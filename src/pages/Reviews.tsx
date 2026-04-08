@@ -111,7 +111,7 @@ export default function Reviews() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Performance Reviews</h1>
@@ -119,7 +119,7 @@ export default function Reviews() {
         </div>
         {isAdmin && (
           <button onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700">
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-medium hover:from-brand-600 hover:to-brand-700 shadow-sm shadow-brand-200 transition-all">
             {showForm ? <X size={16} /> : <Plus size={16} />}
             {showForm ? 'Cancel' : 'New Review'}
           </button>
@@ -128,7 +128,7 @@ export default function Reviews() {
 
       {/* New review form (admin only) */}
       {showForm && isAdmin && (
-        <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-border p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="bg-surface rounded-2xl border border-border p-6 space-y-5 shadow-sm">
           <h2 className="font-semibold">Create Performance Review</h2>
           <div>
             <label className="block text-sm font-medium mb-1.5">Team Member</label>
@@ -159,7 +159,7 @@ export default function Reviews() {
           </div>
           <div className="flex justify-end">
             <button type="submit" disabled={submitting}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-medium hover:from-brand-600 hover:to-brand-700 shadow-sm shadow-brand-200 transition-all disabled:opacity-50">
               {submitting ? <Loader2 size={16} className="animate-spin" /> : <Star size={16} />}
               Submit Review
             </button>
@@ -169,7 +169,7 @@ export default function Reviews() {
 
       {/* Reviews list */}
       {reviews.length === 0 ? (
-        <div className="bg-surface rounded-xl border border-border p-8 text-center text-text-muted">
+        <div className="bg-surface rounded-2xl border border-border p-8 text-center text-text-muted">
           No reviews yet.
         </div>
       ) : (
@@ -177,7 +177,7 @@ export default function Reviews() {
           {reviews.map(review => {
             const rScores = getReviewScores(review.id)
             return (
-              <div key={review.id} className="bg-surface rounded-xl border border-border overflow-hidden">
+              <div key={review.id} className="bg-surface rounded-2xl border border-border overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
                 <div className="px-5 py-3 bg-surface-alt border-b border-border flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-semibold">

@@ -103,7 +103,7 @@ export default function DailyNotes() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Daily Notes</h1>
@@ -112,7 +112,7 @@ export default function DailyNotes() {
         {!isAdmin && (
           <button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-medium hover:from-brand-600 hover:to-brand-700 shadow-sm shadow-brand-200 transition-all"
           >
             {showForm ? <X size={16} /> : <Plus size={16} />}
             {showForm ? 'Cancel' : 'New Note'}
@@ -142,7 +142,7 @@ export default function DailyNotes() {
 
       {/* New Note Form */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-border p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-surface rounded-2xl border border-border p-6 space-y-4 shadow-sm">
           <h2 className="font-semibold flex items-center gap-2">
             <Calendar size={16} />
             Daily Note — {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -163,7 +163,7 @@ export default function DailyNotes() {
             <button
               type="submit"
               disabled={submitting}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-medium hover:from-brand-600 hover:to-brand-700 shadow-sm shadow-brand-200 transition-all disabled:opacity-50"
             >
               {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               Submit Note
@@ -175,15 +175,15 @@ export default function DailyNotes() {
       {/* Notes List */}
       <div className="space-y-4">
         {filteredNotes.length === 0 ? (
-          <div className="bg-surface rounded-xl border border-border p-8 text-center text-text-muted">
+          <div className="bg-surface rounded-2xl border border-border p-8 text-center text-text-muted">
             No notes yet. {!isAdmin && 'Click "New Note" to submit your first daily note.'}
           </div>
         ) : (
           filteredNotes.map(note => {
             const entries = parseContent(note.content)
             return (
-              <div key={note.id} className="bg-surface rounded-xl border border-border overflow-hidden">
-                <div className="px-5 py-3 bg-surface-alt border-b border-border flex items-center justify-between">
+              <div key={note.id} className="bg-surface rounded-2xl border border-border overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
+                <div className="px-5 py-3 border-b border-border border-l-4 border-l-brand-500/35 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Calendar size={14} className="text-text-muted" />
                     <span className="text-sm font-medium">{note.note_date}</span>

@@ -107,7 +107,7 @@ export default function Leads() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Leads</h1>
@@ -115,7 +115,7 @@ export default function Leads() {
         </div>
         <button
           onClick={() => { setShowForm(!showForm); setEditingLead(null); setFormData(EMPTY_LEAD) }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-medium hover:from-brand-600 hover:to-brand-700 shadow-sm shadow-brand-200 transition-all"
         >
           {showForm ? <X size={16} /> : <Plus size={16} />}
           {showForm ? 'Cancel' : 'New Lead'}
@@ -124,47 +124,47 @@ export default function Leads() {
 
       {/* Form */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-border p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-surface rounded-2xl border border-border p-6 space-y-4 shadow-sm">
           <h2 className="font-semibold">{editingLead ? 'Edit Lead' : 'New Lead'}</h2>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">Contact Name *</label>
               <input required value={formData.contact} onChange={e => setFormData({ ...formData, contact: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-lg border border-border text-sm focus:ring-2 focus:ring-brand-500" placeholder="John Doe" />
+                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm focus:ring-2 focus:ring-brand-500" placeholder="John Doe" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">Company</label>
               <input value={formData.company} onChange={e => setFormData({ ...formData, company: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-lg border border-border text-sm focus:ring-2 focus:ring-brand-500" placeholder="Acme Inc." />
+                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm focus:ring-2 focus:ring-brand-500" placeholder="Acme Inc." />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">Email</label>
               <input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-lg border border-border text-sm focus:ring-2 focus:ring-brand-500" placeholder="john@example.com" />
+                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm focus:ring-2 focus:ring-brand-500" placeholder="john@example.com" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">Phone</label>
               <input value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-lg border border-border text-sm focus:ring-2 focus:ring-brand-500" placeholder="(555) 123-4567" />
+                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm focus:ring-2 focus:ring-brand-500" placeholder="(555) 123-4567" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">Priority</label>
               <select value={formData.priority} onChange={e => setFormData({ ...formData, priority: e.target.value as Lead['priority'] })}
-                className="w-full px-3 py-2.5 rounded-lg border border-border text-sm focus:ring-2 focus:ring-brand-500">
+                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm focus:ring-2 focus:ring-brand-500">
                 {PRIORITY_OPTIONS.map(p => <option key={p} value={p} className="capitalize">{p}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">Status</label>
               <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value as Lead['status'] })}
-                className="w-full px-3 py-2.5 rounded-lg border border-border text-sm focus:ring-2 focus:ring-brand-500">
+                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm focus:ring-2 focus:ring-brand-500">
                 {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">Deal Amount</label>
               <input type="number" value={formData.amount ?? ''} onChange={e => setFormData({ ...formData, amount: e.target.value ? Number(e.target.value) : undefined })}
-                className="w-full px-3 py-2.5 rounded-lg border border-border text-sm focus:ring-2 focus:ring-brand-500" placeholder="0" />
+                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm focus:ring-2 focus:ring-brand-500" placeholder="0" />
             </div>
             <div className="flex items-end">
               <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
@@ -177,13 +177,13 @@ export default function Leads() {
           <div>
             <label className="block text-sm font-medium mb-1.5">Description</label>
             <textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })}
-              rows={3} className="w-full px-3 py-2.5 rounded-lg border border-border text-sm focus:ring-2 focus:ring-brand-500 resize-none" placeholder="Notes about this lead..." />
+              rows={3} className="w-full px-3 py-2.5 rounded-xl border border-border text-sm focus:ring-2 focus:ring-brand-500 resize-none" placeholder="Notes about this lead..." />
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => { setShowForm(false); setEditingLead(null) }}
               className="px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-surface-hover">Cancel</button>
             <button type="submit" disabled={submitting}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-medium hover:from-brand-600 hover:to-brand-700 shadow-sm shadow-brand-200 transition-all disabled:opacity-50">
               {submitting ? <Loader2 size={16} className="animate-spin" /> : null}
               {editingLead ? 'Update Lead' : 'Add Lead'}
             </button>
@@ -214,7 +214,7 @@ export default function Leads() {
           No leads found.
         </div>
       ) : (
-        <div className="bg-surface rounded-xl border border-border overflow-hidden">
+        <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

@@ -80,21 +80,21 @@ export default function Schedule() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Schedule</h1>
           <p className="text-text-muted mt-1">Your weekly focus areas and tasks</p>
         </div>
         <button onClick={() => setShowAdd(!showAdd)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700">
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-medium hover:from-brand-600 hover:to-brand-700 shadow-sm shadow-brand-200 transition-all">
           {showAdd ? <X size={16} /> : <Plus size={16} />}
           {showAdd ? 'Cancel' : 'Add Entry'}
         </button>
       </div>
 
       {showAdd && (
-        <div className="bg-surface rounded-xl border border-border p-5 space-y-4">
+        <div className="bg-surface rounded-2xl border border-border p-5 space-y-4">
           <h3 className="font-semibold">New Schedule Entry</h3>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
@@ -121,7 +121,11 @@ export default function Schedule() {
 
       <div className="grid gap-4">
         {groupedByDay.map(({ day, index, entries }) => (
-          <div key={day} className={`rounded-xl border p-4 ${DAY_COLORS[index]}`}>
+          <div
+            key={day}
+            className={`rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all duration-200 animate-slide-up ${DAY_COLORS[index]}`}
+            style={{ animationDelay: `${index * 60}ms` }}
+          >
             <div className="flex items-center gap-2 mb-3">
               <Calendar size={16} className="text-text-muted" />
               <h3 className="font-semibold">{day}</h3>

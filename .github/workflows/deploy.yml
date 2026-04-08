@@ -21,14 +21,6 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: Deploy built files to root
-        run: |
-          # Copy built index.html to root (overwrites source version for serving)
-          cp dist/index.html index.html
-          cp dist/index.html 404.html
-          rm -f assets/*.js assets/*.css
-          cp dist/assets/* assets/
-
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"

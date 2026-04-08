@@ -13,18 +13,13 @@ function deployToRoot() {
       const distAssets = resolve(distDir, 'assets')
       const rootAssets = resolve(rootDir, 'assets')
 
-      // Copy built index.html to root (for GitHub Pages) and as 404.html (SPA fallback)
-      copyFileSync(resolve(distDir, 'index.html'), resolve(rootDir, '404.html'))
+      const htmlFile = resolve(distDir, 'entry.html')
+      copyFileSync(htmlFile, resolve(rootDir, 'index.html'))
+      copyFileSync(htmlFile, resolve(rootDir, '404.html'))
 
-      // NOTE: We don't overwrite root index.html here because Vite reads it as source.
-      // The GitHub Actions workflow handles copying it for deployment.
-
-      // Clear and copy built assets
       try {
         for (const f of readdirSync(rootAssets)) {
-          if (f.endsWith('.js') || f.endsWith('.css')) {
-            rmSync(resolve(rootAssets, f))
-          }
+          if (f.endsWith('.js') || f.endsWith('.css')) rmSync(resolve(rootAssets, f))
         }
       } catch {}
       mkdirSync(rootAssets, { recursive: true })
@@ -38,4 +33,13 @@ function deployToRoot() {
 export default defineConfig({
   plugins: [react(), tailwindcss(), deployToRoot()],
   base: '/Intern-Dashboard/',
+  root: 'src',
+  publicDir: resolve(__dirname, 'public'),
+  build: {
+    outDir: resolve(__dirname, 'dist'),
+    emptyOutDir: true,
+    rollupOptions: {
+      input: resolve(__dirname, 'src/entry.html'),
+    },
+  },
 })
