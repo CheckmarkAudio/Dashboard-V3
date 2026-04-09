@@ -23,7 +23,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
   const dateKey = date.toISOString().split('T')[0]
 
   const reload = useCallback(async () => {
-    if (!profile) return
+    if (!profile) { setLoading(false); return }
     setLoading(true)
     try {
       const { data: instId } = await supabase.rpc('intern_generate_checklist', {

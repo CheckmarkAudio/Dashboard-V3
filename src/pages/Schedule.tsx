@@ -21,29 +21,33 @@ interface FocusTask {
   done: boolean
 }
 
-function TodayFocus() {
+function TodayFocus({ profileId }: { profileId?: string }) {
   const [tasks, setTasks] = useState<FocusTask[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const dayIndex = new Date().getDay()
-    const adjustedIndex = dayIndex === 0 ? 7 : dayIndex
-    if (adjustedIndex > 5) {
+    const jsDay = new Date().getDay() // 0=Sun, 1=Mon...6=Sat
+    // DAYS array: 0=Monday...4=Friday, 5=Saturday, 6=Sunday
+    const dayIndex = jsDay === 0 ? 6 : jsDay - 1
+    if (dayIndex > 4) {
       setTasks([{ text: 'Weekend - no scheduled tasks', done: false }])
       setLoading(false)
       return
     }
-    supabase
+    let query = supabase
       .from('intern_schedule_templates')
       .select('focus_areas')
-      .eq('day_of_week', adjustedIndex)
-      .single()
+      .eq('day_of_week', dayIndex)
+    if (profileId) query = query.eq('intern_id', profileId)
+    query
+      .limit(1)
+      .maybeSingle()
       .then(({ data }) => {
         const areas: string[] = data?.focus_areas ?? []
         setTasks(areas.map(a => ({ text: a, done: false })))
         setLoading(false)
       })
-  }, [])
+  }, [profileId])
 
   const toggle = (idx: number) => {
     setTasks(prev => prev.map((t, i) => i === idx ? { ...t, done: !t.done } : t))
@@ -167,7 +171,7 @@ export default function Schedule() {
         </button>
       </div>
 
-      <TodayFocus />
+      <TodayFocus profileId={isAdmin ? undefined : profile?.id} />
 
       {showAdd && (
         <div className="bg-surface rounded-2xl border border-border p-5 space-y-4">

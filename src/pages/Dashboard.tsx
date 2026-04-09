@@ -47,27 +47,31 @@ export default function Dashboard() {
         if (leadsRes.data) setLeads(leadsRes.data as Lead[])
       }
 
-      const { data: noteToday } = await supabase
+      let todayNoteQuery = supabase
         .from('intern_daily_notes')
         .select('submitted_at, manager_reply')
         .eq('note_date', todayStr)
-        .limit(1)
-        .maybeSingle()
+      if (!isAdmin) todayNoteQuery = todayNoteQuery.eq('intern_id', profile.id)
+      const { data: noteToday } = await todayNoteQuery.limit(1).maybeSingle()
       setTodayNote(noteToday)
 
-      const { count: fCount } = await supabase
+      let followUpQuery = supabase
         .from('intern_leads')
         .select('id', { count: 'exact', head: true })
         .eq('needs_follow_up', true)
+      if (!isAdmin) followUpQuery = followUpQuery.eq('intern_id', profile.id)
+      const { count: fCount } = await followUpQuery
       setFollowUpCount(fCount ?? 0)
 
       try {
-        const { data: instances } = await supabase
+        let instancesQuery = supabase
           .from('intern_checklist_instances')
           .select('id, period_date')
           .eq('frequency', 'daily')
           .order('period_date', { ascending: false })
           .limit(30)
+        if (!isAdmin) instancesQuery = instancesQuery.eq('intern_id', profile.id)
+        const { data: instances } = await instancesQuery
         if (instances && instances.length > 0) {
           let s = 0
           for (const inst of instances) {
