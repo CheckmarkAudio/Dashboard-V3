@@ -63,9 +63,12 @@ export interface PerformanceScore {
 
 export interface ChecklistItem {
   id: string
-  checklist_id: string
+  instance_id: string
+  category: string
   item_text: string
   is_completed: boolean
+  completed_at: string | null
+  sort_order: number
 }
 
 export interface ScheduleTemplate {

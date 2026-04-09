@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import type { ScheduleTemplate } from '../types'
-import { Calendar, Plus, X, Save, Loader2, Edit2, Trash2 } from 'lucide-react'
+import { Calendar, Plus, X, Save, Loader2, Edit2, Trash2, CheckSquare, Square } from 'lucide-react'
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
@@ -15,6 +15,80 @@ const DAY_COLORS = [
   'bg-cyan-50 border-cyan-200',
   'bg-gray-50 border-gray-200',
 ]
+
+interface FocusTask {
+  text: string
+  done: boolean
+}
+
+function TodayFocus() {
+  const [tasks, setTasks] = useState<FocusTask[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const dayIndex = new Date().getDay()
+    const adjustedIndex = dayIndex === 0 ? 7 : dayIndex
+    if (adjustedIndex > 5) {
+      setTasks([{ text: 'Weekend - no scheduled tasks', done: false }])
+      setLoading(false)
+      return
+    }
+    supabase
+      .from('intern_schedule_templates')
+      .select('focus_areas')
+      .eq('day_of_week', adjustedIndex)
+      .single()
+      .then(({ data }) => {
+        const areas: string[] = data?.focus_areas ?? []
+        setTasks(areas.map(a => ({ text: a, done: false })))
+        setLoading(false)
+      })
+  }, [])
+
+  const toggle = (idx: number) => {
+    setTasks(prev => prev.map((t, i) => i === idx ? { ...t, done: !t.done } : t))
+  }
+
+  if (loading) return <div className="h-20 flex items-center justify-center"><Loader2 size={16} className="animate-spin text-text-muted" /></div>
+
+  const done = tasks.filter(t => t.done).length
+
+  return (
+    <div className="bg-surface rounded-2xl border border-border p-5 shadow-sm animate-slide-up mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-sm flex items-center gap-2">
+          <Calendar size={16} className="text-brand-500" />
+          Today's Focus
+        </h2>
+        {tasks.length > 0 && (
+          <span className="text-xs text-text-muted">{done}/{tasks.length} done</span>
+        )}
+      </div>
+      {tasks.length === 0 ? (
+        <p className="text-sm text-text-muted italic">No focus areas for today</p>
+      ) : (
+        <div className="space-y-1.5">
+          {tasks.map((task, i) => (
+            <button
+              key={i}
+              onClick={() => toggle(i)}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-alt/50 transition-colors text-left group"
+            >
+              {task.done ? (
+                <CheckSquare size={18} className="text-brand-500 shrink-0" />
+              ) : (
+                <Square size={18} className="text-text-light group-hover:text-text-muted shrink-0 transition-colors" />
+              )}
+              <span className={`text-sm ${task.done ? 'line-through text-text-light' : ''}`}>
+                {task.text}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Schedule() {
   const { profile, isAdmin } = useAuth()
@@ -83,8 +157,8 @@ export default function Schedule() {
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Schedule</h1>
-          <p className="text-text-muted mt-1">Your weekly focus areas and tasks</p>
+          <h1 className="text-2xl font-bold">Weekly Schedule</h1>
+          <p className="text-text-muted mt-1">Focus areas for each day</p>
         </div>
         <button onClick={() => setShowAdd(!showAdd)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-medium hover:from-brand-600 hover:to-brand-700 shadow-sm shadow-brand-200 transition-all">
@@ -92,6 +166,8 @@ export default function Schedule() {
           {showAdd ? 'Cancel' : 'Add Entry'}
         </button>
       </div>
+
+      <TodayFocus />
 
       {showAdd && (
         <div className="bg-surface rounded-2xl border border-border p-5 space-y-4">

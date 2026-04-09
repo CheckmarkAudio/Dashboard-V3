@@ -4,14 +4,16 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   LayoutDashboard, FileText, Users, Calendar, Star, Target, Settings,
   LogOut, Menu, X, ChevronDown, Shield, ClipboardList, CheckSquare,
+  CalendarCheck,
 } from 'lucide-react'
 
 const memberLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/daily', icon: FileText, label: 'Daily Notes' },
-  { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
-  { to: '/leads', icon: Target, label: 'Leads' },
+  { to: '/daily', icon: CheckSquare, label: 'Daily Checklist' },
+  { to: '/weekly', icon: CalendarCheck, label: 'Weekly Checklist' },
   { to: '/schedule', icon: Calendar, label: 'Schedule' },
+  { to: '/notes', icon: FileText, label: 'Notes' },
+  { to: '/leads', icon: Target, label: 'Leads' },
   { to: '/reviews', icon: Star, label: 'Reviews' },
 ]
 

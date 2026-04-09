@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useChecklist } from '../hooks/useChecklist'
 import { supabase } from '../lib/supabase'
 import type { TeamMember, DailyNote, Lead } from '../types'
 import {
   Users, FileText, Target, TrendingUp, Clock, CheckCircle2, AlertCircle,
-  ArrowRight, Sparkles, BarChart3, ChevronRight,
+  ArrowRight, Sparkles, CheckSquare, ChevronRight, Flame,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -14,12 +15,20 @@ export default function Dashboard() {
   const [recentNotes, setRecentNotes] = useState<DailyNote[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
+  const [followUpCount, setFollowUpCount] = useState(0)
+  const [streak, setStreak] = useState(0)
+  const [todayNote, setTodayNote] = useState<{ submitted_at?: string; manager_reply?: string } | null>(null)
+
+  const daily = useChecklist('daily', new Date())
+  const weekly = useChecklist('weekly', new Date())
 
   useEffect(() => { loadData() }, [profile])
 
   const loadData = async () => {
     if (!profile) { setLoading(false); return }
     try {
+      const todayStr = new Date().toISOString().split('T')[0]
+
       if (isAdmin) {
         const [usersRes, notesRes, leadsRes] = await Promise.all([
           supabase.from('intern_users').select('*'),
@@ -37,6 +46,42 @@ export default function Dashboard() {
         if (notesRes.data) setRecentNotes(notesRes.data as DailyNote[])
         if (leadsRes.data) setLeads(leadsRes.data as Lead[])
       }
+
+      const { data: noteToday } = await supabase
+        .from('intern_daily_notes')
+        .select('submitted_at, manager_reply')
+        .eq('note_date', todayStr)
+        .limit(1)
+        .maybeSingle()
+      setTodayNote(noteToday)
+
+      const { count: fCount } = await supabase
+        .from('intern_leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('needs_follow_up', true)
+      setFollowUpCount(fCount ?? 0)
+
+      try {
+        const { data: instances } = await supabase
+          .from('intern_checklist_instances')
+          .select('id, period_date')
+          .eq('frequency', 'daily')
+          .order('period_date', { ascending: false })
+          .limit(30)
+        if (instances && instances.length > 0) {
+          let s = 0
+          for (const inst of instances) {
+            const { data: cItems } = await supabase
+              .from('intern_checklist_items')
+              .select('is_completed')
+              .eq('instance_id', inst.id)
+            if (!cItems || cItems.length === 0) break
+            if (cItems.every((ci: { is_completed: boolean }) => ci.is_completed)) s++
+            else break
+          }
+          setStreak(s)
+        }
+      } catch {}
     } catch (err) { console.error('Dashboard load error:', err) }
     finally { setLoading(false) }
   }
@@ -50,22 +95,10 @@ export default function Dashboard() {
   }
 
   const activeLeads = leads.filter(l => !['closed_won', 'closed_lost'].includes(l.status))
-  const followUps = leads.filter(l => l.needs_follow_up)
   const todayNotes = recentNotes.filter(n => n.note_date === new Date().toISOString().split('T')[0])
 
-  const stats = isAdmin
-    ? [
-        { label: 'Team Members', value: teamMembers.length, icon: Users, gradient: 'from-brand-500 to-brand-600', bg: 'bg-brand-50', shadow: 'shadow-brand-100' },
-        { label: 'Notes Today', value: todayNotes.length, icon: FileText, gradient: 'from-emerald-500 to-green-600', bg: 'bg-green-50', shadow: 'shadow-green-100' },
-        { label: 'Active Leads', value: activeLeads.length, icon: Target, gradient: 'from-violet-500 to-purple-600', bg: 'bg-purple-50', shadow: 'shadow-purple-100' },
-        { label: 'Follow-ups', value: followUps.length, icon: AlertCircle, gradient: 'from-amber-500 to-orange-600', bg: 'bg-amber-50', shadow: 'shadow-amber-100' },
-      ]
-    : [
-        { label: 'My Notes', value: recentNotes.length, icon: FileText, gradient: 'from-brand-500 to-brand-600', bg: 'bg-brand-50', shadow: 'shadow-brand-100' },
-        { label: 'My Leads', value: leads.length, icon: Target, gradient: 'from-violet-500 to-purple-600', bg: 'bg-purple-50', shadow: 'shadow-purple-100' },
-        { label: 'Active Leads', value: activeLeads.length, icon: TrendingUp, gradient: 'from-emerald-500 to-green-600', bg: 'bg-green-50', shadow: 'shadow-green-100' },
-        { label: 'Follow-ups', value: followUps.length, icon: AlertCircle, gradient: 'from-amber-500 to-orange-600', bg: 'bg-amber-50', shadow: 'shadow-amber-100' },
-      ]
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
   const parseContent = (content: string) => {
     try {
@@ -88,44 +121,108 @@ export default function Dashboard() {
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </span>
           </div>
-          <h1 className="text-3xl font-bold">Welcome back, {profile?.display_name?.split(' ')[0]}</h1>
+          <h1 className="text-3xl font-bold">{greeting}, {profile?.display_name?.split(' ')[0]}</h1>
           <p className="text-brand-200 mt-2 max-w-lg">
             {isAdmin
               ? `You have ${teamMembers.length} team members. ${todayNotes.length} notes submitted today.`
-              : `You have ${activeLeads.length} active leads and ${followUps.length} pending follow-ups.`
+              : `You have ${activeLeads.length} active leads and ${followUpCount} pending follow-ups.`
             }
           </p>
           <div className="flex gap-3 mt-5">
             <Link to="/daily" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-sm font-medium transition-colors backdrop-blur-sm">
-              <FileText size={14} /> Daily Notes <ArrowRight size={14} />
+              <CheckSquare size={14} /> Daily Checklist <ArrowRight size={14} />
             </Link>
-            <Link to="/tasks" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-sm font-medium transition-colors backdrop-blur-sm">
-              <BarChart3 size={14} /> Tasks <ArrowRight size={14} />
+            <Link to="/notes" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-sm font-medium transition-colors backdrop-blur-sm">
+              <FileText size={14} /> Daily Notes <ArrowRight size={14} />
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, i) => (
-          <div
-            key={stat.label}
-            className={`bg-surface rounded-2xl border border-border p-5 shadow-sm hover:shadow-md transition-all duration-300 animate-slide-up`}
-            style={{ animationDelay: `${i * 80}ms` }}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
-                <p className="text-xs text-text-muted font-medium mt-1">{stat.label}</p>
-              </div>
-              <div className={`p-2.5 rounded-xl bg-gradient-to-br ${stat.gradient} shadow-md ${stat.shadow}`}>
-                <stat.icon size={18} className="text-white" />
-              </div>
-            </div>
+      {/* Checklist progress + stats row */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Daily progress */}
+        <Link to="/daily" className="bg-surface rounded-2xl border border-border p-5 shadow-sm hover:shadow-md transition-all duration-300 animate-slide-up group">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Daily Tasks</span>
+            <CheckSquare size={16} className="text-brand-500" />
           </div>
-        ))}
+          <p className="text-2xl font-bold tracking-tight">{daily.completedCount}/{daily.totalCount}</p>
+          <div className="h-2 bg-surface-alt rounded-full overflow-hidden mt-2">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${daily.percentage}%`,
+                backgroundColor: daily.percentage === 100 ? '#10b981' : '#3b82f6',
+              }}
+            />
+          </div>
+        </Link>
+
+        {/* Weekly progress */}
+        <Link to="/weekly" className="bg-surface rounded-2xl border border-border p-5 shadow-sm hover:shadow-md transition-all duration-300 animate-slide-up group" style={{ animationDelay: '80ms' }}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Weekly Tasks</span>
+            <TrendingUp size={16} className="text-purple-500" />
+          </div>
+          <p className="text-2xl font-bold tracking-tight">{weekly.completedCount}/{weekly.totalCount}</p>
+          <div className="h-2 bg-surface-alt rounded-full overflow-hidden mt-2">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${weekly.percentage}%`,
+                backgroundColor: weekly.percentage === 100 ? '#10b981' : '#8b5cf6',
+              }}
+            />
+          </div>
+        </Link>
+
+        {/* Streak */}
+        <div className="bg-surface rounded-2xl border border-border p-5 shadow-sm hover:shadow-md transition-all duration-300 animate-slide-up" style={{ animationDelay: '160ms' }}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Streak</span>
+            <Flame size={16} className="text-orange-500" />
+          </div>
+          <p className="text-2xl font-bold tracking-tight">{streak} day{streak !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-text-muted mt-1">Consecutive 100% days</p>
+        </div>
+
+        {/* Follow-ups / Today's Note */}
+        <div className="bg-surface rounded-2xl border border-border p-5 shadow-sm hover:shadow-md transition-all duration-300 animate-slide-up" style={{ animationDelay: '240ms' }}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Today's Note</span>
+            <FileText size={16} className="text-emerald-500" />
+          </div>
+          {todayNote?.submitted_at ? (
+            <>
+              <p className="text-sm font-semibold text-emerald-600">Submitted</p>
+              {todayNote.manager_reply
+                ? <p className="text-xs text-text-muted mt-1">Gavin replied</p>
+                : <p className="text-xs text-text-muted mt-1">No reply yet</p>
+              }
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-amber-600">Not submitted</p>
+              <p className="text-xs text-text-muted mt-1">Don't forget to submit today's note</p>
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Follow-ups banner */}
+      {followUpCount > 0 && (
+        <Link
+          to="/leads"
+          className="flex items-center gap-3 px-5 py-3.5 bg-orange-50 border border-orange-200 rounded-2xl hover:bg-orange-100 transition-colors animate-slide-up"
+        >
+          <AlertCircle size={18} className="text-orange-600" />
+          <span className="text-sm font-medium text-orange-700">
+            You have {followUpCount} lead{followUpCount > 1 ? 's' : ''} that need follow-up
+          </span>
+          <ArrowRight size={14} className="ml-auto text-orange-500" />
+        </Link>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Recent Notes */}
@@ -135,7 +232,7 @@ export default function Dashboard() {
               <FileText size={16} className="text-brand-500" />
               <h2 className="font-semibold">Recent Notes</h2>
             </div>
-            <Link to="/daily" className="text-xs text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1">
+            <Link to="/notes" className="text-xs text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1">
               View all <ChevronRight size={12} />
             </Link>
           </div>

@@ -3,11 +3,12 @@ import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import DailyChecklist from './pages/DailyChecklist'
+import WeeklyChecklist from './pages/WeeklyChecklist'
 import DailyNotes from './pages/DailyNotes'
 import Leads from './pages/Leads'
 import Schedule from './pages/Schedule'
 import Reviews from './pages/Reviews'
-import Tasks from './pages/Tasks'
 import TeamManager from './pages/admin/TeamManager'
 import Templates from './pages/admin/Templates'
 import AdminSettings from './pages/admin/AdminSettings'
@@ -24,8 +25,9 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
-        <Route path="daily" element={<DailyNotes />} />
-        <Route path="tasks" element={<Tasks />} />
+        <Route path="daily" element={<DailyChecklist />} />
+        <Route path="weekly" element={<WeeklyChecklist />} />
+        <Route path="notes" element={<DailyNotes />} />
         <Route path="leads" element={<Leads />} />
         <Route path="schedule" element={<Schedule />} />
         <Route path="reviews" element={<Reviews />} />
