@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const fetchProfile = async (userId: string, email?: string) => {
+    // 1. Try by auth user id
     const { data } = await supabase
       .from('intern_users')
       .select('*')
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle()
     if (data) { setProfile(data as TeamMember); return }
 
+    // 2. Try by email (for admin-created users with placeholder ids)
     if (email) {
       const { data: emailMatch } = await supabase
         .from('intern_users')
@@ -43,7 +45,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .update({ id: userId })
           .eq('id', emailMatch.id)
         setProfile({ ...emailMatch, id: userId } as TeamMember)
+        return
       }
+    }
+
+    // 3. No profile exists — create one automatically
+    if (email) {
+      const newProfile = {
+        id: userId,
+        email,
+        display_name: email.split('@')[0],
+        role: 'member' as const,
+      }
+      await supabase.from('intern_users').insert(newProfile)
+      setProfile(newProfile as TeamMember)
     }
   }
 
