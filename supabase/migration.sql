@@ -43,8 +43,7 @@ CREATE TABLE IF NOT EXISTS intern_users (
 
 ALTER TABLE intern_users
   ADD COLUMN IF NOT EXISTS team_id uuid
-    DEFAULT '00000000-0000-0000-0000-000000000001'
-    REFERENCES teams(id);
+    DEFAULT '00000000-0000-0000-0000-000000000001';
 ALTER TABLE intern_users
   ADD COLUMN IF NOT EXISTS position text DEFAULT 'intern';
 ALTER TABLE intern_users
@@ -126,7 +125,7 @@ CREATE TABLE IF NOT EXISTS report_templates (
   updated_at timestamptz DEFAULT now()
 );
 ALTER TABLE report_templates
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 UPDATE report_templates SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE report_templates ENABLE ROW LEVEL SECURITY;
 
@@ -192,7 +191,7 @@ CREATE TABLE IF NOT EXISTS task_assignments (
   CONSTRAINT assignment_target CHECK (intern_id IS NOT NULL OR position IS NOT NULL)
 );
 ALTER TABLE task_assignments
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 UPDATE task_assignments SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE task_assignments ENABLE ROW LEVEL SECURITY;
 
@@ -227,7 +226,7 @@ CREATE TABLE IF NOT EXISTS platform_metrics (
   UNIQUE(platform, metric_date)
 );
 ALTER TABLE platform_metrics
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 UPDATE platform_metrics SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE platform_metrics ENABLE ROW LEVEL SECURITY;
 
@@ -265,7 +264,7 @@ CREATE TABLE IF NOT EXISTS deliverable_submissions (
   created_at timestamptz DEFAULT now()
 );
 ALTER TABLE deliverable_submissions
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 UPDATE deliverable_submissions SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE deliverable_submissions ENABLE ROW LEVEL SECURITY;
 
@@ -304,7 +303,7 @@ CREATE TABLE IF NOT EXISTS projects (
   updated_at timestamptz DEFAULT now()
 );
 ALTER TABLE projects
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 UPDATE projects SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 
@@ -344,7 +343,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at timestamptz DEFAULT now()
 );
 ALTER TABLE sessions
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 UPDATE sessions SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 
@@ -382,7 +381,7 @@ CREATE TABLE IF NOT EXISTS artist_pipeline (
   updated_at timestamptz DEFAULT now()
 );
 ALTER TABLE artist_pipeline
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 UPDATE artist_pipeline SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE artist_pipeline ENABLE ROW LEVEL SECURITY;
 
@@ -419,7 +418,7 @@ CREATE TABLE IF NOT EXISTS education_students (
   created_at timestamptz DEFAULT now()
 );
 ALTER TABLE education_students
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 UPDATE education_students SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE education_students ENABLE ROW LEVEL SECURITY;
 
@@ -456,11 +455,10 @@ CREATE TABLE IF NOT EXISTS intern_daily_notes (
   content text NOT NULL,
   focus_areas jsonb NOT NULL DEFAULT '[]',
   submitted_at timestamptz DEFAULT now(),
-  manager_reply text,
-  team_id uuid REFERENCES teams(id)
+  manager_reply text
 );
 ALTER TABLE intern_daily_notes
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 ALTER TABLE intern_daily_notes ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_daily_notes_select" ON intern_daily_notes;
@@ -496,11 +494,10 @@ CREATE TABLE IF NOT EXISTS intern_leads (
     CHECK (status IN ('new', 'contacted', 'qualified', 'proposal', 'closed_won', 'closed_lost')),
   amount numeric,
   needs_follow_up boolean NOT NULL DEFAULT false,
-  created_at timestamptz DEFAULT now(),
-  team_id uuid REFERENCES teams(id)
+  created_at timestamptz DEFAULT now()
 );
 ALTER TABLE intern_leads
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 ALTER TABLE intern_leads ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_leads_select" ON intern_leads;
@@ -529,11 +526,10 @@ CREATE TABLE IF NOT EXISTS intern_performance_reviews (
   review_date date NOT NULL,
   overall_score numeric NOT NULL DEFAULT 0,
   feedback text,
-  created_at timestamptz DEFAULT now(),
-  team_id uuid REFERENCES teams(id)
+  created_at timestamptz DEFAULT now()
 );
 ALTER TABLE intern_performance_reviews
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 ALTER TABLE intern_performance_reviews ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_performance_reviews_select" ON intern_performance_reviews;
@@ -559,11 +555,10 @@ CREATE TABLE IF NOT EXISTS intern_performance_scores (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   review_id uuid NOT NULL REFERENCES intern_performance_reviews(id) ON DELETE CASCADE,
   category text NOT NULL,
-  score numeric NOT NULL DEFAULT 0,
-  team_id uuid REFERENCES teams(id)
+  score numeric NOT NULL DEFAULT 0
 );
 ALTER TABLE intern_performance_scores
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 ALTER TABLE intern_performance_scores ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_performance_scores_select" ON intern_performance_scores;
@@ -590,11 +585,10 @@ CREATE TABLE IF NOT EXISTS intern_schedule_templates (
   intern_id uuid NOT NULL REFERENCES intern_users(id) ON DELETE CASCADE,
   day_of_week integer NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
   focus_areas jsonb NOT NULL DEFAULT '[]',
-  frequency text NOT NULL DEFAULT 'weekly',
-  team_id uuid REFERENCES teams(id)
+  frequency text NOT NULL DEFAULT 'weekly'
 );
 ALTER TABLE intern_schedule_templates
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 ALTER TABLE intern_schedule_templates ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_schedule_templates_select" ON intern_schedule_templates;
@@ -621,11 +615,10 @@ CREATE TABLE IF NOT EXISTS intern_checklist_instances (
   intern_id uuid NOT NULL REFERENCES intern_users(id) ON DELETE CASCADE,
   frequency text NOT NULL,
   period_date date NOT NULL,
-  created_at timestamptz DEFAULT now(),
-  team_id uuid REFERENCES teams(id)
+  created_at timestamptz DEFAULT now()
 );
 ALTER TABLE intern_checklist_instances
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 ALTER TABLE intern_checklist_instances ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_checklist_instances_select" ON intern_checklist_instances;
@@ -655,11 +648,10 @@ CREATE TABLE IF NOT EXISTS intern_checklist_items (
   is_completed boolean NOT NULL DEFAULT false,
   completed_at timestamptz,
   sort_order integer NOT NULL DEFAULT 0,
-  is_critical boolean DEFAULT false,
-  team_id uuid REFERENCES teams(id)
+  is_critical boolean DEFAULT false
 );
 ALTER TABLE intern_checklist_items
-  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES teams(id);
+  ADD COLUMN IF NOT EXISTS team_id uuid;
 ALTER TABLE intern_checklist_items ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_checklist_items_select" ON intern_checklist_items;
