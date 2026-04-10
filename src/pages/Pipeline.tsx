@@ -99,8 +99,8 @@ export default function Pipeline() {
       .select('*')
       .order('display_name')
     if (error) {
-      console.error(error)
-      toast('Could not load team members', 'error')
+      console.error('Load team error:', error)
+      toast(`Could not load team members: ${error.message}`, 'error')
       return
     }
     if (data) setTeamMembers(data as TeamMember[])
@@ -116,8 +116,8 @@ export default function Pipeline() {
       .select('*')
       .order('updated_at', { ascending: false })
     if (error) {
-      console.error(error)
-      toast('Could not load pipeline', 'error')
+      console.error('Load pipeline error:', error)
+      toast(`Could not load pipeline: ${error.message}`, 'error')
       setLoading(false)
       return
     }

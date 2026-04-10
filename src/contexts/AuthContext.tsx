@@ -25,25 +25,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfile = async (userId: string, email?: string) => {
     // 1. Try by auth user id
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('intern_users')
       .select('*')
       .eq('id', userId)
       .maybeSingle()
+    if (error) console.error('Profile lookup failed:', error.message, error.code)
     if (data) { setProfile(data as TeamMember); return }
 
     // 2. Try by email (for admin-created users with placeholder ids)
     if (email) {
-      const { data: emailMatch } = await supabase
+      const { data: emailMatch, error: emailErr } = await supabase
         .from('intern_users')
         .select('*')
         .eq('email', email)
         .maybeSingle()
+      if (emailErr) console.error('Email lookup failed:', emailErr.message)
       if (emailMatch) {
-        await supabase
+        const { error: linkErr } = await supabase
           .from('intern_users')
           .update({ id: userId })
           .eq('id', emailMatch.id)
+        if (linkErr) console.error('Profile link failed:', linkErr.message)
         setProfile({ ...emailMatch, id: userId } as TeamMember)
         return
       }
@@ -57,7 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         display_name: email.split('@')[0],
         role: 'member' as const,
       }
-      await supabase.from('intern_users').insert(newProfile)
+      const { error: insertErr } = await supabase.from('intern_users').insert(newProfile)
+      if (insertErr) {
+        console.error('Profile creation failed:', insertErr.message, insertErr.code)
+        return
+      }
       setProfile(newProfile as TeamMember)
     }
   }
@@ -78,10 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        try { await fetchProfile(session.user.id, session.user.email) } catch {}
+        try { await fetchProfile(session.user.id, session.user.email) } catch (err) {
+          console.error('Failed to load profile on init:', err)
+        }
       }
       setLoading(false)
-    }).catch(() => {
+    }).catch((err) => {
+      console.error('Session retrieval failed:', err)
       if (mounted) setLoading(false)
     })
 
@@ -90,7 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        try { await fetchProfile(session.user.id, session.user.email) } catch {}
+        try { await fetchProfile(session.user.id, session.user.email) } catch (err) {
+          console.error('Failed to load profile on auth change:', err)
+        }
       } else {
         setProfile(null)
       }

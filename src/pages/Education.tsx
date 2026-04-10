@@ -85,8 +85,8 @@ export default function Education() {
       .select('*')
       .order('display_name')
     if (error) {
-      console.error(error)
-      toast('Could not load team members', 'error')
+      console.error('Load team error:', error)
+      toast(`Could not load team members: ${error.message}`, 'error')
       return
     }
     if (data) setTeamMembers(data as TeamMember[])
@@ -102,8 +102,8 @@ export default function Education() {
       .select('*')
       .order('created_at', { ascending: false })
     if (error) {
-      console.error(error)
-      toast('Could not load students', 'error')
+      console.error('Load students error:', error)
+      toast(`Could not load students: ${error.message}`, 'error')
       setLoading(false)
       return
     }

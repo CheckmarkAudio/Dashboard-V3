@@ -9,6 +9,7 @@ export interface TeamMember {
   start_date?: string
   status?: string
   created_at?: string
+  team_id?: string
 }
 
 export interface DailyNote {
