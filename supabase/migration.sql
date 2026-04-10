@@ -671,3 +671,127 @@ CREATE POLICY "intern_checklist_items_delete" ON intern_checklist_items
 DROP TRIGGER IF EXISTS set_team_id ON intern_checklist_items;
 CREATE TRIGGER set_team_id BEFORE INSERT ON intern_checklist_items
   FOR EACH ROW EXECUTE FUNCTION set_team_id_on_insert();
+
+
+-- =============================================
+-- PART 4: FLYWHEEL TEAM MANAGEMENT SYSTEM
+-- =============================================
+
+-- 4a. Add reporting hierarchy to intern_users
+ALTER TABLE intern_users
+  ADD COLUMN IF NOT EXISTS managed_by uuid REFERENCES intern_users(id);
+
+-- 4b. member_kpis — defines what metric each member owns
+CREATE TABLE IF NOT EXISTS member_kpis (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  intern_id uuid NOT NULL REFERENCES intern_users(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  flywheel_stage text NOT NULL CHECK (flywheel_stage IN (
+    'deliver', 'capture', 'share', 'attract', 'book'
+  )),
+  unit text NOT NULL DEFAULT 'count',
+  target_value numeric,
+  target_direction text DEFAULT 'up' CHECK (target_direction IN ('up', 'stable')),
+  created_by uuid REFERENCES intern_users(id),
+  team_id uuid,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE member_kpis ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "member_kpis_select" ON member_kpis;
+DROP POLICY IF EXISTS "member_kpis_insert" ON member_kpis;
+DROP POLICY IF EXISTS "member_kpis_update" ON member_kpis;
+DROP POLICY IF EXISTS "member_kpis_delete" ON member_kpis;
+
+CREATE POLICY "member_kpis_select" ON member_kpis
+  FOR SELECT TO authenticated USING (team_id = get_my_team_id());
+CREATE POLICY "member_kpis_insert" ON member_kpis
+  FOR INSERT TO authenticated WITH CHECK (team_id = get_my_team_id());
+CREATE POLICY "member_kpis_update" ON member_kpis
+  FOR UPDATE TO authenticated USING (team_id = get_my_team_id());
+CREATE POLICY "member_kpis_delete" ON member_kpis
+  FOR DELETE TO authenticated USING (team_id = get_my_team_id());
+
+DROP TRIGGER IF EXISTS set_team_id ON member_kpis;
+CREATE TRIGGER set_team_id BEFORE INSERT ON member_kpis
+  FOR EACH ROW EXECUTE FUNCTION set_team_id_on_insert();
+
+-- 4c. member_kpi_entries — time-series data for graphs
+CREATE TABLE IF NOT EXISTS member_kpi_entries (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  kpi_id uuid NOT NULL REFERENCES member_kpis(id) ON DELETE CASCADE,
+  entry_date date NOT NULL,
+  value numeric NOT NULL,
+  notes text,
+  entered_by uuid REFERENCES intern_users(id),
+  team_id uuid,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(kpi_id, entry_date)
+);
+ALTER TABLE member_kpi_entries ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "member_kpi_entries_select" ON member_kpi_entries;
+DROP POLICY IF EXISTS "member_kpi_entries_insert" ON member_kpi_entries;
+DROP POLICY IF EXISTS "member_kpi_entries_update" ON member_kpi_entries;
+DROP POLICY IF EXISTS "member_kpi_entries_delete" ON member_kpi_entries;
+
+CREATE POLICY "member_kpi_entries_select" ON member_kpi_entries
+  FOR SELECT TO authenticated USING (team_id = get_my_team_id());
+CREATE POLICY "member_kpi_entries_insert" ON member_kpi_entries
+  FOR INSERT TO authenticated WITH CHECK (team_id = get_my_team_id());
+CREATE POLICY "member_kpi_entries_update" ON member_kpi_entries
+  FOR UPDATE TO authenticated USING (team_id = get_my_team_id());
+CREATE POLICY "member_kpi_entries_delete" ON member_kpi_entries
+  FOR DELETE TO authenticated USING (team_id = get_my_team_id());
+
+DROP TRIGGER IF EXISTS set_team_id ON member_kpi_entries;
+CREATE TRIGGER set_team_id BEFORE INSERT ON member_kpi_entries
+  FOR EACH ROW EXECUTE FUNCTION set_team_id_on_insert();
+
+-- 4d. weekly_admin_reviews — admin writes weekly reviews for direct reports
+CREATE TABLE IF NOT EXISTS weekly_admin_reviews (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  intern_id uuid NOT NULL REFERENCES intern_users(id) ON DELETE CASCADE,
+  reviewer_id uuid NOT NULL REFERENCES intern_users(id),
+  week_start date NOT NULL,
+  flywheel_scores jsonb NOT NULL DEFAULT '{}',
+  kpi_on_track boolean,
+  strengths text,
+  improvements text,
+  action_items jsonb DEFAULT '[]',
+  overall_score numeric,
+  team_id uuid,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(intern_id, week_start)
+);
+ALTER TABLE weekly_admin_reviews ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "weekly_admin_reviews_select" ON weekly_admin_reviews;
+DROP POLICY IF EXISTS "weekly_admin_reviews_insert" ON weekly_admin_reviews;
+DROP POLICY IF EXISTS "weekly_admin_reviews_update" ON weekly_admin_reviews;
+DROP POLICY IF EXISTS "weekly_admin_reviews_delete" ON weekly_admin_reviews;
+
+CREATE POLICY "weekly_admin_reviews_select" ON weekly_admin_reviews
+  FOR SELECT TO authenticated USING (team_id = get_my_team_id());
+CREATE POLICY "weekly_admin_reviews_insert" ON weekly_admin_reviews
+  FOR INSERT TO authenticated WITH CHECK (team_id = get_my_team_id());
+CREATE POLICY "weekly_admin_reviews_update" ON weekly_admin_reviews
+  FOR UPDATE TO authenticated USING (team_id = get_my_team_id());
+CREATE POLICY "weekly_admin_reviews_delete" ON weekly_admin_reviews
+  FOR DELETE TO authenticated USING (team_id = get_my_team_id());
+
+DROP TRIGGER IF EXISTS set_team_id ON weekly_admin_reviews;
+CREATE TRIGGER set_team_id BEFORE INSERT ON weekly_admin_reviews
+  FOR EACH ROW EXECUTE FUNCTION set_team_id_on_insert();
+
+-- 4e. Helper function: get direct reports for a manager
+CREATE OR REPLACE FUNCTION get_direct_reports(manager uuid)
+RETURNS SETOF uuid AS $$
+  SELECT id FROM public.intern_users WHERE managed_by = manager
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- 4f. Expand report_templates type to include must_do
+ALTER TABLE report_templates DROP CONSTRAINT IF EXISTS report_templates_type_check;
+ALTER TABLE report_templates
+  ADD CONSTRAINT report_templates_type_check
+  CHECK (type IN ('daily', 'weekly', 'checklist', 'must_do'));

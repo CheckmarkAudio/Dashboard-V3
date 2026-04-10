@@ -10,6 +10,7 @@ export interface TeamMember {
   status?: string
   created_at?: string
   team_id?: string
+  managed_by?: string
 }
 
 export interface DailyNote {
@@ -93,7 +94,7 @@ export interface TeamPosition {
 export interface ReportTemplate {
   id: string
   name: string
-  type: 'daily' | 'weekly' | 'checklist'
+  type: 'daily' | 'weekly' | 'checklist' | 'must_do'
   position: string | null
   fields: TemplateField[]
   is_default: boolean
@@ -195,5 +196,46 @@ export interface EducationStudent {
   status: 'active' | 'paused' | 'completed'
   assigned_to: string | null
   notes: string | null
+  created_at: string
+}
+
+export type FlywheelStage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
+
+export interface MemberKPI {
+  id: string
+  intern_id: string
+  name: string
+  flywheel_stage: FlywheelStage
+  unit: string
+  target_value: number | null
+  target_direction: 'up' | 'stable'
+  created_by: string | null
+  team_id?: string
+  created_at: string
+}
+
+export interface MemberKPIEntry {
+  id: string
+  kpi_id: string
+  entry_date: string
+  value: number
+  notes: string | null
+  entered_by: string | null
+  team_id?: string
+  created_at: string
+}
+
+export interface WeeklyAdminReview {
+  id: string
+  intern_id: string
+  reviewer_id: string
+  week_start: string
+  flywheel_scores: Record<FlywheelStage, number>
+  kpi_on_track: boolean | null
+  strengths: string | null
+  improvements: string | null
+  action_items: string[]
+  overall_score: number | null
+  team_id?: string
   created_at: string
 }

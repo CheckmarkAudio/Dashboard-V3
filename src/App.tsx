@@ -12,8 +12,11 @@ import Sessions from './pages/Sessions'
 import Content from './pages/Content'
 import Pipeline from './pages/Pipeline'
 import Education from './pages/Education'
+import Reviews from './pages/Reviews'
+import KPIDashboard from './pages/KPIDashboard'
 import TeamManager from './pages/admin/TeamManager'
 import Templates from './pages/admin/Templates'
+import MyTeam from './pages/admin/MyTeam'
 import BusinessHealth from './pages/admin/BusinessHealth'
 import AdminSettings from './pages/admin/AdminSettings'
 
@@ -38,6 +41,8 @@ export default function App() {
         <Route path="content" element={<Content />} />
         <Route path="pipeline" element={<Pipeline />} />
         <Route path="education" element={<Education />} />
+        <Route path="reviews" element={<Reviews />} />
+        <Route path="kpis" element={<KPIDashboard />} />
         <Route
           path="admin/team"
           element={<ProtectedRoute adminOnly><TeamManager /></ProtectedRoute>}
@@ -45,6 +50,10 @@ export default function App() {
         <Route
           path="admin/templates"
           element={<ProtectedRoute adminOnly><Templates /></ProtectedRoute>}
+        />
+        <Route
+          path="admin/my-team"
+          element={<ProtectedRoute adminOnly><MyTeam /></ProtectedRoute>}
         />
         <Route
           path="admin/health"

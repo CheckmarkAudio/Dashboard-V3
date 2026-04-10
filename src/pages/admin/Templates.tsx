@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import type { ReportTemplate, TemplateField } from '../../types'
+import { useToast } from '../../components/Toast'
+import type { ReportTemplate, TemplateField, TeamMember, TaskAssignment } from '../../types'
 import {
   ClipboardList, Plus, X, Save, Loader2, Edit2, Trash2, Copy, GripVertical,
-  FileText, CheckSquare, BarChart3,
+  FileText, CheckSquare, BarChart3, AlertTriangle, UserPlus, Users,
 } from 'lucide-react'
 
 const TEMPLATE_TYPES = [
   { value: 'daily', label: 'Daily Report', icon: FileText, color: 'bg-sky-500/10 text-sky-400' },
   { value: 'weekly', label: 'Weekly Report', icon: BarChart3, color: 'bg-violet-500/10 text-violet-400' },
   { value: 'checklist', label: 'Checklist', icon: CheckSquare, color: 'bg-emerald-500/10 text-emerald-400' },
+  { value: 'must_do', label: 'Must-Do', icon: AlertTriangle, color: 'bg-red-500/10 text-red-400' },
 ]
 
 const FIELD_TYPES = [
@@ -18,6 +20,15 @@ const FIELD_TYPES = [
   { value: 'number', label: 'Number' },
   { value: 'checkbox', label: 'Checkbox' },
   { value: 'select', label: 'Dropdown' },
+]
+
+const POSITIONS_LIST = [
+  { value: 'owner', label: 'Owner / Lead Engineer' },
+  { value: 'marketing_admin', label: 'Marketing / Admin' },
+  { value: 'artist_development', label: 'Artist Development' },
+  { value: 'intern', label: 'Intern' },
+  { value: 'engineer', label: 'Audio Engineer' },
+  { value: 'producer', label: 'Producer' },
 ]
 
 const PRESET_TEMPLATES: Omit<ReportTemplate, 'id' | 'created_at' | 'updated_at'>[] = [
@@ -74,6 +85,17 @@ const PRESET_TEMPLATES: Omit<ReportTemplate, 'id' | 'created_at' | 'updated_at'>
     ],
   },
   {
+    name: 'Daily Must-Do\'s',
+    type: 'must_do',
+    position: null,
+    is_default: true,
+    fields: [
+      { id: '1', label: 'Submit 1 content piece to Dropbox', type: 'checkbox', is_critical: true },
+      { id: '2', label: 'Log all client/external communications', type: 'checkbox', is_critical: true },
+      { id: '3', label: 'Update daily notes', type: 'checkbox', is_critical: true },
+    ],
+  },
+  {
     name: 'Weekly Summary',
     type: 'weekly',
     position: null,
@@ -111,6 +133,7 @@ const PRESET_TEMPLATES: Omit<ReportTemplate, 'id' | 'created_at' | 'updated_at'>
 ]
 
 export default function Templates() {
+  const { toast } = useToast()
   const [templates, setTemplates] = useState<ReportTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -120,16 +143,31 @@ export default function Templates() {
   const [typeFilter, setTypeFilter] = useState('all')
 
   const [name, setName] = useState('')
-  const [type, setType] = useState<'daily' | 'weekly' | 'checklist'>('daily')
+  const [type, setType] = useState<ReportTemplate['type']>('daily')
   const [position, setPosition] = useState<string>('')
   const [isDefault, setIsDefault] = useState(false)
   const [fields, setFields] = useState<TemplateField[]>([])
 
+  // Assignment modal state
+  const [assignModalTemplate, setAssignModalTemplate] = useState<ReportTemplate | null>(null)
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [assignments, setAssignments] = useState<TaskAssignment[]>([])
+  const [assignMode, setAssignMode] = useState<'member' | 'position'>('member')
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
+  const [selectedPosition, setSelectedPosition] = useState('')
+  const [assignSubmitting, setAssignSubmitting] = useState(false)
+
   useEffect(() => { loadTemplates() }, [])
 
   const loadTemplates = async () => {
-    const { data } = await supabase.from('report_templates').select('*').order('created_at', { ascending: false })
-    if (data) setTemplates(data as ReportTemplate[])
+    const [{ data: tData }, { data: mData }, { data: aData }] = await Promise.all([
+      supabase.from('report_templates').select('*').order('created_at', { ascending: false }),
+      supabase.from('intern_users').select('*').order('display_name'),
+      supabase.from('task_assignments').select('*'),
+    ])
+    if (tData) setTemplates(tData as ReportTemplate[])
+    if (mData) setTeamMembers(mData as TeamMember[])
+    if (aData) setAssignments(aData as TaskAssignment[])
     setLoading(false)
   }
 
@@ -176,7 +214,7 @@ export default function Templates() {
     setFields([...fields, {
       id: crypto.randomUUID(),
       label: '',
-      type: type === 'checklist' ? 'checkbox' : 'textarea',
+      type: (type === 'checklist' || type === 'must_do') ? 'checkbox' : 'textarea',
       required: false,
     }])
   }
@@ -220,7 +258,65 @@ export default function Templates() {
     loadTemplates()
   }
 
+  // Assignment handlers
+  const openAssignModal = (t: ReportTemplate) => {
+    setAssignModalTemplate(t)
+    setAssignMode('member')
+    setSelectedMemberIds(new Set())
+    setSelectedPosition(t.position ?? '')
+  }
+
+  const toggleMemberSelection = (id: string) => {
+    setSelectedMemberIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleAssign = async () => {
+    if (!assignModalTemplate) return
+    setAssignSubmitting(true)
+
+    const inserts: Array<{ template_id: string; intern_id: string | null; position: string | null; is_active: boolean }> = []
+
+    if (assignMode === 'member') {
+      for (const memberId of selectedMemberIds) {
+        const exists = assignments.some(a => a.template_id === assignModalTemplate.id && a.intern_id === memberId && a.is_active)
+        if (!exists) {
+          inserts.push({ template_id: assignModalTemplate.id, intern_id: memberId, position: null, is_active: true })
+        }
+      }
+    } else if (selectedPosition) {
+      const exists = assignments.some(a => a.template_id === assignModalTemplate.id && a.position === selectedPosition && a.is_active)
+      if (!exists) {
+        inserts.push({ template_id: assignModalTemplate.id, intern_id: null, position: selectedPosition, is_active: true })
+      }
+    }
+
+    if (inserts.length > 0) {
+      const { error } = await supabase.from('task_assignments').insert(inserts)
+      if (error) toast('Failed to assign template', 'error')
+      else toast(`Template assigned to ${inserts.length} target${inserts.length > 1 ? 's' : ''}`)
+    } else {
+      toast('Already assigned', 'error')
+    }
+
+    setAssignSubmitting(false)
+    setAssignModalTemplate(null)
+    loadTemplates()
+  }
+
+  const removeAssignment = async (assignmentId: string) => {
+    await supabase.from('task_assignments').delete().eq('id', assignmentId)
+    toast('Assignment removed')
+    loadTemplates()
+  }
+
   const getTypeInfo = (t: string) => TEMPLATE_TYPES.find(tt => tt.value === t) ?? TEMPLATE_TYPES[0]!
+
+  const getAssignmentCount = (templateId: string) => assignments.filter(a => a.template_id === templateId && a.is_active).length
 
   const filtered = typeFilter === 'all' ? templates : templates.filter(t => t.type === typeFilter)
 
@@ -231,7 +327,7 @@ export default function Templates() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Templates</h1>
-          <p className="text-text-muted mt-1">Create and manage report templates for your team</p>
+          <p className="text-text-muted mt-1">Create and manage task templates for your team</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { setShowPresets(!showPresets); setShowForm(false) }}
@@ -246,7 +342,6 @@ export default function Templates() {
         </div>
       </div>
 
-      {/* Presets panel */}
       {showPresets && (
         <div className="bg-surface rounded-xl border border-border p-5">
           <h2 className="font-semibold mb-4">Preset Templates</h2>
@@ -262,7 +357,7 @@ export default function Templates() {
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`p-1 rounded ${info.color}`}><info.icon size={14} /></span>
-                    <span className="text-xs font-medium text-text-muted capitalize">{preset.type}</span>
+                    <span className="text-xs font-medium text-text-muted capitalize">{preset.type.replace('_', '-')}</span>
                     {preset.position && (
                       <span className="text-xs bg-surface-alt px-1.5 py-0.5 rounded capitalize">{preset.position}</span>
                     )}
@@ -276,7 +371,6 @@ export default function Templates() {
         </div>
       )}
 
-      {/* Form */}
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-border p-6 space-y-5">
           <h2 className="font-semibold">{editingTemplate ? 'Edit Template' : 'Create Template'}</h2>
@@ -300,12 +394,7 @@ export default function Templates() {
               <select value={position} onChange={e => setPosition(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                 <option value="">All Positions</option>
-                <option value="owner">Owner / Lead Engineer</option>
-                <option value="marketing_admin">Marketing / Admin</option>
-                <option value="artist_development">Artist Development</option>
-                <option value="intern">Intern</option>
-                <option value="engineer">Audio Engineer</option>
-                <option value="producer">Producer</option>
+                {POSITIONS_LIST.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </div>
             <div className="flex items-end">
@@ -316,7 +405,6 @@ export default function Templates() {
             </div>
           </div>
 
-          {/* Fields builder */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <label className="text-sm font-medium">Fields ({fields.length})</label>
@@ -357,6 +445,14 @@ export default function Templates() {
                       Required
                     </label>
                   )}
+                  {(type === 'checklist' || type === 'must_do') && field.type === 'checkbox' && (
+                    <label className="flex items-center gap-1 text-xs text-red-400 mt-2 shrink-0">
+                      <input type="checkbox" checked={field.is_critical ?? false}
+                        onChange={e => updateField(i, { is_critical: e.target.checked })}
+                        className="rounded border-border" />
+                      Critical
+                    </label>
+                  )}
                   <button type="button" onClick={() => removeField(i)}
                     className="p-1 rounded text-text-muted hover:text-red-400 hover:bg-red-500/10 mt-1 shrink-0">
                     <X size={14} />
@@ -392,7 +488,6 @@ export default function Templates() {
         ))}
       </div>
 
-      {/* Templates list */}
       {filtered.length === 0 ? (
         <div className="bg-surface rounded-xl border border-border p-8 text-center text-text-muted">
           <ClipboardList size={32} className="mx-auto mb-3 opacity-30" />
@@ -402,15 +497,21 @@ export default function Templates() {
         <div className="grid sm:grid-cols-2 gap-4">
           {filtered.map(template => {
             const info = getTypeInfo(template.type)
+            const assignCount = getAssignmentCount(template.id)
             return (
               <div key={template.id} className="bg-surface rounded-xl border border-border p-5 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`p-1 rounded ${info.color}`}><info.icon size={14} /></span>
-                      <span className="text-xs font-medium text-text-muted capitalize">{template.type}</span>
+                      <span className="text-xs font-medium text-text-muted capitalize">{template.type.replace('_', '-')}</span>
                       {template.is_default && (
                         <span className="text-[10px] font-medium bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded">Default</span>
+                      )}
+                      {assignCount > 0 && (
+                        <span className="text-[10px] font-medium bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                          <Users size={10} /> {assignCount}
+                        </span>
                       )}
                     </div>
                     <h3 className="font-semibold">{template.name}</h3>
@@ -423,7 +524,7 @@ export default function Templates() {
                 <div className="space-y-1 mb-4">
                   {template.fields.slice(0, 4).map(field => (
                     <div key={field.id} className="flex items-center gap-2 text-xs text-text-muted">
-                      <span className="w-1.5 h-1.5 rounded-full bg-text-light shrink-0" />
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${field.is_critical ? 'bg-red-400' : 'bg-text-light'}`} />
                       <span className="truncate">{field.label}</span>
                       <span className="text-text-light ml-auto shrink-0">{field.type}</span>
                     </div>
@@ -442,6 +543,10 @@ export default function Templates() {
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-text-muted hover:bg-surface-hover">
                     <Copy size={12} /> Duplicate
                   </button>
+                  <button onClick={() => openAssignModal(template)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-violet-400 hover:bg-violet-500/10">
+                    <UserPlus size={12} /> Assign
+                  </button>
                   <button onClick={() => handleDelete(template.id)}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 ml-auto">
                     <Trash2 size={12} /> Delete
@@ -450,6 +555,100 @@ export default function Templates() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Assignment Modal */}
+      {assignModalTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setAssignModalTemplate(null)} />
+          <div className="relative bg-surface rounded-2xl border border-border p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="font-semibold text-lg">Assign Template</h2>
+                <p className="text-sm text-text-muted mt-0.5">{assignModalTemplate.name}</p>
+              </div>
+              <button onClick={() => setAssignModalTemplate(null)} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Current assignments */}
+            {(() => {
+              const current = assignments.filter(a => a.template_id === assignModalTemplate.id && a.is_active)
+              if (current.length === 0) return null
+              return (
+                <div className="mb-5">
+                  <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">Current Assignments</p>
+                  <div className="space-y-1.5">
+                    {current.map(a => (
+                      <div key={a.id} className="flex items-center justify-between p-2.5 rounded-lg bg-surface-alt text-sm">
+                        <span>
+                          {a.intern_id
+                            ? teamMembers.find(m => m.id === a.intern_id)?.display_name ?? 'Unknown'
+                            : `All ${POSITIONS_LIST.find(p => p.value === a.position)?.label ?? a.position}`}
+                        </span>
+                        <button onClick={() => removeAssignment(a.id)}
+                          className="text-xs text-red-400 hover:text-red-300 font-medium">Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => setAssignMode('member')}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${assignMode === 'member' ? 'bg-gold/10 text-gold' : 'text-text-muted hover:bg-surface-hover'}`}>
+                By Member
+              </button>
+              <button onClick={() => setAssignMode('position')}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${assignMode === 'position' ? 'bg-gold/10 text-gold' : 'text-text-muted hover:bg-surface-hover'}`}>
+                By Position
+              </button>
+            </div>
+
+            {assignMode === 'member' ? (
+              <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                {teamMembers.filter(m => m.status !== 'inactive').map(m => (
+                  <label key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-hover cursor-pointer">
+                    <input type="checkbox" checked={selectedMemberIds.has(m.id)}
+                      onChange={() => toggleMemberSelection(m.id)} className="rounded border-border" />
+                    <div className="w-8 h-8 rounded-full bg-gold/15 text-gold flex items-center justify-center text-xs font-bold shrink-0">
+                      {m.display_name?.charAt(0)?.toUpperCase() ?? '?'}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{m.display_name}</p>
+                      <p className="text-xs text-text-muted capitalize">{(m.position ?? 'intern').replace(/_/g, ' ')}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div>
+                <select value={selectedPosition} onChange={e => setSelectedPosition(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
+                  <option value="">Select a position...</option>
+                  {POSITIONS_LIST.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+                {selectedPosition && (
+                  <p className="text-xs text-text-muted mt-2">
+                    All current and future {POSITIONS_LIST.find(p => p.value === selectedPosition)?.label} members will receive this template.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-border">
+              <button onClick={() => setAssignModalTemplate(null)}
+                className="px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-surface-hover">Cancel</button>
+              <button onClick={handleAssign} disabled={assignSubmitting || (assignMode === 'member' ? selectedMemberIds.size === 0 : !selectedPosition)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm disabled:opacity-50">
+                {assignSubmitting ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+                Assign
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
