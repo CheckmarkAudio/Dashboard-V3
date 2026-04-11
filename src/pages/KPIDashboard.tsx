@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { localDateKey } from '../lib/dates'
 import { useToast } from '../components/Toast'
 import type { MemberKPI, MemberKPIEntry, FlywheelStage, TeamMember } from '../types'
 import {
@@ -44,6 +46,7 @@ const UNIT_LABELS: Record<string, string> = {
 }
 
 export default function KPIDashboard() {
+  useDocumentTitle('My KPIs - Checkmark Audio')
   const { profile, isAdmin } = useAuth()
   const { toast } = useToast()
   const [kpis, setKpis] = useState<MemberKPI[]>([])
@@ -58,11 +61,11 @@ export default function KPIDashboard() {
   const [logKpiId, setLogKpiId] = useState<string | null>(null)
   const [logValue, setLogValue] = useState('')
   const [logNotes, setLogNotes] = useState('')
-  const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0])
+  const [logDate, setLogDate] = useState(localDateKey())
   const [logSubmitting, setLogSubmitting] = useState(false)
 
   const loadData = useCallback(async () => {
-    if (!profile) return
+    if (!profile) { setLoading(false); return }
     setLoading(true)
     try {
       const [kpisRes, entriesRes, membersRes] = await Promise.all([
@@ -70,16 +73,19 @@ export default function KPIDashboard() {
         supabase.from('member_kpi_entries').select('*').order('entry_date'),
         isAdmin
           ? supabase.from('intern_users').select('*').eq('managed_by', profile.id).order('display_name')
-          : Promise.resolve({ data: null }),
+          : Promise.resolve({ data: null, error: null }),
       ])
+      if (kpisRes.error) toast('Failed to load KPIs', 'error')
+      if (entriesRes.error) toast('Failed to load KPI entries', 'error')
       if (kpisRes.data) setKpis(kpisRes.data as MemberKPI[])
       if (entriesRes.data) setEntries(entriesRes.data as MemberKPIEntry[])
       if (membersRes.data) setDirectReports(membersRes.data as TeamMember[])
     } catch (err) {
       console.error(err)
+      toast('Failed to load KPI data', 'error')
     }
     setLoading(false)
-  }, [profile, isAdmin])
+  }, [profile, isAdmin, toast])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -106,18 +112,23 @@ export default function KPIDashboard() {
     setLogKpiId(null)
     setLogValue('')
     setLogNotes('')
-    setLogDate(new Date().toISOString().split('T')[0])
+    setLogDate(localDateKey())
     loadData()
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" /></div>
+  if (loading) return (
+    <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" aria-hidden="true" />
+      <span className="sr-only">Loading…</span>
+    </div>
+  )
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest text-gold">Flywheel</p>
         <h1 className="text-2xl font-bold mt-1 flex items-center gap-2">
-          <Target size={24} className="text-gold" /> My KPIs
+          <Target size={24} className="text-gold" aria-hidden="true" /> My KPIs
         </h1>
         <p className="text-text-muted text-sm mt-1">
           Track your key performance indicators. Every metric should always be trending up.
@@ -128,6 +139,7 @@ export default function KPIDashboard() {
       {isAdmin && directReports.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => setViewingUserId(null)}
+            aria-current={!viewingUserId ? 'true' : undefined}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               !viewingUserId ? 'bg-gold/10 text-gold' : 'text-text-muted hover:bg-surface-hover'
             }`}>
@@ -135,6 +147,7 @@ export default function KPIDashboard() {
           </button>
           {directReports.map(m => (
             <button key={m.id} onClick={() => setViewingUserId(m.id)}
+              aria-current={viewingUserId === m.id ? 'true' : undefined}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 viewingUserId === m.id ? 'bg-gold/10 text-gold' : 'text-text-muted hover:bg-surface-hover'
               }`}>
@@ -145,7 +158,10 @@ export default function KPIDashboard() {
       )}
 
       {/* Flywheel stage summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <p id="kpi-flywheel-stage-summary-desc" className="sr-only">
+        Each card is a flywheel stage. The number is how many KPIs are assigned to that stage; the icon reflects whether recent entries for those KPIs are trending up, down, or flat.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" aria-describedby="kpi-flywheel-stage-summary-desc">
         {FLYWHEEL_STAGES.map(stage => {
           const stageKpis = myKpis.filter(k => k.flywheel_stage === stage.key)
           const hasKpi = stageKpis.length > 0
@@ -157,9 +173,24 @@ export default function KPIDashboard() {
               <p className={`text-[10px] font-semibold uppercase tracking-wide ${stage.color}`}>{stage.label}</p>
               {hasKpi ? (
                 <div className="flex items-center justify-center gap-1 mt-1">
-                  {trend === 'up' && <TrendingUp size={14} className="text-emerald-400" />}
-                  {trend === 'down' && <TrendingDown size={14} className="text-red-400" />}
-                  {trend === 'flat' && <Minus size={14} className="text-text-muted" />}
+                  {trend === 'up' && (
+                    <>
+                      <TrendingUp size={14} className="text-emerald-400" aria-hidden="true" />
+                      <span className="sr-only">Trending up</span>
+                    </>
+                  )}
+                  {trend === 'down' && (
+                    <>
+                      <TrendingDown size={14} className="text-red-400" aria-hidden="true" />
+                      <span className="sr-only">Trending down</span>
+                    </>
+                  )}
+                  {trend === 'flat' && (
+                    <>
+                      <Minus size={14} className="text-text-muted" aria-hidden="true" />
+                      <span className="sr-only">Flat trend</span>
+                    </>
+                  )}
                   <span className="text-xs font-medium text-text">{stageKpis.length} KPI{stageKpis.length > 1 ? 's' : ''}</span>
                 </div>
               ) : (
@@ -172,7 +203,7 @@ export default function KPIDashboard() {
 
       {myKpis.length === 0 ? (
         <div className="bg-surface rounded-2xl border border-border p-8 text-center">
-          <Target size={40} className="mx-auto mb-3 text-text-light opacity-30" />
+          <Target size={40} className="mx-auto mb-3 text-text-light opacity-30" aria-hidden="true" />
           <p className="text-text-muted">No KPIs assigned yet.</p>
           <p className="text-xs text-text-light mt-1">Your manager will set up KPIs tied to your flywheel responsibilities.</p>
         </div>
@@ -213,35 +244,58 @@ export default function KPIDashboard() {
                           ) : '—'}
                         </p>
                       </div>
-                      {trend === 'up' && <TrendingUp size={24} className="text-emerald-400" />}
-                      {trend === 'down' && <TrendingDown size={24} className="text-red-400" />}
-                      {trend === 'flat' && <Minus size={24} className="text-text-muted" />}
+                      {trend === 'up' && (
+                        <>
+                          <TrendingUp size={24} className="text-emerald-400" aria-hidden="true" />
+                          <span className="sr-only">Trending up</span>
+                        </>
+                      )}
+                      {trend === 'down' && (
+                        <>
+                          <TrendingDown size={24} className="text-red-400" aria-hidden="true" />
+                          <span className="sr-only">Trending down</span>
+                        </>
+                      )}
+                      {trend === 'flat' && (
+                        <>
+                          <Minus size={24} className="text-text-muted" aria-hidden="true" />
+                          <span className="sr-only">Flat trend</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   {chartData.length > 1 ? (
-                    <div className="h-44 mt-4">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData}>
-                          <defs>
-                            <linearGradient id={`area-${kpi.id}`} x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor={trendColor} stopOpacity={0.25} />
-                              <stop offset="100%" stopColor={trendColor} stopOpacity={0} />
-                            </linearGradient>
-                          </defs>
-                          <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} />
-                          <YAxis tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} width={35} />
-                          <Tooltip
-                            contentStyle={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, fontSize: 12 }}
-                            labelStyle={{ color: '#aaa' }}
-                          />
-                          {kpi.target_value != null && (
-                            <ReferenceLine y={Number(kpi.target_value)} stroke="#C9A84C" strokeDasharray="4 4" strokeOpacity={0.6} label={{ value: 'Target', position: 'right', fill: '#C9A84C', fontSize: 10 }} />
-                          )}
-                          <Area type="monotone" dataKey="value" stroke={trendColor} fill={`url(#area-${kpi.id})`} strokeWidth={2.5} dot={{ r: 3, fill: trendColor }} activeDot={{ r: 5 }} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
+                    <>
+                      <div className="h-44 mt-4" aria-hidden="true">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={chartData}>
+                            <defs>
+                              <linearGradient id={`area-${kpi.id}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={trendColor} stopOpacity={0.25} />
+                                <stop offset="100%" stopColor={trendColor} stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} width={35} />
+                            <Tooltip
+                              contentStyle={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, fontSize: 12 }}
+                              labelStyle={{ color: '#aaa' }}
+                            />
+                            {kpi.target_value != null && (
+                              <ReferenceLine y={Number(kpi.target_value)} stroke="#C9A84C" strokeDasharray="4 4" strokeOpacity={0.6} label={{ value: 'Target', position: 'right', fill: '#C9A84C', fontSize: 10 }} />
+                            )}
+                            <Area type="monotone" dataKey="value" stroke={trendColor} fill={`url(#area-${kpi.id})`} strokeWidth={2.5} dot={{ r: 3, fill: trendColor }} activeDot={{ r: 5 }} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <span className="sr-only">
+                        {kpi.name}
+                        {latestValue != null
+                          ? `: area chart of recent values; latest ${kpi.unit === 'dollars' ? '$' : ''}${latestValue}${unitLabel}.`
+                          : ': area chart of recent values; no latest value logged.'}
+                      </span>
+                    </>
                   ) : (
                     <div className="h-24 mt-4 flex items-center justify-center rounded-xl border border-dashed border-border text-text-light text-xs">
                       Log entries to see your trend chart
@@ -254,25 +308,25 @@ export default function KPIDashboard() {
                   <div className="px-5 py-4 bg-surface-alt/50 border-t border-border space-y-3">
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs font-medium mb-1 text-text-muted">Date</label>
-                        <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)}
+                        <label htmlFor={`kpi-entry-date-${kpi.id}`} className="block text-xs font-medium mb-1 text-text-muted">Date</label>
+                        <input id={`kpi-entry-date-${kpi.id}`} type="date" value={logDate} onChange={e => setLogDate(e.target.value)}
                           className="w-full px-2.5 py-2 rounded-lg border border-border text-sm" />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium mb-1 text-text-muted">Value *</label>
-                        <input type="number" value={logValue} onChange={e => setLogValue(e.target.value)}
+                        <label htmlFor={`kpi-entry-value-${kpi.id}`} className="block text-xs font-medium mb-1 text-text-muted">Value *</label>
+                        <input id={`kpi-entry-value-${kpi.id}`} type="number" value={logValue} onChange={e => setLogValue(e.target.value)}
                           className="w-full px-2.5 py-2 rounded-lg border border-border text-sm" placeholder="0" autoFocus />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium mb-1 text-text-muted">Notes</label>
-                        <input value={logNotes} onChange={e => setLogNotes(e.target.value)}
+                        <label htmlFor={`kpi-entry-notes-${kpi.id}`} className="block text-xs font-medium mb-1 text-text-muted">Notes</label>
+                        <input id={`kpi-entry-notes-${kpi.id}`} value={logNotes} onChange={e => setLogNotes(e.target.value)}
                           className="w-full px-2.5 py-2 rounded-lg border border-border text-sm" placeholder="Optional" />
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={handleLogEntry} disabled={logSubmitting || !logValue}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gold hover:bg-gold-muted text-black text-xs font-semibold disabled:opacity-50">
-                        {logSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                        {logSubmitting ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Save size={14} aria-hidden="true" />}
                         Save Entry
                       </button>
                       <button onClick={() => setLogKpiId(null)}
@@ -281,9 +335,9 @@ export default function KPIDashboard() {
                   </div>
                 ) : (
                   <div className="px-5 py-3 border-t border-border">
-                    <button onClick={() => { setLogKpiId(kpi.id); setLogDate(new Date().toISOString().split('T')[0]) }}
+                    <button onClick={() => { setLogKpiId(kpi.id); setLogDate(localDateKey()) }}
                       className="flex items-center gap-1.5 text-xs font-medium text-gold hover:text-gold-muted">
-                      <Plus size={14} /> Log Today's Entry
+                      <Plus size={14} aria-hidden="true" /> Log Today's Entry
                     </button>
                   </div>
                 )}

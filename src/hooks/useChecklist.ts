@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { localDateKey } from '../lib/dates'
 
 export interface ChecklistItemRow {
   id: string
@@ -21,7 +22,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
   const [loading, setLoading] = useState(true)
   const [instanceId, setInstanceId] = useState<string | null>(null)
 
-  const dateKey = date.toISOString().split('T')[0]
+  const dateKey = localDateKey(date)
 
   const reload = useCallback(async () => {
     if (!profile) { setLoading(false); return }
@@ -128,8 +129,8 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
       }
 
       setInstanceId(newInst.id)
+      setItems([])
 
-      // Generate items from template fields
       const newItems: Array<{
         instance_id: string
         category: string
@@ -161,6 +162,8 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
           .insert(newItems)
           .select('*')
         setItems((inserted as ChecklistItemRow[]) ?? [])
+      } else {
+        setItems([])
       }
     } catch (err) {
       console.error('Checklist load error:', err)

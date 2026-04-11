@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { localDateKey } from '../../lib/dates'
 import { useToast } from '../../components/Toast'
 import type {
   TeamMember, ReportTemplate, TaskAssignment, MemberKPI, MemberKPIEntry,
@@ -12,7 +14,7 @@ import {
 import ConfirmModal from '../../components/ConfirmModal'
 import {
   Users, ClipboardList, Star, TrendingUp, TrendingDown, Minus,
-  Plus, X, Save, Loader2, ChevronDown, Target, FileText,
+  Plus, X, Save, Loader2, Target, FileText,
   AlertTriangle, CheckSquare, BarChart3, Calendar,
 } from 'lucide-react'
 
@@ -36,7 +38,7 @@ function startOfWeek(d = new Date()): string {
   const day = date.getDay()
   const diff = date.getDate() - day + (day === 0 ? -6 : 1)
   date.setDate(diff)
-  return date.toISOString().split('T')[0]
+  return localDateKey(date)
 }
 
 function getKPITrend(entries: MemberKPIEntry[]): 'up' | 'down' | 'flat' {
@@ -51,6 +53,7 @@ function getKPITrend(entries: MemberKPIEntry[]): 'up' | 'down' | 'flat' {
 }
 
 export default function MyTeam() {
+  useDocumentTitle('My Team - Checkmark Audio')
   const { profile } = useAuth()
   const { toast } = useToast()
   const [reports, setReports] = useState<TeamMember[]>([])
@@ -114,9 +117,10 @@ export default function MyTeam() {
       if (reviewsRes.data) setReviews(reviewsRes.data as WeeklyAdminReview[])
     } catch (err) {
       console.error(err)
+      toast('Failed to load team data', 'error')
     }
     setLoading(false)
-  }, [profile])
+  }, [profile, toast])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -204,7 +208,11 @@ export default function MyTeam() {
   }
 
   const handleRemoveAssignment = async (id: string) => {
-    await supabase.from('task_assignments').delete().eq('id', id)
+    const { error } = await supabase.from('task_assignments').delete().eq('id', id)
+    if (error) {
+      toast('Failed to remove assignment', 'error')
+      return
+    }
     toast('Assignment removed')
     loadData()
   }
@@ -228,14 +236,19 @@ export default function MyTeam() {
     }
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" /></div>
+  if (loading) return (
+    <div role="status" aria-live="polite" className="flex items-center justify-center h-64">
+      <div aria-hidden="true" className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" />
+      <span className="sr-only">Loading…</span>
+    </div>
+  )
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest text-gold">Admin</p>
         <h1 className="text-2xl font-bold mt-1 flex items-center gap-2">
-          <Users size={24} className="text-gold" /> My Team
+          <Users size={24} className="text-gold" aria-hidden="true" /> My Team
         </h1>
         <p className="text-text-muted text-sm mt-1">
           Manage your direct reports, assign tasks, track KPIs, and write weekly reviews.
@@ -244,25 +257,25 @@ export default function MyTeam() {
 
       {reports.length === 0 ? (
         <div className="bg-surface rounded-2xl border border-border p-8 text-center">
-          <Users size={32} className="mx-auto mb-3 text-text-light opacity-30" />
+          <Users size={32} className="mx-auto mb-3 text-text-light opacity-30" aria-hidden="true" />
           <p className="text-text-muted">No team members are reporting to you yet.</p>
           <p className="text-xs text-text-light mt-1">Go to Team Manager and set "Reports To" for members you manage.</p>
         </div>
       ) : (
         <>
           {/* Tab navigation */}
-          <div className="flex items-center gap-1 bg-surface rounded-xl border border-border p-1">
+          <div role="tablist" className="flex items-center gap-1 bg-surface rounded-xl border border-border p-1">
             {([
               { key: 'overview' as const, label: 'Overview', icon: Users },
               { key: 'assign' as const, label: 'Assign', icon: ClipboardList },
               { key: 'review' as const, label: 'Review', icon: Star },
               { key: 'kpis' as const, label: 'KPIs', icon: Target },
             ]).map(tab => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              <button key={tab.key} type="button" role="tab" aria-selected={activeTab === tab.key} onClick={() => setActiveTab(tab.key)}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   activeTab === tab.key ? 'bg-gold/10 text-gold' : 'text-text-muted hover:text-text hover:bg-surface-hover'
                 }`}>
-                <tab.icon size={15} />
+                <tab.icon size={15} aria-hidden="true" />
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
             ))}
@@ -294,28 +307,51 @@ export default function MyTeam() {
                         <p className="text-xs text-text-muted capitalize">{(member.position ?? 'intern').replace(/_/g, ' ')}</p>
                       </div>
                       {trend && (
-                        <div className="ml-auto">
-                          {trend === 'up' && <TrendingUp size={18} className="text-emerald-400" />}
-                          {trend === 'down' && <TrendingDown size={18} className="text-red-400" />}
-                          {trend === 'flat' && <Minus size={18} className="text-text-muted" />}
+                        <div className="ml-auto inline-flex">
+                          {trend === 'up' && (
+                            <span className="inline-flex items-center">
+                              <TrendingUp size={18} className="text-emerald-400" aria-hidden="true" />
+                              <span className="sr-only">Trending up</span>
+                            </span>
+                          )}
+                          {trend === 'down' && (
+                            <span className="inline-flex items-center">
+                              <TrendingDown size={18} className="text-red-400" aria-hidden="true" />
+                              <span className="sr-only">Trending down</span>
+                            </span>
+                          )}
+                          {trend === 'flat' && (
+                            <span className="inline-flex items-center">
+                              <Minus size={18} className="text-text-muted" aria-hidden="true" />
+                              <span className="sr-only">No change</span>
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
 
                     {chartData.length > 1 && (
-                      <div className="h-16 mb-3 -mx-1">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={chartData}>
-                            <defs>
-                              <linearGradient id={`grad-${member.id}`} x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0.3} />
-                                <stop offset="100%" stopColor={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <Area type="monotone" dataKey="value" stroke={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'} fill={`url(#grad-${member.id})`} strokeWidth={2} />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
+                      <>
+                        <div className="h-16 mb-3 -mx-1" aria-hidden="true">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={chartData}>
+                              <defs>
+                                <linearGradient id={`grad-${member.id}`} x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0.3} />
+                                  <stop offset="100%" stopColor={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <Area type="monotone" dataKey="value" stroke={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'} fill={`url(#grad-${member.id})`} strokeWidth={2} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <span className="sr-only">
+                          {primaryKpi ? `Area chart of ${primaryKpi.name} for the last ${chartData.length} data points. ` : ''}
+                          {trend === 'up' && 'Values are trending upward.'}
+                          {trend === 'down' && 'Values are trending downward.'}
+                          {trend === 'flat' && 'Values are relatively flat.'}
+                        </span>
+                      </>
                     )}
 
                     <div className="space-y-1.5 text-xs text-text-muted">
@@ -343,11 +379,11 @@ export default function MyTeam() {
                     <div className="flex gap-1.5 mt-3 pt-3 border-t border-border">
                       <button onClick={() => selectMemberForReview(member)}
                         className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium text-gold hover:bg-gold/10">
-                        <Star size={12} /> Review
+                        <Star size={12} aria-hidden="true" /> Review
                       </button>
                       <button onClick={() => { setSelectedMember(member); setActiveTab('kpis') }}
                         className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium text-violet-400 hover:bg-violet-500/10">
-                        <Target size={12} /> KPIs
+                        <Target size={12} aria-hidden="true" /> KPIs
                       </button>
                     </div>
                   </div>
@@ -363,8 +399,8 @@ export default function MyTeam() {
                 <h2 className="font-semibold mb-4">Assign Template to Members</h2>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1.5 text-text-muted">Template</label>
-                    <select value={assignTemplateId} onChange={e => setAssignTemplateId(e.target.value)}
+                    <label htmlFor="myteam-assign-template" className="block text-sm font-medium mb-1.5 text-text-muted">Template</label>
+                    <select id="myteam-assign-template" value={assignTemplateId} onChange={e => setAssignTemplateId(e.target.value)}
                       className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                       <option value="">Select a template...</option>
                       {templates.map(t => {
@@ -374,8 +410,8 @@ export default function MyTeam() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1.5 text-text-muted">Members</label>
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg border border-border p-2">
+                    <p id="myteam-assign-members-heading" className="block text-sm font-medium mb-1.5 text-text-muted">Members</p>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg border border-border p-2" role="group" aria-labelledby="myteam-assign-members-heading">
                       {reports.map(m => (
                         <label key={m.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-hover cursor-pointer">
                           <input type="checkbox" checked={assignMemberIds.has(m.id)}
@@ -398,7 +434,7 @@ export default function MyTeam() {
                   <button onClick={handleAssignTemplate}
                     disabled={assignSubmitting || !assignTemplateId || assignMemberIds.size === 0}
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-sm font-semibold disabled:opacity-50">
-                    {assignSubmitting ? <Loader2 size={16} className="animate-spin" /> : <ClipboardList size={16} />}
+                    {assignSubmitting ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <ClipboardList size={16} aria-hidden="true" />}
                     Assign Template
                   </button>
                 </div>
@@ -423,7 +459,7 @@ export default function MyTeam() {
                         return (
                           <div key={a.id} className="px-5 py-2.5 flex items-center justify-between hover:bg-surface-hover/30">
                             <div className="flex items-center gap-2">
-                              {(() => { const Icon = TEMPLATE_TYPE_ICONS[tpl.type] ?? FileText; return <Icon size={14} className="text-text-muted" /> })()}
+                              {(() => { const Icon = TEMPLATE_TYPE_ICONS[tpl.type] ?? FileText; return <Icon size={14} className="text-text-muted" aria-hidden="true" /> })()}
                               <span className="text-sm">{tpl.name}</span>
                               <span className="text-[10px] text-text-light capitalize px-1.5 py-0.5 rounded bg-surface-alt">{tpl.type.replace('_', '-')}</span>
                             </div>
@@ -464,21 +500,22 @@ export default function MyTeam() {
                     <div>
                       <h2 className="font-semibold">Weekly Review: {selectedMember.display_name}</h2>
                       <p className="text-xs text-text-muted mt-0.5 flex items-center gap-1">
-                        <Calendar size={12} /> Week of {startOfWeek()}
+                        <Calendar size={12} aria-hidden="true" /> Week of {startOfWeek()}
                       </p>
                     </div>
                   </div>
 
                   {/* Flywheel scores */}
                   <div>
-                    <label className="block text-sm font-medium mb-3">Flywheel Stage Scores</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <p id="myteam-flywheel-scores-heading" className="block text-sm font-medium mb-3">Flywheel Stage Scores</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" aria-labelledby="myteam-flywheel-scores-heading">
                       {FLYWHEEL_STAGES.map(stage => (
                         <div key={stage.key} className="text-center">
                           <p className={`text-xs font-semibold mb-2 ${stage.color}`}>{stage.label}</p>
-                          <div className="flex flex-col items-center gap-1">
+                          <div className="flex flex-col items-center gap-1" role="radiogroup" aria-label={stage.label}>
                             {[5, 4, 3, 2, 1].map(n => (
-                              <button key={n} onClick={() => setReviewScores({ ...reviewScores, [stage.key]: n })}
+                              <button key={n} type="button" role="radio" aria-checked={reviewScores[stage.key] === n}
+                                onClick={() => setReviewScores({ ...reviewScores, [stage.key]: n })}
                                 className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
                                   reviewScores[stage.key] >= n
                                     ? 'bg-gold/20 text-gold border border-gold/40'
@@ -494,8 +531,8 @@ export default function MyTeam() {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                      <input type="checkbox" checked={reviewKpiOnTrack}
+                    <label htmlFor="myteam-review-kpi-on-track" className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                      <input id="myteam-review-kpi-on-track" type="checkbox" checked={reviewKpiOnTrack}
                         onChange={e => setReviewKpiOnTrack(e.target.checked)} className="rounded border-border" />
                       KPI on track this week
                     </label>
@@ -505,22 +542,22 @@ export default function MyTeam() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Strengths</label>
-                    <textarea value={reviewStrengths} onChange={e => setReviewStrengths(e.target.value)} rows={3}
+                    <label htmlFor="myteam-review-strengths" className="block text-sm font-medium mb-1.5">Strengths</label>
+                    <textarea id="myteam-review-strengths" value={reviewStrengths} onChange={e => setReviewStrengths(e.target.value)} rows={3}
                       className="w-full px-3 py-2.5 rounded-lg border border-border text-sm resize-none"
                       placeholder="What did they do well this week?" />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Areas for Improvement</label>
-                    <textarea value={reviewImprovements} onChange={e => setReviewImprovements(e.target.value)} rows={3}
+                    <label htmlFor="myteam-review-improvements" className="block text-sm font-medium mb-1.5">Areas for Improvement</label>
+                    <textarea id="myteam-review-improvements" value={reviewImprovements} onChange={e => setReviewImprovements(e.target.value)} rows={3}
                       className="w-full px-3 py-2.5 rounded-lg border border-border text-sm resize-none"
                       placeholder="Where can they improve?" />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Action Items (one per line)</label>
-                    <textarea value={reviewActions} onChange={e => setReviewActions(e.target.value)} rows={3}
+                    <label htmlFor="myteam-review-actions" className="block text-sm font-medium mb-1.5">Action Items (one per line)</label>
+                    <textarea id="myteam-review-actions" value={reviewActions} onChange={e => setReviewActions(e.target.value)} rows={3}
                       className="w-full px-3 py-2.5 rounded-lg border border-border text-sm resize-none"
                       placeholder={"Submit content by 3pm daily\nUpdate pipeline before EOD"} />
                   </div>
@@ -528,7 +565,7 @@ export default function MyTeam() {
                   <div className="flex justify-end">
                     <button onClick={handleSubmitReview} disabled={reviewSubmitting}
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-sm font-semibold disabled:opacity-50">
-                      {reviewSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      {reviewSubmitting ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
                       Submit Review
                     </button>
                   </div>
@@ -589,7 +626,7 @@ export default function MyTeam() {
                     <h2 className="font-semibold">{selectedMember.display_name}'s KPIs</h2>
                     <button onClick={() => setShowKpiForm(!showKpiForm)}
                       className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium text-gold hover:bg-gold/10">
-                      {showKpiForm ? <X size={14} /> : <Plus size={14} />}
+                      {showKpiForm ? <X size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
                       {showKpiForm ? 'Cancel' : 'Add KPI'}
                     </button>
                   </div>
@@ -598,21 +635,21 @@ export default function MyTeam() {
                     <div className="bg-surface rounded-xl border border-border p-5 space-y-4">
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium mb-1.5">KPI Name *</label>
-                          <input required value={kpiName} onChange={e => setKpiName(e.target.value)}
+                          <label htmlFor="myteam-kpi-name" className="block text-sm font-medium mb-1.5">KPI Name *</label>
+                          <input id="myteam-kpi-name" required value={kpiName} onChange={e => setKpiName(e.target.value)}
                             className="w-full px-3 py-2.5 rounded-lg border border-border text-sm"
                             placeholder="e.g. Content Pieces Submitted" />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium mb-1.5">Flywheel Stage</label>
-                          <select value={kpiStage} onChange={e => setKpiStage(e.target.value as FlywheelStage)}
+                          <label htmlFor="myteam-kpi-stage" className="block text-sm font-medium mb-1.5">Flywheel Stage</label>
+                          <select id="myteam-kpi-stage" value={kpiStage} onChange={e => setKpiStage(e.target.value as FlywheelStage)}
                             className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                             {FLYWHEEL_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium mb-1.5">Unit</label>
-                          <select value={kpiUnit} onChange={e => setKpiUnit(e.target.value)}
+                          <label htmlFor="myteam-kpi-unit" className="block text-sm font-medium mb-1.5">Unit</label>
+                          <select id="myteam-kpi-unit" value={kpiUnit} onChange={e => setKpiUnit(e.target.value)}
                             className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                             <option value="count">Count</option>
                             <option value="percent">Percent</option>
@@ -621,15 +658,15 @@ export default function MyTeam() {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium mb-1.5">Target Value</label>
-                          <input type="number" value={kpiTarget} onChange={e => setKpiTarget(e.target.value)}
+                          <label htmlFor="myteam-kpi-target" className="block text-sm font-medium mb-1.5">Target Value</label>
+                          <input id="myteam-kpi-target" type="number" value={kpiTarget} onChange={e => setKpiTarget(e.target.value)}
                             className="w-full px-3 py-2.5 rounded-lg border border-border text-sm"
                             placeholder="e.g. 5" />
                         </div>
                       </div>
                       <button onClick={handleCreateKpi} disabled={kpiSubmitting || !kpiName}
                         className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-sm font-semibold disabled:opacity-50">
-                        {kpiSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        {kpiSubmitting ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
                         Create KPI
                       </button>
                     </div>
@@ -637,7 +674,7 @@ export default function MyTeam() {
 
                   {getMemberKpis(selectedMember.id).length === 0 ? (
                     <div className="bg-surface rounded-xl border border-border p-8 text-center text-text-muted">
-                      <Target size={32} className="mx-auto mb-3 opacity-30" />
+                      <Target size={32} className="mx-auto mb-3 opacity-30" aria-hidden="true" />
                       <p>No KPIs assigned yet. Add one to start tracking.</p>
                     </div>
                   ) : (
@@ -671,34 +708,58 @@ export default function MyTeam() {
                                     <p className="text-[10px] text-text-light">Target: {kpi.target_value}</p>
                                   )}
                                 </div>
-                                {trend === 'up' && <TrendingUp size={20} className="text-emerald-400" />}
-                                {trend === 'down' && <TrendingDown size={20} className="text-red-400" />}
-                                {trend === 'flat' && <Minus size={20} className="text-text-muted" />}
+                                {trend === 'up' && (
+                                  <span className="inline-flex items-center shrink-0">
+                                    <TrendingUp size={20} className="text-emerald-400" aria-hidden="true" />
+                                    <span className="sr-only">Trending up</span>
+                                  </span>
+                                )}
+                                {trend === 'down' && (
+                                  <span className="inline-flex items-center shrink-0">
+                                    <TrendingDown size={20} className="text-red-400" aria-hidden="true" />
+                                    <span className="sr-only">Trending down</span>
+                                  </span>
+                                )}
+                                {trend === 'flat' && (
+                                  <span className="inline-flex items-center shrink-0">
+                                    <Minus size={20} className="text-text-muted" aria-hidden="true" />
+                                    <span className="sr-only">No change</span>
+                                  </span>
+                                )}
                               </div>
                             </div>
 
                             {chartData.length > 1 && (
-                              <div className="h-32">
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <AreaChart data={chartData}>
-                                    <defs>
-                                      <linearGradient id={`kpi-${kpi.id}`} x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0.3} />
-                                        <stop offset="100%" stopColor={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0} />
-                                      </linearGradient>
-                                    </defs>
-                                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} width={30} />
-                                    <Tooltip contentStyle={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, fontSize: 12 }} />
-                                    {kpi.target_value != null && (
-                                      <ReferenceLine y={Number(kpi.target_value)} stroke="#C9A84C" strokeDasharray="4 4" strokeOpacity={0.5} />
-                                    )}
-                                    <Area type="monotone" dataKey="value"
-                                      stroke={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'}
-                                      fill={`url(#kpi-${kpi.id})`} strokeWidth={2} />
-                                  </AreaChart>
-                                </ResponsiveContainer>
-                              </div>
+                              <>
+                                <div className="h-32" aria-hidden="true">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={chartData}>
+                                      <defs>
+                                        <linearGradient id={`kpi-${kpi.id}`} x1="0" y1="0" x2="0" y2="1">
+                                          <stop offset="0%" stopColor={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0.3} />
+                                          <stop offset="100%" stopColor={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0} />
+                                        </linearGradient>
+                                      </defs>
+                                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} />
+                                      <YAxis tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} width={30} />
+                                      <Tooltip contentStyle={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, fontSize: 12 }} />
+                                      {kpi.target_value != null && (
+                                        <ReferenceLine y={Number(kpi.target_value)} stroke="#C9A84C" strokeDasharray="4 4" strokeOpacity={0.5} />
+                                      )}
+                                      <Area type="monotone" dataKey="value"
+                                        stroke={trend === 'up' ? '#10b981' : trend === 'down' ? '#ef4444' : '#C9A84C'}
+                                        fill={`url(#kpi-${kpi.id})`} strokeWidth={2} />
+                                    </AreaChart>
+                                  </ResponsiveContainer>
+                                </div>
+                                <span className="sr-only">
+                                  {`Area chart of ${kpi.name} for the last ${chartData.length} data points. `}
+                                  {trend === 'up' && 'Values are trending upward.'}
+                                  {trend === 'down' && 'Values are trending downward.'}
+                                  {trend === 'flat' && 'Values are relatively flat.'}
+                                  {kpi.target_value != null && ` Target reference line at ${kpi.target_value}.`}
+                                </span>
+                              </>
                             )}
 
                             <div className="flex justify-end mt-2">

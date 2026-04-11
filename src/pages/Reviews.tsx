@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { localDateKey } from '../lib/dates'
+import { useToast } from '../components/Toast'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import type { PerformanceReview, PerformanceScore, TeamMember } from '../types'
 import { Star, Plus, X, Loader2, User, Calendar } from 'lucide-react'
 
@@ -10,7 +13,9 @@ const CATEGORIES = [
 ]
 
 export default function Reviews() {
+  useDocumentTitle('Reviews - Checkmark Audio')
   const { profile, isAdmin } = useAuth()
+  const { toast } = useToast()
   const [reviews, setReviews] = useState<PerformanceReview[]>([])
   const [scores, setScores] = useState<PerformanceScore[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
@@ -21,11 +26,7 @@ export default function Reviews() {
   const [reviewScores, setReviewScores] = useState<Record<string, number>>({})
   const [feedback, setFeedback] = useState('')
 
-  useEffect(() => {
-    loadData()
-  }, [profile])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!profile) { setLoading(false); return }
     try {
       if (isAdmin) {
@@ -47,7 +48,9 @@ export default function Reviews() {
       }
     } catch (err) { console.error(err) }
     setLoading(false)
-  }
+  }, [profile, isAdmin])
+
+  useEffect(() => { loadData() }, [loadData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,19 +65,29 @@ export default function Reviews() {
     const { data: review, error } = await supabase.from('intern_performance_reviews').insert({
       intern_id: selectedMember,
       reviewer: profile.display_name,
-      review_date: new Date().toISOString().split('T')[0],
+      review_date: localDateKey(),
       overall_score: overall,
       feedback,
     }).select().single()
 
-    if (!error && review) {
+    if (error || !review) {
+      toast('Failed to create review', 'error')
+      setSubmitting(false)
+      return
+    }
+
+    if (categoryScores.length > 0) {
       const scoreInserts = categoryScores.map(([category, score]) => ({
         review_id: review.id,
         category,
         score,
       }))
-      if (scoreInserts.length > 0) {
-        await supabase.from('intern_performance_scores').insert(scoreInserts)
+      const { error: scoresError } = await supabase.from('intern_performance_scores').insert(scoreInserts)
+      if (scoresError) {
+        await supabase.from('intern_performance_reviews').delete().eq('id', review.id)
+        toast('Failed to save scores. Review was not created.', 'error')
+        setSubmitting(false)
+        return
       }
     }
 
@@ -89,26 +102,51 @@ export default function Reviews() {
   const getMemberName = (id: string) => teamMembers.find(m => m.id === id)?.display_name ?? 'Team Member'
   const getReviewScores = (reviewId: string) => scores.filter(s => s.review_id === reviewId)
 
-  const renderStars = (score: number, editable = false, category = '') => (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map(n => (
-        <button
-          key={n}
-          type="button"
-          disabled={!editable}
-          onClick={() => editable && setReviewScores({ ...reviewScores, [category]: n })}
-          className={`${editable ? 'cursor-pointer hover:scale-110' : 'cursor-default'} transition-transform`}
-        >
-          <Star
-            size={editable ? 20 : 16}
-            className={n <= score ? 'text-amber-400 fill-amber-400' : 'text-text-light'}
-          />
-        </button>
-      ))}
-    </div>
-  )
+  const renderStars = (score: number, editable = false, category = '') => {
+    if (editable) {
+      return (
+        <div className="flex items-center gap-0.5" role="radiogroup" aria-label={category}>
+          {[1, 2, 3, 4, 5].map(n => (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={n <= score}
+              aria-label={`${n} of 5 stars`}
+              onClick={() => setReviewScores({ ...reviewScores, [category]: n })}
+              className="cursor-pointer hover:scale-110 transition-transform"
+            >
+              <Star
+                size={20}
+                className={n <= score ? 'text-amber-400 fill-amber-400' : 'text-text-light'}
+              />
+            </button>
+          ))}
+        </div>
+      )
+    }
+    return (
+      <span role="img" aria-label={`${score} out of 5 stars`} className="flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map(n => (
+          <span key={n} aria-hidden="true" className="inline-flex">
+            <Star
+              size={16}
+              className={n <= score ? 'text-amber-400 fill-amber-400' : 'text-text-light'}
+            />
+          </span>
+        ))}
+      </span>
+    )
+  }
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" /></div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" aria-hidden="true" />
+        <span className="sr-only">Loading…</span>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
@@ -120,7 +158,7 @@ export default function Reviews() {
         {isAdmin && (
           <button onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black font-semibold text-sm transition-all">
-            {showForm ? <X size={16} /> : <Plus size={16} />}
+            {showForm ? <X size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
             {showForm ? 'Cancel' : 'New Review'}
           </button>
         )}
@@ -131,8 +169,8 @@ export default function Reviews() {
         <form onSubmit={handleSubmit} className="bg-surface rounded-2xl border border-border p-6 space-y-5 shadow-sm">
           <h2 className="font-semibold">Create Performance Review</h2>
           <div>
-            <label className="block text-sm font-medium mb-1.5">Team Member</label>
-            <select required value={selectedMember} onChange={e => setSelectedMember(e.target.value)}
+            <label htmlFor="review-member" className="block text-sm font-medium mb-1.5">Team Member</label>
+            <select id="review-member" required value={selectedMember} onChange={e => setSelectedMember(e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
               <option value="">Select a team member...</option>
               {teamMembers.filter(m => m.role !== 'admin').map(m => (
@@ -152,15 +190,15 @@ export default function Reviews() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1.5">Feedback</label>
-            <textarea value={feedback} onChange={e => setFeedback(e.target.value)} rows={4}
+            <label htmlFor="review-feedback" className="block text-sm font-medium mb-1.5">Feedback</label>
+            <textarea id="review-feedback" value={feedback} onChange={e => setFeedback(e.target.value)} rows={4}
               className="w-full px-3 py-2.5 rounded-lg border border-border text-sm resize-none"
               placeholder="Overall feedback and areas for growth..." />
           </div>
           <div className="flex justify-end">
             <button type="submit" disabled={submitting}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black font-semibold text-sm transition-all disabled:opacity-50">
-              {submitting ? <Loader2 size={16} className="animate-spin" /> : <Star size={16} />}
+              {submitting ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Star size={16} aria-hidden="true" />}
               Submit Review
             </button>
           </div>
@@ -181,14 +219,14 @@ export default function Reviews() {
                 <div className="px-5 py-3 bg-surface-alt border-b border-border flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-gold/15 text-gold flex items-center justify-center text-xs font-semibold">
-                      <User size={14} />
+                      <User size={14} aria-hidden="true" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">
                         {isAdmin ? getMemberName(review.intern_id) : 'Your Review'}
                       </p>
                       <p className="text-xs text-text-muted flex items-center gap-1">
-                        <Calendar size={11} /> {review.review_date} · by {review.reviewer}
+                        <Calendar size={11} aria-hidden="true" /> {review.review_date} · by {review.reviewer}
                       </p>
                     </div>
                   </div>

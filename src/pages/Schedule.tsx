@@ -1,20 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { supabase } from '../lib/supabase'
+import { useToast } from '../components/Toast'
 import type { ScheduleTemplate } from '../types'
 import { Calendar, Plus, X, Save, Loader2, Edit2, Trash2, CheckSquare, Square } from 'lucide-react'
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-
-const DAY_COLORS = [
-  'bg-surface border-border',
-  'bg-surface border-border',
-  'bg-surface border-border',
-  'bg-surface border-border',
-  'bg-surface border-border',
-  'bg-surface border-border',
-  'bg-surface border-border',
-]
 
 interface FocusTask {
   text: string
@@ -47,13 +39,23 @@ function TodayFocus({ profileId }: { profileId?: string }) {
         setTasks(areas.map(a => ({ text: a, done: false })))
         setLoading(false)
       })
+      .catch(() => {
+        setLoading(false)
+      })
   }, [profileId])
 
   const toggle = (idx: number) => {
     setTasks(prev => prev.map((t, i) => i === idx ? { ...t, done: !t.done } : t))
   }
 
-  if (loading) return <div className="h-20 flex items-center justify-center"><Loader2 size={16} className="animate-spin text-text-muted" /></div>
+  if (loading) {
+    return (
+      <div className="h-20 flex items-center justify-center" role="status" aria-live="polite">
+        <span className="sr-only">Loading…</span>
+        <Loader2 size={16} className="animate-spin text-text-muted" aria-hidden="true" />
+      </div>
+    )
+  }
 
   const done = tasks.filter(t => t.done).length
 
@@ -61,7 +63,7 @@ function TodayFocus({ profileId }: { profileId?: string }) {
     <div className="bg-surface rounded-2xl border border-border p-5 shadow-sm animate-slide-up mb-6">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-sm flex items-center gap-2">
-          <Calendar size={16} className="text-gold" />
+          <Calendar size={16} className="text-gold" aria-hidden="true" />
           Today's Focus
         </h2>
         {tasks.length > 0 && (
@@ -75,13 +77,14 @@ function TodayFocus({ profileId }: { profileId?: string }) {
           {tasks.map((task, i) => (
             <button
               key={i}
+              aria-pressed={task.done}
               onClick={() => toggle(i)}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-alt/50 transition-colors text-left group"
             >
               {task.done ? (
-                <CheckSquare size={18} className="text-gold shrink-0" />
+                <CheckSquare size={18} className="text-gold shrink-0" aria-hidden="true" />
               ) : (
-                <Square size={18} className="text-text-light group-hover:text-text-muted shrink-0 transition-colors" />
+                <Square size={18} className="text-text-light group-hover:text-text-muted shrink-0 transition-colors" aria-hidden="true" />
               )}
               <span className={`text-sm ${task.done ? 'line-through text-text-light' : ''}`}>
                 {task.text}
@@ -95,6 +98,7 @@ function TodayFocus({ profileId }: { profileId?: string }) {
 }
 
 export default function Schedule() {
+  useDocumentTitle('Schedule - Checkmark Audio')
   const { profile, isAdmin } = useAuth()
   const [schedules, setSchedules] = useState<ScheduleTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -104,10 +108,9 @@ export default function Schedule() {
   const [newDay, setNewDay] = useState(0)
   const [newAreas, setNewAreas] = useState('')
   const [saving, setSaving] = useState(false)
+  const { toast } = useToast()
 
-  useEffect(() => { loadSchedule() }, [profile])
-
-  const loadSchedule = async () => {
+  const loadSchedule = useCallback(async () => {
     if (!profile) { setLoading(false); return }
     try {
       let query = supabase.from('intern_schedule_templates').select('*').order('day_of_week', { ascending: true })
@@ -116,17 +119,20 @@ export default function Schedule() {
       if (data) setSchedules(data as ScheduleTemplate[])
     } catch (err) { console.error(err) }
     setLoading(false)
-  }
+  }, [profile, isAdmin])
+
+  useEffect(() => { loadSchedule() }, [loadSchedule])
 
   const handleAdd = async () => {
     if (!profile || !newAreas.trim()) return
     setSaving(true)
-    await supabase.from('intern_schedule_templates').insert({
+    const { error } = await supabase.from('intern_schedule_templates').insert({
       intern_id: profile.id,
       day_of_week: newDay,
       focus_areas: newAreas.split(',').map(s => s.trim()).filter(Boolean),
       frequency: 'weekly',
     })
+    if (error) { toast('Failed to add entry', 'error') }
     setShowAdd(false)
     setNewAreas('')
     setSaving(false)
@@ -135,9 +141,10 @@ export default function Schedule() {
 
   const handleUpdate = async (id: string) => {
     setSaving(true)
-    await supabase.from('intern_schedule_templates').update({
+    const { error } = await supabase.from('intern_schedule_templates').update({
       focus_areas: editAreas.split(',').map(s => s.trim()).filter(Boolean),
     }).eq('id', id)
+    if (error) { toast('Failed to update entry', 'error') }
     setEditing(null)
     setSaving(false)
     loadSchedule()
@@ -145,7 +152,8 @@ export default function Schedule() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this schedule entry?')) return
-    await supabase.from('intern_schedule_templates').delete().eq('id', id)
+    const { error } = await supabase.from('intern_schedule_templates').delete().eq('id', id)
+    if (error) toast('Failed to delete entry', 'error')
     loadSchedule()
   }
 
@@ -155,7 +163,14 @@ export default function Schedule() {
     entries: schedules.filter(s => s.day_of_week === i),
   }))
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" /></div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
+        <span className="sr-only">Loading…</span>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" aria-hidden="true" />
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
@@ -166,7 +181,7 @@ export default function Schedule() {
         </div>
         <button onClick={() => setShowAdd(!showAdd)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black font-semibold transition-all">
-          {showAdd ? <X size={16} /> : <Plus size={16} />}
+          {showAdd ? <X size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
           {showAdd ? 'Cancel' : 'Add Entry'}
         </button>
       </div>
@@ -178,22 +193,22 @@ export default function Schedule() {
           <h3 className="font-semibold">New Schedule Entry</h3>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5">Day of Week</label>
-              <select value={newDay} onChange={e => setNewDay(Number(e.target.value))}
+              <label htmlFor="schedule-new-day" className="block text-sm font-medium mb-1.5">Day of Week</label>
+              <select id="schedule-new-day" value={newDay} onChange={e => setNewDay(Number(e.target.value))}
                 className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                 {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Focus Areas (comma-separated)</label>
-              <input value={newAreas} onChange={e => setNewAreas(e.target.value)} placeholder="e.g. Content creation, SEO, Outreach"
+              <label htmlFor="schedule-new-areas" className="block text-sm font-medium mb-1.5">Focus Areas (comma-separated)</label>
+              <input id="schedule-new-areas" value={newAreas} onChange={e => setNewAreas(e.target.value)} placeholder="e.g. Content creation, SEO, Outreach"
                 className="w-full px-3 py-2.5 rounded-lg border border-border text-sm" />
             </div>
           </div>
           <div className="flex justify-end">
             <button onClick={handleAdd} disabled={saving}
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm disabled:opacity-50">
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save
+              {saving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />} Save
             </button>
           </div>
         </div>
@@ -203,11 +218,11 @@ export default function Schedule() {
         {groupedByDay.map(({ day, index, entries }) => (
           <div
             key={day}
-            className={`rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all duration-200 animate-slide-up ${DAY_COLORS[index]}`}
+            className="rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all duration-200 animate-slide-up bg-surface border-border"
             style={{ animationDelay: `${index * 60}ms` }}
           >
             <div className="flex items-center gap-2 mb-3">
-              <Calendar size={16} className="text-text-muted" />
+              <Calendar size={16} className="text-text-muted" aria-hidden="true" />
               <h3 className="font-semibold">{day}</h3>
               <span className="text-xs text-text-muted">({entries.length} {entries.length === 1 ? 'entry' : 'entries'})</span>
             </div>
@@ -219,14 +234,15 @@ export default function Schedule() {
                   <div key={entry.id} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
                     {editing === i && entry.day_of_week === index ? (
                       <div className="flex-1 flex items-center gap-2">
-                        <input value={editAreas} onChange={e => setEditAreas(e.target.value)}
+                        <label htmlFor={`schedule-edit-${entry.id}`} className="sr-only">Focus areas (comma-separated)</label>
+                        <input id={`schedule-edit-${entry.id}`} value={editAreas} onChange={e => setEditAreas(e.target.value)}
                           className="flex-1 px-2 py-1 rounded border border-border text-sm" />
-                        <button onClick={() => handleUpdate(entry.id)} disabled={saving}
+                        <button aria-label="Save entry" onClick={() => handleUpdate(entry.id)} disabled={saving}
                           className="p-1 rounded text-gold hover:bg-gold/10">
-                          <Save size={14} />
+                          <Save size={14} aria-hidden="true" />
                         </button>
-                        <button onClick={() => setEditing(null)} className="p-1 rounded text-text-muted hover:bg-surface-hover">
-                          <X size={14} />
+                        <button aria-label="Cancel editing" onClick={() => setEditing(null)} className="p-1 rounded text-text-muted hover:bg-surface-hover">
+                          <X size={14} aria-hidden="true" />
                         </button>
                       </div>
                     ) : (
@@ -238,13 +254,13 @@ export default function Schedule() {
                             </span>
                           ))}
                         </div>
-                        <button onClick={() => { setEditing(i); setEditAreas((entry.focus_areas || []).join(', ')) }}
+                        <button aria-label="Edit entry" onClick={() => { setEditing(i); setEditAreas((entry.focus_areas || []).join(', ')) }}
                           className="p-1 rounded text-text-muted hover:text-gold hover:bg-gold/10">
-                          <Edit2 size={14} />
+                          <Edit2 size={14} aria-hidden="true" />
                         </button>
-                        <button onClick={() => handleDelete(entry.id)}
+                        <button aria-label="Delete entry" onClick={() => handleDelete(entry.id)}
                           className="p-1 rounded text-text-muted hover:text-red-600 hover:bg-red-50">
-                          <Trash2 size={14} />
+                          <Trash2 size={14} aria-hidden="true" />
                         </button>
                       </>
                     )}

@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useChecklist } from '../hooks/useChecklist'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { supabase } from '../lib/supabase'
+import { localDateKey } from '../lib/dates'
 import type { DailyNote, DeliverableSubmission, TeamMember, MemberKPI, MemberKPIEntry } from '../types'
 import MustDoCard from '../components/MustDoCard'
 import SubmissionModal from '../components/SubmissionModal'
+import { useToast } from '../components/Toast'
 import {
   AreaChart, Area, ResponsiveContainer,
 } from 'recharts'
@@ -26,6 +29,7 @@ function getKPITrend(entries: MemberKPIEntry[]): 'up' | 'down' | 'flat' {
 }
 
 export default function Dashboard() {
+  useDocumentTitle('Dashboard - Checkmark Audio')
   const { profile, isAdmin } = useAuth()
   const [showSubmitModal, setShowSubmitModal] = useState(false)
   const [todayNote, setTodayNote] = useState<DailyNote | null>(null)
@@ -39,12 +43,11 @@ export default function Dashboard() {
   const [kpiEntries, setKpiEntries] = useState<MemberKPIEntry[]>([])
 
   const daily = useChecklist('daily', new Date())
+  const { toast } = useToast()
 
-  useEffect(() => { loadData() }, [profile])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!profile) { setLoading(false); return }
-    const today = new Date().toISOString().split('T')[0]
+    const today = localDateKey()
 
     try {
       const [noteRes, sessRes, kpisRes] = await Promise.all([
@@ -52,6 +55,9 @@ export default function Dashboard() {
         supabase.from('sessions').select('*').eq('session_date', today).order('start_time'),
         supabase.from('member_kpis').select('*').eq('intern_id', profile.id).limit(1),
       ])
+      if (noteRes.error) toast('Failed to load daily note', 'error')
+      if (sessRes.error) toast('Failed to load sessions', 'error')
+      if (kpisRes.error) toast('Failed to load KPIs', 'error')
       if (noteRes.data) setTodayNote(noteRes.data as DailyNote)
       if (sessRes.data) setTodaySessions(sessRes.data)
 
@@ -104,7 +110,9 @@ export default function Dashboard() {
       } catch {}
     } catch (err) { console.error('Dashboard load error:', err) }
     finally { setLoading(false) }
-  }
+  }, [profile, isAdmin, toast])
+
+  useEffect(() => { loadData() }, [loadData])
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -112,10 +120,11 @@ export default function Dashboard() {
 
   const handleReviewSubmission = async (id: string) => {
     if (!profile) return
-    await supabase.from('deliverable_submissions').update({
+    const { error } = await supabase.from('deliverable_submissions').update({
       reviewed_by: profile.id,
       reviewed_at: new Date().toISOString(),
     }).eq('id', id)
+    if (error) toast('Failed to mark as reviewed', 'error')
     loadData()
   }
 
@@ -125,8 +134,9 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" />
+      <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" aria-hidden="true" />
+        <span className="sr-only">Loading…</span>
       </div>
     )
   }
@@ -146,10 +156,17 @@ export default function Dashboard() {
         <div className="bg-surface rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Daily Progress</span>
-            <ListChecks size={14} className="text-gold" />
+            <ListChecks size={14} className="text-gold" aria-hidden="true" />
           </div>
           <p className="text-xl font-bold">{daily.completedCount}/{daily.totalCount}</p>
-          <div className="h-1.5 bg-surface-alt rounded-full overflow-hidden mt-2">
+          <div
+            className="h-1.5 bg-surface-alt rounded-full overflow-hidden mt-2"
+            role="progressbar"
+            aria-valuenow={daily.percentage}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Daily progress"
+          >
             <div
               className="h-full rounded-full transition-all duration-500"
               style={{
@@ -163,7 +180,7 @@ export default function Dashboard() {
         <div className="bg-surface rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Streak</span>
-            <Flame size={14} className="text-orange-500" />
+            <Flame size={14} className="text-orange-500" aria-hidden="true" />
           </div>
           <p className="text-xl font-bold">{streak} day{streak !== 1 ? 's' : ''}</p>
           <p className="text-[11px] text-text-light mt-1">Consecutive 100%</p>
@@ -172,7 +189,7 @@ export default function Dashboard() {
         <div className="bg-surface rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Daily Note</span>
-            <FileText size={14} className="text-emerald-500" />
+            <FileText size={14} className="text-emerald-500" aria-hidden="true" />
           </div>
           {todayNote ? (
             <p className="text-sm font-semibold text-emerald-400">Submitted</p>
@@ -188,30 +205,50 @@ export default function Dashboard() {
           <Link to="/kpis" className="bg-surface rounded-2xl border border-border p-4 hover:border-gold/20 transition-colors">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-text-muted uppercase tracking-wide truncate">{primaryKpi.name}</span>
-              <Target size={14} className="text-gold shrink-0" />
+              <Target size={14} className="text-gold shrink-0" aria-hidden="true" />
             </div>
             <div className="flex items-center gap-2">
               <p className="text-xl font-bold">{kpiLatest ?? '—'}</p>
-              {kpiTrend === 'up' && <TrendingUp size={16} className="text-emerald-400" />}
-              {kpiTrend === 'down' && <TrendingDown size={16} className="text-red-400" />}
-              {kpiTrend === 'flat' && <Minus size={16} className="text-text-muted" />}
+              {kpiTrend === 'up' && (
+                <>
+                  <TrendingUp size={16} className="text-emerald-400" aria-hidden="true" />
+                  <span className="sr-only">Trending up</span>
+                </>
+              )}
+              {kpiTrend === 'down' && (
+                <>
+                  <TrendingDown size={16} className="text-red-400" aria-hidden="true" />
+                  <span className="sr-only">Trending down</span>
+                </>
+              )}
+              {kpiTrend === 'flat' && (
+                <>
+                  <Minus size={16} className="text-text-muted" aria-hidden="true" />
+                  <span className="sr-only">Flat trend</span>
+                </>
+              )}
             </div>
             {kpiChartData.length > 1 && (
-              <div className="h-8 mt-1 -mx-1">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={kpiChartData}>
-                    <defs>
-                      <linearGradient id="dashKpi" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={kpiTrend === 'up' ? '#10b981' : kpiTrend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0.3} />
-                        <stop offset="100%" stopColor={kpiTrend === 'up' ? '#10b981' : kpiTrend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Area type="monotone" dataKey="value"
-                      stroke={kpiTrend === 'up' ? '#10b981' : kpiTrend === 'down' ? '#ef4444' : '#C9A84C'}
-                      fill="url(#dashKpi)" strokeWidth={1.5} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+              <>
+                <span className="sr-only">
+                  {primaryKpi.name} trend chart (decorative). Latest recorded value: {kpiLatest ?? '—'}.
+                </span>
+                <div className="h-8 mt-1 -mx-1" aria-hidden="true">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={kpiChartData}>
+                      <defs>
+                        <linearGradient id="dashKpi" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={kpiTrend === 'up' ? '#10b981' : kpiTrend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0.3} />
+                          <stop offset="100%" stopColor={kpiTrend === 'up' ? '#10b981' : kpiTrend === 'down' ? '#ef4444' : '#C9A84C'} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Area type="monotone" dataKey="value"
+                        stroke={kpiTrend === 'up' ? '#10b981' : kpiTrend === 'down' ? '#ef4444' : '#C9A84C'}
+                        fill="url(#dashKpi)" strokeWidth={1.5} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
             )}
           </Link>
         )}
@@ -236,14 +273,18 @@ export default function Dashboard() {
                   <button
                     key={item.id}
                     onClick={() => daily.toggleItem(item.id)}
+                    aria-pressed={item.is_completed}
                     className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors text-left"
                   >
-                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
-                      item.is_completed
-                        ? 'bg-emerald-500 border-emerald-500'
-                        : 'border-border-light hover:border-gold/50'
-                    }`}>
-                      {item.is_completed && <Check size={14} className="text-white" />}
+                    <div
+                      className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+                        item.is_completed
+                          ? 'bg-emerald-500 border-emerald-500'
+                          : 'border-border-light hover:border-gold/50'
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {item.is_completed && <Check size={14} className="text-white" aria-hidden="true" />}
                     </div>
                     <span className={`text-sm ${item.is_completed ? 'text-text-light line-through' : 'text-text'}`}>
                       {item.item_text}
@@ -261,11 +302,11 @@ export default function Dashboard() {
         <div className="bg-surface rounded-2xl border border-border overflow-hidden">
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Mic size={14} className="text-gold" />
+              <Mic size={14} className="text-gold" aria-hidden="true" />
               <h2 className="font-semibold text-sm">Today's Sessions</h2>
             </div>
             <Link to="/sessions" className="text-xs text-gold font-medium flex items-center gap-1">
-              View all <ArrowRight size={12} />
+              View all <ArrowRight size={12} aria-hidden="true" />
             </Link>
           </div>
           <div className="divide-y divide-border/50">

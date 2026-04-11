@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { localDateKey } from '../lib/dates'
+import { useToast } from '../components/Toast'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import type { DailyNote, TeamMember } from '../types'
 import {
   Plus, Send, MessageSquare, Calendar, ChevronDown, X, Loader2,
@@ -13,6 +16,7 @@ const DEFAULT_PROMPTS = [
 ]
 
 export default function DailyNotes() {
+  useDocumentTitle('Daily Notes - Checkmark Audio')
   const { profile, isAdmin } = useAuth()
   const [notes, setNotes] = useState<DailyNote[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
@@ -23,6 +27,7 @@ export default function DailyNotes() {
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
   const [formData, setFormData] = useState<Record<string, string>>({})
+  const { toast } = useToast()
 
   useEffect(() => {
     loadNotes()
@@ -56,13 +61,15 @@ export default function DailyNotes() {
 
     const { error } = await supabase.from('intern_daily_notes').insert({
       intern_id: profile.id,
-      note_date: new Date().toISOString().split('T')[0],
+      note_date: localDateKey(),
       content,
       focus_areas: [],
       submitted_at: new Date().toISOString(),
     })
 
-    if (!error) {
+    if (error) {
+      toast('Failed to submit note', 'error')
+    } else {
       setShowForm(false)
       setFormData({})
       loadNotes()
@@ -72,7 +79,8 @@ export default function DailyNotes() {
 
   const handleReply = async (noteId: string) => {
     if (!replyText.trim()) return
-    await supabase.from('intern_daily_notes').update({ manager_reply: replyText }).eq('id', noteId)
+    const { error } = await supabase.from('intern_daily_notes').update({ manager_reply: replyText }).eq('id', noteId)
+    if (error) { toast('Failed to send reply', 'error'); return }
     setReplyingTo(null)
     setReplyText('')
     loadNotes()
@@ -97,9 +105,19 @@ export default function DailyNotes() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" />
-    </div>
+    return (
+      <div
+        className="flex items-center justify-center h-64"
+        role="status"
+        aria-live="polite"
+      >
+        <div
+          className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold"
+          aria-hidden="true"
+        />
+        <span className="sr-only">Loading…</span>
+      </div>
+    )
   }
 
   return (
@@ -114,7 +132,7 @@ export default function DailyNotes() {
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black font-semibold transition-all"
           >
-            {showForm ? <X size={16} /> : <Plus size={16} />}
+            {showForm ? <X size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
             {showForm ? 'Cancel' : 'New Note'}
           </button>
         )}
@@ -123,9 +141,10 @@ export default function DailyNotes() {
       {/* Admin filter */}
       {isAdmin && teamMembers.length > 0 && (
         <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-text-muted">Filter by member:</label>
+          <label className="text-sm font-medium text-text-muted" htmlFor="notes-member-filter">Filter by member:</label>
           <div className="relative">
             <select
+              id="notes-member-filter"
               value={selectedMember}
               onChange={e => setSelectedMember(e.target.value)}
               className="appearance-none pl-3 pr-8 py-2 rounded-lg border border-border bg-surface text-sm"
@@ -135,7 +154,7 @@ export default function DailyNotes() {
                 <option key={m.id} value={m.id}>{m.display_name}</option>
               ))}
             </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" aria-hidden="true" />
           </div>
         </div>
       )}
@@ -144,13 +163,14 @@ export default function DailyNotes() {
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-surface rounded-2xl border border-border p-6 space-y-4 shadow-sm">
           <h2 className="font-semibold flex items-center gap-2">
-            <Calendar size={16} />
+            <Calendar size={16} aria-hidden="true" />
             Daily Note — {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </h2>
           {DEFAULT_PROMPTS.map(prompt => (
             <div key={prompt.id}>
-              <label className="block text-sm font-medium mb-1.5">{prompt.label}</label>
+              <label className="block text-sm font-medium mb-1.5" htmlFor={`note-${prompt.id}`}>{prompt.label}</label>
               <textarea
+                id={`note-${prompt.id}`}
                 value={formData[prompt.id] || ''}
                 onChange={e => setFormData({ ...formData, [prompt.id]: e.target.value })}
                 rows={3}
@@ -163,9 +183,10 @@ export default function DailyNotes() {
             <button
               type="submit"
               disabled={submitting}
+              aria-busy={submitting}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black font-semibold transition-all disabled:opacity-50"
             >
-              {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              {submitting ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
               Submit Note
             </button>
           </div>
@@ -185,7 +206,7 @@ export default function DailyNotes() {
               <div key={note.id} className="bg-surface rounded-2xl border border-border overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
                 <div className="px-5 py-3 border-b border-border border-l-4 border-l-gold/30 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Calendar size={14} className="text-text-muted" />
+                    <Calendar size={14} className="text-text-muted" aria-hidden="true" />
                     <span className="text-sm font-medium">{note.note_date}</span>
                     {isAdmin && (
                       <span className="text-sm text-text-muted">— {getDisplayName(note.intern_id)}</span>
@@ -226,6 +247,7 @@ export default function DailyNotes() {
                           placeholder="Write a reply..."
                           className="flex-1 px-3 py-2 rounded-lg border border-border text-sm"
                           autoFocus
+                          aria-label="Reply to note"
                         />
                         <button
                           onClick={() => handleReply(note.id)}
@@ -245,7 +267,7 @@ export default function DailyNotes() {
                         onClick={() => setReplyingTo(note.id)}
                         className="flex items-center gap-1.5 text-sm text-text-muted hover:text-gold"
                       >
-                        <MessageSquare size={14} /> Reply
+                        <MessageSquare size={14} aria-hidden="true" /> Reply
                       </button>
                     )}
                   </div>

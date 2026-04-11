@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../components/Toast'
 import type { ReportTemplate, TemplateField, TeamMember, TaskAssignment } from '../../types'
@@ -133,6 +134,7 @@ const PRESET_TEMPLATES: Omit<ReportTemplate, 'id' | 'created_at' | 'updated_at'>
 ]
 
 export default function Templates() {
+  useDocumentTitle('Templates - Checkmark Audio')
   const { toast } = useToast()
   const [templates, setTemplates] = useState<ReportTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -241,9 +243,19 @@ export default function Templates() {
     }
 
     if (editingTemplate) {
-      await supabase.from('report_templates').update(payload).eq('id', editingTemplate.id)
+      const { error } = await supabase.from('report_templates').update(payload).eq('id', editingTemplate.id)
+      if (error) {
+        toast('Failed to update template', 'error')
+        setSubmitting(false)
+        return
+      }
     } else {
-      await supabase.from('report_templates').insert({ ...payload, created_at: new Date().toISOString() })
+      const { error } = await supabase.from('report_templates').insert({ ...payload, created_at: new Date().toISOString() })
+      if (error) {
+        toast('Failed to create template', 'error')
+        setSubmitting(false)
+        return
+      }
     }
 
     setShowForm(false)
@@ -254,7 +266,11 @@ export default function Templates() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this template?')) return
-    await supabase.from('report_templates').delete().eq('id', id)
+    const { error } = await supabase.from('report_templates').delete().eq('id', id)
+    if (error) {
+      toast('Failed to delete template', 'error')
+      return
+    }
     loadTemplates()
   }
 
@@ -309,7 +325,11 @@ export default function Templates() {
   }
 
   const removeAssignment = async (assignmentId: string) => {
-    await supabase.from('task_assignments').delete().eq('id', assignmentId)
+    const { error } = await supabase.from('task_assignments').delete().eq('id', assignmentId)
+    if (error) {
+      toast('Failed to remove assignment', 'error')
+      return
+    }
     toast('Assignment removed')
     loadTemplates()
   }
@@ -320,7 +340,12 @@ export default function Templates() {
 
   const filtered = typeFilter === 'all' ? templates : templates.filter(t => t.type === typeFilter)
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" /></div>
+  if (loading) return (
+    <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" aria-hidden="true" />
+      <span className="sr-only">Loading…</span>
+    </div>
+  )
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -332,11 +357,11 @@ export default function Templates() {
         <div className="flex items-center gap-2">
           <button onClick={() => { setShowPresets(!showPresets); setShowForm(false) }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-surface-hover">
-            <ClipboardList size={16} /> Presets
+            <ClipboardList size={16} aria-hidden="true" /> Presets
           </button>
           <button onClick={showForm ? () => { setShowForm(false); resetForm() } : openForm}
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm">
-            {showForm ? <X size={16} /> : <Plus size={16} />}
+            {showForm ? <X size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
             {showForm ? 'Cancel' : 'New Template'}
           </button>
         </div>
@@ -356,7 +381,7 @@ export default function Templates() {
                   className="text-left p-4 rounded-lg border border-border hover:border-gold/30 hover:shadow-sm transition-all"
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={`p-1 rounded ${info.color}`}><info.icon size={14} /></span>
+                    <span className={`p-1 rounded ${info.color}`}><info.icon size={14} aria-hidden="true" /></span>
                     <span className="text-xs font-medium text-text-muted capitalize">{preset.type.replace('_', '-')}</span>
                     {preset.position && (
                       <span className="text-xs bg-surface-alt px-1.5 py-0.5 rounded capitalize">{preset.position}</span>
@@ -377,29 +402,29 @@ export default function Templates() {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5">Template Name *</label>
-              <input required value={name} onChange={e => setName(e.target.value)}
+              <label htmlFor="template-name" className="block text-sm font-medium mb-1.5">Template Name *</label>
+              <input id="template-name" required value={name} onChange={e => setName(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg border border-border text-sm"
                 placeholder="e.g. Daily Marketing Report" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Type</label>
-              <select value={type} onChange={e => setType(e.target.value as ReportTemplate['type'])}
+              <label htmlFor="template-type" className="block text-sm font-medium mb-1.5">Type</label>
+              <select id="template-type" value={type} onChange={e => setType(e.target.value as ReportTemplate['type'])}
                 className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                 {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Assigned Position</label>
-              <select value={position} onChange={e => setPosition(e.target.value)}
+              <label htmlFor="template-position" className="block text-sm font-medium mb-1.5">Assigned Position</label>
+              <select id="template-position" value={position} onChange={e => setPosition(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                 <option value="">All Positions</option>
                 {POSITIONS_LIST.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </div>
             <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} className="rounded border-border" />
+              <label htmlFor="template-is-default" className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <input id="template-is-default" type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} className="rounded border-border" />
                 Set as default for this position
               </label>
             </div>
@@ -410,7 +435,7 @@ export default function Templates() {
               <label className="text-sm font-medium">Fields ({fields.length})</label>
               <button type="button" onClick={addField}
                 className="flex items-center gap-1 text-xs text-gold font-medium">
-                <Plus size={14} /> Add Field
+                <Plus size={14} aria-hidden="true" /> Add Field
               </button>
             </div>
             <div className="space-y-2">
@@ -421,41 +446,49 @@ export default function Templates() {
               )}
               {fields.map((field, i) => (
                 <div key={field.id} className="flex items-start gap-2 p-3 rounded-lg border border-border bg-surface-alt">
-                  <GripVertical size={16} className="text-text-light mt-2 shrink-0 cursor-grab" />
+                  <GripVertical size={16} className="text-text-light mt-2 shrink-0 cursor-grab" aria-label="Reorder" />
                   <div className="flex-1 grid sm:grid-cols-3 gap-2">
-                    <input
-                      value={field.label}
-                      onChange={e => updateField(i, { label: e.target.value })}
-                      placeholder="Field label"
-                      className="sm:col-span-2 px-2.5 py-1.5 rounded border border-border text-sm"
-                    />
-                    <select
-                      value={field.type}
-                      onChange={e => updateField(i, { type: e.target.value as TemplateField['type'] })}
-                      className="px-2.5 py-1.5 rounded border border-border text-sm"
-                    >
-                      {FIELD_TYPES.map(ft => <option key={ft.value} value={ft.value}>{ft.label}</option>)}
-                    </select>
+                    <div className="sm:col-span-2">
+                      <label htmlFor={`field-label-${field.id}`} className="sr-only">Field label</label>
+                      <input
+                        id={`field-label-${field.id}`}
+                        value={field.label}
+                        onChange={e => updateField(i, { label: e.target.value })}
+                        placeholder="Field label"
+                        className="w-full px-2.5 py-1.5 rounded border border-border text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor={`field-type-${field.id}`} className="sr-only">Field type</label>
+                      <select
+                        id={`field-type-${field.id}`}
+                        value={field.type}
+                        onChange={e => updateField(i, { type: e.target.value as TemplateField['type'] })}
+                        className="w-full px-2.5 py-1.5 rounded border border-border text-sm"
+                      >
+                        {FIELD_TYPES.map(ft => <option key={ft.value} value={ft.value}>{ft.label}</option>)}
+                      </select>
+                    </div>
                   </div>
                   {field.type !== 'checkbox' && (
-                    <label className="flex items-center gap-1 text-xs text-text-muted mt-2 shrink-0">
-                      <input type="checkbox" checked={field.required ?? false}
+                    <label htmlFor={`field-required-${field.id}`} className="flex items-center gap-1 text-xs text-text-muted mt-2 shrink-0">
+                      <input id={`field-required-${field.id}`} type="checkbox" checked={field.required ?? false}
                         onChange={e => updateField(i, { required: e.target.checked })}
                         className="rounded border-border" />
                       Required
                     </label>
                   )}
                   {(type === 'checklist' || type === 'must_do') && field.type === 'checkbox' && (
-                    <label className="flex items-center gap-1 text-xs text-red-400 mt-2 shrink-0">
-                      <input type="checkbox" checked={field.is_critical ?? false}
+                    <label htmlFor={`field-critical-${field.id}`} className="flex items-center gap-1 text-xs text-red-400 mt-2 shrink-0">
+                      <input id={`field-critical-${field.id}`} type="checkbox" checked={field.is_critical ?? false}
                         onChange={e => updateField(i, { is_critical: e.target.checked })}
                         className="rounded border-border" />
                       Critical
                     </label>
                   )}
-                  <button type="button" onClick={() => removeField(i)}
+                  <button type="button" onClick={() => removeField(i)} aria-label="Remove field"
                     className="p-1 rounded text-text-muted hover:text-red-400 hover:bg-red-500/10 mt-1 shrink-0">
-                    <X size={14} />
+                    <X size={14} aria-hidden="true" />
                   </button>
                 </div>
               ))}
@@ -467,7 +500,7 @@ export default function Templates() {
               className="px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-surface-hover">Cancel</button>
             <button type="submit" disabled={submitting}
               className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm disabled:opacity-50">
-              {submitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {submitting ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
               {editingTemplate ? 'Update Template' : 'Create Template'}
             </button>
           </div>
@@ -475,22 +508,22 @@ export default function Templates() {
       )}
 
       {/* Filter tabs */}
-      <div className="flex items-center gap-2">
-        <button onClick={() => setTypeFilter('all')}
+      <div className="flex items-center gap-2" role="tablist">
+        <button type="button" role="tab" aria-selected={typeFilter === 'all'} onClick={() => setTypeFilter('all')}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${typeFilter === 'all' ? 'bg-gold/10 text-gold' : 'text-text-muted hover:bg-surface-hover'}`}>
           All
         </button>
         {TEMPLATE_TYPES.map(t => (
-          <button key={t.value} onClick={() => setTypeFilter(t.value)}
+          <button type="button" key={t.value} role="tab" aria-selected={typeFilter === t.value} onClick={() => setTypeFilter(t.value)}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${typeFilter === t.value ? t.color : 'text-text-muted hover:bg-surface-hover'}`}>
-            <t.icon size={12} /> {t.label}
+            <t.icon size={12} aria-hidden="true" /> {t.label}
           </button>
         ))}
       </div>
 
       {filtered.length === 0 ? (
         <div className="bg-surface rounded-xl border border-border p-8 text-center text-text-muted">
-          <ClipboardList size={32} className="mx-auto mb-3 opacity-30" />
+          <ClipboardList size={32} className="mx-auto mb-3 opacity-30" aria-hidden="true" />
           <p>No templates yet. Create one or pick from presets to get started.</p>
         </div>
       ) : (
@@ -503,14 +536,14 @@ export default function Templates() {
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`p-1 rounded ${info.color}`}><info.icon size={14} /></span>
+                      <span className={`p-1 rounded ${info.color}`}><info.icon size={14} aria-hidden="true" /></span>
                       <span className="text-xs font-medium text-text-muted capitalize">{template.type.replace('_', '-')}</span>
                       {template.is_default && (
                         <span className="text-[10px] font-medium bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded">Default</span>
                       )}
                       {assignCount > 0 && (
                         <span className="text-[10px] font-medium bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                          <Users size={10} /> {assignCount}
+                          <Users size={10} aria-hidden="true" /> {assignCount}
                         </span>
                       )}
                     </div>
@@ -537,19 +570,19 @@ export default function Templates() {
                 <div className="flex items-center gap-1.5 border-t border-border pt-3">
                   <button onClick={() => handleEdit(template)}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gold hover:bg-gold/10">
-                    <Edit2 size={12} /> Edit
+                    <Edit2 size={12} aria-hidden="true" /> Edit
                   </button>
                   <button onClick={() => handleDuplicate(template)}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-text-muted hover:bg-surface-hover">
-                    <Copy size={12} /> Duplicate
+                    <Copy size={12} aria-hidden="true" /> Duplicate
                   </button>
                   <button onClick={() => openAssignModal(template)}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-violet-400 hover:bg-violet-500/10">
-                    <UserPlus size={12} /> Assign
+                    <UserPlus size={12} aria-hidden="true" /> Assign
                   </button>
                   <button onClick={() => handleDelete(template.id)}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 ml-auto">
-                    <Trash2 size={12} /> Delete
+                    <Trash2 size={12} aria-hidden="true" /> Delete
                   </button>
                 </div>
               </div>
@@ -560,16 +593,16 @@ export default function Templates() {
 
       {/* Assignment Modal */}
       {assignModalTemplate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setAssignModalTemplate(null)} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="assign-modal-title">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" role="presentation" onClick={() => setAssignModalTemplate(null)} />
           <div className="relative bg-surface rounded-2xl border border-border p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="font-semibold text-lg">Assign Template</h2>
+                <h2 id="assign-modal-title" className="font-semibold text-lg">Assign Template</h2>
                 <p className="text-sm text-text-muted mt-0.5">{assignModalTemplate.name}</p>
               </div>
-              <button onClick={() => setAssignModalTemplate(null)} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted">
-                <X size={18} />
+              <button onClick={() => setAssignModalTemplate(null)} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted" aria-label="Close">
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 
@@ -626,7 +659,8 @@ export default function Templates() {
               </div>
             ) : (
               <div>
-                <select value={selectedPosition} onChange={e => setSelectedPosition(e.target.value)}
+                <label htmlFor="assign-position" className="sr-only">Position to assign</label>
+                <select id="assign-position" value={selectedPosition} onChange={e => setSelectedPosition(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                   <option value="">Select a position...</option>
                   {POSITIONS_LIST.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -644,7 +678,7 @@ export default function Templates() {
                 className="px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-surface-hover">Cancel</button>
               <button onClick={handleAssign} disabled={assignSubmitting || (assignMode === 'member' ? selectedMemberIds.size === 0 : !selectedPosition)}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm disabled:opacity-50">
-                {assignSubmitting ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+                {assignSubmitting ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <UserPlus size={16} aria-hidden="true" />}
                 Assign
               </button>
             </div>

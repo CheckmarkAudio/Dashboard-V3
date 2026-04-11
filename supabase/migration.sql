@@ -98,7 +98,7 @@ CREATE POLICY "Users can view team" ON intern_users
 
 CREATE POLICY "Users can insert own profile" ON intern_users
   FOR INSERT TO authenticated
-  WITH CHECK (id = auth.uid());
+  WITH CHECK (id = auth.uid() OR is_team_admin());
 
 CREATE POLICY "Users can update in team" ON intern_users
   FOR UPDATE TO authenticated
@@ -459,6 +459,7 @@ CREATE TABLE IF NOT EXISTS intern_daily_notes (
 );
 ALTER TABLE intern_daily_notes
   ADD COLUMN IF NOT EXISTS team_id uuid;
+UPDATE intern_daily_notes SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE intern_daily_notes ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_daily_notes_select" ON intern_daily_notes;
@@ -498,6 +499,7 @@ CREATE TABLE IF NOT EXISTS intern_leads (
 );
 ALTER TABLE intern_leads
   ADD COLUMN IF NOT EXISTS team_id uuid;
+UPDATE intern_leads SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE intern_leads ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_leads_select" ON intern_leads;
@@ -530,6 +532,7 @@ CREATE TABLE IF NOT EXISTS intern_performance_reviews (
 );
 ALTER TABLE intern_performance_reviews
   ADD COLUMN IF NOT EXISTS team_id uuid;
+UPDATE intern_performance_reviews SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE intern_performance_reviews ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_performance_reviews_select" ON intern_performance_reviews;
@@ -559,6 +562,7 @@ CREATE TABLE IF NOT EXISTS intern_performance_scores (
 );
 ALTER TABLE intern_performance_scores
   ADD COLUMN IF NOT EXISTS team_id uuid;
+UPDATE intern_performance_scores SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE intern_performance_scores ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_performance_scores_select" ON intern_performance_scores;
@@ -569,11 +573,11 @@ DROP POLICY IF EXISTS "intern_performance_scores_delete" ON intern_performance_s
 CREATE POLICY "intern_performance_scores_select" ON intern_performance_scores
   FOR SELECT TO authenticated USING (team_id = get_my_team_id());
 CREATE POLICY "intern_performance_scores_insert" ON intern_performance_scores
-  FOR INSERT TO authenticated WITH CHECK (team_id = get_my_team_id());
+  FOR INSERT TO authenticated WITH CHECK (team_id = get_my_team_id() AND is_team_admin());
 CREATE POLICY "intern_performance_scores_update" ON intern_performance_scores
-  FOR UPDATE TO authenticated USING (team_id = get_my_team_id());
+  FOR UPDATE TO authenticated USING (team_id = get_my_team_id() AND is_team_admin());
 CREATE POLICY "intern_performance_scores_delete" ON intern_performance_scores
-  FOR DELETE TO authenticated USING (team_id = get_my_team_id());
+  FOR DELETE TO authenticated USING (team_id = get_my_team_id() AND is_team_admin());
 
 DROP TRIGGER IF EXISTS set_team_id ON intern_performance_scores;
 CREATE TRIGGER set_team_id BEFORE INSERT ON intern_performance_scores
@@ -589,6 +593,7 @@ CREATE TABLE IF NOT EXISTS intern_schedule_templates (
 );
 ALTER TABLE intern_schedule_templates
   ADD COLUMN IF NOT EXISTS team_id uuid;
+UPDATE intern_schedule_templates SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE intern_schedule_templates ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_schedule_templates_select" ON intern_schedule_templates;
@@ -619,6 +624,7 @@ CREATE TABLE IF NOT EXISTS intern_checklist_instances (
 );
 ALTER TABLE intern_checklist_instances
   ADD COLUMN IF NOT EXISTS team_id uuid;
+UPDATE intern_checklist_instances SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE intern_checklist_instances ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_checklist_instances_select" ON intern_checklist_instances;
@@ -652,6 +658,7 @@ CREATE TABLE IF NOT EXISTS intern_checklist_items (
 );
 ALTER TABLE intern_checklist_items
   ADD COLUMN IF NOT EXISTS team_id uuid;
+UPDATE intern_checklist_items SET team_id = '00000000-0000-0000-0000-000000000001' WHERE team_id IS NULL;
 ALTER TABLE intern_checklist_items ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "intern_checklist_items_select" ON intern_checklist_items;
@@ -706,11 +713,11 @@ DROP POLICY IF EXISTS "member_kpis_delete" ON member_kpis;
 CREATE POLICY "member_kpis_select" ON member_kpis
   FOR SELECT TO authenticated USING (team_id = get_my_team_id());
 CREATE POLICY "member_kpis_insert" ON member_kpis
-  FOR INSERT TO authenticated WITH CHECK (team_id = get_my_team_id());
+  FOR INSERT TO authenticated WITH CHECK (team_id = get_my_team_id() AND is_team_admin());
 CREATE POLICY "member_kpis_update" ON member_kpis
-  FOR UPDATE TO authenticated USING (team_id = get_my_team_id());
+  FOR UPDATE TO authenticated USING (team_id = get_my_team_id() AND is_team_admin());
 CREATE POLICY "member_kpis_delete" ON member_kpis
-  FOR DELETE TO authenticated USING (team_id = get_my_team_id());
+  FOR DELETE TO authenticated USING (team_id = get_my_team_id() AND is_team_admin());
 
 DROP TRIGGER IF EXISTS set_team_id ON member_kpis;
 CREATE TRIGGER set_team_id BEFORE INSERT ON member_kpis
@@ -742,7 +749,7 @@ CREATE POLICY "member_kpi_entries_insert" ON member_kpi_entries
 CREATE POLICY "member_kpi_entries_update" ON member_kpi_entries
   FOR UPDATE TO authenticated USING (team_id = get_my_team_id());
 CREATE POLICY "member_kpi_entries_delete" ON member_kpi_entries
-  FOR DELETE TO authenticated USING (team_id = get_my_team_id());
+  FOR DELETE TO authenticated USING (team_id = get_my_team_id() AND is_team_admin());
 
 DROP TRIGGER IF EXISTS set_team_id ON member_kpi_entries;
 CREATE TRIGGER set_team_id BEFORE INSERT ON member_kpi_entries
@@ -774,11 +781,11 @@ DROP POLICY IF EXISTS "weekly_admin_reviews_delete" ON weekly_admin_reviews;
 CREATE POLICY "weekly_admin_reviews_select" ON weekly_admin_reviews
   FOR SELECT TO authenticated USING (team_id = get_my_team_id());
 CREATE POLICY "weekly_admin_reviews_insert" ON weekly_admin_reviews
-  FOR INSERT TO authenticated WITH CHECK (team_id = get_my_team_id());
+  FOR INSERT TO authenticated WITH CHECK (team_id = get_my_team_id() AND is_team_admin());
 CREATE POLICY "weekly_admin_reviews_update" ON weekly_admin_reviews
-  FOR UPDATE TO authenticated USING (team_id = get_my_team_id());
+  FOR UPDATE TO authenticated USING (team_id = get_my_team_id() AND is_team_admin());
 CREATE POLICY "weekly_admin_reviews_delete" ON weekly_admin_reviews
-  FOR DELETE TO authenticated USING (team_id = get_my_team_id());
+  FOR DELETE TO authenticated USING (team_id = get_my_team_id() AND is_team_admin());
 
 DROP TRIGGER IF EXISTS set_team_id ON weekly_admin_reviews;
 CREATE TRIGGER set_team_id BEFORE INSERT ON weekly_admin_reviews

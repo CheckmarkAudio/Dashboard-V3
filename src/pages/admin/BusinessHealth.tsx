@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { localDateKey } from '../../lib/dates'
 import { useAuth } from '../../contexts/AuthContext'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
 import MetricsEntry from '../../components/MetricsEntry'
 import type { PlatformMetric, TeamMember } from '../../types'
@@ -22,23 +24,19 @@ const PLATFORMS: { key: PlatformKey; label: string; accent: string }[] = [
   { key: 'youtube', label: 'YouTube', accent: 'text-red-400' },
 ]
 
-function formatDate(d: Date): string {
-  return d.toISOString().split('T')[0]
-}
-
 function startOfWeekMonday(d = new Date()): string {
   const date = new Date(d)
   const day = date.getDay()
   const diff = date.getDate() - day + (day === 0 ? -6 : 1)
   date.setDate(diff)
   date.setHours(0, 0, 0, 0)
-  return formatDate(date)
+  return localDateKey(date)
 }
 
 function addDays(iso: string, delta: number): string {
   const d = new Date(iso + 'T12:00:00')
   d.setDate(d.getDate() + delta)
-  return formatDate(d)
+  return localDateKey(d)
 }
 
 function computePlatformInsights(
@@ -86,6 +84,7 @@ function computePlatformInsights(
 }
 
 export default function BusinessHealth() {
+  useDocumentTitle('Business Health - Checkmark Audio')
   const { profile, isAdmin } = useAuth()
   const { toast } = useToast()
   const [metricsRows, setMetricsRows] = useState<PlatformMetric[]>([])
@@ -96,8 +95,8 @@ export default function BusinessHealth() {
   const [checklistEligible, setChecklistEligible] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  const today = useMemo(() => formatDate(new Date()), [])
-  const weekStart = useMemo(() => startOfWeekMonday(), [])
+  const today = localDateKey()
+  const weekStart = startOfWeekMonday()
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -131,14 +130,10 @@ export default function BusinessHealth() {
           .eq('period_date', today),
       ])
 
-      if (mErr) console.error(mErr)
-      if (memErr) console.error(memErr)
-      if (subErr) console.error(subErr)
-      if (wErr) console.error(wErr)
-      if (instErr) console.error(instErr)
-
       if (mErr || memErr) {
         toast('Could not load dashboard data', 'error')
+      } else if (subErr || wErr || instErr) {
+        toast('Could not load some team activity data', 'error')
       }
 
       setMetricsRows((mData ?? []) as PlatformMetric[])
@@ -163,7 +158,7 @@ export default function BusinessHealth() {
           .in('instance_id', instanceIds)
 
         if (itemsErr) {
-          console.error(itemsErr)
+          toast('Could not load checklist completion data', 'error')
           setChecklistDoneCount(0)
         } else {
           const byInstance = new Map<string, boolean[]>()
@@ -182,7 +177,6 @@ export default function BusinessHealth() {
         }
       }
     } catch (e) {
-      console.error(e)
       toast('Failed to load business health', 'error')
     } finally {
       setLoading(false)
@@ -209,8 +203,16 @@ export default function BusinessHealth() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" />
+      <div
+        className="flex items-center justify-center h-64"
+        role="status"
+        aria-live="polite"
+      >
+        <div
+          className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold"
+          aria-hidden="true"
+        />
+        <span className="sr-only">Loading…</span>
       </div>
     )
   }
@@ -221,7 +223,7 @@ export default function BusinessHealth() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-gold">Admin</p>
           <h1 className="text-2xl font-bold mt-1 flex items-center gap-2">
-            <BarChart3 size={26} className="text-gold" />
+            <BarChart3 size={26} className="text-gold" aria-hidden="true" />
             Business health
           </h1>
           <p className="text-text-muted text-sm mt-1 max-w-2xl">
@@ -267,20 +269,20 @@ export default function BusinessHealth() {
                     <>
                       {up && (
                         <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
-                          <TrendingUp size={16} />
+                          <TrendingUp size={16} aria-hidden="true" />
                           {wowPct >= 0 ? '+' : ''}
                           {wowPct.toFixed(1)}% WoW
                         </span>
                       )}
                       {down && (
                         <span className="inline-flex items-center gap-1 text-red-400 font-medium">
-                          <TrendingDown size={16} />
+                          <TrendingDown size={16} aria-hidden="true" />
                           {wowPct.toFixed(1)}% WoW
                         </span>
                       )}
                       {!up && !down && (
                         <span className="text-text-muted inline-flex items-center gap-1">
-                          <BarChart3 size={14} /> Flat vs week ago
+                          <BarChart3 size={14} aria-hidden="true" /> Flat vs week ago
                         </span>
                       )}
                     </>
@@ -290,7 +292,7 @@ export default function BusinessHealth() {
                 </div>
                 {declining && wowPct !== null && (
                   <p className="mt-3 text-xs font-medium text-red-400 flex items-center gap-1.5">
-                    <AlertTriangle size={14} />
+                    <AlertTriangle size={14} aria-hidden="true" />
                     Followers declined vs the prior-week snapshot.
                   </p>
                 )}
@@ -306,7 +308,7 @@ export default function BusinessHealth() {
       <section className="bg-surface rounded-2xl border border-border overflow-hidden">
         <div className="p-5 border-b border-border flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Users size={18} className="text-gold" />
+            <Users size={18} className="text-gold" aria-hidden="true" />
             <h2 className="text-sm font-semibold uppercase tracking-wide">Team scorecard</h2>
           </div>
           <p className="text-xs text-text-muted">
@@ -338,12 +340,12 @@ export default function BusinessHealth() {
                     <td className="px-5 py-3.5">
                       {ok ? (
                         <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
-                          <CheckCircle2 size={16} />
+                          <CheckCircle2 size={16} aria-hidden="true" />
                           Yes
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-red-400 font-medium">
-                          <XCircle size={16} />
+                          <XCircle size={16} aria-hidden="true" />
                           No
                         </span>
                       )}
@@ -362,7 +364,7 @@ export default function BusinessHealth() {
       {/* Content output */}
       <section className="bg-surface rounded-2xl border border-border p-5 sm:p-6">
         <div className="flex items-center gap-2 mb-2">
-          <BarChart3 size={18} className="text-gold" />
+          <BarChart3 size={18} className="text-gold" aria-hidden="true" />
           <h2 className="text-sm font-semibold uppercase tracking-wide">Content output</h2>
         </div>
         <p className="text-xs text-text-muted mb-4">
@@ -376,10 +378,18 @@ export default function BusinessHealth() {
           </p>
           <p className="text-xs text-text-light">{contentPct.toFixed(0)}% of target</p>
         </div>
-        <div className="h-2.5 bg-surface-alt rounded-full overflow-hidden border border-border">
+        <div
+          className="h-2.5 bg-surface-alt rounded-full overflow-hidden border border-border"
+          role="progressbar"
+          aria-valuenow={Math.round(contentPct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Weekly content submissions progress toward target"
+        >
           <div
             className="h-full rounded-full bg-gold transition-all duration-500"
             style={{ width: `${contentPct}%` }}
+            aria-hidden="true"
           />
         </div>
       </section>

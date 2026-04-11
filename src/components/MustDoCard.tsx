@@ -1,17 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { getMustDoConfig } from '../lib/mustDoConfig'
+import { localDateKey } from '../lib/dates'
 import type { DeliverableSubmission } from '../types'
 import { CheckCircle2, AlertCircle, Upload } from 'lucide-react'
-
-const MUST_DO_CONFIG: Record<string, { label: string; submissionType: string }> = {
-  owner: { label: 'Review team progress and approve submitted work', submissionType: 'team_review' },
-  marketing_admin: { label: 'Submit content to Dropbox and update team schedule', submissionType: 'content_and_schedule' },
-  artist_development: { label: 'Complete client/artist follow-ups and log communications', submissionType: 'client_followup_log' },
-  intern: { label: 'Submit 1 social media piece to Dropbox', submissionType: 'social_media_content' },
-  engineer: { label: 'Update session notes and project status', submissionType: 'session_notes' },
-  producer: { label: 'Review active projects and update timelines', submissionType: 'project_review' },
-}
 
 interface MustDoCardProps {
   onSubmit: () => void
@@ -23,30 +16,33 @@ export default function MustDoCard({ onSubmit }: MustDoCardProps) {
   const [loading, setLoading] = useState(true)
 
   const position = profile?.position ?? 'intern'
-  const config = MUST_DO_CONFIG[position] ?? MUST_DO_CONFIG.intern
+  const config = getMustDoConfig(position)
 
   useEffect(() => {
-    if (!profile) return
-    const today = new Date().toISOString().split('T')[0]
+    if (!profile) { setLoading(false); return }
+    const today = localDateKey()
     supabase
       .from('deliverable_submissions')
       .select('*')
       .eq('intern_id', profile.id)
       .eq('submission_date', today)
+      .eq('submission_type', config.submissionType)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) console.error('MustDo fetch error:', error.message)
         setSubmission(data as DeliverableSubmission | null)
         setLoading(false)
       })
-  }, [profile])
+  }, [profile, config.submissionType])
 
   if (loading) {
     return (
-      <div className="bg-surface rounded-2xl border border-border p-6 animate-pulse">
-        <div className="h-5 bg-surface-alt rounded w-32 mb-3" />
-        <div className="h-4 bg-surface-alt rounded w-64" />
+      <div className="bg-surface rounded-2xl border border-border p-6 animate-pulse" role="status" aria-live="polite">
+        <div className="h-5 bg-surface-alt rounded w-32 mb-3" aria-hidden="true" />
+        <div className="h-4 bg-surface-alt rounded w-64" aria-hidden="true" />
+        <span className="sr-only">Loading today's must-do…</span>
       </div>
     )
   }
@@ -61,12 +57,12 @@ export default function MustDoCard({ onSubmit }: MustDoCardProps) {
         : 'bg-gold/5 border-gold/20 animate-pulse-gold'
     }`}>
       <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
+          <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             {isComplete ? (
-              <CheckCircle2 size={18} className="text-emerald-400" />
+              <CheckCircle2 size={18} className="text-emerald-400" aria-hidden="true" />
             ) : (
-              <AlertCircle size={18} className="text-gold" />
+              <AlertCircle size={18} className="text-gold" aria-hidden="true" />
             )}
             <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
               Today's Must-Do
@@ -92,7 +88,7 @@ export default function MustDoCard({ onSubmit }: MustDoCardProps) {
             onClick={onSubmit}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-sm font-semibold transition-all shrink-0"
           >
-            <Upload size={14} />
+            <Upload size={14} aria-hidden="true" />
             Submit
           </button>
         )}
@@ -100,5 +96,3 @@ export default function MustDoCard({ onSubmit }: MustDoCardProps) {
     </div>
   )
 }
-
-export { MUST_DO_CONFIG }

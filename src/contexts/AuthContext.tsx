@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { TeamMember } from '../types'
@@ -22,9 +22,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<TeamMember | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const sessionInitialized = useRef(false)
 
-  const fetchProfile = async (userId: string, email?: string) => {
-    // 1. Try by auth user id
+  const fetchProfile = useCallback(async (userId: string, email?: string) => {
     const { data, error } = await supabase
       .from('intern_users')
       .select('*')
@@ -33,7 +33,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) console.error('Profile lookup failed:', error.message, error.code)
     if (data) { setProfile(data as TeamMember); return }
 
-    // 2. Try by email (for admin-created users with placeholder ids)
     if (email) {
       const { data: emailMatch, error: emailErr } = await supabase
         .from('intern_users')
@@ -52,7 +51,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // 3. No profile exists — create one automatically
     if (email) {
       const newProfile = {
         id: userId,
@@ -67,11 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setProfile(newProfile as TeamMember)
     }
-  }
+  }, [])
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (user) await fetchProfile(user.id, user.email)
-  }
+  }, [user, fetchProfile])
 
   useEffect(() => {
     let mounted = true
@@ -82,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mounted) return
+      sessionInitialized.current = true
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -95,8 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (mounted) setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
+      if (event === 'INITIAL_SESSION' && sessionInitialized.current) return
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -114,14 +114,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(timeout)
       subscription.unsubscribe()
     }
-  }, [])
+  }, [fetchProfile])
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     return { error: error as Error | null }
-  }
+  }, [])
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  const signUp = useCallback(async (email: string, password: string, displayName: string) => {
     const { data, error } = await supabase.auth.signUp({ email, password })
     if (error) return { error: error as Error | null }
 
@@ -147,27 +147,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     return { error: null }
-  }
+  }, [])
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try { await supabase.auth.signOut() } catch {}
     setUser(null)
     setSession(null)
     setProfile(null)
-  }
+  }, [])
+
+  const value = useMemo(() => ({
+    user,
+    profile,
+    session,
+    loading,
+    isAdmin: profile?.role === 'admin',
+    signIn,
+    signUp,
+    signOut,
+    refreshProfile,
+  }), [user, profile, session, loading, signIn, signUp, signOut, refreshProfile])
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      profile,
-      session,
-      loading,
-      isAdmin: profile?.role === 'admin',
-      signIn,
-      signUp,
-      signOut,
-      refreshProfile,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )
