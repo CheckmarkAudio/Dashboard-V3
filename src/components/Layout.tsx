@@ -5,11 +5,14 @@ import {
   LayoutDashboard, Users, Calendar, Settings,
   LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
   FolderKanban, Mic, GitBranch, GraduationCap, BarChart3, Pencil,
-  Target, Star, UsersRound,
+  Target, Star, UsersRound, FileText,
 } from 'lucide-react'
 
 const memberLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Today' },
+  { to: '/daily', icon: ClipboardList, label: 'Daily Checklist' },
+  { to: '/notes', icon: FileText, label: 'Daily Notes' },
+  { to: '/schedule', icon: Calendar, label: 'Schedule' },
   { to: '/kpis', icon: Target, label: 'My KPIs' },
   { to: '/projects', icon: FolderKanban, label: 'Projects' },
   { to: '/sessions', icon: Mic, label: 'Sessions' },
@@ -40,9 +43,9 @@ export default function Layout() {
   }
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+    `relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
       isActive
-        ? 'bg-white/[0.08] text-gold'
+        ? 'bg-white/[0.08] text-gold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-5 before:rounded-r-full before:bg-gold'
         : 'text-text-muted hover:bg-white/[0.04] hover:text-text'
     }`
 

@@ -145,7 +145,7 @@ export default function KPIDashboard() {
       )}
 
       {/* Flywheel stage summary */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {FLYWHEEL_STAGES.map(stage => {
           const stageKpis = myKpis.filter(k => k.flywheel_stage === stage.key)
           const hasKpi = stageKpis.length > 0

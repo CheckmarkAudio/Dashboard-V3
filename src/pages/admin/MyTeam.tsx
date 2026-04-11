@@ -9,6 +9,7 @@ import type {
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
+import ConfirmModal from '../../components/ConfirmModal'
 import {
   Users, ClipboardList, Star, TrendingUp, TrendingDown, Minus,
   Plus, X, Save, Loader2, ChevronDown, Target, FileText,
@@ -81,6 +82,9 @@ export default function MyTeam() {
   const [kpiUnit, setKpiUnit] = useState('count')
   const [kpiTarget, setKpiTarget] = useState('')
   const [kpiSubmitting, setKpiSubmitting] = useState(false)
+
+  // Delete KPI confirmation
+  const [deleteKpiConfirm, setDeleteKpiConfirm] = useState<{ open: boolean; kpiId: string; loading: boolean }>({ open: false, kpiId: '', loading: false })
 
   // Assignment form
   const [assignTemplateId, setAssignTemplateId] = useState('')
@@ -169,10 +173,12 @@ export default function MyTeam() {
     loadData()
   }
 
-  const handleDeleteKpi = async (kpiId: string) => {
-    if (!confirm('Delete this KPI and all its entries?')) return
-    await supabase.from('member_kpis').delete().eq('id', kpiId)
-    toast('KPI deleted')
+  const handleDeleteKpi = async () => {
+    setDeleteKpiConfirm(s => ({ ...s, loading: true }))
+    const { error } = await supabase.from('member_kpis').delete().eq('id', deleteKpiConfirm.kpiId)
+    if (error) toast('Failed to delete KPI', 'error')
+    else toast('KPI deleted')
+    setDeleteKpiConfirm({ open: false, kpiId: '', loading: false })
     loadData()
   }
 
@@ -248,15 +254,16 @@ export default function MyTeam() {
           <div className="flex items-center gap-1 bg-surface rounded-xl border border-border p-1">
             {([
               { key: 'overview' as const, label: 'Overview', icon: Users },
-              { key: 'assign' as const, label: 'Assign Tasks', icon: ClipboardList },
-              { key: 'review' as const, label: 'Weekly Review', icon: Star },
-              { key: 'kpis' as const, label: 'KPI Metrics', icon: Target },
+              { key: 'assign' as const, label: 'Assign', icon: ClipboardList },
+              { key: 'review' as const, label: 'Review', icon: Star },
+              { key: 'kpis' as const, label: 'KPIs', icon: Target },
             ]).map(tab => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   activeTab === tab.key ? 'bg-gold/10 text-gold' : 'text-text-muted hover:text-text hover:bg-surface-hover'
                 }`}>
-                <tab.icon size={15} /> {tab.label}
+                <tab.icon size={15} />
+                <span className="hidden sm:inline">{tab.label}</span>
               </button>
             ))}
           </div>
@@ -465,7 +472,7 @@ export default function MyTeam() {
                   {/* Flywheel scores */}
                   <div>
                     <label className="block text-sm font-medium mb-3">Flywheel Stage Scores</label>
-                    <div className="grid grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                       {FLYWHEEL_STAGES.map(stage => (
                         <div key={stage.key} className="text-center">
                           <p className={`text-xs font-semibold mb-2 ${stage.color}`}>{stage.label}</p>
@@ -695,7 +702,7 @@ export default function MyTeam() {
                             )}
 
                             <div className="flex justify-end mt-2">
-                              <button onClick={() => handleDeleteKpi(kpi.id)}
+                              <button onClick={() => setDeleteKpiConfirm({ open: true, kpiId: kpi.id, loading: false })}
                                 className="text-xs text-red-400 hover:text-red-300 font-medium">Delete KPI</button>
                             </div>
                           </div>
@@ -709,6 +716,17 @@ export default function MyTeam() {
           )}
         </>
       )}
+
+      <ConfirmModal
+        open={deleteKpiConfirm.open}
+        title="Delete KPI"
+        message="Are you sure you want to delete this KPI and all its entries? This cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        loading={deleteKpiConfirm.loading}
+        onConfirm={handleDeleteKpi}
+        onCancel={() => setDeleteKpiConfirm({ open: false, kpiId: '', loading: false })}
+      />
     </div>
   )
 }

@@ -142,7 +142,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats row */}
-      <div className={`grid gap-4 ${primaryKpi ? 'grid-cols-4' : 'grid-cols-3'}`}>
+      <div className={`grid gap-4 grid-cols-2 ${primaryKpi ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         <div className="bg-surface rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Daily Progress</span>
