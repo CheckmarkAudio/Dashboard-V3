@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { normalizeEmail } from '../lib/email'
 import { useToast } from '../components/Toast'
 import type { Lead } from '../types'
 import {
@@ -63,14 +64,28 @@ export default function Leads() {
     if (!profile) return
     setSubmitting(true)
 
-    const payload = { ...formData, intern_id: profile.id }
+    const payload = {
+      ...formData,
+      email: normalizeEmail(formData.email),
+      intern_id: profile.id,
+    }
 
     if (editingLead) {
       const { error } = await supabase.from('intern_leads').update(payload).eq('id', editingLead.id)
-      if (error) { toast('Failed to update lead', 'error'); setSubmitting(false); return }
+      if (error) {
+        console.error('[Leads] Update failed:', error)
+        toast(error.message || 'Failed to update lead', 'error')
+        setSubmitting(false)
+        return
+      }
     } else {
       const { error } = await supabase.from('intern_leads').insert(payload)
-      if (error) { toast('Failed to add lead', 'error'); setSubmitting(false); return }
+      if (error) {
+        console.error('[Leads] Insert failed:', error)
+        toast(error.message || 'Failed to add lead', 'error')
+        setSubmitting(false)
+        return
+      }
     }
 
     setShowForm(false)

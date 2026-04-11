@@ -1,22 +1,26 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { normalizeEmail } from '../../lib/email'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
 import ConfirmModal from '../../components/ConfirmModal'
+import { Button, Input, Select, Badge, EmptyState, PageHeader } from '../../components/ui'
 import type { TeamMember } from '../../types'
 import {
-  Users, Plus, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck,
+  Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck,
   Mail, Phone, Calendar as CalendarIcon, Save, ChevronRight,
   MoreVertical, UserPlus, Filter,
 } from 'lucide-react'
 
-const POSITIONS = [
-  { value: 'owner', label: 'Owner / Lead Engineer', color: 'bg-gold/10 text-gold' },
-  { value: 'marketing_admin', label: 'Marketing / Admin', color: 'bg-emerald-500/10 text-emerald-400' },
-  { value: 'artist_development', label: 'Artist Development', color: 'bg-violet-500/10 text-violet-400' },
-  { value: 'intern', label: 'Intern', color: 'bg-sky-500/10 text-sky-400' },
-  { value: 'engineer', label: 'Audio Engineer', color: 'bg-amber-500/10 text-amber-400' },
-  { value: 'producer', label: 'Producer', color: 'bg-rose-500/10 text-rose-400' },
+import type { BadgeVariant } from '../../components/ui'
+
+const POSITIONS: { value: string; label: string; badge: BadgeVariant }[] = [
+  { value: 'owner',              label: 'Owner / Lead Engineer', badge: 'gold' },
+  { value: 'marketing_admin',    label: 'Marketing / Admin',     badge: 'success' },
+  { value: 'artist_development', label: 'Artist Development',    badge: 'stage-share' },
+  { value: 'intern',             label: 'Intern',                badge: 'info' },
+  { value: 'engineer',           label: 'Audio Engineer',        badge: 'warning' },
+  { value: 'producer',           label: 'Producer',              badge: 'stage-book' },
 ]
 
 type MemberForm = {
@@ -76,33 +80,49 @@ export default function TeamManager() {
     setSubmitting(true)
 
     const position = formData.position === 'custom' ? customPosition : formData.position
+    const email = normalizeEmail(formData.email)
 
     if (editingMember) {
       const { error } = await supabase.from('intern_users').update({
-        display_name: formData.display_name,
+        display_name: formData.display_name.trim(),
         role: formData.role,
         position,
-        phone: formData.phone,
+        phone: formData.phone.trim() || null,
         start_date: formData.start_date || null,
         status: formData.status,
         managed_by: formData.managed_by || null,
       }).eq('id', editingMember.id)
-      if (error) toast('Failed to update member', 'error')
-      else toast('Member updated')
+      if (error) {
+        console.error('[TeamManager] Update member failed:', error)
+        toast(error.message || 'Failed to update member', 'error')
+        setSubmitting(false)
+        return
+      }
+      toast('Member updated')
     } else {
+      if (!email) {
+        toast('Email is required', 'error')
+        setSubmitting(false)
+        return
+      }
       const { error } = await supabase.from('intern_users').insert({
         id: crypto.randomUUID(),
-        display_name: formData.display_name,
-        email: formData.email,
+        display_name: formData.display_name.trim(),
+        email,
         role: formData.role,
         position,
-        phone: formData.phone || null,
+        phone: formData.phone.trim() || null,
         start_date: formData.start_date || null,
         status: formData.status,
         managed_by: formData.managed_by || null,
       })
-      if (error) toast('Failed to add member', 'error')
-      else toast('Member added')
+      if (error) {
+        console.error('[TeamManager] Add member failed:', error)
+        toast(error.message || 'Failed to add member', 'error')
+        setSubmitting(false)
+        return
+      }
+      toast('Member added')
     }
 
     closeForm()
@@ -178,8 +198,8 @@ export default function TeamManager() {
     loadMembers()
   }
 
-  const getPositionStyle = (pos: string) =>
-    POSITIONS.find(p => p.value === pos)?.color ?? 'bg-surface-alt text-text-muted'
+  const getPositionVariant = (pos: string): BadgeVariant =>
+    POSITIONS.find(p => p.value === pos)?.badge ?? 'neutral'
 
   const getPositionLabel = (pos: string) =>
     POSITIONS.find(p => p.value === pos)?.label ?? pos
@@ -233,23 +253,27 @@ export default function TeamManager() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-5 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+      <PageHeader
+        icon={Users}
+        title={
+          <span className="inline-flex items-center gap-2">
             Team Manager
             <span className="text-sm font-medium text-text-muted bg-surface-alt px-2.5 py-0.5 rounded-full">
               {members.length}
             </span>
-          </h1>
-          <p className="text-text-muted text-sm mt-1">Manage team members, roles, positions, and reporting structure</p>
-        </div>
-        <button onClick={openAddForm}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-sm font-semibold transition-all">
-          <UserPlus size={16} aria-hidden="true" />
-          Add Member
-        </button>
-      </div>
+          </span>
+        }
+        subtitle="Manage team members, roles, positions, and reporting structure"
+        actions={
+          <Button
+            variant="primary"
+            onClick={openAddForm}
+            iconLeft={<UserPlus size={16} aria-hidden="true" />}
+          >
+            Add Member
+          </Button>
+        }
+      />
 
       {/* Toolbar: search + filters */}
       <div className="bg-surface rounded-xl border border-border p-4 space-y-3">
@@ -281,50 +305,61 @@ export default function TeamManager() {
 
         <div className="flex items-center gap-2 flex-wrap">
           <Filter size={12} className="text-text-light" aria-hidden="true" />
-          {Object.entries(positionCounts).map(([pos, count]) => (
-            <button key={pos} onClick={() => setPositionFilter(positionFilter === pos ? 'all' : pos)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                positionFilter === pos ? 'ring-2 ring-gold ring-offset-1 ring-offset-bg' : ''
-              } ${getPositionStyle(pos)}`}>
-              <span>{getPositionLabel(pos)}</span>
-              <span className="bg-white/10 rounded-full px-1.5 py-0.5 text-[10px]">{count}</span>
-            </button>
-          ))}
+          {Object.entries(positionCounts).map(([pos, count]) => {
+            const isActive = positionFilter === pos
+            return (
+              <button
+                key={pos}
+                type="button"
+                onClick={() => setPositionFilter(isActive ? 'all' : pos)}
+                className={`rounded-full focus-ring transition-all ${
+                  isActive ? 'ring-2 ring-gold ring-offset-1 ring-offset-bg' : ''
+                }`}
+                aria-pressed={isActive}
+              >
+                <Badge variant={getPositionVariant(pos)}>
+                  <span>{getPositionLabel(pos)}</span>
+                  <span className="bg-white/10 rounded-full px-1.5 py-0.5 text-[10px]">{count}</span>
+                </Badge>
+              </button>
+            )
+          })}
           {positionFilter !== 'all' && (
-            <button onClick={() => setPositionFilter('all')}
-              className="text-xs text-text-muted hover:text-gold px-2 py-1">
+            <Button variant="ghost" size="sm" onClick={() => setPositionFilter('all')}>
               Clear
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {/* Member grid */}
       {filtered.length === 0 ? (
-        <div className="bg-surface rounded-2xl border border-border p-10 text-center">
-          {members.length === 0 ? (
-            <>
-              <div className="w-14 h-14 rounded-2xl bg-gold/10 flex items-center justify-center mx-auto mb-4">
-                <Users size={24} className="text-gold" aria-hidden="true" />
-              </div>
-              <h3 className="font-semibold text-lg mb-1">No team members yet</h3>
-              <p className="text-sm text-text-muted mb-4">Get started by adding your first team member.</p>
-              <button onClick={openAddForm}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-sm font-semibold transition-all">
-                <UserPlus size={16} aria-hidden="true" /> Add First Member
-              </button>
-            </>
-          ) : (
-            <>
-              <Search size={32} className="mx-auto mb-3 text-text-light opacity-30" aria-hidden="true" />
-              <p className="text-text-muted">No members match your filters.</p>
-              <button onClick={() => { setSearch(''); setPositionFilter('all'); setStatusFilter('all') }}
-                className="text-sm text-gold font-medium mt-2 hover:underline">
+        members.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No team members yet"
+            description="Get started by adding your first team member."
+            action={
+              <Button variant="primary" onClick={openAddForm} iconLeft={<UserPlus size={16} aria-hidden="true" />}>
+                Add First Member
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={Search}
+            title="No matches"
+            description="No members match your current filters."
+            action={
+              <Button
+                variant="ghost"
+                onClick={() => { setSearch(''); setPositionFilter('all'); setStatusFilter('all') }}
+              >
                 Clear all filters
-              </button>
-            </>
-          )}
-        </div>
+              </Button>
+            }
+          />
+        )
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(member => {
@@ -350,9 +385,13 @@ export default function TeamManager() {
                     </div>
                     <div className="min-w-0">
                       <h3 className="font-semibold text-sm truncate">{member.display_name}</h3>
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium mt-0.5 ${getPositionStyle(member.position ?? 'intern')}`}>
+                      <Badge
+                        variant={getPositionVariant(member.position ?? 'intern')}
+                        size="sm"
+                        className="mt-0.5"
+                      >
                         {getPositionLabel(member.position ?? 'intern')}
-                      </span>
+                      </Badge>
                     </div>
                   </div>
 
@@ -403,18 +442,12 @@ export default function TeamManager() {
 
                 <div className="flex items-center gap-2 text-xs mb-3">
                   {member.role === 'admin' ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gold/10 text-gold font-medium">
-                      <Shield size={10} aria-hidden="true" /> Admin
-                    </span>
+                    <Badge variant="gold" icon={<Shield size={10} aria-hidden="true" />}>Admin</Badge>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-alt text-text-muted font-medium">
-                      <UserCheck size={10} aria-hidden="true" /> Member
-                    </span>
+                    <Badge variant="neutral" icon={<UserCheck size={10} aria-hidden="true" />}>Member</Badge>
                   )}
                   {member.status === 'inactive' && (
-                    <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 font-medium text-[10px]">
-                      Inactive
-                    </span>
+                    <Badge variant="danger" size="sm">Inactive</Badge>
                   )}
                 </div>
 
@@ -441,10 +474,16 @@ export default function TeamManager() {
                 )}
 
                 <div className="mt-3 pt-3 border-t border-border">
-                  <button onClick={() => handleEdit(member)}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-gold hover:bg-gold/10 transition-colors">
-                    <Edit2 size={12} aria-hidden="true" /> Edit Details
-                  </button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    block
+                    onClick={() => handleEdit(member)}
+                    iconLeft={<Edit2 size={12} aria-hidden="true" />}
+                    className="text-gold hover:text-gold hover:bg-gold/10"
+                  >
+                    Edit Details
+                  </Button>
                 </div>
               </div>
             )

@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+  /* -------- Brand (gold) -------- */
   --color-brand-50: #fdf8ec;
   --color-brand-100: #f9edd0;
   --color-brand-200: #f0d89e;
@@ -17,6 +18,7 @@
   --color-gold-muted: #A8893D;
   --color-gold-dim: #8a6e2f;
 
+  /* -------- Neutral surfaces -------- */
   --color-bg: #0A0A0A;
   --color-surface: #141414;
   --color-surface-alt: #1C1C1C;
@@ -27,8 +29,43 @@
   --color-text-muted: #999999;
   --color-text-light: #666666;
 
+  /* -------- Semantic status colors (for chips, badges, toasts, alerts) --------
+     Each status has a foreground (-text) and a translucent surface (-bg) so
+     components don't need to hand-roll tailwind arbitrary values. Use like:
+     className="text-status-success-text bg-status-success-bg"
+  */
+  --color-status-success-text: #34d399; /* emerald-400 */
+  --color-status-success-bg:   rgba(16, 185, 129, 0.10);
+  --color-status-warning-text: #fbbf24; /* amber-400 */
+  --color-status-warning-bg:   rgba(245, 158, 11, 0.10);
+  --color-status-danger-text:  #f87171; /* red-400 */
+  --color-status-danger-bg:    rgba(239, 68, 68, 0.10);
+  --color-status-info-text:    #7dd3fc; /* sky-300 */
+  --color-status-info-bg:      rgba(14, 165, 233, 0.10);
+  --color-status-neutral-text: #9ca3af; /* gray-400 */
+  --color-status-neutral-bg:   rgba(156, 163, 175, 0.10);
+
+  /* -------- Flywheel stage colors (Deliver → Capture → Share → Attract → Book) --------
+     Sourced from src/pages/KPIDashboard.tsx FLYWHEEL_STAGES. Pipeline.tsx stage
+     colors map onto the same palette. Anywhere a stage gets rendered — KPI
+     chips, pipeline columns, dashboard badges — should consume these tokens
+     so the visual story stays coherent.
+  */
+  --color-stage-deliver-text: #34d399; /* emerald-400 */
+  --color-stage-deliver-bg:   rgba(16, 185, 129, 0.10);
+  --color-stage-capture-text: #38bdf8; /* sky-400 */
+  --color-stage-capture-bg:   rgba(14, 165, 233, 0.10);
+  --color-stage-share-text:   #a78bfa; /* violet-400 */
+  --color-stage-share-bg:     rgba(139, 92, 246, 0.10);
+  --color-stage-attract-text: #fbbf24; /* amber-400 */
+  --color-stage-attract-bg:   rgba(245, 158, 11, 0.10);
+  --color-stage-book-text:    #fb7185; /* rose-400 */
+  --color-stage-book-bg:      rgba(244, 63, 94, 0.10);
+
+  /* -------- Typography (font stack + semantic body font) -------- */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 
+  /* -------- Animations -------- */
   --animate-fade-in: fade-in 0.3s ease-out;
   --animate-slide-up: slide-up 0.3s ease-out;
   --animate-slide-in: slide-in 0.2s ease-out;
@@ -115,6 +152,66 @@ body {
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border-width: 0;
+  }
+
+  /* Shared focus-visible ring — gold outline, offset from surface.
+     Use on any interactive element that doesn't already get the auto
+     focus styling on form inputs (buttons, cards acting as buttons,
+     links). Pairs with `focus:outline-none` to replace the browser ring. */
+  .focus-ring {
+    outline: none;
+  }
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 2px;
+    border-radius: inherit;
+  }
+}
+
+@layer components {
+  /* -------- Semantic typography scale --------
+     These are thin wrappers that let pages declare intent (`.text-title`)
+     instead of scattering size/weight/tracking classes. Sizes match the
+     existing visual rhythm so adopting them incrementally doesn't cause
+     visual regressions. */
+  .text-display {
+    font-size: 1.875rem;   /* 30px */
+    line-height: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .text-title {
+    font-size: 1.5rem;     /* 24px — matches current page h1 */
+    line-height: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .text-subtitle {
+    font-size: 1.125rem;   /* 18px */
+    line-height: 1.75rem;
+    font-weight: 600;
+  }
+  .text-section {
+    font-size: 0.875rem;   /* 14px — matches current section headings */
+    line-height: 1.25rem;
+    font-weight: 600;
+  }
+  .text-body {
+    font-size: 0.875rem;   /* 14px */
+    line-height: 1.375rem;
+  }
+  .text-caption {
+    font-size: 0.75rem;    /* 12px */
+    line-height: 1rem;
+    color: var(--color-text-muted);
+  }
+  .text-label {
+    font-size: 0.6875rem;  /* 11px */
+    line-height: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-light);
   }
 }
 
