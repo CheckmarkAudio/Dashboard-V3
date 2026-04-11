@@ -55,11 +55,11 @@ export default function Content() {
         ])
 
       if (subsErr) {
-        toast('Could not load submissions', 'error')
+        toast(`Could not load submissions: ${subsErr.message}`, 'error')
         console.error(subsErr)
       }
       if (metErr) {
-        toast('Could not load platform metrics', 'error')
+        toast(`Could not load platform metrics: ${metErr.message}`, 'error')
         console.error(metErr)
       }
 
