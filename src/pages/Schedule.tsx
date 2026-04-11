@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
-import type { ScheduleTemplate } from '../types'
+import type { ScheduleTemplate, TeamMember } from '../types'
 import { Calendar, Plus, X, Save, Loader2, Edit2, Trash2, CheckSquare, Square } from 'lucide-react'
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -13,13 +13,28 @@ interface FocusTask {
   done: boolean
 }
 
-function TodayFocus({ profileId }: { profileId?: string }) {
+function TodayFocus({ profileId, isAdmin }: { profileId?: string; isAdmin?: boolean }) {
   const [tasks, setTasks] = useState<FocusTask[]>([])
   const [loading, setLoading] = useState(true)
+  const [members, setMembers] = useState<TeamMember[]>([])
+  const [selectedMemberId, setSelectedMemberId] = useState(profileId ?? '')
 
   useEffect(() => {
-    const jsDay = new Date().getDay() // 0=Sun, 1=Mon...6=Sat
-    // DAYS array: 0=Monday...4=Friday, 5=Saturday, 6=Sunday
+    if (!isAdmin) return
+    supabase.from('intern_users').select('id, display_name').order('display_name')
+      .then(({ data }) => {
+        const list = (data ?? []) as TeamMember[]
+        setMembers(list)
+        if (!selectedMemberId && list.length > 0) setSelectedMemberId(list[0].id)
+      })
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const targetId = isAdmin ? selectedMemberId : profileId
+
+  useEffect(() => {
+    if (isAdmin && !targetId) { setLoading(false); return }
+    setLoading(true)
+    const jsDay = new Date().getDay()
     const dayIndex = jsDay === 0 ? 6 : jsDay - 1
     if (dayIndex > 4) {
       setTasks([{ text: 'Weekend - no scheduled tasks', done: false }])
@@ -30,7 +45,7 @@ function TodayFocus({ profileId }: { profileId?: string }) {
       .from('intern_schedule_templates')
       .select('focus_areas')
       .eq('day_of_week', dayIndex)
-    if (profileId) query = query.eq('intern_id', profileId)
+    if (targetId) query = query.eq('intern_id', targetId)
     query
       .limit(1)
       .maybeSingle()
@@ -42,7 +57,7 @@ function TodayFocus({ profileId }: { profileId?: string }) {
       .catch(() => {
         setLoading(false)
       })
-  }, [profileId])
+  }, [targetId, isAdmin])
 
   const toggle = (idx: number) => {
     setTasks(prev => prev.map((t, i) => i === idx ? { ...t, done: !t.done } : t))
@@ -61,14 +76,28 @@ function TodayFocus({ profileId }: { profileId?: string }) {
 
   return (
     <div className="bg-surface rounded-2xl border border-border p-5 shadow-sm animate-slide-up mb-6">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 gap-3">
         <h2 className="font-semibold text-sm flex items-center gap-2">
           <Calendar size={16} className="text-gold" aria-hidden="true" />
           Today's Focus
         </h2>
-        {tasks.length > 0 && (
-          <span className="text-xs text-text-muted">{done}/{tasks.length} done</span>
-        )}
+        <div className="flex items-center gap-3">
+          {isAdmin && members.length > 0 && (
+            <select
+              value={selectedMemberId}
+              onChange={e => setSelectedMemberId(e.target.value)}
+              className="text-xs px-2 py-1 rounded-lg border border-border bg-surface"
+              aria-label="Select team member"
+            >
+              {members.map(m => (
+                <option key={m.id} value={m.id}>{m.display_name}</option>
+              ))}
+            </select>
+          )}
+          {tasks.length > 0 && (
+            <span className="text-xs text-text-muted">{done}/{tasks.length} done</span>
+          )}
+        </div>
       </div>
       {tasks.length === 0 ? (
         <p className="text-sm text-text-muted italic">No focus areas for today</p>
@@ -186,7 +215,7 @@ export default function Schedule() {
         </button>
       </div>
 
-      <TodayFocus profileId={isAdmin ? undefined : profile?.id} />
+      <TodayFocus profileId={profile?.id} isAdmin={isAdmin} />
 
       {showAdd && (
         <div className="bg-surface rounded-2xl border border-border p-5 space-y-4">

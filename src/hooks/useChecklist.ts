@@ -16,8 +16,10 @@ export interface ChecklistItemRow {
 
 export type GroupedItems = Record<string, ChecklistItemRow[]>
 
-export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
+export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUserId?: string) {
   const { profile } = useAuth()
+  const userId = targetUserId ?? profile?.id
+  const isOwn = !targetUserId || targetUserId === profile?.id
   const [items, setItems] = useState<ChecklistItemRow[]>([])
   const [loading, setLoading] = useState(true)
   const [instanceId, setInstanceId] = useState<string | null>(null)
@@ -25,36 +27,37 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
   const dateKey = localDateKey(date)
 
   const reload = useCallback(async () => {
-    if (!profile) { setLoading(false); return }
+    if (!userId) { setLoading(false); return }
     setLoading(true)
     try {
-      // Try the existing RPC first (works if the DB function exists)
-      const { data: instId, error: rpcError } = await supabase.rpc('intern_generate_checklist', {
-        p_intern_id: profile.id,
-        p_frequency: frequency,
-        p_date: dateKey,
-      })
+      if (isOwn && profile) {
+        // Try the existing RPC first (works if the DB function exists)
+        const { data: instId, error: rpcError } = await supabase.rpc('intern_generate_checklist', {
+          p_intern_id: profile.id,
+          p_frequency: frequency,
+          p_date: dateKey,
+        })
 
-      if (!rpcError && instId) {
-        setInstanceId(instId)
-        const { data } = await supabase
-          .from('intern_checklist_items')
-          .select('*')
-          .eq('instance_id', instId)
-          .order('sort_order')
-        setItems((data as ChecklistItemRow[]) ?? [])
-        setLoading(false)
-        return
+        if (!rpcError && instId) {
+          setInstanceId(instId)
+          const { data } = await supabase
+            .from('intern_checklist_items')
+            .select('*')
+            .eq('instance_id', instId)
+            .order('sort_order')
+          setItems((data as ChecklistItemRow[]) ?? [])
+          setLoading(false)
+          return
+        }
       }
 
-      // Fallback: load from task_assignments + report_templates
-      const position = profile.position ?? 'intern'
+      // Load existing instance for this user
+      const position = isOwn ? (profile?.position ?? 'intern') : 'intern'
 
-      // Check for existing instance first
       const { data: existing } = await supabase
         .from('intern_checklist_instances')
         .select('id')
-        .eq('intern_id', profile.id)
+        .eq('intern_id', userId)
         .eq('frequency', frequency)
         .eq('period_date', dateKey)
         .maybeSingle()
@@ -71,6 +74,13 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
         return
       }
 
+      // Only auto-create instances for the logged-in user's own checklist
+      if (!isOwn || !profile) {
+        setItems([])
+        setLoading(false)
+        return
+      }
+
       // No existing instance: find templates via assignments or position default
       const { data: assignments } = await supabase
         .from('task_assignments')
@@ -81,7 +91,6 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
       let templateIds = (assignments ?? []).map((a: { template_id: string }) => a.template_id)
 
       if (templateIds.length === 0) {
-        // Fall back to default templates for this position
         const typeMatch = frequency === 'daily' ? 'checklist' : 'weekly'
         const { data: defaults } = await supabase
           .from('report_templates')
@@ -99,7 +108,6 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
         return
       }
 
-      // Load templates
       const { data: templates } = await supabase
         .from('report_templates')
         .select('*')
@@ -111,7 +119,6 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
         return
       }
 
-      // Create instance
       const { data: newInst } = await supabase
         .from('intern_checklist_instances')
         .insert({
@@ -169,7 +176,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date) {
       console.error('Checklist load error:', err)
     }
     setLoading(false)
-  }, [profile, frequency, dateKey])
+  }, [userId, isOwn, profile, frequency, dateKey])
 
   useEffect(() => { reload() }, [reload])
 
