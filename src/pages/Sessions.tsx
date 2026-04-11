@@ -223,6 +223,15 @@ export default function Sessions() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!profile) return
+
+    // Client-side validation — ensure end_time is strictly after start_time.
+    // The server will also reject invalid ranges via a check constraint, but
+    // catching it here gives the user an immediate, friendlier toast.
+    if (parseTimeToMinutes(form.end_time) <= parseTimeToMinutes(form.start_time)) {
+      toast('End time must be after start time', 'error')
+      return
+    }
+
     setSubmitting(true)
 
     const payload = {

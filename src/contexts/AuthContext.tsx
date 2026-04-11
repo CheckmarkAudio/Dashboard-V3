@@ -44,54 +44,98 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfile = useCallback(async (authUser: SupabaseUser) => {
     const userId = authUser.id
-    const email = authUser.email
+    // Always normalize emails — the DB's RLS policies compare via `lower(email)`
+    // (see migration.sql "Users can view team"), so any casing drift between
+    // client queries and server checks silently creates ghost profiles.
+    const email = authUser.email?.trim().toLowerCase() ?? null
 
+    // 1) Primary lookup: profile row whose PK already matches the auth uid.
     const { data, error } = await supabase
       .from('intern_users')
       .select('*')
       .eq('id', userId)
       .maybeSingle()
-    if (error) console.error('Profile lookup failed:', error.message, error.code)
+    if (error) console.error('[AuthContext] Profile lookup failed:', error.message, error.code)
     if (data) { setProfile(data as TeamMember); return }
 
+    // 2) Secondary lookup: an admin may have pre-seeded a row keyed by email
+    //    before this user signed up. We CANNOT update intern_users.id to the
+    //    new auth uid — the PK is referenced by FKs on every child table and
+    //    updating it fails (either blocked by FK, or by the RLS WITH CHECK on
+    //    intern_users itself). Instead we copy the pre-seeded row's fields
+    //    into a fresh row keyed by auth.uid() so the user can immediately use
+    //    the app with the right role/team/position. Historical data attached
+    //    to the old row will need to be reconciled server-side (see the
+    //    server migration TODO in the Phase 1.2 plan).
     if (email) {
       const { data: emailMatch, error: emailErr } = await supabase
         .from('intern_users')
         .select('*')
-        .eq('email', email)
+        .ilike('email', email)
         .maybeSingle()
-      if (emailErr) console.error('Email lookup failed:', emailErr.message)
+      if (emailErr) console.error('[AuthContext] Email lookup failed:', emailErr.message)
       if (emailMatch) {
-        const { error: linkErr } = await supabase
+        const seeded = emailMatch as TeamMember & {
+          position?: string | null
+          team_id?: string | null
+          avatar_url?: string | null
+          phone?: string | null
+          start_date?: string | null
+          status?: string | null
+          managed_by?: string | null
+        }
+        const copied = {
+          id: userId,
+          email,
+          display_name: seeded.display_name,
+          role: seeded.role,
+          position: seeded.position ?? null,
+          team_id: seeded.team_id ?? null,
+          avatar_url: seeded.avatar_url ?? null,
+          phone: seeded.phone ?? null,
+          start_date: seeded.start_date ?? null,
+          status: seeded.status ?? 'active',
+          managed_by: seeded.managed_by ?? null,
+        }
+        const { data: inserted, error: copyErr } = await supabase
           .from('intern_users')
-          .update({ id: userId })
-          .eq('id', emailMatch.id)
-        if (linkErr) console.error('Profile link failed:', linkErr.message)
-        setProfile({ ...emailMatch, id: userId } as TeamMember)
+          .insert(copied)
+          .select('*')
+          .maybeSingle()
+        if (copyErr) {
+          console.error('[AuthContext] Profile copy from seed failed:', copyErr.message, copyErr.code)
+          // Fall back to the in-memory copy so the user isn't locked out
+          setProfile(copied as TeamMember)
+          return
+        }
+        setProfile((inserted ?? copied) as TeamMember)
         return
       }
     }
 
+    // 3) No seed, no existing row — create a fresh profile keyed by auth uid.
     if (email) {
       const newProfile = {
         id: userId,
         email,
-        display_name: email.split('@')[0],
+        display_name: email.split('@')[0] ?? 'User',
         role: 'member' as const,
       }
-      const { error: insertErr } = await supabase
+      const { data: inserted, error: insertErr } = await supabase
         .from('intern_users')
-        .upsert(newProfile, { onConflict: 'id' })
+        .insert(newProfile)
+        .select('*')
+        .maybeSingle()
       if (insertErr) {
-        console.error('Profile creation failed:', insertErr.message, insertErr.code)
+        console.error('[AuthContext] Profile creation failed:', insertErr.message, insertErr.code)
         setProfile(buildFallbackProfile(authUser))
         return
       }
-      setProfile(newProfile as TeamMember)
+      setProfile((inserted ?? newProfile) as TeamMember)
       return
     }
 
-    // Last-resort fallback to prevent "signed in but no profile" lockout.
+    // 4) Last-resort fallback to prevent "signed in but no profile" lockout.
     setProfile(buildFallbackProfile(authUser))
   }, [buildFallbackProfile])
 
@@ -147,33 +191,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [buildFallbackProfile, fetchProfile])
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const normalized = email.trim().toLowerCase()
+    const { error } = await supabase.auth.signInWithPassword({ email: normalized, password })
     return { error: error as Error | null }
   }, [])
 
   const signUp = useCallback(async (email: string, password: string, displayName: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    const normalized = email.trim().toLowerCase()
+    const { data, error } = await supabase.auth.signUp({ email: normalized, password })
     if (error) return { error: error as Error | null }
 
     if (data.user) {
+      // Does a pre-seeded intern_users row already exist for this email?
       const { data: existing } = await supabase
         .from('intern_users')
-        .select('id')
-        .eq('email', email)
+        .select('*')
+        .ilike('email', normalized)
         .maybeSingle()
 
       if (existing) {
-        await supabase
-          .from('intern_users')
-          .update({ id: data.user.id, display_name: displayName })
-          .eq('email', email)
-      } else {
-        await supabase.from('intern_users').insert({
+        // Pre-seeded profile: copy its fields into a new row keyed by the
+        // auth uid. We CANNOT update the existing row's `id` — it's a PK
+        // referenced by FKs across the schema and blocked by the RLS
+        // WITH CHECK clause. See the matching logic in fetchProfile() for
+        // the long-form explanation.
+        const seeded = existing as TeamMember & {
+          position?: string | null
+          team_id?: string | null
+          avatar_url?: string | null
+          phone?: string | null
+          start_date?: string | null
+          status?: string | null
+          managed_by?: string | null
+        }
+        const copyErr = (await supabase.from('intern_users').insert({
           id: data.user.id,
-          email,
+          email: normalized,
+          display_name: displayName || seeded.display_name,
+          role: seeded.role,
+          position: seeded.position ?? null,
+          team_id: seeded.team_id ?? null,
+          avatar_url: seeded.avatar_url ?? null,
+          phone: seeded.phone ?? null,
+          start_date: seeded.start_date ?? null,
+          status: seeded.status ?? 'active',
+          managed_by: seeded.managed_by ?? null,
+        })).error
+        if (copyErr) console.error('[AuthContext] signUp seed-copy failed:', copyErr.message, copyErr.code)
+      } else {
+        const { error: insertErr } = await supabase.from('intern_users').insert({
+          id: data.user.id,
+          email: normalized,
           display_name: displayName,
           role: 'member',
         })
+        if (insertErr) console.error('[AuthContext] signUp profile insert failed:', insertErr.message, insertErr.code)
       }
     }
     return { error: null }

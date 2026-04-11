@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { localDateKey } from '../lib/dates'
@@ -23,12 +23,23 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
   const [items, setItems] = useState<ChecklistItemRow[]>([])
   const [loading, setLoading] = useState(true)
   const [instanceId, setInstanceId] = useState<string | null>(null)
+  // Tracks whether the hook is still mounted so async work doesn't
+  // fire setState after unmount (classic React warning + memory leak
+  // if rapid navigation cancels a long query sequence).
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   const dateKey = localDateKey(date)
 
   const reload = useCallback(async () => {
-    if (!userId) { setLoading(false); return }
-    setLoading(true)
+    if (!userId) {
+      if (mountedRef.current) setLoading(false)
+      return
+    }
+    if (mountedRef.current) setLoading(true)
     try {
       if (isOwn && profile) {
         // Try the existing RPC first (works if the DB function exists)
@@ -37,6 +48,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
           p_frequency: frequency,
           p_date: dateKey,
         })
+        if (!mountedRef.current) return
 
         if (!rpcError && instId) {
           setInstanceId(instId)
@@ -45,6 +57,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
             .select('*')
             .eq('instance_id', instId)
             .order('sort_order')
+          if (!mountedRef.current) return
           setItems((data as ChecklistItemRow[]) ?? [])
           setLoading(false)
           return
@@ -61,6 +74,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
         .eq('frequency', frequency)
         .eq('period_date', dateKey)
         .maybeSingle()
+      if (!mountedRef.current) return
 
       if (existing) {
         setInstanceId(existing.id)
@@ -69,6 +83,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
           .select('*')
           .eq('instance_id', existing.id)
           .order('sort_order')
+        if (!mountedRef.current) return
         setItems((data as ChecklistItemRow[]) ?? [])
         setLoading(false)
         return
@@ -87,6 +102,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
         .select('template_id')
         .or(`intern_id.eq.${profile.id},position.eq.${position}`)
         .eq('is_active', true)
+      if (!mountedRef.current) return
 
       let templateIds = (assignments ?? []).map((a: { template_id: string }) => a.template_id)
 
@@ -98,6 +114,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
           .eq('is_default', true)
           .eq('type', typeMatch)
           .or(`position.eq.${position},position.is.null`)
+        if (!mountedRef.current) return
 
         templateIds = (defaults ?? []).map((t: { id: string }) => t.id)
       }
@@ -112,6 +129,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
         .from('report_templates')
         .select('*')
         .in('id', templateIds)
+      if (!mountedRef.current) return
 
       if (!templates || templates.length === 0) {
         setItems([])
@@ -128,6 +146,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
         })
         .select('id')
         .single()
+      if (!mountedRef.current) return
 
       if (!newInst) {
         setItems([])
@@ -168,6 +187,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
           .from('intern_checklist_items')
           .insert(newItems)
           .select('*')
+        if (!mountedRef.current) return
         setItems((inserted as ChecklistItemRow[]) ?? [])
       } else {
         setItems([])
@@ -175,7 +195,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
     } catch (err) {
       console.error('Checklist load error:', err)
     }
-    setLoading(false)
+    if (mountedRef.current) setLoading(false)
   }, [userId, isOwn, profile, frequency, dateKey])
 
   useEffect(() => { reload() }, [reload])
@@ -183,23 +203,33 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
   const toggleItem = async (id: string) => {
     const item = items.find(i => i.id === id)
     if (!item) return
+    const previous = item
     const newCompleted = !item.is_completed
+    const nextCompletedAt = newCompleted ? new Date().toISOString() : null
 
+    // Optimistic
     setItems(prev =>
       prev.map(i =>
         i.id === id
-          ? { ...i, is_completed: newCompleted, completed_at: newCompleted ? new Date().toISOString() : null }
+          ? { ...i, is_completed: newCompleted, completed_at: nextCompletedAt }
           : i
       )
     )
 
-    await supabase
+    const { error } = await supabase
       .from('intern_checklist_items')
       .update({
         is_completed: newCompleted,
-        completed_at: newCompleted ? new Date().toISOString() : null,
+        completed_at: nextCompletedAt,
       })
       .eq('id', id)
+
+    if (!mountedRef.current) return
+    if (error) {
+      // Roll back so UI matches server
+      console.error('[useChecklist] toggleItem failed:', error)
+      setItems(prev => prev.map(i => (i.id === id ? previous : i)))
+    }
   }
 
   const grouped: GroupedItems = items.reduce<GroupedItems>((acc, item) => {

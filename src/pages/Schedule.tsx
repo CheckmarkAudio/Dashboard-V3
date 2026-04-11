@@ -21,14 +21,33 @@ function TodayFocus({ profileId, isAdmin }: { profileId?: string; isAdmin?: bool
 
   useEffect(() => {
     if (!isAdmin) return
-    void supabase.from('intern_users').select('id, display_name').order('display_name')
-      .then(({ data }) => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('intern_users')
+          .select('id, display_name')
+          .order('display_name')
+        if (cancelled) return
+        if (error) {
+          console.error('[Schedule] Failed to load team members for Today Focus:', error)
+          return
+        }
         const list = (data ?? []) as TeamMember[]
         setMembers(list)
+        // Default to the first member if we don't already have a selection.
+        // Read via functional setState so this effect doesn't need to depend
+        // on selectedMemberId (which would retrigger on every selection).
         const firstMember = list[0]
-        if (!selectedMemberId && firstMember) setSelectedMemberId(firstMember.id)
-      })
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+        if (firstMember) {
+          setSelectedMemberId(prev => (prev ? prev : firstMember.id))
+        }
+      } catch (err) {
+        if (!cancelled) console.error('[Schedule] Today Focus members fetch threw:', err)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [isAdmin])
 
   const targetId = isAdmin ? selectedMemberId : profileId
 

@@ -84,8 +84,19 @@ function AdminChecklistEditor({ member, onClose }: { member: TeamMember; onClose
     const item = items.find(i => i.id === id)
     if (!item) return
     const next = !item.is_completed
-    setItems(prev => prev.map(i => i.id === id ? { ...i, is_completed: next, completed_at: next ? new Date().toISOString() : null } : i))
-    await supabase.from('intern_checklist_items').update({ is_completed: next, completed_at: next ? new Date().toISOString() : null }).eq('id', id)
+    const nextCompletedAt = next ? new Date().toISOString() : null
+    const previous = item
+    // Optimistic update
+    setItems(prev => prev.map(i => i.id === id ? { ...i, is_completed: next, completed_at: nextCompletedAt } : i))
+    const { error } = await supabase
+      .from('intern_checklist_items')
+      .update({ is_completed: next, completed_at: nextCompletedAt })
+      .eq('id', id)
+    if (error) {
+      // Roll back on failure so UI matches server
+      setItems(prev => prev.map(i => i.id === id ? previous : i))
+      toast('Failed to update task', 'error')
+    }
   }
 
   const addItem = async () => {

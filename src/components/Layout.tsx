@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useRouteAnnounce } from '../hooks/useRouteAnnounce'
+import ErrorBoundary from './ErrorBoundary'
 import {
   LayoutDashboard, Users, Calendar, Settings,
   LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
@@ -38,6 +39,7 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [adminExpanded, setAdminExpanded] = useState(true)
   const navigate = useNavigate()
+  const location = useLocation()
   const drawerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(drawerRef, sidebarOpen)
   useRouteAnnounce()
@@ -182,7 +184,12 @@ export default function Layout() {
           </div>
         </header>
         <div className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <Outlet />
+          {/* Per-route boundary — keyed by pathname so navigating away from
+              a crashed page resets the boundary and renders the next page
+              cleanly, while keeping the sidebar alive. */}
+          <ErrorBoundary key={location.pathname} label="This page">
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
     </div>

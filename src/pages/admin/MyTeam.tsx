@@ -190,11 +190,12 @@ export default function MyTeam() {
 
   // Assignment handlers
   const handleAssignTemplate = async () => {
-    if (!assignTemplateId || assignMemberIds.size === 0) return
+    if (!assignTemplateId || assignMemberIds.size === 0 || !profile) return
     setAssignSubmitting(true)
+    const assignedBy = profile.id
     const inserts = Array.from(assignMemberIds)
       .filter(id => !assignments.some(a => a.template_id === assignTemplateId && a.intern_id === id && a.is_active))
-      .map(id => ({ template_id: assignTemplateId, intern_id: id, position: null, is_active: true, assigned_by: profile.id }))
+      .map(id => ({ template_id: assignTemplateId, intern_id: id, position: null, is_active: true, assigned_by: assignedBy }))
 
     if (inserts.length > 0) {
       const { error } = await supabase.from('task_assignments').insert(inserts)
