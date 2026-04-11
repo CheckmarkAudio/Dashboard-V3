@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
 import ConfirmModal from '../../components/ConfirmModal'
 import type { TeamMember } from '../../types'
@@ -30,6 +31,7 @@ const EMPTY_MEMBER: MemberForm = {
 }
 
 export default function TeamManager() {
+  useDocumentTitle('Team Manager - Checkmark Audio')
   const { toast } = useToast()
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
@@ -223,8 +225,9 @@ export default function TeamManager() {
   const inactiveCount = members.length - activeCount
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" />
+    <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
+      <span className="sr-only">Loading…</span>
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" aria-hidden="true" />
     </div>
   )
 
@@ -243,7 +246,7 @@ export default function TeamManager() {
         </div>
         <button onClick={openAddForm}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-sm font-semibold transition-all">
-          <UserPlus size={16} />
+          <UserPlus size={16} aria-hidden="true" />
           Add Member
         </button>
       </div>
@@ -252,8 +255,9 @@ export default function TeamManager() {
       <div className="bg-surface rounded-xl border border-border p-4 space-y-3">
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" aria-hidden="true" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email..."
+              aria-label="Search team members"
               className="w-full pl-9 pr-3 py-2 rounded-lg border border-border text-sm" />
           </div>
           <div className="flex items-center gap-1 bg-surface-alt rounded-lg p-0.5">
@@ -276,7 +280,7 @@ export default function TeamManager() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Filter size={12} className="text-text-light" />
+          <Filter size={12} className="text-text-light" aria-hidden="true" />
           {Object.entries(positionCounts).map(([pos, count]) => (
             <button key={pos} onClick={() => setPositionFilter(positionFilter === pos ? 'all' : pos)}
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
@@ -301,18 +305,18 @@ export default function TeamManager() {
           {members.length === 0 ? (
             <>
               <div className="w-14 h-14 rounded-2xl bg-gold/10 flex items-center justify-center mx-auto mb-4">
-                <Users size={24} className="text-gold" />
+                <Users size={24} className="text-gold" aria-hidden="true" />
               </div>
               <h3 className="font-semibold text-lg mb-1">No team members yet</h3>
               <p className="text-sm text-text-muted mb-4">Get started by adding your first team member.</p>
               <button onClick={openAddForm}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-sm font-semibold transition-all">
-                <UserPlus size={16} /> Add First Member
+                <UserPlus size={16} aria-hidden="true" /> Add First Member
               </button>
             </>
           ) : (
             <>
-              <Search size={32} className="mx-auto mb-3 text-text-light opacity-30" />
+              <Search size={32} className="mx-auto mb-3 text-text-light opacity-30" aria-hidden="true" />
               <p className="text-text-muted">No members match your filters.</p>
               <button onClick={() => { setSearch(''); setPositionFilter('all'); setStatusFilter('all') }}
                 className="text-sm text-gold font-medium mt-2 hover:underline">
@@ -335,7 +339,7 @@ export default function TeamManager() {
                 }`}>
                 {isLoading && (
                   <div className="absolute inset-0 flex items-center justify-center z-10">
-                    <Loader2 size={20} className="animate-spin text-gold" />
+                    <Loader2 size={20} className="animate-spin text-gold" aria-hidden="true" />
                   </div>
                 )}
 
@@ -354,32 +358,36 @@ export default function TeamManager() {
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className={`w-2.5 h-2.5 rounded-full ${member.status === 'active' ? 'bg-emerald-400' : 'bg-text-light'}`}
-                      title={member.status === 'active' ? 'Active' : 'Inactive'} />
+                      title={member.status === 'active' ? 'Active' : 'Inactive'}
+                      aria-hidden="true" />
 
                     <div className="relative" ref={openMenuId === member.id ? menuRef : undefined}>
                       <button onClick={() => setOpenMenuId(openMenuId === member.id ? null : member.id)}
-                        className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100">
-                        <MoreVertical size={14} />
+                        className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        aria-label={`Actions for ${member.display_name}`}
+                        aria-expanded={openMenuId === member.id}
+                        aria-haspopup="menu">
+                        <MoreVertical size={14} aria-hidden="true" />
                       </button>
 
                       {openMenuId === member.id && (
-                        <div className="absolute right-0 top-full mt-1 w-44 bg-surface border border-border rounded-xl shadow-xl z-20 py-1 animate-fade-in">
-                          <button onClick={() => handleEdit(member)}
+                        <div className="absolute right-0 top-full mt-1 w-44 bg-surface border border-border rounded-xl shadow-xl z-20 py-1 animate-fade-in" role="menu">
+                          <button role="menuitem" onClick={() => handleEdit(member)}
                             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors">
-                            <Edit2 size={12} /> Edit Member
+                            <Edit2 size={12} aria-hidden="true" /> Edit Member
                           </button>
-                          <button onClick={() => toggleRole(member)}
+                          <button role="menuitem" onClick={() => toggleRole(member)}
                             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-surface-hover transition-colors">
-                            <Shield size={12} /> {member.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
+                            <Shield size={12} aria-hidden="true" /> {member.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
                           </button>
-                          <button onClick={() => toggleStatus(member)}
+                          <button role="menuitem" onClick={() => toggleStatus(member)}
                             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-hover transition-colors">
-                            <UserCheck size={12} /> {member.status === 'active' ? 'Deactivate' : 'Activate'}
+                            <UserCheck size={12} aria-hidden="true" /> {member.status === 'active' ? 'Deactivate' : 'Activate'}
                           </button>
                           <div className="my-1 border-t border-border" />
-                          <button onClick={() => requestDelete(member)}
+                          <button role="menuitem" onClick={() => requestDelete(member)}
                             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors">
-                            <Trash2 size={12} /> Remove Member
+                            <Trash2 size={12} aria-hidden="true" /> Remove Member
                           </button>
                         </div>
                       )}
@@ -388,19 +396,19 @@ export default function TeamManager() {
                 </div>
 
                 <div className="space-y-1.5 text-xs text-text-muted mb-3">
-                  <p className="flex items-center gap-1.5 truncate"><Mail size={12} className="shrink-0" /> {member.email}</p>
-                  {member.phone && <p className="flex items-center gap-1.5"><Phone size={12} className="shrink-0" /> {member.phone}</p>}
-                  {member.start_date && <p className="flex items-center gap-1.5"><CalendarIcon size={12} className="shrink-0" /> Started {member.start_date}</p>}
+                  <p className="flex items-center gap-1.5 truncate"><Mail size={12} className="shrink-0" aria-hidden="true" /> {member.email}</p>
+                  {member.phone && <p className="flex items-center gap-1.5"><Phone size={12} className="shrink-0" aria-hidden="true" /> {member.phone}</p>}
+                  {member.start_date && <p className="flex items-center gap-1.5"><CalendarIcon size={12} className="shrink-0" aria-hidden="true" /> Started {member.start_date}</p>}
                 </div>
 
                 <div className="flex items-center gap-2 text-xs mb-3">
                   {member.role === 'admin' ? (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gold/10 text-gold font-medium">
-                      <Shield size={10} /> Admin
+                      <Shield size={10} aria-hidden="true" /> Admin
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-alt text-text-muted font-medium">
-                      <UserCheck size={10} /> Member
+                      <UserCheck size={10} aria-hidden="true" /> Member
                     </span>
                   )}
                   {member.status === 'inactive' && (
@@ -413,7 +421,7 @@ export default function TeamManager() {
                 {managerName && (
                   <div className="pt-2 border-t border-border">
                     <div className="flex items-center gap-1 text-xs">
-                      <Users size={12} className="text-violet-400 shrink-0" />
+                      <Users size={12} className="text-violet-400 shrink-0" aria-hidden="true" />
                       <span className="text-text-light">Reports to</span>
                       <span className="font-medium text-text">{managerName}</span>
                     </div>
@@ -421,11 +429,11 @@ export default function TeamManager() {
                       <div className="flex items-center gap-0.5 flex-wrap pl-4 mt-1">
                         {[...chain].reverse().map((name, i) => (
                           <span key={i} className="flex items-center gap-0.5 text-[10px] text-text-light">
-                            {i > 0 && <ChevronRight size={8} />}
+                            {i > 0 && <ChevronRight size={8} aria-hidden="true" />}
                             {name}
                           </span>
                         ))}
-                        <ChevronRight size={8} className="text-text-light" />
+                        <ChevronRight size={8} className="text-text-light" aria-hidden="true" />
                         <span className="text-[10px] text-gold font-medium">{member.display_name}</span>
                       </div>
                     )}
@@ -435,7 +443,7 @@ export default function TeamManager() {
                 <div className="mt-3 pt-3 border-t border-border">
                   <button onClick={() => handleEdit(member)}
                     className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-gold hover:bg-gold/10 transition-colors">
-                    <Edit2 size={12} /> Edit Details
+                    <Edit2 size={12} aria-hidden="true" /> Edit Details
                   </button>
                 </div>
               </div>
@@ -449,27 +457,30 @@ export default function TeamManager() {
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeForm} />
           <aside className="absolute right-0 top-0 h-full w-full max-w-lg bg-surface border-l border-border shadow-2xl flex flex-col animate-slide-in"
-            style={{ animationDirection: 'normal' }}>
+            style={{ animationDirection: 'normal' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="team-manager-panel-title">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-              <h2 className="font-semibold text-lg">{editingMember ? 'Edit Team Member' : 'Add Team Member'}</h2>
-              <button onClick={closeForm} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted">
-                <X size={18} />
+              <h2 id="team-manager-panel-title" className="font-semibold text-lg">{editingMember ? 'Edit Team Member' : 'Add Team Member'}</h2>
+              <button onClick={closeForm} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted" aria-label="Close">
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
               <div className="p-6 space-y-5">
                 <div>
-                  <label className="block text-sm font-medium mb-1.5 text-text-muted">Full Name *</label>
-                  <input required value={formData.display_name}
+                  <label htmlFor="team-member-display-name" className="block text-sm font-medium mb-1.5 text-text-muted">Full Name *</label>
+                  <input id="team-member-display-name" required value={formData.display_name}
                     onChange={e => setFormData({ ...formData, display_name: e.target.value })}
                     className="w-full px-3 py-2.5 rounded-lg border border-border text-sm"
                     placeholder="Jane Smith" autoFocus />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1.5 text-text-muted">Email {editingMember ? '' : '*'}</label>
-                  <input type="email" required={!editingMember} disabled={!!editingMember}
+                  <label htmlFor="team-member-email" className="block text-sm font-medium mb-1.5 text-text-muted">Email {editingMember ? '' : '*'}</label>
+                  <input id="team-member-email" type="email" required={!editingMember} disabled={!!editingMember}
                     value={editingMember ? editingMember.email : formData.email}
                     onChange={e => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-3 py-2.5 rounded-lg border border-border text-sm disabled:bg-surface-alt disabled:text-text-muted"
@@ -478,8 +489,8 @@ export default function TeamManager() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1.5 text-text-muted">Position</label>
-                    <select value={formData.position}
+                    <label htmlFor="team-member-position" className="block text-sm font-medium mb-1.5 text-text-muted">Position</label>
+                    <select id="team-member-position" value={formData.position}
                       onChange={e => setFormData({ ...formData, position: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                       {POSITIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -487,8 +498,8 @@ export default function TeamManager() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1.5 text-text-muted">Role</label>
-                    <select value={formData.role}
+                    <label htmlFor="team-member-role" className="block text-sm font-medium mb-1.5 text-text-muted">Role</label>
+                    <select id="team-member-role" value={formData.role}
                       onChange={e => setFormData({ ...formData, role: e.target.value as 'admin' | 'member' })}
                       className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                       <option value="member">Member</option>
@@ -499,16 +510,16 @@ export default function TeamManager() {
 
                 {formData.position === 'custom' && (
                   <div>
-                    <label className="block text-sm font-medium mb-1.5 text-text-muted">Custom Position Name</label>
-                    <input value={customPosition} onChange={e => setCustomPosition(e.target.value)}
+                    <label htmlFor="team-member-custom-position" className="block text-sm font-medium mb-1.5 text-text-muted">Custom Position Name</label>
+                    <input id="team-member-custom-position" value={customPosition} onChange={e => setCustomPosition(e.target.value)}
                       className="w-full px-3 py-2.5 rounded-lg border border-border text-sm"
                       placeholder="e.g. Session Musician" />
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium mb-1.5 text-text-muted">Reports To</label>
-                  <select value={formData.managed_by}
+                  <label htmlFor="team-member-managed-by" className="block text-sm font-medium mb-1.5 text-text-muted">Reports To</label>
+                  <select id="team-member-managed-by" value={formData.managed_by}
                     onChange={e => setFormData({ ...formData, managed_by: e.target.value })}
                     className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                     <option value="">No Manager (Top Level)</option>
@@ -522,23 +533,23 @@ export default function TeamManager() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1.5 text-text-muted">Phone</label>
-                    <input value={formData.phone}
+                    <label htmlFor="team-member-phone" className="block text-sm font-medium mb-1.5 text-text-muted">Phone</label>
+                    <input id="team-member-phone" value={formData.phone}
                       onChange={e => setFormData({ ...formData, phone: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-lg border border-border text-sm"
                       placeholder="(555) 123-4567" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1.5 text-text-muted">Start Date</label>
-                    <input type="date" value={formData.start_date}
+                    <label htmlFor="team-member-start-date" className="block text-sm font-medium mb-1.5 text-text-muted">Start Date</label>
+                    <input id="team-member-start-date" type="date" value={formData.start_date}
                       onChange={e => setFormData({ ...formData, start_date: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-lg border border-border text-sm" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1.5 text-text-muted">Status</label>
-                  <select value={formData.status}
+                  <label htmlFor="team-member-status" className="block text-sm font-medium mb-1.5 text-text-muted">Status</label>
+                  <select id="team-member-status" value={formData.status}
                     onChange={e => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' })}
                     className="w-full px-3 py-2.5 rounded-lg border border-border text-sm">
                     <option value="active">Active</option>
@@ -554,7 +565,7 @@ export default function TeamManager() {
                 </button>
                 <button type="submit" disabled={submitting}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-sm font-semibold disabled:opacity-50 transition-all">
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {submitting ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
                   {editingMember ? 'Update Member' : 'Add Member'}
                 </button>
               </div>

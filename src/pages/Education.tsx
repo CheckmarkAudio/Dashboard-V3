@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
 import { supabase } from '../lib/supabase'
@@ -60,6 +61,7 @@ function StatusBadge({ status }: { status: EducationStudent['status'] }) {
 }
 
 export default function Education() {
+  useDocumentTitle('Education - Checkmark Audio')
   const { profile } = useAuth()
   const { toast } = useToast()
   const [students, setStudents] = useState<EducationStudent[]>([])
@@ -215,8 +217,13 @@ export default function Education() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-gold" aria-hidden />
+      <div
+        className="flex items-center justify-center min-h-[40vh]"
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="h-8 w-8 animate-spin text-gold" aria-hidden="true" />
+        <span className="sr-only">Loading…</span>
       </div>
     )
   }
@@ -234,7 +241,7 @@ export default function Education() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-gold/30 bg-surface-alt text-gold">
-            <GraduationCap size={22} strokeWidth={1.75} />
+            <GraduationCap size={22} strokeWidth={1.75} aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-text">Education</h1>
@@ -246,7 +253,7 @@ export default function Education() {
           onClick={() => (showForm ? closeForm() : openNew())}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-alt px-4 py-2.5 text-sm font-medium text-text transition-colors hover:bg-surface-hover hover:border-gold/40"
         >
-          {showForm ? <X size={18} /> : <Plus size={18} />}
+          {showForm ? <X size={18} aria-hidden="true" /> : <Plus size={18} aria-hidden="true" />}
           {showForm ? 'Close' : 'Add student'}
         </button>
       </div>
@@ -257,15 +264,23 @@ export default function Education() {
           className="rounded-2xl border border-border bg-surface p-6 shadow-sm space-y-4"
         >
           <h2 className="text-lg font-medium text-text flex items-center gap-2">
-            {editingStudent ? <Edit2 size={18} className="text-gold" /> : <Plus size={18} className="text-gold" />}
+            {editingStudent ? (
+              <Edit2 size={18} className="text-gold" aria-hidden="true" />
+            ) : (
+              <Plus size={18} className="text-gold" aria-hidden="true" />
+            )}
             {editingStudent ? 'Edit student' : 'New student'}
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="edu-student-name"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Student name *
               </label>
               <input
+                id="edu-student-name"
                 required
                 value={formData.student_name}
                 onChange={(e) => setFormData({ ...formData, student_name: e.target.value })}
@@ -274,10 +289,14 @@ export default function Education() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="edu-email"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Email
               </label>
               <input
+                id="edu-email"
                 type="email"
                 value={formData.contact_email}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
@@ -285,10 +304,14 @@ export default function Education() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="edu-instrument"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Instrument
               </label>
               <input
+                id="edu-instrument"
                 value={formData.instrument}
                 onChange={(e) => setFormData({ ...formData, instrument: e.target.value })}
                 className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -296,10 +319,14 @@ export default function Education() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="edu-level"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Level
               </label>
               <input
+                id="edu-level"
                 value={formData.level}
                 onChange={(e) => setFormData({ ...formData, level: e.target.value })}
                 className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -307,10 +334,14 @@ export default function Education() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="edu-status"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Status
               </label>
               <select
+                id="edu-status"
                 value={formData.status}
                 onChange={(e) =>
                   setFormData({ ...formData, status: e.target.value as EducationStudent['status'] })
@@ -325,10 +356,14 @@ export default function Education() {
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="edu-assigned-to"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Assigned teacher
               </label>
               <select
+                id="edu-assigned-to"
                 value={formData.assigned_to}
                 onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
                 className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -342,10 +377,14 @@ export default function Education() {
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="edu-notes"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Notes
               </label>
               <textarea
+                id="edu-notes"
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 rows={3}
@@ -377,7 +416,11 @@ export default function Education() {
               disabled={submitting}
               className="inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-medium text-bg hover:opacity-90 disabled:opacity-50"
             >
-              {submitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {submitting ? (
+                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Save size={16} aria-hidden="true" />
+              )}
               {editingStudent ? 'Save changes' : 'Add student'}
             </button>
           </div>
@@ -386,11 +429,16 @@ export default function Education() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+            aria-hidden="true"
+          />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search students, instrument, teacher…"
+            aria-label="Search students"
             className="w-full rounded-xl border border-border py-2.5 pl-9 pr-3 text-sm"
           />
         </div>
@@ -400,6 +448,7 @@ export default function Education() {
             onChange={(e) =>
               setStatusFilter(e.target.value as typeof statusFilter)
             }
+            aria-label="Filter by status"
             className="rounded-xl border border-border px-3 py-2.5 text-sm"
           >
             <option value="all">All statuses</option>
@@ -409,9 +458,11 @@ export default function Education() {
               </option>
             ))}
           </select>
-          <div className="flex rounded-xl border border-border p-0.5 bg-surface-alt">
+          <div className="flex rounded-xl border border-border p-0.5 bg-surface-alt" role="tablist">
             <button
               type="button"
+              role="tab"
+              aria-selected={viewMode === 'table'}
               onClick={() => setViewMode('table')}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 viewMode === 'table' ? 'bg-surface text-text' : 'text-text-muted hover:text-text'
@@ -421,6 +472,8 @@ export default function Education() {
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={viewMode === 'cards'}
               onClick={() => setViewMode('cards')}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 viewMode === 'cards' ? 'bg-surface text-text' : 'text-text-muted hover:text-text'
@@ -447,7 +500,9 @@ export default function Education() {
                   <th className="px-4 py-3 font-medium text-text-muted hidden md:table-cell">Level</th>
                   <th className="px-4 py-3 font-medium text-text-muted">Status</th>
                   <th className="px-4 py-3 font-medium text-text-muted hidden lg:table-cell">Teacher</th>
-                  <th className="px-4 py-3 w-24" />
+                  <th className="px-4 py-3 w-24">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -534,7 +589,7 @@ export default function Education() {
                   onClick={() => openEdit(s)}
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-2 text-xs font-medium text-text hover:bg-surface-hover"
                 >
-                  <Edit2 size={14} />
+                  <Edit2 size={14} aria-hidden="true" />
                   Edit
                 </button>
                 <button
@@ -542,7 +597,7 @@ export default function Education() {
                   onClick={() => handleDelete(s)}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/30 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-950/25"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={14} aria-hidden="true" />
                 </button>
               </div>
             </div>

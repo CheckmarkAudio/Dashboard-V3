@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import type { DeliverableSubmission, PlatformMetric, TeamMember } from '../types'
 import {
   Pencil,
@@ -27,6 +28,7 @@ const PLATFORMS: { key: PlatformMetric['platform']; label: string; icon: typeof 
 ]
 
 export default function Content() {
+  useDocumentTitle('Content - Checkmark Audio')
   const { profile } = useAuth()
   const { toast } = useToast()
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([])
@@ -124,8 +126,16 @@ export default function Content() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" />
+      <div
+        className="flex items-center justify-center h-64"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="sr-only">Loading…</span>
+        <div
+          className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold"
+          aria-hidden="true"
+        />
       </div>
     )
   }
@@ -157,10 +167,11 @@ export default function Content() {
               <div
                 key={key}
                 className="bg-surface rounded-2xl border border-border p-4 flex flex-col gap-2 hover:border-gold/20 transition-colors"
+                aria-label={`${label}: ${m ? m.follower_count.toLocaleString() : 'no data'} followers`}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-text-muted">{label}</span>
-                  <Icon size={18} className="text-gold" />
+                  <Icon size={18} className="text-gold" aria-hidden="true" />
                 </div>
                 <p className="text-2xl font-bold tabular-nums">
                   {m ? m.follower_count.toLocaleString() : '—'}
@@ -230,7 +241,7 @@ export default function Content() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 text-sm font-medium text-gold hover:underline"
                     >
-                      <ExternalLink size={14} />
+                      <ExternalLink size={14} aria-hidden="true" />
                       Dropbox
                     </a>
                   ) : (
@@ -246,7 +257,7 @@ export default function Content() {
       {/* Ideas */}
       <section className="bg-surface rounded-2xl border border-border p-5 sm:p-6">
         <div className="flex items-center gap-2 mb-4">
-          <Lightbulb size={18} className="text-gold" />
+          <Lightbulb size={18} className="text-gold" aria-hidden="true" />
           <h2 className="text-sm font-semibold uppercase tracking-wide text-text">Content ideas</h2>
         </div>
         <p className="text-xs text-text-muted mb-4">
@@ -259,6 +270,7 @@ export default function Content() {
             onChange={e => setDraftIdea(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && addIdea()}
             placeholder="Drop a hook, format, or campaign idea…"
+            aria-label="New content idea"
             className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-bg text-sm placeholder:text-text-light focus:outline-none focus:ring-1 focus:ring-gold/40"
           />
           <button
@@ -266,7 +278,7 @@ export default function Content() {
             onClick={addIdea}
             className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gold text-black text-sm font-semibold hover:opacity-90 transition-opacity"
           >
-            <Plus size={16} />
+            <Plus size={16} aria-hidden="true" />
             Add
           </button>
         </div>
@@ -284,6 +296,7 @@ export default function Content() {
                     className="flex-1 px-2 py-1.5 rounded-lg border border-border bg-bg text-sm"
                     autoFocus
                     onKeyDown={e => e.key === 'Enter' && saveEdit()}
+                    aria-label="Edit idea"
                   />
                   <button
                     type="button"

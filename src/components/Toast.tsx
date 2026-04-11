@@ -28,7 +28,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none" aria-live="polite" aria-relevant="additions">
         {toasts.map(t => (
           <ToastNotification key={t.id} item={t} onDismiss={dismiss} />
         ))}
@@ -44,21 +44,24 @@ function ToastNotification({ item, onDismiss }: { item: ToastItem; onDismiss: (i
   }, [item.id, onDismiss])
 
   return (
-    <div className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl bg-surface border shadow-lg animate-slide-up min-w-[280px] ${
-      item.type === 'success' ? 'border-emerald-500/30' : 'border-red-500/30'
-    }`}>
+    <div
+      className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl bg-surface border shadow-lg animate-slide-up min-w-[280px] ${
+        item.type === 'success' ? 'border-emerald-500/30' : 'border-red-500/30'
+      }`}
+      role={item.type === 'error' ? 'alert' : 'status'}
+    >
       {item.type === 'success' ? (
-        <div className="w-6 h-6 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
+        <div className="w-6 h-6 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0" aria-hidden="true">
           <CheckCircle2 size={14} className="text-emerald-400" />
         </div>
       ) : (
-        <div className="w-6 h-6 rounded-full bg-red-500/15 flex items-center justify-center shrink-0">
+        <div className="w-6 h-6 rounded-full bg-red-500/15 flex items-center justify-center shrink-0" aria-hidden="true">
           <AlertCircle size={14} className="text-red-400" />
         </div>
       )}
       <span className="text-sm text-text flex-1">{item.message}</span>
-      <button onClick={() => onDismiss(item.id)} className="text-text-light hover:text-text shrink-0 p-0.5">
-        <X size={14} />
+      <button onClick={() => onDismiss(item.id)} className="text-text-light hover:text-text shrink-0 p-0.5" aria-label="Dismiss notification">
+        <X size={14} aria-hidden="true" />
       </button>
     </div>
   )

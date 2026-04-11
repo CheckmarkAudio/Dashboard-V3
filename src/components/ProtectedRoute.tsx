@@ -9,8 +9,9 @@ export default function ProtectedRoute({ children, adminOnly = false }: {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-bg">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" />
+      <div className="flex items-center justify-center h-screen bg-bg" role="status" aria-live="polite">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" aria-hidden="true" />
+        <span className="sr-only">Loading…</span>
       </div>
     )
   }

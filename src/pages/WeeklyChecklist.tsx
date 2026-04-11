@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useChecklist, type GroupedItems } from '../hooks/useChecklist'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import {
   Check, ChevronLeft, ChevronRight, ListChecks,
 } from 'lucide-react'
@@ -22,6 +23,7 @@ function getMonday(d: Date) {
 }
 
 export default function WeeklyChecklist() {
+  useDocumentTitle('Weekly Review - Checkmark Audio')
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()))
   const { grouped, loading, toggleItem, completedCount, totalCount, percentage } =
     useChecklist('weekly', weekStart)
@@ -37,8 +39,9 @@ export default function WeeklyChecklist() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" />
+      <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" aria-hidden="true" />
+        <span className="sr-only">Loading…</span>
       </div>
     )
   }
@@ -57,8 +60,8 @@ export default function WeeklyChecklist() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => shiftWeek(-1)} className="p-2 hover:bg-surface-hover rounded-lg transition-colors text-text-muted">
-            <ChevronLeft size={20} />
+          <button onClick={() => shiftWeek(-1)} className="p-2 hover:bg-surface-hover rounded-lg transition-colors text-text-muted" aria-label="Previous week">
+            <ChevronLeft size={20} aria-hidden="true" />
           </button>
           <button
             onClick={() => setWeekStart(getMonday(new Date()))}
@@ -66,8 +69,8 @@ export default function WeeklyChecklist() {
           >
             This Week
           </button>
-          <button onClick={() => shiftWeek(1)} className="p-2 hover:bg-surface-hover rounded-lg transition-colors text-text-muted">
-            <ChevronRight size={20} />
+          <button onClick={() => shiftWeek(1)} className="p-2 hover:bg-surface-hover rounded-lg transition-colors text-text-muted" aria-label="Next week">
+            <ChevronRight size={20} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -75,12 +78,19 @@ export default function WeeklyChecklist() {
       <div className="bg-surface rounded-2xl border border-border p-5">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium flex items-center gap-2 text-text-muted">
-            <ListChecks size={16} className="text-gold" />
+            <ListChecks size={16} className="text-gold" aria-hidden="true" />
             Weekly Progress
           </span>
           <span className="text-sm font-bold text-text">{completedCount}/{totalCount}</span>
         </div>
-        <div className="h-3 bg-surface-alt rounded-full overflow-hidden">
+        <div
+          className="h-3 bg-surface-alt rounded-full overflow-hidden"
+          role="progressbar"
+          aria-valuenow={percentage}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`Weekly progress: ${percentage}%`}
+        >
           <div
             className="h-full rounded-full transition-all duration-500"
             style={{
@@ -90,7 +100,7 @@ export default function WeeklyChecklist() {
           />
         </div>
         {percentage === 100 && totalCount > 0 && (
-          <p className="text-sm text-emerald-400 font-medium mt-2">All tasks completed!</p>
+          <p className="text-sm text-emerald-400 font-medium mt-2" aria-live="polite">All tasks completed!</p>
         )}
       </div>
 
@@ -135,27 +145,32 @@ function CategoryList({
             <button
               onClick={() => toggle(category)}
               className="w-full flex items-center gap-3 px-5 py-4 hover:bg-surface-alt/50 transition-colors"
+              aria-expanded={!isCollapsed}
+              aria-controls={`weekly-cat-${catIdx}`}
             >
-              <span className="text-lg">{emoji}</span>
+              <span className="text-lg" aria-hidden="true">{emoji}</span>
               <span className="font-semibold text-sm flex-1 text-left text-text">{category}</span>
               <span className="text-xs text-text-muted font-medium">
                 {done}/{items.length}
               </span>
               <ChevronLeft
                 size={16}
+                aria-hidden="true"
                 className={`text-text-light transition-transform duration-200 ${isCollapsed ? '' : '-rotate-90'}`}
               />
             </button>
 
             {!isCollapsed && (
-              <div className="border-t border-border divide-y divide-border/50">
+              <div id={`weekly-cat-${catIdx}`} className="border-t border-border divide-y divide-border/50">
                 {items.map(item => (
                   <button
                     key={item.id}
                     onClick={() => toggleItem(item.id)}
+                    aria-pressed={item.is_completed}
                     className="w-full flex items-center gap-3 px-5 py-3 hover:bg-surface-alt/50 transition-colors group text-left"
                   >
                     <div
+                      aria-hidden="true"
                       className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
                         item.is_completed
                           ? 'bg-gold border-gold'

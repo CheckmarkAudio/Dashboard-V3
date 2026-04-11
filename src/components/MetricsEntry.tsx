@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { localDateKey } from '../lib/dates'
 import { useToast } from './Toast'
 import { BarChart3, Loader2, Save } from 'lucide-react'
 
@@ -18,7 +19,7 @@ export default function MetricsEntry({ onSaved }: { onSaved?: () => void }) {
 
   const handleSave = async () => {
     if (!profile) return
-    const today = new Date().toISOString().split('T')[0]
+    const today = localDateKey()
     setSaving(true)
 
     const entries = PLATFORMS
@@ -53,14 +54,15 @@ export default function MetricsEntry({ onSaved }: { onSaved?: () => void }) {
   return (
     <div className="bg-surface rounded-2xl border border-border p-5">
       <div className="flex items-center gap-2 mb-4">
-        <BarChart3 size={16} className="text-gold" />
+        <BarChart3 size={16} className="text-gold" aria-hidden="true" />
         <h3 className="text-sm font-semibold">Log Today's Follower Counts</h3>
       </div>
       <div className="grid grid-cols-3 gap-3">
         {PLATFORMS.map(p => (
           <div key={p.key}>
-            <label className={`block text-xs font-medium mb-1 ${p.color}`}>{p.label}</label>
+            <label htmlFor={`metrics-${p.key}`} className={`block text-xs font-medium mb-1 ${p.color}`}>{p.label}</label>
             <input
+              id={`metrics-${p.key}`}
               type="number"
               value={counts[p.key]}
               onChange={e => setCounts({ ...counts, [p.key]: e.target.value })}
@@ -73,9 +75,10 @@ export default function MetricsEntry({ onSaved }: { onSaved?: () => void }) {
       <button
         onClick={handleSave}
         disabled={saving}
+        aria-busy={saving}
         className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-surface-alt hover:bg-surface-hover border border-border text-sm font-medium text-text-muted transition-all disabled:opacity-50"
       >
-        {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+        {saving ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Save size={14} aria-hidden="true" />}
         Save Metrics
       </button>
     </div>

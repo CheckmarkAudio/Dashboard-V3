@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
 import { supabase } from '../lib/supabase'
@@ -74,6 +75,7 @@ function entryToForm(e: ArtistPipelineEntry): PipelineForm {
 }
 
 export default function Pipeline() {
+  useDocumentTitle('Pipeline - Checkmark Audio')
   const { profile } = useAuth()
   const { toast } = useToast()
   const [entries, setEntries] = useState<ArtistPipelineEntry[]>([])
@@ -248,8 +250,13 @@ export default function Pipeline() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-gold" aria-hidden />
+      <div
+        className="flex items-center justify-center min-h-[40vh]"
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="h-8 w-8 animate-spin text-gold" aria-hidden="true" />
+        <span className="sr-only">Loading…</span>
       </div>
     )
   }
@@ -267,7 +274,7 @@ export default function Pipeline() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-gold/30 bg-surface-alt text-gold">
-            <GitBranch size={22} strokeWidth={1.75} />
+            <GitBranch size={22} strokeWidth={1.75} aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-text">Artist pipeline</h1>
@@ -284,7 +291,7 @@ export default function Pipeline() {
           }}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-alt px-4 py-2.5 text-sm font-medium text-text transition-colors hover:bg-surface-hover hover:border-gold/40"
         >
-          {showAddForm ? <X size={18} /> : <Plus size={18} />}
+          {showAddForm ? <X size={18} aria-hidden="true" /> : <Plus size={18} aria-hidden="true" />}
           {showAddForm ? 'Close' : 'Add artist'}
         </button>
       </div>
@@ -295,15 +302,19 @@ export default function Pipeline() {
           className="rounded-2xl border border-border bg-surface p-6 shadow-sm space-y-4"
         >
           <h2 className="text-lg font-medium text-text flex items-center gap-2">
-            <Plus size={18} className="text-gold" />
+            <Plus size={18} className="text-gold" aria-hidden="true" />
             New artist
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="pipe-add-name"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Artist name *
               </label>
               <input
+                id="pipe-add-name"
                 required
                 value={addForm.artist_name}
                 onChange={(e) => setAddForm({ ...addForm, artist_name: e.target.value })}
@@ -312,10 +323,14 @@ export default function Pipeline() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="pipe-add-email"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Email
               </label>
               <input
+                id="pipe-add-email"
                 type="email"
                 value={addForm.contact_email}
                 onChange={(e) => setAddForm({ ...addForm, contact_email: e.target.value })}
@@ -324,10 +339,14 @@ export default function Pipeline() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="pipe-add-phone"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Phone
               </label>
               <input
+                id="pipe-add-phone"
                 value={addForm.contact_phone}
                 onChange={(e) => setAddForm({ ...addForm, contact_phone: e.target.value })}
                 className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -335,10 +354,14 @@ export default function Pipeline() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="pipe-add-stage"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Stage
               </label>
               <select
+                id="pipe-add-stage"
                 value={addForm.stage}
                 onChange={(e) =>
                   setAddForm({ ...addForm, stage: e.target.value as ArtistPipelineEntry['stage'] })
@@ -353,10 +376,14 @@ export default function Pipeline() {
               </select>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="pipe-add-assigned"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Assigned to
               </label>
               <select
+                id="pipe-add-assigned"
                 value={addForm.assigned_to}
                 onChange={(e) => setAddForm({ ...addForm, assigned_to: e.target.value })}
                 className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -370,10 +397,14 @@ export default function Pipeline() {
               </select>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="pipe-add-followup"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Next follow-up
               </label>
               <input
+                id="pipe-add-followup"
                 type="date"
                 value={addForm.next_followup}
                 onChange={(e) => setAddForm({ ...addForm, next_followup: e.target.value })}
@@ -381,10 +412,14 @@ export default function Pipeline() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              <label
+                htmlFor="pipe-add-notes"
+                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 Notes
               </label>
               <textarea
+                id="pipe-add-notes"
                 value={addForm.notes}
                 onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })}
                 rows={3}
@@ -409,7 +444,11 @@ export default function Pipeline() {
               disabled={submittingAdd}
               className="inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-medium text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {submittingAdd ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {submittingAdd ? (
+                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Save size={16} aria-hidden="true" />
+              )}
               Save artist
             </button>
           </div>
@@ -423,6 +462,8 @@ export default function Pipeline() {
             return (
               <div
                 key={col.key}
+                role="region"
+                aria-label={col.label}
                 className="w-[280px] shrink-0 flex flex-col rounded-2xl border border-border bg-surface-alt/80"
               >
                 <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
@@ -437,16 +478,7 @@ export default function Pipeline() {
                     return (
                       <div
                         key={entry.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => openExpanded(entry)}
-                        onKeyDown={(ev) => {
-                          if (ev.key === 'Enter' || ev.key === ' ') {
-                            ev.preventDefault()
-                            openExpanded(entry)
-                          }
-                        }}
-                        className={`w-full rounded-xl border text-left transition-colors cursor-pointer ${
+                        className={`w-full rounded-xl border text-left transition-colors ${
                           overdue
                             ? 'border-red-500/50 bg-red-950/20 hover:bg-red-950/35'
                             : 'border-border bg-surface hover:bg-surface-hover hover:border-border-light'
@@ -454,9 +486,13 @@ export default function Pipeline() {
                       >
                         <div className="p-3 space-y-2">
                           <div className="flex items-start justify-between gap-2">
-                            <span className="font-medium text-text text-sm leading-snug">
+                            <button
+                              type="button"
+                              onClick={() => openExpanded(entry)}
+                              className="font-medium text-text text-sm leading-snug hover:underline text-left"
+                            >
                               {entry.artist_name}
-                            </span>
+                            </button>
                             {overdue && (
                               <AlertCircle
                                 size={16}
@@ -466,7 +502,7 @@ export default function Pipeline() {
                             )}
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                            <User size={12} className="shrink-0" />
+                            <User size={12} className="shrink-0" aria-hidden="true" />
                             <span className="truncate">{assigneeLabel(entry.assigned_to)}</span>
                           </div>
                           {entry.next_followup && (
@@ -487,9 +523,9 @@ export default function Pipeline() {
                                 className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface-hover/50 px-2 py-1 text-[11px] font-medium text-gold hover:bg-surface-hover"
                               >
                                 {advancingId === entry.id ? (
-                                  <Loader2 size={12} className="animate-spin" />
+                                  <Loader2 size={12} className="animate-spin" aria-hidden="true" />
                                 ) : (
-                                  <ChevronRight size={12} />
+                                  <ChevronRight size={12} aria-hidden="true" />
                                 )}
                                 Advance
                               </button>
@@ -525,23 +561,28 @@ export default function Pipeline() {
           <div className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl border border-border bg-surface sm:rounded-2xl shadow-xl">
             <div className="sticky top-0 flex items-center justify-between border-b border-border bg-surface-alt px-4 py-3">
               <h2 id="pipeline-drawer-title" className="text-lg font-semibold text-text flex items-center gap-2">
-                <Edit2 size={18} className="text-gold" />
+                <Edit2 size={18} className="text-gold" aria-hidden="true" />
                 {expanded.artist_name}
               </h2>
               <button
                 type="button"
                 onClick={closeExpanded}
+                aria-label="Close details"
                 className="rounded-lg p-2 text-text-muted hover:bg-surface-hover hover:text-text"
               >
-                <X size={20} />
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
             <form onSubmit={handleEditSave} className="p-4 space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+                <label
+                  htmlFor="pipe-edit-name"
+                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+                >
                   Artist name *
                 </label>
                 <input
+                  id="pipe-edit-name"
                   required
                   value={editForm.artist_name}
                   onChange={(e) => setEditForm({ ...editForm, artist_name: e.target.value })}
@@ -550,10 +591,14 @@ export default function Pipeline() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+                  <label
+                    htmlFor="pipe-edit-email"
+                    className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+                  >
                     Email
                   </label>
                   <input
+                    id="pipe-edit-email"
                     type="email"
                     value={editForm.contact_email}
                     onChange={(e) => setEditForm({ ...editForm, contact_email: e.target.value })}
@@ -561,10 +606,14 @@ export default function Pipeline() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+                  <label
+                    htmlFor="pipe-edit-phone"
+                    className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+                  >
                     Phone
                   </label>
                   <input
+                    id="pipe-edit-phone"
                     value={editForm.contact_phone}
                     onChange={(e) => setEditForm({ ...editForm, contact_phone: e.target.value })}
                     className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -572,10 +621,14 @@ export default function Pipeline() {
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+                <label
+                  htmlFor="pipe-edit-stage"
+                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+                >
                   Stage
                 </label>
                 <select
+                  id="pipe-edit-stage"
                   value={editForm.stage}
                   onChange={(e) =>
                     setEditForm({ ...editForm, stage: e.target.value as ArtistPipelineEntry['stage'] })
@@ -590,10 +643,14 @@ export default function Pipeline() {
                 </select>
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+                <label
+                  htmlFor="pipe-edit-assigned"
+                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+                >
                   Assigned to
                 </label>
                 <select
+                  id="pipe-edit-assigned"
                   value={editForm.assigned_to}
                   onChange={(e) => setEditForm({ ...editForm, assigned_to: e.target.value })}
                   className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -607,10 +664,14 @@ export default function Pipeline() {
                 </select>
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+                <label
+                  htmlFor="pipe-edit-followup"
+                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+                >
                   Next follow-up
                 </label>
                 <input
+                  id="pipe-edit-followup"
                   type="date"
                   value={editForm.next_followup}
                   onChange={(e) => setEditForm({ ...editForm, next_followup: e.target.value })}
@@ -618,10 +679,14 @@ export default function Pipeline() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+                <label
+                  htmlFor="pipe-edit-notes"
+                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
+                >
                   Notes
                 </label>
                 <textarea
+                  id="pipe-edit-notes"
                   value={editForm.notes}
                   onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                   rows={4}
@@ -637,9 +702,9 @@ export default function Pipeline() {
                     className="inline-flex items-center gap-2 rounded-xl border border-gold/40 bg-surface-alt px-4 py-2.5 text-sm font-medium text-gold hover:bg-surface-hover disabled:opacity-50"
                   >
                     {advancingId === expanded.id ? (
-                      <Loader2 size={16} className="animate-spin" />
+                      <Loader2 size={16} className="animate-spin" aria-hidden="true" />
                     ) : (
-                      <ChevronRight size={16} />
+                      <ChevronRight size={16} aria-hidden="true" />
                     )}
                     Advance stage
                   </button>
@@ -649,7 +714,7 @@ export default function Pipeline() {
                   onClick={handleDelete}
                   className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 px-4 py-2.5 text-sm font-medium text-red-400 hover:bg-red-950/30"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={16} aria-hidden="true" />
                   Delete
                 </button>
                 <div className="flex-1 min-w-[120px]" />
@@ -658,7 +723,11 @@ export default function Pipeline() {
                   disabled={submittingEdit}
                   className="inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-medium text-bg hover:opacity-90 disabled:opacity-50"
                 >
-                  {submittingEdit ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {submittingEdit ? (
+                    <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Save size={16} aria-hidden="true" />
+                  )}
                   Save
                 </button>
               </div>

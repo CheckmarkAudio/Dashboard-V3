@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { supabase } from '../lib/supabase'
 import type { Project, Session } from '../types'
 import {
@@ -112,6 +113,7 @@ function sessionBorderClass(status: Session['status']) {
 }
 
 export default function Sessions() {
+  useDocumentTitle('Sessions - Checkmark Audio')
   const { profile } = useAuth()
   const { toast } = useToast()
   const [viewDate, setViewDate] = useState(() => new Date())
@@ -293,7 +295,7 @@ export default function Sessions() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-11 w-11 items-center justify-center rounded-xl bg-surface-alt border border-border">
-            <Mic className="h-5 w-5 text-gold" aria-hidden />
+            <Mic className="h-5 w-5 text-gold" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-text">Sessions</h1>
@@ -305,7 +307,7 @@ export default function Sessions() {
           onClick={openCreate}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-medium text-bg hover:opacity-90 transition-opacity"
         >
-          <Plus className="h-4 w-4" aria-hidden />
+          <Plus className="h-4 w-4" aria-hidden="true" />
           Book session
         </button>
       </div>
@@ -318,7 +320,7 @@ export default function Sessions() {
             className="rounded-xl border border-border p-2 text-text-muted hover:bg-surface-hover hover:text-text"
             aria-label="Previous day"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
           </button>
           <div className="min-w-[200px] text-center">
             <p className="text-sm font-medium text-text">{headerDate}</p>
@@ -332,7 +334,7 @@ export default function Sessions() {
             className="rounded-xl border border-border p-2 text-text-muted hover:bg-surface-hover hover:text-text"
             aria-label="Next day"
           >
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
         <button
@@ -346,12 +348,17 @@ export default function Sessions() {
       </div>
 
       {loading && sessions.length === 0 ? (
-        <div className="flex items-center justify-center min-h-[320px]">
-          <Loader2 className="h-9 w-9 animate-spin text-gold" aria-hidden />
+        <div
+          className="flex items-center justify-center min-h-[320px]"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="h-9 w-9 animate-spin text-gold" aria-hidden="true" />
+          <span className="sr-only">Loading…</span>
         </div>
       ) : sessions.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-surface/50 px-6 py-20 text-center">
-          <Clock className="mx-auto h-10 w-10 text-text-light" aria-hidden />
+          <Clock className="mx-auto h-10 w-10 text-text-light" aria-hidden="true" />
           <p className="mt-4 text-sm text-text-muted">No sessions on this day.</p>
           <button type="button" onClick={openCreate} className="mt-3 text-sm font-medium text-gold hover:underline">
             Book the first session
@@ -359,7 +366,10 @@ export default function Sessions() {
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-          <div className="relative hidden lg:block rounded-2xl border border-border bg-bg overflow-hidden">
+          <div
+            className="relative hidden lg:block rounded-2xl border border-border bg-bg overflow-hidden"
+            aria-hidden="true"
+          >
             <div className="border-b border-border bg-surface-alt px-3 py-2 text-xs font-medium uppercase tracking-wider text-text-muted">
               Timeline
             </div>
@@ -384,7 +394,10 @@ export default function Sessions() {
                   >
                     <div className="flex h-full flex-col overflow-hidden">
                       <div className="flex items-center gap-1.5 text-[11px] font-medium text-text">
-                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[s.status]}`} />
+                        <span
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[s.status]}`}
+                          aria-hidden="true"
+                        />
                         <span className="truncate">
                           {formatTimeDisplay(s.start_time)} – {formatTimeDisplay(s.end_time)}
                         </span>
@@ -404,7 +417,7 @@ export default function Sessions() {
 
           <div className="space-y-3">
             <h2 className="text-sm font-medium text-text-muted flex items-center gap-2 lg:hidden">
-              <Clock className="h-4 w-4 text-gold" />
+              <Clock className="h-4 w-4 text-gold" aria-hidden="true" />
               {sessions.length} session{sessions.length === 1 ? '' : 's'}
             </h2>
             <ul className="space-y-3">
@@ -416,7 +429,10 @@ export default function Sessions() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={`inline-flex h-2 w-2 rounded-full ${STATUS_DOT[s.status]}`} />
+                        <span
+                          className={`inline-flex h-2 w-2 rounded-full ${STATUS_DOT[s.status]}`}
+                          aria-hidden="true"
+                        />
                         <span className="text-sm font-semibold text-text capitalize">{s.status}</span>
                         <span className="text-text-light">·</span>
                         <span className={`text-sm font-medium ${TYPE_STYLE[s.session_type]}`}>
@@ -424,7 +440,7 @@ export default function Sessions() {
                         </span>
                       </div>
                       <p className="flex items-center gap-2 text-sm text-text">
-                        <Clock className="h-4 w-4 shrink-0 text-gold" />
+                        <Clock className="h-4 w-4 shrink-0 text-gold" aria-hidden="true" />
                         {formatTimeDisplay(s.start_time)} – {formatTimeDisplay(s.end_time)}
                       </p>
                       <p className="text-sm text-text-muted">
@@ -449,7 +465,7 @@ export default function Sessions() {
                         className="rounded-lg p-2 text-text-muted hover:bg-surface-alt hover:text-text"
                         aria-label="Edit session"
                       >
-                        <Edit2 className="h-4 w-4" />
+                        <Edit2 className="h-4 w-4" aria-hidden="true" />
                       </button>
                       <button
                         type="button"
@@ -459,9 +475,9 @@ export default function Sessions() {
                         aria-label="Delete session"
                       >
                         {deletingId === s.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                         ) : (
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         )}
                       </button>
                     </div>
@@ -491,13 +507,16 @@ export default function Sessions() {
                 className="rounded-lg p-2 text-text-muted hover:bg-surface-hover hover:text-text"
                 aria-label="Close"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4 p-5">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Date</label>
+                <label htmlFor="session-field-date" className="mb-1.5 block text-sm font-medium text-text">
+                  Date
+                </label>
                 <input
+                  id="session-field-date"
                   type="date"
                   required
                   value={form.session_date}
@@ -507,8 +526,11 @@ export default function Sessions() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-text">Start</label>
+                  <label htmlFor="session-field-start" className="mb-1.5 block text-sm font-medium text-text">
+                    Start
+                  </label>
                   <input
+                    id="session-field-start"
                     type="time"
                     required
                     value={form.start_time}
@@ -517,8 +539,11 @@ export default function Sessions() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-text">End</label>
+                  <label htmlFor="session-field-end" className="mb-1.5 block text-sm font-medium text-text">
+                    End
+                  </label>
                   <input
+                    id="session-field-end"
                     type="time"
                     required
                     value={form.end_time}
@@ -529,8 +554,11 @@ export default function Sessions() {
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-text">Type</label>
+                  <label htmlFor="session-field-type" className="mb-1.5 block text-sm font-medium text-text">
+                    Type
+                  </label>
                   <select
+                    id="session-field-type"
                     value={form.session_type}
                     onChange={(e) =>
                       setForm({ ...form, session_type: e.target.value as Session['session_type'] })
@@ -545,8 +573,11 @@ export default function Sessions() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-text">Status</label>
+                  <label htmlFor="session-field-status" className="mb-1.5 block text-sm font-medium text-text">
+                    Status
+                  </label>
                   <select
+                    id="session-field-status"
                     value={form.status}
                     onChange={(e) =>
                       setForm({ ...form, status: e.target.value as Session['status'] })
@@ -562,8 +593,11 @@ export default function Sessions() {
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Project</label>
+                <label htmlFor="session-field-project" className="mb-1.5 block text-sm font-medium text-text">
+                  Project
+                </label>
                 <select
+                  id="session-field-project"
                   value={form.project_id}
                   onChange={(e) => setForm({ ...form, project_id: e.target.value })}
                   className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -577,8 +611,11 @@ export default function Sessions() {
                 </select>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Client</label>
+                <label htmlFor="session-field-client" className="mb-1.5 block text-sm font-medium text-text">
+                  Client
+                </label>
                 <input
+                  id="session-field-client"
                   value={form.client_name}
                   onChange={(e) => setForm({ ...form, client_name: e.target.value })}
                   className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -586,8 +623,11 @@ export default function Sessions() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Room</label>
+                <label htmlFor="session-field-room" className="mb-1.5 block text-sm font-medium text-text">
+                  Room
+                </label>
                 <input
+                  id="session-field-room"
                   value={form.room}
                   onChange={(e) => setForm({ ...form, room: e.target.value })}
                   className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -595,8 +635,11 @@ export default function Sessions() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Notes</label>
+                <label htmlFor="session-field-notes" className="mb-1.5 block text-sm font-medium text-text">
+                  Notes
+                </label>
                 <textarea
+                  id="session-field-notes"
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   rows={3}
@@ -616,7 +659,11 @@ export default function Sessions() {
                   disabled={submitting}
                   className="inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-medium text-bg hover:opacity-90 disabled:opacity-50"
                 >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Save className="h-4 w-4" aria-hidden="true" />
+                  )}
                   {editing ? 'Save' : 'Create'}
                 </button>
               </div>

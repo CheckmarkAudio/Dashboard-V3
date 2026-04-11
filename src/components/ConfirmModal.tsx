@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 
 interface ConfirmModalProps {
   open: boolean
@@ -17,6 +18,8 @@ export default function ConfirmModal({
   variant = 'danger', loading = false, onConfirm, onCancel,
 }: ConfirmModalProps) {
   const cancelRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(dialogRef, open)
 
   useEffect(() => {
     if (open) cancelRef.current?.focus()
@@ -40,19 +43,19 @@ export default function ConfirmModal({
   const iconColors = variant === 'danger' ? 'text-red-400 bg-red-500/10' : 'text-amber-400 bg-amber-500/10'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-desc">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" role="presentation" onClick={onCancel} />
       <div className="relative bg-surface border border-border rounded-2xl shadow-2xl w-full max-w-md animate-slide-up">
-        <button onClick={onCancel} className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-surface-hover text-text-muted">
-          <X size={16} />
+        <button onClick={onCancel} className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-surface-hover text-text-muted" aria-label="Close">
+          <X size={16} aria-hidden="true" />
         </button>
 
         <div className="p-6">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${iconColors}`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${iconColors}`} aria-hidden="true">
             <AlertTriangle size={20} />
           </div>
-          <h3 className="text-lg font-semibold mb-1">{title}</h3>
-          <p className="text-sm text-text-muted leading-relaxed">{message}</p>
+          <h3 id="confirm-modal-title" className="text-lg font-semibold mb-1">{title}</h3>
+          <p id="confirm-modal-desc" className="text-sm text-text-muted leading-relaxed">{message}</p>
         </div>
 
         <div className="flex items-center justify-end gap-2 px-6 pb-6">

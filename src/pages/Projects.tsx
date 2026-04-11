@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { supabase } from '../lib/supabase'
 import type { Project, TeamMember } from '../types'
 import {
@@ -84,6 +85,7 @@ function formatDueDate(iso: string | null) {
 }
 
 export default function Projects() {
+  useDocumentTitle('Projects - Checkmark Audio')
   const { profile } = useAuth()
   const { toast } = useToast()
   const [projects, setProjects] = useState<Project[]>([])
@@ -233,8 +235,13 @@ export default function Projects() {
 
   if (loading && projects.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <Loader2 className="h-9 w-9 animate-spin text-gold" aria-hidden />
+      <div
+        className="flex items-center justify-center min-h-[40vh]"
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="h-9 w-9 animate-spin text-gold" aria-hidden="true" />
+        <span className="sr-only">Loading…</span>
       </div>
     )
   }
@@ -244,7 +251,7 @@ export default function Projects() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-11 w-11 items-center justify-center rounded-xl bg-surface-alt border border-border">
-            <FolderKanban className="h-5 w-5 text-gold" aria-hidden />
+            <FolderKanban className="h-5 w-5 text-gold" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-text">Projects</h1>
@@ -258,14 +265,14 @@ export default function Projects() {
           onClick={openCreate}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-medium text-bg hover:opacity-90 transition-opacity shadow-sm"
         >
-          <Plus className="h-4 w-4" aria-hidden />
+          <Plus className="h-4 w-4" aria-hidden="true" />
           New project
         </button>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center rounded-2xl border border-border bg-surface p-4">
         <div className="flex items-center gap-2 text-text-muted">
-          <Filter className="h-4 w-4 shrink-0 text-gold" aria-hidden />
+          <Filter className="h-4 w-4 shrink-0 text-gold" aria-hidden="true" />
           <span className="text-xs font-medium uppercase tracking-wider">Filters</span>
         </div>
         <div className="flex flex-1 flex-wrap gap-3">
@@ -273,6 +280,7 @@ export default function Projects() {
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
             className="min-w-[140px] rounded-xl border border-border bg-surface-alt px-3 py-2 text-sm"
+            aria-label="Filter by type"
           >
             <option value="all">All types</option>
             {PROJECT_TYPES.map((t) => (
@@ -285,6 +293,7 @@ export default function Projects() {
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
             className="min-w-[140px] rounded-xl border border-border bg-surface-alt px-3 py-2 text-sm"
+            aria-label="Filter by status"
           >
             <option value="all">All statuses</option>
             {STATUS_OPTIONS.map((s) => (
@@ -329,7 +338,7 @@ export default function Projects() {
                     className="rounded-lg p-1.5 text-text-muted hover:bg-surface-alt hover:text-text"
                     aria-label="Edit project"
                   >
-                    <Edit2 className="h-4 w-4" />
+                    <Edit2 className="h-4 w-4" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
@@ -339,9 +348,9 @@ export default function Projects() {
                     aria-label="Delete project"
                   >
                     {deletingId === p.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     ) : (
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     )}
                   </button>
                 </div>
@@ -398,13 +407,16 @@ export default function Projects() {
                 className="rounded-lg p-2 text-text-muted hover:bg-surface-hover hover:text-text"
                 aria-label="Close"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4 p-5">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Name</label>
+                <label htmlFor="project-form-name" className="mb-1.5 block text-sm font-medium text-text">
+                  Name
+                </label>
                 <input
+                  id="project-form-name"
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -413,8 +425,11 @@ export default function Projects() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Client</label>
+                <label htmlFor="project-form-client" className="mb-1.5 block text-sm font-medium text-text">
+                  Client
+                </label>
                 <input
+                  id="project-form-client"
                   value={form.client_name}
                   onChange={(e) => setForm({ ...form, client_name: e.target.value })}
                   className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -423,8 +438,11 @@ export default function Projects() {
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-text">Type</label>
+                  <label htmlFor="project-form-type" className="mb-1.5 block text-sm font-medium text-text">
+                    Type
+                  </label>
                   <select
+                    id="project-form-type"
                     value={form.project_type}
                     onChange={(e) =>
                       setForm({ ...form, project_type: e.target.value as Project['project_type'] })
@@ -439,8 +457,11 @@ export default function Projects() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-text">Status</label>
+                  <label htmlFor="project-form-status" className="mb-1.5 block text-sm font-medium text-text">
+                    Status
+                  </label>
                   <select
+                    id="project-form-status"
                     value={form.status}
                     onChange={(e) =>
                       setForm({ ...form, status: e.target.value as Project['status'] })
@@ -456,8 +477,11 @@ export default function Projects() {
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Assigned to</label>
+                <label htmlFor="project-form-assigned" className="mb-1.5 block text-sm font-medium text-text">
+                  Assigned to
+                </label>
                 <select
+                  id="project-form-assigned"
                   value={form.assigned_to}
                   onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}
                   className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
@@ -471,8 +495,11 @@ export default function Projects() {
                 </select>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Due date</label>
+                <label htmlFor="project-form-due-date" className="mb-1.5 block text-sm font-medium text-text">
+                  Due date
+                </label>
                 <input
+                  id="project-form-due-date"
                   type="date"
                   value={form.due_date}
                   onChange={(e) => setForm({ ...form, due_date: e.target.value })}
@@ -480,8 +507,11 @@ export default function Projects() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Notes</label>
+                <label htmlFor="project-form-notes" className="mb-1.5 block text-sm font-medium text-text">
+                  Notes
+                </label>
                 <textarea
+                  id="project-form-notes"
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   rows={3}
@@ -502,7 +532,11 @@ export default function Projects() {
                   disabled={submitting}
                   className="inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-medium text-bg hover:opacity-90 disabled:opacity-50"
                 >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Save className="h-4 w-4" aria-hidden="true" />
+                  )}
                   {editing ? 'Save changes' : 'Create project'}
                 </button>
               </div>

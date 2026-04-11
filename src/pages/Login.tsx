@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { LogIn, UserPlus, Loader2, Music } from 'lucide-react'
 
 export default function Login() {
   const { user, loading: authLoading, signIn, signUp } = useAuth()
+  useDocumentTitle('Sign In - Checkmark Audio')
   const [tab, setTab] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -15,8 +17,9 @@ export default function Login() {
 
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-bg">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" />
+      <div className="flex items-center justify-center h-screen bg-bg" role="status" aria-live="polite">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" aria-hidden="true" />
+        <span className="sr-only">Loading…</span>
       </div>
     )
   }
@@ -110,30 +113,35 @@ export default function Login() {
           </div>
 
           <div className="bg-surface rounded-2xl border border-border p-7">
-            <div className="flex rounded-xl bg-surface-alt p-1 mb-6">
+            <div className="flex rounded-xl bg-surface-alt p-1 mb-6" role="tablist" aria-label="Authentication method">
               <button
+                role="tab"
+                aria-selected={tab === 'signin'}
                 onClick={() => { setTab('signin'); setError(''); setSuccess('') }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
                   tab === 'signin' ? 'bg-surface-hover text-text' : 'text-text-muted hover:text-text'
                 }`}
               >
-                <LogIn size={15} /> Sign In
+                <LogIn size={15} aria-hidden="true" /> Sign In
               </button>
               <button
+                role="tab"
+                aria-selected={tab === 'signup'}
                 onClick={() => { setTab('signup'); setError(''); setSuccess('') }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
                   tab === 'signup' ? 'bg-surface-hover text-text' : 'text-text-muted hover:text-text'
                 }`}
               >
-                <UserPlus size={15} /> Sign Up
+                <UserPlus size={15} aria-hidden="true" /> Sign Up
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" role="tabpanel">
               {tab === 'signup' && (
                 <div>
-                  <label className="block text-sm font-medium mb-1.5 text-text-muted">Full Name</label>
+                  <label htmlFor="login-name" className="block text-sm font-medium mb-1.5 text-text-muted">Full Name</label>
                   <input
+                    id="login-name"
                     type="text"
                     value={displayName}
                     onChange={e => setDisplayName(e.target.value)}
@@ -144,8 +152,9 @@ export default function Login() {
               )}
 
               <div>
-                <label className="block text-sm font-medium mb-1.5 text-text-muted">Email</label>
+                <label htmlFor="login-email" className="block text-sm font-medium mb-1.5 text-text-muted">Email</label>
                 <input
+                  id="login-email"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
@@ -156,8 +165,9 @@ export default function Login() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5 text-text-muted">Password</label>
+                <label htmlFor="login-password" className="block text-sm font-medium mb-1.5 text-text-muted">Password</label>
                 <input
+                  id="login-password"
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -169,12 +179,12 @@ export default function Login() {
               </div>
 
               {error && (
-                <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3 animate-slide-up">
+                <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3 animate-slide-up">
                   {error}
                 </div>
               )}
               {success && (
-                <div className="text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 animate-slide-up">
+                <div role="status" className="text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 animate-slide-up">
                   {success}
                 </div>
               )}
@@ -182,9 +192,10 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
+                aria-busy={loading}
                 className="w-full py-3 px-4 rounded-xl bg-gold hover:bg-gold-muted text-black font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
               >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : null}
+                {loading ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : null}
                 {tab === 'signin' ? 'Sign In' : 'Create Account'}
               </button>
             </form>
