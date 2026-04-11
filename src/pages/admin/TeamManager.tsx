@@ -133,8 +133,30 @@ export default function TeamManager() {
       })
 
       if (error || !result?.ok) {
-        const msg = result?.error || error?.message || 'Failed to add member'
-        console.error('[TeamManager] admin-create-member failed:', msg)
+        // supabase.functions.invoke wraps non-2xx responses in a generic
+        // FunctionsHttpError ("Edge Function returned a non-2xx status code")
+        // and stuffs the actual response on error.context. Read it so the
+        // toast shows the real reason instead of the wrapper.
+        let msg = result?.error || error?.message || 'Failed to add member'
+        const ctx = (error as { context?: Response } | null)?.context
+        if (ctx && typeof ctx.text === 'function') {
+          try {
+            const raw = await ctx.text()
+            if (raw) {
+              try {
+                const parsed = JSON.parse(raw)
+                if (parsed?.error) msg = parsed.error
+                else if (parsed?.message) msg = parsed.message
+                else msg = raw
+              } catch {
+                msg = raw
+              }
+            }
+          } catch {
+            // fall through with the original message
+          }
+        }
+        console.error('[TeamManager] admin-create-member failed:', msg, error, result)
         toast(msg, 'error')
         setSubmitting(false)
         return
