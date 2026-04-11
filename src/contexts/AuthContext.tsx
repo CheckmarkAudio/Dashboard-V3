@@ -24,7 +24,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const sessionInitialized = useRef(false)
 
-  const fetchProfile = useCallback(async (userId: string, email?: string) => {
+  const buildFallbackProfile = useCallback((authUser: SupabaseUser): TeamMember => {
+    const derivedDisplayName =
+      (typeof authUser.user_metadata?.display_name === 'string' && authUser.user_metadata.display_name) ||
+      (typeof authUser.user_metadata?.full_name === 'string' && authUser.user_metadata.full_name) ||
+      (authUser.email?.split('@')[0] ?? 'User')
+    const derivedRole =
+      (typeof authUser.app_metadata?.role === 'string' && authUser.app_metadata.role) ||
+      (typeof authUser.user_metadata?.role === 'string' && authUser.user_metadata.role) ||
+      'member'
+
+    return {
+      id: authUser.id,
+      email: authUser.email ?? '',
+      display_name: derivedDisplayName,
+      role: derivedRole,
+    }
+  }, [])
+
+  const fetchProfile = useCallback(async (authUser: SupabaseUser) => {
+    const userId = authUser.id
+    const email = authUser.email
+
     const { data, error } = await supabase
       .from('intern_users')
       .select('*')
@@ -58,17 +79,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         display_name: email.split('@')[0],
         role: 'member' as const,
       }
-      const { error: insertErr } = await supabase.from('intern_users').insert(newProfile)
+      const { error: insertErr } = await supabase
+        .from('intern_users')
+        .upsert(newProfile, { onConflict: 'id' })
       if (insertErr) {
         console.error('Profile creation failed:', insertErr.message, insertErr.code)
+        setProfile(buildFallbackProfile(authUser))
         return
       }
       setProfile(newProfile as TeamMember)
+      return
     }
-  }, [])
+
+    // Last-resort fallback to prevent "signed in but no profile" lockout.
+    setProfile(buildFallbackProfile(authUser))
+  }, [buildFallbackProfile])
 
   const refreshProfile = useCallback(async () => {
-    if (user) await fetchProfile(user.id, user.email)
+    if (user) await fetchProfile(user)
   }, [user, fetchProfile])
 
   useEffect(() => {
@@ -84,8 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        try { await fetchProfile(session.user.id, session.user.email) } catch (err) {
+        try { await fetchProfile(session.user) } catch (err) {
           console.error('Failed to load profile on init:', err)
+          setProfile(buildFallbackProfile(session.user))
         }
       }
       setLoading(false)
@@ -100,8 +129,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        try { await fetchProfile(session.user.id, session.user.email) } catch (err) {
+        try { await fetchProfile(session.user) } catch (err) {
           console.error('Failed to load profile on auth change:', err)
+          setProfile(buildFallbackProfile(session.user))
         }
       } else {
         setProfile(null)
@@ -114,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(timeout)
       subscription.unsubscribe()
     }
-  }, [fetchProfile])
+  }, [buildFallbackProfile, fetchProfile])
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })

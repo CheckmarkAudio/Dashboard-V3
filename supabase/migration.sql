@@ -94,7 +94,11 @@ DROP POLICY IF EXISTS "Admins can delete users" ON intern_users;
 
 CREATE POLICY "Users can view team" ON intern_users
   FOR SELECT TO authenticated
-  USING (team_id = get_my_team_id() OR id = auth.uid());
+  USING (
+    id = auth.uid()
+    OR lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+    OR team_id = get_my_team_id()
+  );
 
 CREATE POLICY "Users can insert own profile" ON intern_users
   FOR INSERT TO authenticated
@@ -102,7 +106,15 @@ CREATE POLICY "Users can insert own profile" ON intern_users
 
 CREATE POLICY "Users can update in team" ON intern_users
   FOR UPDATE TO authenticated
-  USING (id = auth.uid() OR (team_id = get_my_team_id() AND is_team_admin()));
+  USING (
+    id = auth.uid()
+    OR lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+    OR (team_id = get_my_team_id() AND is_team_admin())
+  )
+  WITH CHECK (
+    id = auth.uid()
+    OR (team_id = get_my_team_id() AND is_team_admin())
+  );
 
 CREATE POLICY "Admins can delete users" ON intern_users
   FOR DELETE TO authenticated
