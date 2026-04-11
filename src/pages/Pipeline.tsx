@@ -3,11 +3,14 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
 import { supabase } from '../lib/supabase'
+import {
+  Button, Input, Textarea, Select, Badge, EmptyState, PageHeader, Modal,
+  type BadgeVariant,
+} from '../components/ui'
 import type { ArtistPipelineEntry, TeamMember } from '../types'
 import {
   GitBranch,
   Plus,
-  X,
   Save,
   Loader2,
   Edit2,
@@ -17,12 +20,16 @@ import {
   User,
 } from 'lucide-react'
 
-const STAGES: { key: ArtistPipelineEntry['stage']; label: string }[] = [
-  { key: 'inquiry', label: 'Inquiry' },
-  { key: 'onboarding', label: 'Onboarding' },
-  { key: 'active', label: 'Active' },
-  { key: 'release_support', label: 'Release Support' },
-  { key: 'alumni', label: 'Alumni' },
+const STAGES: {
+  key: ArtistPipelineEntry['stage']
+  label: string
+  badge: BadgeVariant
+}[] = [
+  { key: 'inquiry',         label: 'Inquiry',         badge: 'stage-capture' },
+  { key: 'onboarding',      label: 'Onboarding',      badge: 'stage-share'   },
+  { key: 'active',          label: 'Active',          badge: 'stage-deliver' },
+  { key: 'release_support', label: 'Release Support', badge: 'stage-attract' },
+  { key: 'alumni',          label: 'Alumni',          badge: 'neutral'       },
 ]
 
 type PipelineForm = {
@@ -273,30 +280,23 @@ export default function Pipeline() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in pb-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-gold/30 bg-surface-alt text-gold">
-            <GitBranch size={22} strokeWidth={1.75} aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-text">Artist pipeline</h1>
-            <p className="mt-0.5 text-sm text-text-muted">
-              Track artists from inquiry through alumni.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setShowAddForm((v) => !v)
-            if (showAddForm) setAddForm(EMPTY_FORM)
-          }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-alt px-4 py-2.5 text-sm font-medium text-text transition-colors hover:bg-surface-hover hover:border-gold/40"
-        >
-          {showAddForm ? <X size={18} aria-hidden="true" /> : <Plus size={18} aria-hidden="true" />}
-          {showAddForm ? 'Close' : 'Add artist'}
-        </button>
-      </div>
+      <PageHeader
+        icon={GitBranch}
+        title="Artist pipeline"
+        subtitle="Track artists from inquiry through alumni."
+        actions={
+          <Button
+            variant={showAddForm ? 'secondary' : 'primary'}
+            onClick={() => {
+              setShowAddForm((v) => !v)
+              if (showAddForm) setAddForm(EMPTY_FORM)
+            }}
+            iconLeft={<Plus size={18} aria-hidden="true" />}
+          >
+            {showAddForm ? 'Close' : 'Add artist'}
+          </Button>
+        }
+      />
 
       {showAddForm && (
         <form
@@ -308,151 +308,83 @@ export default function Pipeline() {
             New artist
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label
-                htmlFor="pipe-add-name"
-                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-              >
-                Artist name *
-              </label>
-              <input
-                id="pipe-add-name"
-                required
-                value={addForm.artist_name}
-                onChange={(e) => setAddForm({ ...addForm, artist_name: e.target.value })}
-                className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                placeholder="Artist or project name"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="pipe-add-email"
-                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-              >
-                Email
-              </label>
-              <input
-                id="pipe-add-email"
-                type="email"
-                value={addForm.contact_email}
-                onChange={(e) => setAddForm({ ...addForm, contact_email: e.target.value })}
-                className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                placeholder="contact@…"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="pipe-add-phone"
-                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-              >
-                Phone
-              </label>
-              <input
-                id="pipe-add-phone"
-                value={addForm.contact_phone}
-                onChange={(e) => setAddForm({ ...addForm, contact_phone: e.target.value })}
-                className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                placeholder="Optional"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="pipe-add-stage"
-                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-              >
-                Stage
-              </label>
-              <select
-                id="pipe-add-stage"
-                value={addForm.stage}
-                onChange={(e) =>
-                  setAddForm({ ...addForm, stage: e.target.value as ArtistPipelineEntry['stage'] })
-                }
-                className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-              >
-                {STAGES.map((s) => (
-                  <option key={s.key} value={s.key}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label
-                htmlFor="pipe-add-assigned"
-                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-              >
-                Assigned to
-              </label>
-              <select
-                id="pipe-add-assigned"
-                value={addForm.assigned_to}
-                onChange={(e) => setAddForm({ ...addForm, assigned_to: e.target.value })}
-                className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-              >
-                <option value="">Unassigned</option>
-                {teamMembers.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.display_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label
-                htmlFor="pipe-add-followup"
-                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-              >
-                Next follow-up
-              </label>
-              <input
-                id="pipe-add-followup"
-                type="date"
-                value={addForm.next_followup}
-                onChange={(e) => setAddForm({ ...addForm, next_followup: e.target.value })}
-                className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label
-                htmlFor="pipe-add-notes"
-                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-              >
-                Notes
-              </label>
-              <textarea
-                id="pipe-add-notes"
-                value={addForm.notes}
-                onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })}
-                rows={3}
-                className="w-full resize-none rounded-xl border border-border px-3 py-2.5 text-sm"
-                placeholder="Internal notes…"
-              />
-            </div>
+            <Input
+              id="pipe-add-name"
+              label="Artist name"
+              required
+              placeholder="Artist or project name"
+              value={addForm.artist_name}
+              onChange={(e) => setAddForm({ ...addForm, artist_name: e.target.value })}
+              wrapperClassName="sm:col-span-2"
+            />
+            <Input
+              id="pipe-add-email"
+              label="Email"
+              type="email"
+              placeholder="contact@\u2026"
+              value={addForm.contact_email}
+              onChange={(e) => setAddForm({ ...addForm, contact_email: e.target.value })}
+            />
+            <Input
+              id="pipe-add-phone"
+              label="Phone"
+              placeholder="Optional"
+              value={addForm.contact_phone}
+              onChange={(e) => setAddForm({ ...addForm, contact_phone: e.target.value })}
+            />
+            <Select
+              id="pipe-add-stage"
+              label="Stage"
+              value={addForm.stage}
+              onChange={(e) => setAddForm({ ...addForm, stage: e.target.value as ArtistPipelineEntry['stage'] })}
+            >
+              {STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </Select>
+            <Select
+              id="pipe-add-assigned"
+              label="Assigned to"
+              value={addForm.assigned_to}
+              onChange={(e) => setAddForm({ ...addForm, assigned_to: e.target.value })}
+            >
+              <option value="">Unassigned</option>
+              {teamMembers.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+            </Select>
+            <Input
+              id="pipe-add-followup"
+              label="Next follow-up"
+              type="date"
+              value={addForm.next_followup}
+              onChange={(e) => setAddForm({ ...addForm, next_followup: e.target.value })}
+            />
+            <Textarea
+              id="pipe-add-notes"
+              label="Notes"
+              rows={3}
+              placeholder="Internal notes\u2026"
+              value={addForm.notes}
+              onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })}
+              wrapperClassName="sm:col-span-2"
+            />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 setShowAddForm(false)
                 setAddForm(EMPTY_FORM)
               }}
-              className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-text-muted hover:bg-surface-hover hover:text-text"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              disabled={submittingAdd}
-              className="inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-medium text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+              variant="primary"
+              loading={submittingAdd}
+              iconLeft={!submittingAdd ? <Save size={16} aria-hidden="true" /> : undefined}
             >
-              {submittingAdd ? (
-                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-              ) : (
-                <Save size={16} aria-hidden="true" />
-              )}
               Save artist
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -469,7 +401,7 @@ export default function Pipeline() {
                 className="w-[280px] shrink-0 flex flex-col rounded-2xl border border-border bg-surface-alt/80"
               >
                 <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-                  <span className="text-sm font-medium text-text">{col.label}</span>
+                  <Badge variant={col.badge} size="sm">{col.label}</Badge>
                   <span className="rounded-md bg-surface px-2 py-0.5 text-xs text-text-muted">
                     {colEntries.length}
                   </span>
@@ -519,18 +451,16 @@ export default function Pipeline() {
                           <p className="text-xs text-text-light line-clamp-2">{notesPreview(entry.notes)}</p>
                           {entry.stage !== 'alumni' && (
                             <div className="pt-1">
-                              <button
-                                type="button"
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={(ev) => handleAdvance(entry, ev)}
-                                className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface-hover/50 px-2 py-1 text-[11px] font-medium text-gold hover:bg-surface-hover"
+                                loading={advancingId === entry.id}
+                                iconLeft={advancingId !== entry.id ? <ChevronRight size={12} aria-hidden="true" /> : undefined}
+                                className="text-gold hover:text-gold"
                               >
-                                {advancingId === entry.id ? (
-                                  <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-                                ) : (
-                                  <ChevronRight size={12} aria-hidden="true" />
-                                )}
                                 Advance
-                              </button>
+                              </Button>
                             </div>
                           )}
                         </div>
@@ -547,196 +477,105 @@ export default function Pipeline() {
         </div>
       </div>
 
-      {expanded && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4 bg-black/70 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pipeline-drawer-title"
-        >
-          <button
-            type="button"
-            className="absolute inset-0 cursor-default"
-            aria-label="Close"
-            onClick={closeExpanded}
+      <Modal
+        open={!!expanded}
+        onClose={closeExpanded}
+        title={
+          <span className="flex items-center gap-2">
+            <Edit2 size={18} className="text-gold" aria-hidden="true" />
+            {expanded?.artist_name ?? ''}
+          </span>
+        }
+        size="lg"
+        locked={submittingEdit}
+      >
+        <form onSubmit={handleEditSave} className="space-y-4">
+          <Input
+            id="pipe-edit-name"
+            label="Artist name"
+            required
+            value={editForm.artist_name}
+            onChange={(e) => setEditForm({ ...editForm, artist_name: e.target.value })}
           />
-          <div className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl border border-border bg-surface sm:rounded-2xl shadow-xl">
-            <div className="sticky top-0 flex items-center justify-between border-b border-border bg-surface-alt px-4 py-3">
-              <h2 id="pipeline-drawer-title" className="text-lg font-semibold text-text flex items-center gap-2">
-                <Edit2 size={18} className="text-gold" aria-hidden="true" />
-                {expanded.artist_name}
-              </h2>
-              <button
-                type="button"
-                onClick={closeExpanded}
-                aria-label="Close details"
-                className="rounded-lg p-2 text-text-muted hover:bg-surface-hover hover:text-text"
-              >
-                <X size={20} aria-hidden="true" />
-              </button>
-            </div>
-            <form onSubmit={handleEditSave} className="p-4 space-y-4">
-              <div>
-                <label
-                  htmlFor="pipe-edit-name"
-                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-                >
-                  Artist name *
-                </label>
-                <input
-                  id="pipe-edit-name"
-                  required
-                  value={editForm.artist_name}
-                  onChange={(e) => setEditForm({ ...editForm, artist_name: e.target.value })}
-                  className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label
-                    htmlFor="pipe-edit-email"
-                    className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-                  >
-                    Email
-                  </label>
-                  <input
-                    id="pipe-edit-email"
-                    type="email"
-                    value={editForm.contact_email}
-                    onChange={(e) => setEditForm({ ...editForm, contact_email: e.target.value })}
-                    className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="pipe-edit-phone"
-                    className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-                  >
-                    Phone
-                  </label>
-                  <input
-                    id="pipe-edit-phone"
-                    value={editForm.contact_phone}
-                    onChange={(e) => setEditForm({ ...editForm, contact_phone: e.target.value })}
-                    className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                  />
-                </div>
-              </div>
-              <div>
-                <label
-                  htmlFor="pipe-edit-stage"
-                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-                >
-                  Stage
-                </label>
-                <select
-                  id="pipe-edit-stage"
-                  value={editForm.stage}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, stage: e.target.value as ArtistPipelineEntry['stage'] })
-                  }
-                  className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                >
-                  {STAGES.map((s) => (
-                    <option key={s.key} value={s.key}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="pipe-edit-assigned"
-                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-                >
-                  Assigned to
-                </label>
-                <select
-                  id="pipe-edit-assigned"
-                  value={editForm.assigned_to}
-                  onChange={(e) => setEditForm({ ...editForm, assigned_to: e.target.value })}
-                  className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                >
-                  <option value="">Unassigned</option>
-                  {teamMembers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.display_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="pipe-edit-followup"
-                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-                >
-                  Next follow-up
-                </label>
-                <input
-                  id="pipe-edit-followup"
-                  type="date"
-                  value={editForm.next_followup}
-                  onChange={(e) => setEditForm({ ...editForm, next_followup: e.target.value })}
-                  className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="pipe-edit-notes"
-                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted"
-                >
-                  Notes
-                </label>
-                <textarea
-                  id="pipe-edit-notes"
-                  value={editForm.notes}
-                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                  rows={4}
-                  className="w-full resize-none rounded-xl border border-border px-3 py-2.5 text-sm"
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
-                {editForm.stage !== 'alumni' && (
-                  <button
-                    type="button"
-                    onClick={(ev) => handleAdvance(expanded, ev)}
-                    disabled={advancingId === expanded.id}
-                    className="inline-flex items-center gap-2 rounded-xl border border-gold/40 bg-surface-alt px-4 py-2.5 text-sm font-medium text-gold hover:bg-surface-hover disabled:opacity-50"
-                  >
-                    {advancingId === expanded.id ? (
-                      <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-                    ) : (
-                      <ChevronRight size={16} aria-hidden="true" />
-                    )}
-                    Advance stage
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 px-4 py-2.5 text-sm font-medium text-red-400 hover:bg-red-950/30"
-                >
-                  <Trash2 size={16} aria-hidden="true" />
-                  Delete
-                </button>
-                <div className="flex-1 min-w-[120px]" />
-                <button
-                  type="submit"
-                  disabled={submittingEdit}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-medium text-bg hover:opacity-90 disabled:opacity-50"
-                >
-                  {submittingEdit ? (
-                    <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Save size={16} aria-hidden="true" />
-                  )}
-                  Save
-                </button>
-              </div>
-            </form>
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              id="pipe-edit-email"
+              label="Email"
+              type="email"
+              value={editForm.contact_email}
+              onChange={(e) => setEditForm({ ...editForm, contact_email: e.target.value })}
+            />
+            <Input
+              id="pipe-edit-phone"
+              label="Phone"
+              value={editForm.contact_phone}
+              onChange={(e) => setEditForm({ ...editForm, contact_phone: e.target.value })}
+            />
           </div>
-        </div>
-      )}
+          <Select
+            id="pipe-edit-stage"
+            label="Stage"
+            value={editForm.stage}
+            onChange={(e) => setEditForm({ ...editForm, stage: e.target.value as ArtistPipelineEntry['stage'] })}
+          >
+            {STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </Select>
+          <Select
+            id="pipe-edit-assigned"
+            label="Assigned to"
+            value={editForm.assigned_to}
+            onChange={(e) => setEditForm({ ...editForm, assigned_to: e.target.value })}
+          >
+            <option value="">Unassigned</option>
+            {teamMembers.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+          </Select>
+          <Input
+            id="pipe-edit-followup"
+            label="Next follow-up"
+            type="date"
+            value={editForm.next_followup}
+            onChange={(e) => setEditForm({ ...editForm, next_followup: e.target.value })}
+          />
+          <Textarea
+            id="pipe-edit-notes"
+            label="Notes"
+            rows={4}
+            value={editForm.notes}
+            onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+          />
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+            {expanded && editForm.stage !== 'alumni' && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={(ev) => handleAdvance(expanded, ev)}
+                loading={advancingId === expanded.id}
+                iconLeft={advancingId !== expanded.id ? <ChevronRight size={16} aria-hidden="true" /> : undefined}
+                className="text-gold hover:text-gold"
+              >
+                Advance stage
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handleDelete}
+              iconLeft={<Trash2 size={16} aria-hidden="true" />}
+            >
+              Delete
+            </Button>
+            <div className="flex-1 min-w-[120px]" />
+            <Button
+              type="submit"
+              variant="primary"
+              loading={submittingEdit}
+              iconLeft={!submittingEdit ? <Save size={16} aria-hidden="true" /> : undefined}
+            >
+              Save
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

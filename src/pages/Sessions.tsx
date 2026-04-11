@@ -3,11 +3,13 @@ import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { supabase } from '../lib/supabase'
+import {
+  Button, Input, Textarea, Select, EmptyState, PageHeader, Modal,
+} from '../components/ui'
 import type { Project, Session } from '../types'
 import {
   Mic,
   Plus,
-  X,
   Save,
   Loader2,
   Edit2,
@@ -301,59 +303,51 @@ export default function Sessions() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-12">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-11 w-11 items-center justify-center rounded-xl bg-surface-alt border border-border">
-            <Mic className="h-5 w-5 text-gold" aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-text">Sessions</h1>
-            <p className="mt-1 text-sm text-text-muted">Studio bookings by day — rooms, clients, and status at a glance.</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-medium text-bg hover:opacity-90 transition-opacity"
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Book session
-        </button>
-      </div>
+      <PageHeader
+        icon={Mic}
+        title="Sessions"
+        subtitle="Studio bookings by day — rooms, clients, and status at a glance."
+        actions={
+          <Button
+            variant="primary"
+            onClick={openCreate}
+            iconLeft={<Plus className="h-4 w-4" aria-hidden="true" />}
+          >
+            Book session
+          </Button>
+        }
+      />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-border bg-surface px-4 py-3">
         <div className="flex items-center justify-center gap-2 sm:justify-start">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={goPrevDay}
-            className="rounded-xl border border-border p-2 text-text-muted hover:bg-surface-hover hover:text-text"
             aria-label="Previous day"
+            className="!p-2"
           >
             <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-          </button>
+          </Button>
           <div className="min-w-[200px] text-center">
             <p className="text-sm font-medium text-text">{headerDate}</p>
             {isToday && (
-              <span className="text-xs font-medium uppercase tracking-wider text-gold">Today</span>
+              <span className="text-label text-gold">Today</span>
             )}
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={goNextDay}
-            className="rounded-xl border border-border p-2 text-text-muted hover:bg-surface-hover hover:text-text"
             aria-label="Next day"
+            className="!p-2"
           >
             <ChevronRight className="h-5 w-5" aria-hidden="true" />
-          </button>
+          </Button>
         </div>
-        <button
-          type="button"
-          onClick={goToday}
-          disabled={isToday}
-          className="rounded-xl border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-40 disabled:hover:bg-transparent"
-        >
+        <Button variant="secondary" size="sm" onClick={goToday} disabled={isToday}>
           Today
-        </button>
+        </Button>
       </div>
 
       {loading && sessions.length === 0 ? (
@@ -366,13 +360,20 @@ export default function Sessions() {
           <span className="sr-only">Loading…</span>
         </div>
       ) : sessions.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-surface/50 px-6 py-20 text-center">
-          <Clock className="mx-auto h-10 w-10 text-text-light" aria-hidden="true" />
-          <p className="mt-4 text-sm text-text-muted">No sessions on this day.</p>
-          <button type="button" onClick={openCreate} className="mt-3 text-sm font-medium text-gold hover:underline">
-            Book the first session
-          </button>
-        </div>
+        <EmptyState
+          icon={Clock}
+          title="No sessions on this day"
+          description="Book the studio and keep the team aligned."
+          action={
+            <Button
+              variant="primary"
+              onClick={openCreate}
+              iconLeft={<Plus className="h-4 w-4" aria-hidden="true" />}
+            >
+              Book the first session
+            </Button>
+          }
+        />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
           <div
@@ -468,27 +469,25 @@ export default function Sessions() {
                       )}
                     </div>
                     <div className="flex shrink-0 gap-1">
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => openEdit(s)}
-                        className="rounded-lg p-2 text-text-muted hover:bg-surface-alt hover:text-text"
                         aria-label="Edit session"
+                        className="!p-2"
                       >
                         <Edit2 className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleDelete(s)}
-                        disabled={deletingId === s.id}
-                        className="rounded-lg p-2 text-text-muted hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                        loading={deletingId === s.id}
                         aria-label="Delete session"
+                        className="!p-2 text-text-muted hover:text-red-400 hover:bg-red-500/10"
                       >
-                        {deletingId === s.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        )}
-                      </button>
+                        {deletingId !== s.id && <Trash2 className="h-4 w-4" aria-hidden="true" />}
+                      </Button>
                     </div>
                   </div>
                 </li>
@@ -498,188 +497,108 @@ export default function Sessions() {
         </div>
       )}
 
-      {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="session-modal-title"
-        >
-          <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-surface shadow-xl animate-slide-up">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface px-5 py-4">
-              <h2 id="session-modal-title" className="text-lg font-semibold text-text">
-                {editing ? 'Edit session' : 'New session'}
-              </h2>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-lg p-2 text-text-muted hover:bg-surface-hover hover:text-text"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-4 p-5">
-              <div>
-                <label htmlFor="session-field-date" className="mb-1.5 block text-sm font-medium text-text">
-                  Date
-                </label>
-                <input
-                  id="session-field-date"
-                  type="date"
-                  required
-                  value={form.session_date}
-                  onChange={(e) => setForm({ ...form, session_date: e.target.value })}
-                  className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="session-field-start" className="mb-1.5 block text-sm font-medium text-text">
-                    Start
-                  </label>
-                  <input
-                    id="session-field-start"
-                    type="time"
-                    required
-                    value={form.start_time}
-                    onChange={(e) => setForm({ ...form, start_time: e.target.value })}
-                    className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="session-field-end" className="mb-1.5 block text-sm font-medium text-text">
-                    End
-                  </label>
-                  <input
-                    id="session-field-end"
-                    type="time"
-                    required
-                    value={form.end_time}
-                    onChange={(e) => setForm({ ...form, end_time: e.target.value })}
-                    className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="session-field-type" className="mb-1.5 block text-sm font-medium text-text">
-                    Type
-                  </label>
-                  <select
-                    id="session-field-type"
-                    value={form.session_type}
-                    onChange={(e) =>
-                      setForm({ ...form, session_type: e.target.value as Session['session_type'] })
-                    }
-                    className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                  >
-                    {SESSION_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {TYPE_LABELS[t]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="session-field-status" className="mb-1.5 block text-sm font-medium text-text">
-                    Status
-                  </label>
-                  <select
-                    id="session-field-status"
-                    value={form.status}
-                    onChange={(e) =>
-                      setForm({ ...form, status: e.target.value as Session['status'] })
-                    }
-                    className="w-full rounded-xl border border-border px-3 py-2.5 text-sm capitalize"
-                  >
-                    {SESSION_STATUSES.map((st) => (
-                      <option key={st} value={st}>
-                        {st}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label htmlFor="session-field-project" className="mb-1.5 block text-sm font-medium text-text">
-                  Project
-                </label>
-                <select
-                  id="session-field-project"
-                  value={form.project_id}
-                  onChange={(e) => setForm({ ...form, project_id: e.target.value })}
-                  className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                >
-                  <option value="">None</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="session-field-client" className="mb-1.5 block text-sm font-medium text-text">
-                  Client
-                </label>
-                <input
-                  id="session-field-client"
-                  value={form.client_name}
-                  onChange={(e) => setForm({ ...form, client_name: e.target.value })}
-                  className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                  placeholder="Optional"
-                />
-              </div>
-              <div>
-                <label htmlFor="session-field-room" className="mb-1.5 block text-sm font-medium text-text">
-                  Room
-                </label>
-                <input
-                  id="session-field-room"
-                  value={form.room}
-                  onChange={(e) => setForm({ ...form, room: e.target.value })}
-                  className="w-full rounded-xl border border-border px-3 py-2.5 text-sm"
-                  placeholder="e.g. Studio A"
-                />
-              </div>
-              <div>
-                <label htmlFor="session-field-notes" className="mb-1.5 block text-sm font-medium text-text">
-                  Notes
-                </label>
-                <textarea
-                  id="session-field-notes"
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  rows={3}
-                  className="w-full resize-none rounded-xl border border-border px-3 py-2.5 text-sm"
-                />
-              </div>
-              <div className="flex justify-end gap-2 border-t border-border pt-4">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-text-muted hover:bg-surface-hover"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-medium text-bg hover:opacity-90 disabled:opacity-50"
-                >
-                  {submitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Save className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {editing ? 'Save' : 'Create'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        title={editing ? 'Edit session' : 'New session'}
+        size="md"
+        locked={submitting}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            id="session-field-date"
+            label="Date"
+            type="date"
+            required
+            value={form.session_date}
+            onChange={(e) => setForm({ ...form, session_date: e.target.value })}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              id="session-field-start"
+              label="Start"
+              type="time"
+              required
+              value={form.start_time}
+              onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+            />
+            <Input
+              id="session-field-end"
+              label="End"
+              type="time"
+              required
+              value={form.end_time}
+              onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+            />
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Select
+              id="session-field-type"
+              label="Type"
+              value={form.session_type}
+              onChange={(e) => setForm({ ...form, session_type: e.target.value as Session['session_type'] })}
+            >
+              {SESSION_TYPES.map((t) => (
+                <option key={t} value={t}>{TYPE_LABELS[t]}</option>
+              ))}
+            </Select>
+            <Select
+              id="session-field-status"
+              label="Status"
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value as Session['status'] })}
+              className="capitalize"
+            >
+              {SESSION_STATUSES.map((st) => (
+                <option key={st} value={st}>{st}</option>
+              ))}
+            </Select>
+          </div>
+          <Select
+            id="session-field-project"
+            label="Project"
+            value={form.project_id}
+            onChange={(e) => setForm({ ...form, project_id: e.target.value })}
+          >
+            <option value="">None</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </Select>
+          <Input
+            id="session-field-client"
+            label="Client"
+            placeholder="Optional"
+            value={form.client_name}
+            onChange={(e) => setForm({ ...form, client_name: e.target.value })}
+          />
+          <Input
+            id="session-field-room"
+            label="Room"
+            placeholder="e.g. Studio A"
+            value={form.room}
+            onChange={(e) => setForm({ ...form, room: e.target.value })}
+          />
+          <Textarea
+            id="session-field-notes"
+            label="Notes"
+            rows={3}
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          />
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={submitting}
+              iconLeft={!submitting ? <Save className="h-4 w-4" aria-hidden="true" /> : undefined}
+            >
+              {editing ? 'Save' : 'Create'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }
