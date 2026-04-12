@@ -49,6 +49,8 @@ Labels above are **UX targets**. Map each row to existing routes/pages or new sh
 
 ## For Claude Code
 
+**Human-written requests:** If the owner uses plain-language + image paths only, follow **`docs/How-to-hand-off-visuals-to-Claude.md`** and keep this Menu-Sidebar folder as the frozen shell.
+
 When implementing Menu-Sidebar:
 
 1. Read this `README.md`.
