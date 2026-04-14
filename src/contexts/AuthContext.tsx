@@ -43,7 +43,8 @@ function DevAuthProvider({ children }: { children: ReactNode }) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // DEV BYPASS
-  if (import.meta.env.DEV) return <DevAuthProvider>{children}</DevAuthProvider>
+  // DEMO BYPASS — use mock auth for draft/demo site and local dev
+  if (import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true') return <DevAuthProvider>{children}</DevAuthProvider>
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [profile, setProfile] = useState<TeamMember | null>(null)
   const [session, setSession] = useState<Session | null>(null)

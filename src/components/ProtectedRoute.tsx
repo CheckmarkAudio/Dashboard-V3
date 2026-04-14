@@ -5,8 +5,8 @@ export default function ProtectedRoute({ children, adminOnly: _adminOnly = false
   children: React.ReactNode
   adminOnly?: boolean
 }) {
-  // DEV BYPASS — skip auth for local UI work
-  if (import.meta.env.DEV) {
+  // DEMO BYPASS — skip auth for draft/demo site and local dev
+  if (import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true') {
     return <>{children}</>
   }
 
