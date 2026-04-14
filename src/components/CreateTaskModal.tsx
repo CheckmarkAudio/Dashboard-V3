@@ -37,7 +37,7 @@ export default function CreateTaskModal({ onClose }: { onClose: () => void }) {
     const isKpi = ['Deliver', 'Capture', 'Share', 'Attract'].includes(category)
     addTask({
       title: title.trim(),
-      priority: highPriority ? 'HIGH' : 'MED',
+      priority: highPriority,
       due: dueDate,
       startDate,
       assignee,

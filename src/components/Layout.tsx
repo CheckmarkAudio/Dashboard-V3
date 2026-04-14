@@ -10,8 +10,8 @@ import checkmarkLogo from '../assets/checkmark-audio-logo.png'
 import type { LucideProps } from 'lucide-react'
 import {
   LayoutDashboard, Users, Calendar, Settings,
-  LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
-  BarChart3, Briefcase, Lightbulb,
+  LogOut, LogIn, Menu, X, ChevronDown, ClipboardList, CheckSquare,
+  BarChart3, Briefcase, Lightbulb, Clock,
 } from 'lucide-react'
 
 type NavLinkDef = {
@@ -60,13 +60,15 @@ const adminLinks: NavLinkDef[] = [
   { to: '/admin', icon: TeamHubIcon as ComponentType<LucideProps>, label: 'Team Hub' },
   { to: '/admin/templates', icon: ClipboardList, label: 'Assign Tasks' },
   { to: '/admin/my-team', icon: Users, label: 'Members' },
-  { to: '/admin/health', icon: BarChart3, label: 'Metrics' },
+  { to: '/admin/health', icon: BarChart3, label: 'Analytics' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ]
 
 export default function Layout() {
   const { profile, isAdmin, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [clockedIn, setClockedIn] = useState(false)
+  const [clockInTime, setClockInTime] = useState('')
   const [adminExpanded, setAdminExpanded] = useState(true)
   const navigate = useNavigate()
   const location = useLocation()
@@ -158,8 +160,29 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* Right: Profile + sign-out */}
+        {/* Center: Clock In/Out bubble */}
         <div className="ml-auto flex items-center gap-3">
+          {!clockedIn ? (
+            <button
+              onClick={() => { setClockedIn(true); setClockInTime(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold/10 text-gold border border-gold/30 text-[11px] font-semibold hover:bg-gold/20 transition-all"
+            >
+              <Clock size={12} />
+              Clock In
+            </button>
+          ) : (
+            <button
+              onClick={() => { setClockedIn(false); setClockInTime('') }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold/15 text-gold border border-gold/30 text-[11px] font-semibold hover:bg-gold/25 transition-all"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
+              {clockInTime} · Clock Out
+            </button>
+          )}
+        </div>
+
+        {/* Right: Profile + sign-out */}
+        <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-semibold text-text truncate max-w-[160px]">
               {profile?.display_name ?? 'User'}

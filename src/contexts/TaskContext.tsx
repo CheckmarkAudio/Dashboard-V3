@@ -19,7 +19,7 @@ export type TaskCategory = KpiStage | MaintenanceCategory
 export type TaskItem = {
   id: string
   title: string
-  priority: 'HIGH' | 'MED' | 'LOW'
+  priority: boolean
   due: string
   startDate: string
   assignee: string
@@ -80,31 +80,26 @@ function stageColorFor(stage: string): string {
 
 const INITIAL_TASKS: TaskItem[] = [
   // Deliver
-  { id: 'd1', title: 'Send final mixes to 3 clients', priority: 'HIGH', due: 'Today, 3:00 PM', startDate: 'Apr 10', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
-  { id: 'd2', title: 'Upload mastered revisions', priority: 'HIGH', due: 'Today, 5:00 PM', startDate: 'Apr 10', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
-  { id: 'd3', title: 'Confirm delivery satisfaction', priority: 'MED', due: 'Tomorrow, 10:00 AM', startDate: 'Apr 11', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: false, category: 'Deliver', recurring: false },
-  { id: 'd4', title: 'Request testimonial from latest session', priority: 'LOW', due: 'Wed, Apr 15', startDate: 'Apr 9', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
-  { id: 'd5', title: 'Submit podcast intro script', priority: 'HIGH', due: 'Today, 6:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
-  { id: 'd6', title: 'Archive completed project files', priority: 'LOW', due: 'Fri, Apr 17', startDate: 'Apr 9', assignee: 'Taylor Morgan', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
+  { id: 'd1', title: 'Send final mixes to 3 clients', priority: true, due: 'Today, 3:00 PM', startDate: 'Apr 10', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
+  { id: 'd2', title: 'Upload mastered revisions', priority: true, due: 'Today, 5:00 PM', startDate: 'Apr 10', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
+  { id: 'd3', title: 'Confirm delivery satisfaction', priority: false, due: 'Tomorrow, 10:00 AM', startDate: 'Apr 11', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: false, category: 'Deliver', recurring: false },
+  { id: 'd4', title: 'Request testimonial from latest session', priority: false, due: 'Wed, Apr 15', startDate: 'Apr 9', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
+  { id: 'd5', title: 'Submit podcast intro script', priority: true, due: 'Today, 6:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
+  { id: 'd6', title: 'Archive completed project files', priority: false, due: 'Fri, Apr 17', startDate: 'Apr 9', assignee: 'Taylor Morgan', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
   // Capture
-  { id: 'c1', title: "Edit Jordan Lee's session block", priority: 'HIGH', due: 'Today, 5:00 PM', startDate: 'Apr 11', assignee: 'You', stage: 'Capture', stageColor: '#38bdf8', completed: true, category: 'Capture', recurring: false },
-  { id: 'c2', title: 'Record B-roll for promo reel', priority: 'MED', due: 'Tomorrow, 2:00 PM', startDate: 'Apr 10', assignee: 'Sam Rivera', stage: 'Capture', stageColor: '#38bdf8', completed: false, category: 'Capture', recurring: false },
-  { id: 'c3', title: 'Capture client testimonial audio', priority: 'HIGH', due: 'Today, 4:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Capture', stageColor: '#38bdf8', completed: true, category: 'Capture', recurring: false },
-  { id: 'c4', title: 'Log new lead from website form', priority: 'MED', due: 'Today, 6:00 PM', startDate: 'Apr 12', assignee: 'Alex Kim', stage: 'Capture', stageColor: '#38bdf8', completed: false, category: 'Capture', recurring: false },
+  { id: 'c1', title: "Edit Jordan Lee's session block", priority: true, due: 'Today, 5:00 PM', startDate: 'Apr 11', assignee: 'You', stage: 'Capture', stageColor: '#38bdf8', completed: true, category: 'Capture', recurring: false },
+  { id: 'c2', title: 'Record B-roll for promo reel', priority: false, due: 'Tomorrow, 2:00 PM', startDate: 'Apr 10', assignee: 'Sam Rivera', stage: 'Capture', stageColor: '#38bdf8', completed: false, category: 'Capture', recurring: false },
+  { id: 'c3', title: 'Capture client testimonial audio', priority: true, due: 'Today, 4:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Capture', stageColor: '#38bdf8', completed: true, category: 'Capture', recurring: false },
+  { id: 'c4', title: 'Log new lead from website form', priority: false, due: 'Today, 6:00 PM', startDate: 'Apr 12', assignee: 'Alex Kim', stage: 'Capture', stageColor: '#38bdf8', completed: false, category: 'Capture', recurring: false },
   // Share
-  { id: 's1', title: 'Platform analytics report', priority: 'LOW', due: 'Wed, Apr 15', startDate: 'Apr 9', assignee: 'Alex Kim', stage: 'Share', stageColor: '#a78bfa', completed: false, category: 'Share', recurring: false },
-  { id: 's2', title: 'Update team weekly summary', priority: 'LOW', due: 'Fri, Apr 17', startDate: 'Apr 10', assignee: 'Taylor Morgan', stage: 'Share', stageColor: '#a78bfa', completed: true, category: 'Share', recurring: false },
-  { id: 's3', title: 'Post session highlight to Instagram', priority: 'MED', due: 'Today, 7:00 PM', startDate: 'Apr 12', assignee: 'Sam Rivera', stage: 'Share', stageColor: '#a78bfa', completed: false, category: 'Share', recurring: false },
-  { id: 's4', title: 'Draft newsletter content', priority: 'LOW', due: 'Thu, Apr 16', startDate: 'Apr 11', assignee: 'Alex Kim', stage: 'Share', stageColor: '#a78bfa', completed: true, category: 'Share', recurring: false },
+  { id: 's1', title: 'Platform analytics report', priority: false, due: 'Wed, Apr 15', startDate: 'Apr 9', assignee: 'Alex Kim', stage: 'Share', stageColor: '#a78bfa', completed: false, category: 'Share', recurring: false },
+  { id: 's2', title: 'Update team weekly summary', priority: false, due: 'Fri, Apr 17', startDate: 'Apr 10', assignee: 'Taylor Morgan', stage: 'Share', stageColor: '#a78bfa', completed: true, category: 'Share', recurring: false },
+  { id: 's3', title: 'Post session highlight to Instagram', priority: false, due: 'Today, 7:00 PM', startDate: 'Apr 12', assignee: 'Sam Rivera', stage: 'Share', stageColor: '#a78bfa', completed: false, category: 'Share', recurring: false },
+  { id: 's4', title: 'Draft newsletter content', priority: false, due: 'Thu, Apr 16', startDate: 'Apr 11', assignee: 'Alex Kim', stage: 'Share', stageColor: '#a78bfa', completed: true, category: 'Share', recurring: false },
   // Attract
-  { id: 'a1', title: 'Review client proposal draft', priority: 'MED', due: 'Tomorrow, 10:00 AM', startDate: 'Apr 11', assignee: 'Sam Rivera', stage: 'Attract', stageColor: '#fbbf24', completed: false, category: 'Attract', recurring: false },
-  { id: 'a2', title: 'Follow up on consultation inquiry', priority: 'HIGH', due: 'Today, 2:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Attract', stageColor: '#fbbf24', completed: true, category: 'Attract', recurring: false },
-  { id: 'a3', title: 'Update portfolio page with new work', priority: 'LOW', due: 'Fri, Apr 17', startDate: 'Apr 9', assignee: 'Alex Kim', stage: 'Attract', stageColor: '#fbbf24', completed: false, category: 'Attract', recurring: false },
-  // Book
-  { id: 'b1', title: 'Confirm studio booking for Friday', priority: 'HIGH', due: 'Today, 1:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Book', stageColor: '#fb7185', completed: true, category: 'Book', recurring: false },
-  { id: 'b2', title: 'Send invoice for completed session', priority: 'MED', due: 'Tomorrow, 9:00 AM', startDate: 'Apr 11', assignee: 'Taylor Morgan', stage: 'Book', stageColor: '#fb7185', completed: true, category: 'Book', recurring: false },
-  { id: 'b3', title: 'Schedule follow-up with new client', priority: 'HIGH', due: 'Today, 4:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Book', stageColor: '#fb7185', completed: true, category: 'Book', recurring: false },
-  { id: 'b4', title: 'Process deposit for next booking', priority: 'MED', due: 'Wed, Apr 15', startDate: 'Apr 10', assignee: 'Taylor Morgan', stage: 'Book', stageColor: '#fb7185', completed: false, category: 'Book', recurring: false },
+  { id: 'a1', title: 'Review client proposal draft', priority: false, due: 'Tomorrow, 10:00 AM', startDate: 'Apr 11', assignee: 'Sam Rivera', stage: 'Attract', stageColor: '#fbbf24', completed: false, category: 'Attract', recurring: false },
+  { id: 'a2', title: 'Follow up on consultation inquiry', priority: true, due: 'Today, 2:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Attract', stageColor: '#fbbf24', completed: true, category: 'Attract', recurring: false },
+  { id: 'a3', title: 'Update portfolio page with new work', priority: false, due: 'Fri, Apr 17', startDate: 'Apr 9', assignee: 'Alex Kim', stage: 'Attract', stageColor: '#fbbf24', completed: false, category: 'Attract', recurring: false },
 ]
 
 const INITIAL_BOOKINGS: BookingItem[] = [
@@ -160,22 +155,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     const conflict = checkConflict(booking.date, booking.startTime, booking.endTime, booking.studio)
     const bookingId = `bk-${nextId++}`
     setBookings(prev => [...prev, { ...booking, id: bookingId, status: 'Pending' }])
-    // Also create a task in the Book stage
-    const taskId = `task-${nextId++}`
-    const timeLabel = `${booking.startTime} - ${booking.endTime}`
-    setTasks(prev => [...prev, {
-      id: taskId,
-      title: `${booking.client}: ${booking.description}`,
-      priority: 'MED' as const,
-      due: `${booking.date}, ${timeLabel}`,
-      startDate: booking.startDate,
-      assignee: booking.assignee,
-      stage: 'Book',
-      stageColor: '#fb7185',
-      completed: false,
-      category: 'Book' as TaskCategory,
-      recurring: booking.recurring,
-    }])
+    // Bookings stay in the bookings list only — not added to tasks
     return { conflict: !!conflict, conflictWith: conflict ?? undefined }
   }, [checkConflict])
 
