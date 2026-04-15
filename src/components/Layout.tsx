@@ -30,7 +30,7 @@ function NavItem({ link, onNavigate }: { link: NavLinkDef; onNavigate: () => voi
   return (
     <NavLink
       to={link.to}
-      end={link.to === '/'}
+      end={link.to === '/' || link.to === '/admin'}
       onClick={onNavigate}
       className={({ isActive }) =>
         [
@@ -62,8 +62,8 @@ const adminLinks: NavLinkDef[] = [
   { to: '/admin/templates', icon: ClipboardList, label: 'Assign Tasks' },
   { to: '/admin/my-team', icon: Users, label: 'Members' },
   { to: '/admin/health', icon: BarChart3, label: 'Analytics' },
-  { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ]
+const settingsLink: NavLinkDef = { to: '/admin/settings', icon: Settings, label: 'Settings' }
 
 export default function Layout() {
   const { profile, isAdmin, signOut } = useAuth()
@@ -126,6 +126,8 @@ export default function Layout() {
                 {adminLinks.map(link => (
                   <NavItem key={link.to} link={link} onNavigate={closeDrawer} />
                 ))}
+                <div className="mx-3 my-1.5 border-t border-border/40" />
+                <NavItem link={settingsLink} onNavigate={closeDrawer} />
               </div>
             )}
           </>
@@ -186,8 +188,8 @@ export default function Layout() {
             </>
           )}
 
-          {/* Profile */}
-          <div className="flex items-center gap-3">
+          {/* Profile — clickable to profile page */}
+          <button onClick={() => navigate('/profile/jordan')} className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer focus-ring rounded-xl">
             <div
               className="w-10 h-10 rounded-full bg-surface-alt border-2 border-border-light text-gold flex items-center justify-center text-[14px] font-bold shrink-0"
               title={profile?.email ?? 'Signed in'}
@@ -202,7 +204,7 @@ export default function Layout() {
                 {profile?.role ?? 'Member'}
               </p>
             </div>
-          </div>
+          </button>
 
           <button
             type="button"

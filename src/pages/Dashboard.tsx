@@ -438,7 +438,7 @@ export default function Dashboard() {
           </div>
           <div className="flex-1 py-1">
             {teamMembers.map((m) => (
-              <Link key={m.id} to="/admin/my-team" className="flex items-center gap-3.5 px-5 py-3 hover:bg-white/[0.03] transition-colors border-b border-border/20 last:border-0">
+              <Link key={m.id} to={`/profile/${m.id}`} className="flex items-center gap-3.5 px-5 py-3 hover:bg-white/[0.03] transition-colors border-b border-border/20 last:border-0">
                 <div className="w-10 h-10 rounded-full bg-gold/10 text-gold flex items-center justify-center text-[14px] font-bold shrink-0">
                   {m.name.charAt(0)}
                 </div>

@@ -22,6 +22,7 @@ import MyTeam from './pages/admin/MyTeam'
 import BusinessHealth from './pages/admin/BusinessHealth'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminHub from './pages/admin/Hub'
+import Profile from './pages/Profile'
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
           }
         >
           <Route index element={<Dashboard />} />
+          <Route path="profile/:memberId" element={<Profile />} />
           <Route path="daily" element={<DailyChecklist />} />
           <Route path="weekly" element={<WeeklyChecklist />} />
           <Route path="notes" element={<DailyNotes />} />
