@@ -154,7 +154,7 @@ export default function Content() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">
-                      <span className={`text-[13px] font-semibold tracking-tight ${isMe ? 'text-gold' : 'text-text'}`}>{msg.sender_name}</span>
+                      <span className="text-[13px] font-semibold tracking-tight text-gold">{msg.sender_name}</span>
                       <span className="text-[10px] text-text-light">{formatTime(msg.created_at)}</span>
                     </div>
                     <p className="text-[14px] font-normal text-text-muted leading-relaxed mt-0.5">{msg.content}</p>
