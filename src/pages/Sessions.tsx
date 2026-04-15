@@ -16,48 +16,8 @@ const STATUS_STYLE: Record<string, { color: string; bg: string; border: string }
 }
 
 /* ── Placeholder bookings (matching mockup) ── */
-const BOOKINGS = [
-  {
-    id: '1',
-    client: 'The Podcast Hub',
-    date: 'Oct 26, 10:00 AM - 12:00 PM',
-    engineer: 'Sarah K. (Studio A)',
-    status: 'Confirmed',
-    category: 'Engineer' as Category,
-  },
-  {
-    id: '2',
-    client: 'Vocal Recording - James',
-    date: 'Oct 26, 2:00 PM - 4:00 PM',
-    engineer: 'Dave L. (Studio B)',
-    status: 'Pending',
-    category: 'Engineer' as Category,
-  },
-  {
-    id: '3',
-    client: 'Final Mix - Project Alpha',
-    date: 'Oct 27, 9:00 AM - 1:00 PM',
-    engineer: 'Ben J. (Main Suite)',
-    status: 'Confirmed',
-    category: 'Engineer' as Category,
-  },
-  {
-    id: '4',
-    client: 'Consulting Session - Maya',
-    date: 'Oct 28, 11:00 AM - 12:00 PM',
-    engineer: 'Sarah K.',
-    status: 'Confirmed',
-    category: 'Consult' as Category,
-  },
-  {
-    id: '5',
-    client: 'Trailing Session - New Intern',
-    date: 'Oct 29, 9:00 AM - 5:00 PM',
-    engineer: 'Dave L.',
-    status: 'Pending',
-    category: 'Trailing' as Category,
-  },
-]
+// No hardcoded bookings — all data comes from TaskContext (single source of truth)
+const BOOKINGS: { id: string; client: string; date: string; engineer: string; status: string; category: Category }[] = []
 
 function StatusBadge({ status }: { status: string }) {
   const style = STATUS_STYLE[status] ?? STATUS_STYLE.Pending

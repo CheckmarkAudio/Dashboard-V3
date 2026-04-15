@@ -5,10 +5,31 @@ import { ChevronLeft, ChevronRight, StickyNote } from 'lucide-react'
 
 /* ── Time grid config ── */
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7) // 7 AM to 7 PM
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const WEEK_DATES = ['Apr 14', 'Apr 15', 'Apr 16', 'Apr 17', 'Apr 18', 'Apr 19', 'Apr 20']
-const WEEK_KEYS = ['2026-04-14', '2026-04-15', '2026-04-16', '2026-04-17', '2026-04-18', '2026-04-19', '2026-04-20']
-const TODAY_KEY = '2026-04-14'
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+// Compute real today and this week's dates dynamically
+function getTodayKey(): string {
+  return new Date().toISOString().split('T')[0]
+}
+
+function getWeekDays(): { day: string; date: string; key: string }[] {
+  const now = new Date()
+  const dayOfWeek = now.getDay() // 0=Sun
+  // Start from Monday
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7))
+  const days: { day: string; date: string; key: string }[] = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    days.push({
+      day: DAY_NAMES[d.getDay()],
+      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      key: d.toISOString().split('T')[0],
+    })
+  }
+  return days
+}
 
 const TYPE_LABELS: Record<string, string> = {
   engineering: 'Engineering', training: 'Training', education: 'Education',
@@ -37,6 +58,10 @@ function durationLabel(start: string, end: string): string {
 export default function Calendar() {
   useDocumentTitle('Calendar - Checkmark Audio')
   const { bookings } = useTasks()
+  const TODAY_KEY = getTodayKey()
+  const WEEK = getWeekDays()
+  const weekStart = WEEK[0]?.date ?? ''
+  const weekEnd = WEEK[6]?.date ?? ''
   const [selectedDate, setSelectedDate] = useState(TODAY_KEY)
 
   // Booking notes — keyed by booking ID
@@ -88,7 +113,7 @@ export default function Calendar() {
           <button className="p-1 rounded hover:bg-surface-hover transition-colors"><ChevronLeft size={16} /></button>
           <span className="text-xs font-semibold text-gold">This Week</span>
           <button className="p-1 rounded hover:bg-surface-hover transition-colors"><ChevronRight size={16} /></button>
-          <span className="text-xs text-text-muted ml-1">Apr 14 – Apr 20, 2026</span>
+          <span className="text-xs text-text-muted ml-1">{weekStart} – {weekEnd}, 2026</span>
         </div>
       </div>
 
@@ -205,17 +230,17 @@ export default function Calendar() {
               {/* Day headers — clickable */}
               <div className="grid grid-cols-[50px_repeat(7,1fr)] border-b border-border/30">
                 <div />
-                {DAYS.map((day, i) => {
-                  const isActualToday = WEEK_KEYS[i] === TODAY_KEY
-                  const isSelected = WEEK_KEYS[i] === selectedDate
+                {WEEK.map((wd, i) => {
+                  const isActualToday = wd.key === TODAY_KEY
+                  const isSelected = wd.key === selectedDate
                   return (
                     <button
-                      key={day}
-                      onClick={() => setSelectedDate(WEEK_KEYS[i])}
+                      key={wd.key}
+                      onClick={() => setSelectedDate(wd.key)}
                       className={`text-center py-2 border-l border-border/20 transition-all ${isSelected ? 'bg-gold/[0.08]' : isActualToday ? 'bg-gold/[0.03]' : 'hover:bg-white/[0.02]'}`}
                     >
-                      <p className={`text-[10px] font-semibold uppercase ${isSelected ? 'text-gold' : isActualToday ? 'text-gold/60' : 'text-text-muted'}`}>{day}</p>
-                      <p className={`text-[9px] ${isSelected ? 'text-gold' : isActualToday ? 'text-gold/50' : 'text-text-light'}`}>{WEEK_DATES[i]}</p>
+                      <p className={`text-[10px] font-semibold uppercase ${isSelected ? 'text-gold' : isActualToday ? 'text-gold/60' : 'text-text-muted'}`}>{wd.day}</p>
+                      <p className={`text-[9px] ${isSelected ? 'text-gold' : isActualToday ? 'text-gold/50' : 'text-text-light'}`}>{wd.date}</p>
                       {isSelected && <div className="w-1 h-1 rounded-full bg-gold mx-auto mt-0.5" />}
                     </button>
                   )
@@ -229,16 +254,16 @@ export default function Calendar() {
                     <div className="text-[9px] text-text-light font-medium pr-2 text-right pt-0.5">
                       {hour > 12 ? hour - 12 : hour} {hour >= 12 ? 'PM' : 'AM'}
                     </div>
-                    {DAYS.map((_, di) => {
-                      const isSel = WEEK_KEYS[di] === selectedDate
+                    {WEEK.map((wd, di) => {
+                      const isSel = wd.key === selectedDate
                       return <div key={di} className={`border-l border-border/10 ${isSel ? 'bg-gold/[0.03]' : ''}`} />
                     })}
                   </div>
                 ))}
 
                 {/* Booking blocks overlay */}
-                {WEEK_KEYS.map((dateKey, dayIndex) => {
-                  const dayBookings = bookingsByDate[dateKey] ?? []
+                {WEEK.map((wd, dayIndex) => {
+                  const dayBookings = bookingsByDate[wd.key] ?? []
                   return dayBookings.map(b => {
                     const startMin = timeToMinutes(b.startTime)
                     const endMin = timeToMinutes(b.endTime)

@@ -102,12 +102,24 @@ const INITIAL_TASKS: TaskItem[] = [
   { id: 'a3', title: 'Update portfolio page with new work', priority: false, due: 'Fri, Apr 17', startDate: 'Apr 9', assignee: 'Alex Kim', stage: 'Attract', stageColor: '#fbbf24', completed: false, category: 'Attract', recurring: false },
 ]
 
+// Bookings are the SINGLE SOURCE OF TRUTH for all calendar/booking data site-wide.
+// Calendar page, Overview widget, Booking Agent, and KPI Book stage all read from here.
 const INITIAL_BOOKINGS: BookingItem[] = [
+  // Monday Apr 14
   { id: 'bk1', description: 'Recording Session', client: 'The Podcast Hub', type: 'engineering', date: '2026-04-14', startTime: '10:00', endTime: '12:00', startDate: '2026-04-10', assignee: 'Sarah K.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
-  { id: 'bk2', description: 'Vocal Recording', client: 'James Wilson', type: 'engineering', date: '2026-04-14', startTime: '14:00', endTime: '16:00', startDate: '2026-04-11', assignee: 'Dave L.', studio: 'Studio B', recurring: false, status: 'Pending' },
+  { id: 'bk2', description: 'Vocal Recording', client: 'James Wilson', type: 'engineering', date: '2026-04-14', startTime: '14:00', endTime: '16:00', startDate: '2026-04-11', assignee: 'Dave L.', studio: 'Studio B', recurring: false, status: 'Confirmed' },
+  // Tuesday Apr 15 (today)
   { id: 'bk3', description: 'Final Mix', client: 'Project Alpha', type: 'engineering', date: '2026-04-15', startTime: '09:00', endTime: '13:00', startDate: '2026-04-10', assignee: 'Ben J.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
+  { id: 'bk6', description: 'Piano Lesson', client: 'Ava Martinez', type: 'music_lesson', date: '2026-04-15', startTime: '14:00', endTime: '15:00', startDate: '2026-04-12', assignee: 'Sarah K.', studio: 'Studio B', recurring: false, status: 'Confirmed' },
+  { id: 'bk7', description: 'Mixing Session', client: 'Stanford Music', type: 'engineering', date: '2026-04-15', startTime: '16:00', endTime: '18:00', startDate: '2026-04-13', assignee: 'Dave L.', studio: 'Studio A', recurring: false, status: 'Pending' },
+  // Wednesday Apr 16
   { id: 'bk4', description: 'Consulting Session', client: 'Maya Thompson', type: 'consultation', date: '2026-04-16', startTime: '11:00', endTime: '12:00', startDate: '2026-04-12', assignee: 'Sarah K.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
+  { id: 'bk8', description: 'Podcast Edit Review', client: 'Aprt Media', type: 'engineering', date: '2026-04-16', startTime: '14:00', endTime: '16:00', startDate: '2026-04-14', assignee: 'Ben J.', studio: 'Studio B', recurring: false, status: 'Pending' },
+  // Thursday Apr 17
   { id: 'bk5', description: 'Training Session', client: 'New Intern', type: 'training', date: '2026-04-17', startTime: '09:00', endTime: '17:00', startDate: '2026-04-14', assignee: 'Dave L.', studio: 'Studio B', recurring: false, status: 'Pending' },
+  // Friday Apr 18
+  { id: 'bk9', description: 'Album Mastering', client: 'Stanford Music', type: 'engineering', date: '2026-04-18', startTime: '10:00', endTime: '14:00', startDate: '2026-04-15', assignee: 'Ben J.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
+  { id: 'bk10', description: 'Voice Lesson', client: 'Quinn Roberts', type: 'music_lesson', date: '2026-04-18', startTime: '15:00', endTime: '16:00', startDate: '2026-04-15', assignee: 'Sarah K.', studio: 'Studio B', recurring: false, status: 'Confirmed' },
 ]
 
 export function TaskProvider({ children }: { children: ReactNode }) {

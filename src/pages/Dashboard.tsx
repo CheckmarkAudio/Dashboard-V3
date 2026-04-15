@@ -220,6 +220,187 @@ function PriorityIcon({ priority }: { priority: boolean }) {
   )
 }
 
+/* ── Team Tasks widget for Overview (same data as Tasks page) ── */
+const POSITIONS_OV = ['Marketing', 'Media', 'Engineer', 'Intern', 'Admin'] as const
+type PositionOV = typeof POSITIONS_OV[number]
+const ROLE_TASKS_OV: Record<PositionOV, { id: string; title: string; due: string; priority: boolean; done: boolean }[]> = {
+  Marketing: [
+    { id: 'mk1', title: 'Draft Q2 social media calendar', due: 'Today, 5:00 PM', priority: true, done: false },
+    { id: 'mk2', title: 'Review Instagram analytics', due: 'Apr 15', priority: false, done: false },
+    { id: 'mk3', title: 'Create podcast promo copy', due: 'Apr 16', priority: false, done: true },
+    { id: 'mk4', title: 'Update brand guidelines', due: 'Apr 18', priority: false, done: false },
+    { id: 'mk5', title: 'Schedule newsletter send', due: 'Today, 3:00 PM', priority: true, done: true },
+  ],
+  Media: [
+    { id: 'md1', title: 'Edit podcast episode 14', due: 'Today, 6:00 PM', priority: true, done: false },
+    { id: 'md2', title: 'Color grade promo video', due: 'Apr 15', priority: false, done: false },
+    { id: 'md3', title: 'Export stems for client', due: 'Today, 4:00 PM', priority: true, done: true },
+    { id: 'md4', title: 'Upload B-roll to drive', due: 'Apr 16', priority: false, done: false },
+  ],
+  Engineer: [
+    { id: 'en1', title: 'Mix Stanford session', due: 'Today, 5:00 PM', priority: true, done: false },
+    { id: 'en2', title: 'Master album tracks', due: 'Apr 15', priority: true, done: false },
+    { id: 'en3', title: 'Calibrate Studio A', due: 'Apr 16', priority: false, done: true },
+    { id: 'en4', title: 'Backup session files', due: 'Apr 18', priority: false, done: false },
+  ],
+  Intern: [
+    { id: 'in1', title: 'Shadow mixing session', due: 'Today, 3:00 PM', priority: true, done: false },
+    { id: 'in2', title: 'Audio fundamentals mod 3', due: 'Apr 15', priority: false, done: false },
+    { id: 'in3', title: 'Organize sample library', due: 'Apr 16', priority: false, done: true },
+    { id: 'in4', title: 'Weekly reflection', due: 'Apr 18', priority: false, done: false },
+  ],
+  Admin: [
+    { id: 'ad1', title: 'Process March invoices', due: 'Today, 5:00 PM', priority: true, done: false },
+    { id: 'ad2', title: 'Update availability cal', due: 'Apr 15', priority: false, done: false },
+    { id: 'ad3', title: 'File equipment receipts', due: 'Apr 16', priority: false, done: true },
+    { id: 'ad4', title: 'Renew software licenses', due: 'Apr 18', priority: true, done: false },
+  ],
+}
+
+function TeamTasksWidget() {
+  const [pos, setPos] = useState<PositionOV>('Marketing')
+  const [time, setTime] = useState('Day')
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [submitted, setSubmitted] = useState<Set<string>>(new Set())
+
+  const tasks = ROLE_TASKS_OV[pos]
+  // Overview: always hide completed
+  const filtered = tasks.filter(t => !t.done && !submitted.has(t.id))
+  const sorted = [...filtered].sort((a, b) => {
+    const aD = a.done || submitted.has(a.id); const bD = b.done || submitted.has(b.id)
+    return aD === bD ? 0 : aD ? 1 : -1
+  })
+
+  return (
+    <div className="bg-surface rounded-2xl border border-border overflow-hidden flex flex-col">
+      <div className="px-5 py-3.5 border-b border-border">
+        <div className="flex items-center justify-between">
+          <Link to="/daily" className="flex items-center gap-1 group">
+            <h2 className="text-[16px] font-bold text-text tracking-tight group-hover:text-gold transition-colors">Team Tasks</h2>
+            <ChevronRight size={12} className="text-text-muted group-hover:text-gold transition-colors" />
+          </Link>
+          <div className="flex bg-surface-alt rounded-lg p-0.5 border border-border">
+            {['Day', 'Week'].map(o => (
+              <button key={o} onClick={() => setTime(o)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium tracking-tight transition-all ${time === o ? 'bg-gold/12 text-gold' : 'text-text-light hover:text-text-muted'}`}
+              >{o}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-0.5 flex-wrap mt-2">
+          {POSITIONS_OV.map(p => (
+            <button key={p} onClick={() => { setPos(p); setChecked(new Set()); setSubmitted(new Set()) }}
+              className={`px-1.5 py-0.5 rounded text-[11px] tracking-tight transition-all ${pos === p ? 'text-gold font-medium' : 'text-text-light font-normal hover:text-text-muted'}`}
+            >{p}</button>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 px-5 py-1 space-y-0">
+        {sorted.map(t => {
+          const isDone = t.done || submitted.has(t.id)
+          const isPending = checked.has(t.id)
+          const isChecked = isDone || isPending
+          const dueLabel = time === 'Day' && t.due.toLowerCase().includes('today') ? (t.due.split(',')[1]?.trim() || '') : t.due.split(',')[0]
+          return (
+            <div key={t.id} className={`flex items-center gap-2 py-[11px] border-b border-border/30 last:border-0 transition-all ${isDone ? 'opacity-25' : ''}`}>
+              <button onClick={() => !isDone && setChecked(p => { const n = new Set(p); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n })} disabled={isDone} className="shrink-0">
+                <div className={`w-[18px] h-[18px] rounded-[5px] border-[1.5px] flex items-center justify-center transition-all ${isDone ? 'bg-gold/30 border-gold/40' : isPending ? 'bg-gold/20 border-gold' : 'border-border-light hover:border-gold/50'}`}>
+                  {isChecked && <Check size={11} className="text-gold" />}
+                </div>
+              </button>
+              <span className={`flex-1 text-[14px] font-normal tracking-tight truncate min-w-0 ${isDone ? 'line-through text-text-light' : 'text-text-muted'}`}>{t.title}</span>
+              {t.priority && <Flame size={13} className="text-gold shrink-0" />}
+              <span className="text-[11px] shrink-0 tabular-nums text-text-light">{dueLabel}</span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="px-5 py-4 border-t border-border mt-auto">
+        <button onClick={() => { setSubmitted(p => { const n = new Set(p); checked.forEach(id => n.add(id)); return n }); setChecked(new Set()) }} disabled={checked.size === 0}
+          className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-semibold tracking-tight transition-all ${checked.size > 0 ? 'bg-gold text-black hover:bg-gold-muted shadow-md shadow-gold/20' : 'bg-surface-alt text-text-light border border-border cursor-not-allowed'}`}>
+          <Check size={14} />
+          {checked.size > 0 ? `Submit Completed (${checked.size})` : 'Submit Completed'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ── Calendar widget (synced with bookings — mirrors Calendar page Today column) ── */
+const BOOKING_TYPE_LABELS: Record<string, string> = {
+  engineering: 'Engineering', training: 'Training', education: 'Education',
+  music_lesson: 'Music Lesson', consultation: 'Consultation',
+}
+
+function formatTime12(t: string): string {
+  const [h, m] = t.split(':').map(Number)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const hr = h % 12 || 12
+  return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`
+}
+
+function durationLabel(start: string, end: string): string {
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  const mins = (eh * 60 + em) - (sh * 60 + sm)
+  const hrs = Math.floor(mins / 60)
+  const rm = mins % 60
+  return hrs > 0 ? `${hrs}h${rm > 0 ? ` ${rm}m` : ''}` : `${rm}m`
+}
+
+function CalendarWidget() {
+  const { bookings } = useTasks()
+  const today = new Date()
+  const todayKey = today.toISOString().split('T')[0]
+  const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+
+  // Show all bookings for today — bookings are the single source of truth
+  const todayBookings = bookings
+    .filter(b => b.date === todayKey)
+    .sort((a, b) => {
+      const am = parseInt(a.startTime.replace(':', ''))
+      const bm = parseInt(b.startTime.replace(':', ''))
+      return am - bm
+    })
+
+  return (
+    <div className="bg-surface rounded-2xl border border-border overflow-hidden flex flex-col">
+      <div className="px-5 py-3.5 border-b border-border">
+        <div className="flex items-center justify-between">
+          <Link to="/calendar" className="flex items-center gap-1.5 group">
+            <CalendarIcon size={14} className="text-gold" />
+            <h2 className="text-[16px] font-bold text-text tracking-tight group-hover:text-gold transition-colors">Calendar</h2>
+            <ChevronRight size={12} className="text-text-muted group-hover:text-gold transition-colors" />
+          </Link>
+        </div>
+        <p className="text-[11px] text-text-light mt-1">{dateLabel}</p>
+      </div>
+      <div className="flex-1 px-5 py-2">
+        {todayBookings.length > 0 ? (
+          <div className="space-y-0">
+            {todayBookings.map(b => (
+              <div key={b.id} className="py-3 border-b border-border/20 last:border-0">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[14px] font-medium text-text tracking-tight">{b.client}</p>
+                  <span className="text-[10px] font-semibold text-gold bg-gold/10 px-1.5 py-0.5 rounded">{durationLabel(b.startTime, b.endTime)}</span>
+                </div>
+                <p className="text-[12px] text-text-muted">{b.description}</p>
+                <p className="text-[12px] text-text-light mt-0.5">{formatTime12(b.startTime)} – {formatTime12(b.endTime)}</p>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="text-[10px] font-semibold text-gold/70 bg-gold/5 border border-gold/15 px-1.5 py-0.5 rounded">{BOOKING_TYPE_LABELS[b.type] ?? b.type}</span>
+                  <span className="text-[10px] text-text-light">{b.studio} · {b.assignee}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[13px] text-text-light italic py-6 text-center">No bookings today</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   useDocumentTitle('Overview - Checkmark Audio')
   const { tasks, pendingIds, togglePending, submitPending, hasPending } = useTasks()
@@ -247,94 +428,35 @@ export default function Dashboard() {
 
       {showCreateTask && <CreateTaskModal onClose={() => setShowCreateTask(false)} />}
 
-      {/* 4-column grid */}
+      {/* 3-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
 
-        {/* Column 1: Upcoming Tasks */}
+        {/* Column 1: Team */}
         <div className="bg-surface rounded-2xl border border-border overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-border">
-            <div className="flex items-center justify-between mb-2">
-              <Link to="/daily" className="flex items-center gap-1 group">
-                <h2 className="text-[16px] font-bold text-text tracking-tight group-hover:text-gold transition-colors">Upcoming Tasks</h2>
-                <ChevronRight size={12} className="text-text-muted group-hover:text-gold transition-colors" />
-              </Link>
-            </div>
-            <button onClick={() => setShowCreateTask(true)} className="px-3 py-1.5 rounded-lg bg-gold/10 text-gold border border-gold/30 text-[10px] font-semibold flex items-center gap-1 hover:bg-gold/20 transition-colors">
-              <Plus size={11} /> Create Task
-            </button>
-          </div>
-          <div className="flex-1 px-4 py-2 space-y-0">
-            {activeTasks.map((task) => {
-              const isPending = pendingIds.has(task.id)
-              return (
-                <div key={task.id} className="flex items-center gap-2.5 py-1.5">
-                  <button onClick={() => togglePending(task.id)} className="shrink-0">
-                    <div className={`w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-all ${isPending ? 'bg-gold/20 border-gold' : 'border-border-light hover:border-gold/50'}`}>
-                      {isPending && <Check size={10} className="text-gold" />}
-                    </div>
-                  </button>
-                  <span className="flex-1 text-[14px] font-normal text-text-muted tracking-tight truncate">{task.title}</span>
-                  <PriorityIcon priority={task.priority} />
-                  <span className="text-[9px] text-text-light shrink-0">{task.due.split(',')[0]}</span>
-                </div>
-              )
-            })}
-            {tasks.filter(t => !t.completed).length > 5 && (
-              <Link to="/daily" className="block text-center text-[10px] text-gold font-medium py-1 hover:underline">
-                +{tasks.filter(t => !t.completed).length - 5} more →
-              </Link>
-            )}
-          </div>
-          <div className="px-4 py-3 border-t border-border mt-auto">
-            <button onClick={submitPending} disabled={!hasPending}
-              className={`w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all ${hasPending ? 'bg-gold text-black hover:bg-gold-muted shadow-md shadow-gold/20' : 'bg-surface-alt text-text-light border border-border cursor-not-allowed'}`}>
-              <Check size={13} />
-              {hasPending ? `Submit Completed (${pendingIds.size})` : 'Submit Completed'}
-            </button>
-          </div>
-        </div>
-
-        {/* Column 2: Team Snapshot */}
-        <div className="bg-surface rounded-2xl border border-border overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-border">
+          <div className="px-5 py-3.5 border-b border-border">
             <h2 className="text-[16px] font-bold text-text tracking-tight">Team</h2>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 py-1">
             {teamMembers.map((m) => (
-              <Link key={m.id} to="/admin/my-team" className="flex items-center gap-2.5 px-4 py-2 hover:bg-white/[0.03] transition-colors border-b border-border/20">
-                <div className="w-7 h-7 rounded-full bg-gold/10 text-gold flex items-center justify-center text-[10px] font-bold shrink-0">
+              <Link key={m.id} to="/admin/my-team" className="flex items-center gap-3.5 px-5 py-3 hover:bg-white/[0.03] transition-colors border-b border-border/20 last:border-0">
+                <div className="w-10 h-10 rounded-full bg-gold/10 text-gold flex items-center justify-center text-[14px] font-bold shrink-0">
                   {m.name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-text truncate">{m.name}</p>
-                  <p className="text-[10px] text-text-muted">{m.role}</p>
+                  <p className="text-[14px] font-medium text-text tracking-tight truncate">{m.name}</p>
+                  <p className="text-[12px] text-text-light mt-0.5">{m.role}</p>
                 </div>
-                <ChevronRight size={10} className="text-text-light shrink-0" />
+                <ChevronRight size={12} className="text-text-light shrink-0" />
               </Link>
             ))}
           </div>
         </div>
 
-        {/* Column 3: Calendar */}
-        <div className="bg-surface rounded-2xl border border-border overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-border">
-            <Link to="/calendar" className="flex items-center gap-1.5 group">
-              <CalendarIcon size={13} className="text-gold" />
-              <h2 className="text-[16px] font-bold text-text tracking-tight group-hover:text-gold transition-colors">Calendar</h2>
-              <ChevronRight size={12} className="text-text-muted group-hover:text-gold transition-colors" />
-            </Link>
-            <p className="text-[10px] text-text-muted mt-1">{dateStr}</p>
-          </div>
-          <div className="flex-1 px-4 py-2 space-y-1">
-            {todayEvents.map((event, i) => (
-              <div key={i} className="flex items-center gap-2 py-1">
-                <span className="text-[10px] text-text-muted font-medium w-[48px] shrink-0">{event.time}</span>
-                <div className="w-1 h-3 rounded-full shrink-0" style={{ backgroundColor: event.color }} />
-                <span className="text-[14px] font-normal text-text-muted tracking-tight truncate">{event.title}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Column 2: Calendar (synced with bookings) */}
+        <CalendarWidget />
+
+        {/* Column 3: Team Tasks */}
+        <TeamTasksWidget />
 
       </div>
     </div>
