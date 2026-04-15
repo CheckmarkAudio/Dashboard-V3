@@ -7,7 +7,7 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   music_lesson: 'Music Lesson', consultation: 'Consultation',
 }
 
-export default function SelfReportModal({ clockInTime, onClose }: { clockInTime: string; onClose: () => void }) {
+export default function SelfReportModal({ clockInTime, onClose, onLogout }: { clockInTime: string; onClose: () => void; onLogout: () => void }) {
   const { tasks, bookings } = useTasks()
   const [wentWell, setWentWell] = useState('')
   const [toImprove, setToImprove] = useState('')
@@ -34,7 +34,6 @@ export default function SelfReportModal({ clockInTime, onClose }: { clockInTime:
 
   const handleSubmit = () => {
     setSubmitted(true)
-    setTimeout(onClose, 1500)
   }
 
   return (
@@ -50,11 +49,19 @@ export default function SelfReportModal({ clockInTime, onClose }: { clockInTime:
         </div>
 
         {submitted ? (
-          <div className="text-center py-8">
+          <div className="text-center py-6">
             <div className="w-12 h-12 rounded-full bg-gold/15 flex items-center justify-center mx-auto mb-3">
               <Check size={24} className="text-gold" />
             </div>
-            <p className="text-sm font-semibold text-text">Report submitted! Great work today.</p>
+            <p className="text-[15px] font-semibold text-text">Report submitted!</p>
+            <p className="text-[12px] text-text-muted mt-1">Great work today. Clocked out at {clockOutTime}</p>
+            <button
+              onClick={onLogout}
+              className="mt-5 px-6 py-2.5 rounded-xl bg-gold text-black text-[13px] font-bold hover:bg-gold-muted transition-all"
+            >
+              Log Out
+            </button>
+            <p className="text-[10px] text-text-light mt-3">Or close this window to stay logged in</p>
           </div>
         ) : (
           <div className="space-y-4">

@@ -175,7 +175,7 @@ export default function Layout() {
             </button>
           ) : (
             <>
-              {showSelfReport && <SelfReportModal clockInTime={clockInTime} onClose={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime('') }} />}
+              {showSelfReport && <SelfReportModal clockInTime={clockInTime} onClose={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime('') }} onLogout={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime(''); navigate('/login') }} />}
               <button
                 onClick={() => setShowSelfReport(true)}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all"
