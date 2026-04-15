@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Header Draft - Separated Controls</title>
+  <style>
+    :root {
+      --bg: #131318;
+      --surface: #1b1b22;
+      --surface-alt: #222228;
+      --surface-raised: #26262d;
+      --border: #2c2c34;
+      --border-light: #3d3d46;
+      --text: #e5e5ea;
+      --text-muted: #a4a4ad;
+      --text-dim: #75757f;
+      --gold: #c9a84c;
+      --gold-soft: rgba(201, 168, 76, 0.14);
+      --gold-border: rgba(201, 168, 76, 0.28);
+      --danger: #ef7676;
+      --danger-soft: rgba(239, 118, 118, 0.1);
+      --danger-border: rgba(239, 118, 118, 0.25);
+      --shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top, rgba(201, 168, 76, 0.06), transparent 28%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+    }
+
+    .board {
+      width: min(1440px, 100%);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      overflow: hidden;
+      background: #17171d;
+      box-shadow: var(--shadow);
+    }
+
+    .header {
+      height: 92px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 28px;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--border);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 65%),
+        var(--surface);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 240px;
+    }
+
+    .brand img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      flex: 0 0 auto;
+      filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.18));
+    }
+
+    .brand-copy {
+      line-height: 1.05;
+    }
+
+    .brand-copy strong {
+      display: block;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      font-weight: 700;
+    }
+
+    .brand-copy span {
+      display: block;
+      margin-top: 5px;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      color: var(--gold);
+      font-weight: 600;
+    }
+
+    .center-zone {
+      display: flex;
+      justify-content: center;
+    }
+
+    .time-panel {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.015);
+      min-width: 420px;
+      justify-content: center;
+    }
+
+    .time-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 126px;
+    }
+
+    .eyebrow {
+      font-size: 10px;
+      line-height: 1;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--text-dim);
+      font-weight: 700;
+    }
+
+    .time-meta strong {
+      font-size: 14px;
+      letter-spacing: -0.01em;
+    }
+
+    .divider {
+      width: 1px;
+      height: 34px;
+      background: var(--border);
+    }
+
+    .action-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 11px 16px;
+      border-radius: 16px;
+      border: 1px solid transparent;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+    }
+
+    .action-pill svg {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+    }
+
+    .action-pill.clock-in {
+      background: var(--gold-soft);
+      border-color: var(--gold-border);
+      color: var(--gold);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .action-pill.clock-out {
+      background: var(--danger-soft);
+      border-color: var(--danger-border);
+      color: #f0adad;
+    }
+
+    .right-zone {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .profile-panel {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 14px 12px 12px;
+      border-radius: 22px;
+      border: 1px solid var(--border-light);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 90%),
+        var(--surface-alt);
+      min-width: 320px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--gold);
+      background: rgba(201, 168, 76, 0.13);
+      border: 1px solid rgba(201, 168, 76, 0.22);
+      letter-spacing: 0.08em;
+      flex: 0 0 auto;
+    }
+
+    .profile-copy {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .profile-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .profile-name {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      color: var(--text);
+    }
+
+    .profile-tag {
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+    }
+
+    .profile-email {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .profile-subtext {
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .profile-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-left: 14px;
+      border-left: 1px solid var(--border);
+    }
+
+    .ghost-button {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-muted);
+    }
+
+    .ghost-button svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .canvas {
+      height: 660px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 16%),
+        #15151b;
+      position: relative;
+    }
+
+    .canvas::before {
+      content: "";
+      position: absolute;
+      inset: 26px;
+      border-radius: 20px;
+      border: 1px dashed rgba(255, 255, 255, 0.05);
+    }
+
+    .notes {
+      position: absolute;
+      top: 32px;
+      left: 32px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .note {
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="board">
+    <header class="header">
+      <div class="brand">
+        <img src="../../src/assets/checkmark-audio-logo.png" alt="Checkmark Audio logo" />
+        <div class="brand-copy">
+          <strong>Checkmark Audio</strong>
+          <span>dashboard</span>
+        </div>
+      </div>
+
+      <div class="center-zone">
+        <div class="time-panel" aria-label="Clock controls concept">
+          <div class="time-meta">
+            <span class="eyebrow">Time Tracking</span>
+            <strong>Wednesday, 2:52 AM</strong>
+          </div>
+          <div class="divider" aria-hidden="true"></div>
+          <div class="action-pill clock-in">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="8"></circle>
+              <path d="M12 8v4l2.5 2.5"></path>
+            </svg>
+            Clock In
+          </div>
+          <div class="action-pill clock-out">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="8"></circle>
+              <path d="M16 12H8"></path>
+            </svg>
+            Clock Out
+          </div>
+        </div>
+      </div>
+
+      <div class="right-zone">
+        <div class="profile-panel">
+          <div class="avatar" aria-hidden="true">DA</div>
+          <div class="profile-copy">
+            <div class="profile-row">
+              <div class="profile-name">Dev Admin</div>
+              <div class="profile-tag">Profile</div>
+            </div>
+            <div class="profile-email">dev@checkmarkaudio.com</div>
+            <div class="profile-subtext">Signed in account</div>
+          </div>
+          <div class="profile-actions">
+            <div class="ghost-button" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 3h8"></path>
+                <path d="M9 3v2"></path>
+                <path d="M15 3v2"></path>
+                <rect x="4" y="5" width="16" height="15" rx="3"></rect>
+                <path d="M9 11h6"></path>
+                <path d="M9 15h3"></path>
+              </svg>
+            </div>
+            <div class="ghost-button" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <path d="M16 17l5-5-5-5"></path>
+                <path d="M21 12H9"></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="canvas" aria-hidden="true">
+      <div class="notes">
+        <div class="note">Concept goal: profile and time actions should read as separate systems</div>
+        <div class="note">Clock In and Clock Out are equal-level bubbles with distinct color treatments</div>
+        <div class="note">Profile block gets its own border, breathing room, and utility actions</div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

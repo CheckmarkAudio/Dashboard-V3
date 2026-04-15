@@ -46,7 +46,7 @@ export type BookingItem = {
   assignee: string
   studio: StudioSpace
   recurring: false | 'daily' | 'weekly' | 'monthly'
-  status: 'Confirmed' | 'Pending' | 'Cancelled'
+  status: 'Confirmed' | 'Placed' | 'Cancelled'
 }
 
 export const EXISTING_CLIENTS = [
@@ -111,12 +111,12 @@ const INITIAL_BOOKINGS: BookingItem[] = [
   // Tuesday Apr 15 (today)
   { id: 'bk3', description: 'Final Mix', client: 'Project Alpha', type: 'engineering', date: '2026-04-15', startTime: '09:00', endTime: '13:00', startDate: '2026-04-10', assignee: 'Ben J.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
   { id: 'bk6', description: 'Piano Lesson', client: 'Ava Martinez', type: 'music_lesson', date: '2026-04-15', startTime: '14:00', endTime: '15:00', startDate: '2026-04-12', assignee: 'Sarah K.', studio: 'Studio B', recurring: false, status: 'Confirmed' },
-  { id: 'bk7', description: 'Mixing Session', client: 'Stanford Music', type: 'engineering', date: '2026-04-15', startTime: '16:00', endTime: '18:00', startDate: '2026-04-13', assignee: 'Dave L.', studio: 'Studio A', recurring: false, status: 'Pending' },
+  { id: 'bk7', description: 'Mixing Session', client: 'Stanford Music', type: 'engineering', date: '2026-04-15', startTime: '16:00', endTime: '18:00', startDate: '2026-04-13', assignee: 'Dave L.', studio: 'Studio A', recurring: false, status: 'Placed' },
   // Wednesday Apr 16
   { id: 'bk4', description: 'Consulting Session', client: 'Maya Thompson', type: 'consultation', date: '2026-04-16', startTime: '11:00', endTime: '12:00', startDate: '2026-04-12', assignee: 'Sarah K.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
-  { id: 'bk8', description: 'Podcast Edit Review', client: 'Aprt Media', type: 'engineering', date: '2026-04-16', startTime: '14:00', endTime: '16:00', startDate: '2026-04-14', assignee: 'Ben J.', studio: 'Studio B', recurring: false, status: 'Pending' },
+  { id: 'bk8', description: 'Podcast Edit Review', client: 'Aprt Media', type: 'engineering', date: '2026-04-16', startTime: '14:00', endTime: '16:00', startDate: '2026-04-14', assignee: 'Ben J.', studio: 'Studio B', recurring: false, status: 'Placed' },
   // Thursday Apr 17
-  { id: 'bk5', description: 'Training Session', client: 'New Intern', type: 'training', date: '2026-04-17', startTime: '09:00', endTime: '17:00', startDate: '2026-04-14', assignee: 'Dave L.', studio: 'Studio B', recurring: false, status: 'Pending' },
+  { id: 'bk5', description: 'Training Session', client: 'New Intern', type: 'training', date: '2026-04-17', startTime: '09:00', endTime: '17:00', startDate: '2026-04-14', assignee: 'Dave L.', studio: 'Studio B', recurring: false, status: 'Placed' },
   // Friday Apr 18
   { id: 'bk9', description: 'Album Mastering', client: 'Stanford Music', type: 'engineering', date: '2026-04-18', startTime: '10:00', endTime: '14:00', startDate: '2026-04-15', assignee: 'Ben J.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
   { id: 'bk10', description: 'Voice Lesson', client: 'Quinn Roberts', type: 'music_lesson', date: '2026-04-18', startTime: '15:00', endTime: '16:00', startDate: '2026-04-15', assignee: 'Sarah K.', studio: 'Studio B', recurring: false, status: 'Confirmed' },
@@ -166,7 +166,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const addBooking = useCallback((booking: Omit<BookingItem, 'id' | 'status'>) => {
     const conflict = checkConflict(booking.date, booking.startTime, booking.endTime, booking.studio)
     const bookingId = `bk-${nextId++}`
-    setBookings(prev => [...prev, { ...booking, id: bookingId, status: 'Pending' }])
+    setBookings(prev => [...prev, { ...booking, id: bookingId, status: 'Placed' }])
     // Bookings stay in the bookings list only — not added to tasks
     return { conflict: !!conflict, conflictWith: conflict ?? undefined }
   }, [checkConflict])

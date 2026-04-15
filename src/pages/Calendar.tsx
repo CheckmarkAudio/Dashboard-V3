@@ -12,12 +12,11 @@ function getTodayKey(): string {
   return new Date().toISOString().split('T')[0]
 }
 
-function getWeekDays(): { day: string; date: string; key: string }[] {
+function getWeekDays(weekOffset: number = 0): { day: string; date: string; key: string }[] {
   const now = new Date()
   const dayOfWeek = now.getDay() // 0=Sun
-  // Start from Monday
   const monday = new Date(now)
-  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7))
+  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7) + (weekOffset * 7))
   const days: { day: string; date: string; key: string }[] = []
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday)
@@ -59,9 +58,11 @@ export default function Calendar() {
   useDocumentTitle('Calendar - Checkmark Audio')
   const { bookings } = useTasks()
   const TODAY_KEY = getTodayKey()
-  const WEEK = getWeekDays()
+  const [weekOffset, setWeekOffset] = useState(0)
+  const WEEK = getWeekDays(weekOffset)
   const weekStart = WEEK[0]?.date ?? ''
   const weekEnd = WEEK[6]?.date ?? ''
+  const weekLabel = weekOffset === 0 ? 'This Week' : weekOffset === 1 ? 'Next Week' : weekOffset === -1 ? 'Last Week' : `${weekOffset > 0 ? '+' : ''}${weekOffset} Weeks`
   const [selectedDate, setSelectedDate] = useState(TODAY_KEY)
 
   // Booking notes — keyed by booking ID
@@ -110,10 +111,10 @@ export default function Calendar() {
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
         <div className="flex items-center gap-2 text-text-muted">
-          <button className="p-1 rounded hover:bg-surface-hover transition-colors"><ChevronLeft size={16} /></button>
-          <span className="text-xs font-semibold text-gold">This Week</span>
-          <button className="p-1 rounded hover:bg-surface-hover transition-colors"><ChevronRight size={16} /></button>
-          <span className="text-xs text-text-muted ml-1">{weekStart} – {weekEnd}, 2026</span>
+          <button onClick={() => { if (weekOffset > -1) setWeekOffset(weekOffset - 1) }} className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset <= -1 ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronLeft size={16} /></button>
+          <button onClick={() => setWeekOffset(0)} className="text-xs font-semibold text-gold hover:underline">{weekLabel}</button>
+          <button onClick={() => { if (weekOffset < 3) setWeekOffset(weekOffset + 1) }} className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset >= 3 ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronRight size={16} /></button>
+          <span className="text-xs text-text-light ml-1">{weekStart} – {weekEnd}</span>
         </div>
       </div>
 
@@ -158,9 +159,11 @@ export default function Calendar() {
                         </div>
                         {/* Status + Add Note button */}
                         <div className="flex items-center justify-between mt-1.5">
-                          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${
-                            b.status === 'Confirmed' ? 'text-gold bg-gold/10 border-gold/20' : 'text-text-muted bg-surface-alt border-border'
-                          }`}>{b.status}</span>
+                          <span className="flex items-center gap-1 text-[10px] text-text-light">
+                            {b.status === 'Confirmed' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                            {b.status === 'Cancelled' && <span className="w-1.5 h-1.5 rounded-full bg-red-400" />}
+                            {b.status}
+                          </span>
                           <button onClick={() => toggleNotes(b.id)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gold/10 text-gold border border-gold/25 text-[10px] font-semibold hover:bg-gold/20 transition-all">
                             <StickyNote size={10} />
                             {bNotes.length > 0 ? `Notes (${bNotes.length})` : 'Add Note'}
@@ -225,10 +228,10 @@ export default function Calendar() {
             <h2 className="text-[16px] font-bold text-text tracking-tight">This Week</h2>
           </div>
 
-          <div className="overflow-x-auto">
-            <div className="min-w-[700px]">
+          <div>
+            <div>
               {/* Day headers — clickable */}
-              <div className="grid grid-cols-[50px_repeat(7,1fr)] border-b border-border/30">
+              <div className="grid grid-cols-[36px_repeat(7,1fr)] border-b border-border/30">
                 <div />
                 {WEEK.map((wd, i) => {
                   const isActualToday = wd.key === TODAY_KEY
@@ -247,10 +250,11 @@ export default function Calendar() {
                 })}
               </div>
 
-              {/* Time rows */}
-              <div className="relative">
+              {/* Time rows with inline booking blocks */}
+              <div className="relative" style={{ height: HOURS.length * 48 }}>
+                {/* Grid lines */}
                 {HOURS.map(hour => (
-                  <div key={hour} className="grid grid-cols-[50px_repeat(7,1fr)] h-[48px] border-b border-border/10">
+                  <div key={hour} className="absolute left-0 right-0 grid grid-cols-[36px_repeat(7,1fr)] h-[48px] border-b border-border/10" style={{ top: (hour - 7) * 48 }}>
                     <div className="text-[9px] text-text-light font-medium pr-2 text-right pt-0.5">
                       {hour > 12 ? hour - 12 : hour} {hour >= 12 ? 'PM' : 'AM'}
                     </div>
@@ -261,7 +265,7 @@ export default function Calendar() {
                   </div>
                 ))}
 
-                {/* Booking blocks overlay */}
+                {/* Booking blocks — positioned within each day column using grid math */}
                 {WEEK.map((wd, dayIndex) => {
                   const dayBookings = bookingsByDate[wd.key] ?? []
                   return dayBookings.map(b => {
@@ -270,23 +274,24 @@ export default function Calendar() {
                     const gridStart = 7 * 60
                     const topPx = ((startMin - gridStart) / 60) * 48
                     const heightPx = ((endMin - startMin) / 60) * 48
-                    const leftPercent = ((dayIndex) / 7) * 100
-                    const widthPercent = 100 / 7
+                    // Use CSS calc that matches the grid: skip 50px time col, then position within 7 equal columns
+                    const colWidth = `((100% - 36px) / 7)`
+                    const colLeft = `(36px + ${colWidth} * ${dayIndex})`
 
                     return (
                       <div
                         key={b.id}
-                        className="absolute rounded-md border border-gold/30 bg-gold/10 px-1.5 py-1 overflow-hidden cursor-default hover:bg-gold/15 transition-colors"
+                        className="absolute bg-gold/8 border border-gold/20 px-1.5 py-0.5 overflow-hidden cursor-default hover:bg-gold/12 transition-colors z-10"
                         style={{
-                          top: topPx,
-                          height: Math.max(heightPx - 2, 20),
-                          left: `calc(50px + ${leftPercent}% + 2px)`,
-                          width: `calc(${widthPercent}% - 4px)`,
+                          top: topPx + 1,
+                          height: Math.max(heightPx - 2, 18),
+                          left: `calc(${colLeft} + 1px)`,
+                          width: `calc(${colWidth} - 2px)`,
                         }}
                       >
-                        <p className="text-[10px] font-semibold text-gold truncate">{b.client}</p>
-                        {heightPx > 30 && <p className="text-[8px] text-text-muted truncate">{b.assignee}</p>}
-                        {heightPx > 45 && <p className="text-[8px] text-text-light truncate">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>}
+                        <p className="text-[10px] font-medium text-gold truncate leading-tight">{b.client}</p>
+                        {heightPx > 28 && <p className="text-[8px] text-text-muted truncate leading-tight">{b.assignee}</p>}
+                        {heightPx > 42 && <p className="text-[8px] text-text-light truncate leading-tight">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>}
                       </div>
                     )
                   })
