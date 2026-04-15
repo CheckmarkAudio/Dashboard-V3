@@ -8,6 +8,7 @@ import {
   Clock, Check, Calendar as CalendarIcon, Send, Plus,
   LogIn, LogOut, X, FileText, Flame,
 } from 'lucide-react'
+import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
 
 /* ── Self Report Modal ── */
 function SelfReportModal({ clockInTime, onClose }: { clockInTime: string; onClose: () => void }) {
@@ -403,7 +404,7 @@ function CalendarWidget() {
 
 export default function Dashboard() {
   useDocumentTitle('Overview - Checkmark Audio')
-  const { tasks, pendingIds, togglePending, submitPending, hasPending } = useTasks()
+  const { tasks, bookings, pendingIds, togglePending, submitPending, hasPending } = useTasks()
   const [showCreateTask, setShowCreateTask] = useState(false)
 
   const today = new Date()
@@ -458,6 +459,37 @@ export default function Dashboard() {
         {/* Column 3: Team Tasks */}
         <TeamTasksWidget />
 
+      </div>
+
+      {/* Mini KPI Chart */}
+      <div className="bg-surface rounded-2xl border border-border p-4 mt-3">
+        <div className="flex items-center justify-between mb-2">
+          <Link to="/admin/health" className="flex items-center gap-1 group">
+            <h2 className="text-[14px] font-bold text-text tracking-tight group-hover:text-gold transition-colors">KPI Performance</h2>
+            <ChevronRight size={12} className="text-text-light group-hover:text-gold transition-colors" />
+          </Link>
+          <span className="text-[10px] text-text-light">{tasks.filter(t => t.completed).length + bookings.filter(b => b.status === 'Confirmed').length} / {tasks.length + bookings.length} completed</span>
+        </div>
+        <div className="h-[80px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={[
+              { name: 'Deliver', pct: (() => { const s = tasks.filter(t => t.stage === 'Deliver'); return s.length ? Math.round(s.filter(t => t.completed).length / s.length * 100) : 0 })() },
+              { name: 'Capture', pct: (() => { const s = tasks.filter(t => t.stage === 'Capture'); return s.length ? Math.round(s.filter(t => t.completed).length / s.length * 100) : 0 })() },
+              { name: 'Share', pct: (() => { const s = tasks.filter(t => t.stage === 'Share'); return s.length ? Math.round(s.filter(t => t.completed).length / s.length * 100) : 0 })() },
+              { name: 'Attract', pct: (() => { const s = tasks.filter(t => t.stage === 'Attract'); return s.length ? Math.round(s.filter(t => t.completed).length / s.length * 100) : 0 })() },
+              { name: 'Book', pct: bookings.length ? Math.round(bookings.filter(b => b.status === 'Confirmed').length / bookings.length * 100) : 0 },
+            ]} barSize={24}>
+              <Bar dataKey="pct" radius={[4, 4, 0, 0]}>
+                {[0,1,2,3,4].map(i => <Cell key={i} fill="#C9A84C" fillOpacity={0.7} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex justify-between px-1 mt-1">
+          {['Deliver', 'Capture', 'Share', 'Attract', 'Book'].map(s => (
+            <span key={s} className="text-[9px] text-text-light">{s}</span>
+          ))}
+        </div>
       </div>
     </div>
   )
