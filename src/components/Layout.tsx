@@ -53,7 +53,7 @@ const mainLinks: NavLinkDef[] = [
   { to: '/daily', icon: CheckSquare, label: 'Tasks' },
   { to: '/calendar', icon: Calendar, label: 'Calendar' },
   { to: '/sessions', icon: Briefcase, label: 'Booking Agent' },
-  { to: '/content', icon: Lightbulb, label: 'Idea Board' },
+  { to: '/content', icon: Lightbulb, label: 'Forum' },
 ]
 
 /* ── Menu-Sidebar v5.2 — Admin menu ── */
