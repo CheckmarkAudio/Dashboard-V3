@@ -67,6 +67,7 @@ export default function Calendar() {
   const [selectedDate, setSelectedDate] = useState(TODAY_KEY)
   const [showBooking, setShowBooking] = useState(false)
   const [bookingPrefillDate, setBookingPrefillDate] = useState('')
+  const [bookingPrefillTime, setBookingPrefillTime] = useState('')
 
   // Booking notes — persisted to localStorage
   type BookingNote = { id: string; text: string; time: string }
@@ -120,7 +121,7 @@ export default function Calendar() {
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
-      {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); setBookingPrefillDate('') }} prefillDate={bookingPrefillDate} />}
+      {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime('') }} prefillDate={bookingPrefillDate} prefillTime={bookingPrefillTime} />}
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
@@ -276,7 +277,7 @@ export default function Calendar() {
                       const isSel = wd.key === selectedDate
                       return (
                         <div key={di} className={`border-l border-border/10 group/cell relative ${isSel ? 'bg-gold/[0.03]' : ''}`}>
-                          <button onClick={() => { setBookingPrefillDate(wd.key); setShowBooking(true) }} className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity z-20">
+                          <button onClick={() => { setBookingPrefillDate(wd.key); setBookingPrefillTime(`${hour.toString().padStart(2,'0')}:00`); setShowBooking(true) }} className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity z-20">
                             <span className="flex items-center gap-0.5 text-[9px] text-gold bg-surface/90 border border-gold/20 rounded px-1.5 py-0.5">
                               <Plus size={8} />Book
                             </span>

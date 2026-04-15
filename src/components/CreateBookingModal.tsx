@@ -36,7 +36,7 @@ function to12(t: string): string {
 
 const today = () => new Date().toISOString().split('T')[0]
 
-export default function CreateBookingModal({ onClose, prefillDate }: { onClose: () => void; prefillDate?: string }) {
+export default function CreateBookingModal({ onClose, prefillDate, prefillTime }: { onClose: () => void; prefillDate?: string; prefillTime?: string }) {
   const { addBooking, checkConflict } = useTasks()
   const { profile } = useAuth()
 
@@ -46,8 +46,14 @@ export default function CreateBookingModal({ onClose, prefillDate }: { onClose: 
   const [bookingType, setBookingType] = useState<BookingType>('engineering')
   const [startDate, setStartDate] = useState(today())
   const [date, setDate] = useState(prefillDate ?? '')
-  const [startTime, setStartTime] = useState('10:00')
-  const [endTime, setEndTime] = useState('12:00')
+  const [startTime, setStartTime] = useState(prefillTime || '10:00')
+  const [endTime, setEndTime] = useState(() => {
+    if (prefillTime) {
+      const [h, m] = prefillTime.split(':').map(Number)
+      return `${(h + 1).toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+    }
+    return '12:00'
+  })
   const [assignee, setAssignee] = useState(profile?.display_name ?? 'You')
   const [studio, setStudio] = useState<StudioSpace>('Studio A')
   const [recurring, setRecurring] = useState<false | 'daily' | 'weekly' | 'monthly'>(false)
