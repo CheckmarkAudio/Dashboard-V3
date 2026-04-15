@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useRouteAnnounce } from '../hooks/useRouteAnnounce'
 import ErrorBoundary from './ErrorBoundary'
+import SelfReportModal from './SelfReportModal'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import TeamHubIcon from './icons/TeamHubIcon'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
@@ -69,6 +70,7 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [clockedIn, setClockedIn] = useState(false)
   const [clockInTime, setClockInTime] = useState('')
+  const [showSelfReport, setShowSelfReport] = useState(false)
   const [adminExpanded, setAdminExpanded] = useState(true)
   const navigate = useNavigate()
   const location = useLocation()
@@ -160,45 +162,48 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* Center: Clock In/Out bubble */}
-        <div className="ml-auto flex items-center gap-3">
+        {/* Right section: Clock + Profile */}
+        <div className="ml-auto flex items-center gap-4">
+          {/* Clock In / Clock Out */}
           {!clockedIn ? (
             <button
               onClick={() => { setClockedIn(true); setClockInTime(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold/10 text-gold border border-gold/30 text-[11px] font-semibold hover:bg-gold/20 transition-all"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold text-black text-[12px] font-bold hover:bg-gold-muted transition-all shadow-sm"
             >
-              <Clock size={12} />
+              <Clock size={13} />
               Clock In
             </button>
           ) : (
-            <button
-              onClick={() => { setClockedIn(false); setClockInTime('') }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold/15 text-gold border border-gold/30 text-[11px] font-semibold hover:bg-gold/25 transition-all"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
-              {clockInTime} · Clock Out
-            </button>
+            <>
+              {showSelfReport && <SelfReportModal clockInTime={clockInTime} onClose={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime('') }} />}
+              <button
+                onClick={() => setShowSelfReport(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
+                {clockInTime} · Clock Out
+              </button>
+            </>
           )}
-        </div>
 
-        {/* Right: Profile + sign-out */}
-        <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-semibold text-text truncate max-w-[160px]">
-              {profile?.display_name ?? 'User'}
-            </p>
-            <p className="text-[11px] text-text-muted truncate max-w-[200px]">
-              {profile?.email ?? ''}
-            </p>
-            <p className="text-[10px] text-text-light">Profile</p>
+          {/* Profile */}
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-full bg-surface-alt border-2 border-border-light text-gold flex items-center justify-center text-[14px] font-bold shrink-0"
+              title={profile?.email ?? 'Signed in'}
+            >
+              {profile?.display_name?.charAt(0)?.toUpperCase() ?? '?'}
+            </div>
+            <div className="text-right hidden sm:block">
+              <p className="text-[13px] font-semibold text-text tracking-tight truncate max-w-[140px]">
+                {profile?.display_name ?? 'User'}
+              </p>
+              <p className="text-[11px] text-text-light truncate max-w-[180px]">
+                {profile?.role ?? 'Member'}
+              </p>
+            </div>
           </div>
-          <div
-            className="w-9 h-9 rounded-full bg-gold/15 text-gold flex items-center justify-center text-xs font-bold shrink-0"
-            aria-hidden="true"
-            title={profile?.email ?? 'Signed in'}
-          >
-            {profile?.display_name?.charAt(0)?.toUpperCase() ?? '?'}
-          </div>
+
           <button
             type="button"
             onClick={handleSignOut}

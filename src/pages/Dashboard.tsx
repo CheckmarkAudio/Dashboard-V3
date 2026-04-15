@@ -356,7 +356,7 @@ function CalendarWidget() {
 
   // Show all bookings for today — bookings are the single source of truth
   const todayBookings = bookings
-    .filter(b => b.date === todayKey)
+    .filter(b => b.date === todayKey && b.status !== 'Cancelled')
     .sort((a, b) => {
       const am = parseInt(a.startTime.replace(':', ''))
       const bm = parseInt(b.startTime.replace(':', ''))

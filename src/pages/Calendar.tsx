@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useTasks } from '../contexts/TaskContext'
-import { ChevronLeft, ChevronRight, StickyNote } from 'lucide-react'
+import CreateBookingModal from '../components/CreateBookingModal'
+import { ChevronLeft, ChevronRight, StickyNote, Plus } from 'lucide-react'
 
 /* ── Time grid config ── */
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7) // 7 AM to 7 PM
@@ -64,10 +65,16 @@ export default function Calendar() {
   const weekEnd = WEEK[6]?.date ?? ''
   const weekLabel = weekOffset === 0 ? 'This Week' : weekOffset === 1 ? 'Next Week' : weekOffset === -1 ? 'Last Week' : `${weekOffset > 0 ? '+' : ''}${weekOffset} Weeks`
   const [selectedDate, setSelectedDate] = useState(TODAY_KEY)
+  const [showBooking, setShowBooking] = useState(false)
 
-  // Booking notes — keyed by booking ID
+  // Booking notes — persisted to localStorage
   type BookingNote = { id: string; text: string; time: string }
-  const [bookingNotes, setBookingNotes] = useState<Record<string, BookingNote[]>>({})
+  const [bookingNotes, setBookingNotes] = useState<Record<string, BookingNote[]>>(() => {
+    try {
+      const saved = localStorage.getItem('checkmark-booking-notes')
+      return saved ? JSON.parse(saved) : {}
+    } catch { return {} }
+  })
   const [noteInputs, setNoteInputs] = useState<Record<string, string>>({})
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
 
@@ -80,7 +87,11 @@ export default function Calendar() {
       text,
       time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
     }
-    setBookingNotes(prev => ({ ...prev, [bookingId]: [...(prev[bookingId] ?? []), note] }))
+    setBookingNotes(prev => {
+      const next = { ...prev, [bookingId]: [...(prev[bookingId] ?? []), note] }
+      try { localStorage.setItem('checkmark-booking-notes', JSON.stringify(next)) } catch {}
+      return next
+    })
     setNoteInputs(prev => ({ ...prev, [bookingId]: '' }))
   }
 
@@ -88,10 +99,11 @@ export default function Calendar() {
     setExpandedNotes(prev => { const n = new Set(prev); n.has(bookingId) ? n.delete(bookingId) : n.add(bookingId); return n })
   }
 
-  // Group bookings by date
+  // Group bookings by date — exclude cancelled from calendar display
   const bookingsByDate = useMemo(() => {
     const map: Record<string, typeof bookings> = {}
     for (const b of bookings) {
+      if (b.status === 'Cancelled') continue
       if (!map[b.date]) map[b.date] = []
       map[b.date].push(b)
     }
@@ -107,6 +119,7 @@ export default function Calendar() {
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
+      {showBooking && <CreateBookingModal onClose={() => setShowBooking(false)} />}
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
@@ -260,7 +273,15 @@ export default function Calendar() {
                     </div>
                     {WEEK.map((wd, di) => {
                       const isSel = wd.key === selectedDate
-                      return <div key={di} className={`border-l border-border/10 ${isSel ? 'bg-gold/[0.03]' : ''}`} />
+                      return (
+                        <div key={di} className={`border-l border-border/10 group/cell relative ${isSel ? 'bg-gold/[0.03]' : ''}`}>
+                          <button onClick={() => setShowBooking(true)} className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity z-20">
+                            <span className="flex items-center gap-0.5 text-[9px] text-gold bg-surface/90 border border-gold/20 rounded px-1.5 py-0.5">
+                              <Plus size={8} />Book
+                            </span>
+                          </button>
+                        </div>
+                      )
                     })}
                   </div>
                 ))}
@@ -289,7 +310,10 @@ export default function Calendar() {
                           width: `calc(${colWidth} - 2px)`,
                         }}
                       >
-                        <p className="text-[10px] font-medium text-gold truncate leading-tight">{b.client}</p>
+                        <div className="flex items-center gap-1">
+                          {b.status === 'Confirmed' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
+                          <p className="text-[10px] font-medium text-gold truncate leading-tight">{b.client}</p>
+                        </div>
                         {heightPx > 28 && <p className="text-[8px] text-text-muted truncate leading-tight">{b.assignee}</p>}
                         {heightPx > 42 && <p className="text-[8px] text-text-light truncate leading-tight">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>}
                       </div>
