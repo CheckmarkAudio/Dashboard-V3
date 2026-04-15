@@ -46,7 +46,7 @@ export default function Content() {
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Idea Board</h1>
+        <h1 className="text-[28px] font-extrabold tracking-tight text-text">Idea Board</h1>
         <p className="text-xs text-text-muted mt-0.5">Suggestions, fixes, and inspiration in one place.</p>
       </div>
 

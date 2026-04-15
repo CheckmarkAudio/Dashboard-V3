@@ -83,7 +83,7 @@ export default function Calendar() {
     <div className="max-w-6xl mx-auto animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <h1 className="text-2xl font-bold">Calendar</h1>
+        <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
         <div className="flex items-center gap-2 text-text-muted">
           <button className="p-1 rounded hover:bg-surface-hover transition-colors"><ChevronLeft size={16} /></button>
           <span className="text-xs font-semibold text-gold">This Week</span>
@@ -100,7 +100,7 @@ export default function Calendar() {
           <div className="flex-1">
             <div className="px-4 py-3 border-b border-border">
               <div className="flex items-center justify-between">
-                <h2 className="text-[13px] font-bold text-text">{isToday ? 'Today' : selectedDateLabel.split(',')[0]}</h2>
+                <h2 className="text-[16px] font-bold text-text tracking-tight">{isToday ? 'Today' : selectedDateLabel.split(',')[0]}</h2>
                 {!isToday && (
                   <button onClick={() => setSelectedDate(TODAY_KEY)} className="text-[9px] text-gold font-semibold hover:underline">Back to Today</button>
                 )}
@@ -197,7 +197,7 @@ export default function Calendar() {
         {/* ── Right column: This Week grid ── */}
         <div className="bg-surface rounded-2xl border border-border overflow-hidden">
           <div className="px-4 py-3 border-b border-border">
-            <h2 className="text-[13px] font-bold text-text">This Week</h2>
+            <h2 className="text-[16px] font-bold text-text tracking-tight">This Week</h2>
           </div>
 
           <div className="overflow-x-auto">

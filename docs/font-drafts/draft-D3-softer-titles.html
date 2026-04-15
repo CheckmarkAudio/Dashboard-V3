@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Draft D3 — Softer Titles</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #131318;
+    color: #e6e6ea;
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 36px;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+  }
+
+  .draft-label { color: #C9A84C; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 28px; display: block; }
+
+  /* Page title — softer white like ref image 2 title: not pure white, warm off-white */
+  .page-title { font-size: 26px; font-weight: 700; color: #d8d8dc; margin-bottom: 28px; letter-spacing: -0.02em; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 1080px; }
+
+  .card {
+    background: #1b1b22;
+    border: 1px solid #2c2c34;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-header {
+    padding: 18px 20px 16px;
+    border-bottom: 1px solid #2c2c34;
+  }
+  /* Card title — like ref "This title text has enough contrast"
+     Not pure white (#fff), more like #d0d0d4 — bright but softer on eyes */
+  .card-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #d0d0d6;
+    letter-spacing: -0.02em;
+  }
+
+  .pill-row { display: flex; gap: 2px; margin-top: 14px; flex-wrap: wrap; }
+  .pill {
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 400;
+    cursor: pointer;
+    border: 1px solid transparent;
+    color: #78787e;
+    background: transparent;
+    letter-spacing: -0.005em;
+  }
+  .pill:hover { color: #a0a0a6; }
+  .pill.active {
+    color: #C9A84C;
+    font-weight: 500;
+    background: rgba(201, 168, 76, 0.08);
+    border-color: rgba(201, 168, 76, 0.22);
+  }
+
+  .create-btn {
+    margin: 16px 20px 0;
+    padding: 10px 16px;
+    border-radius: 10px;
+    background: rgba(201, 168, 76, 0.07);
+    color: #C9A84C;
+    border: 1px solid rgba(201, 168, 76, 0.2);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: -0.005em;
+  }
+
+  .task-list { padding: 4px 20px; flex: 1; }
+
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 0;
+    border-bottom: 1px solid rgba(44, 44, 52, 0.45);
+  }
+  .task-row:last-child { border: none; }
+
+  .checkbox {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    border: 1.5px solid #46464e;
+    flex-shrink: 0;
+  }
+
+  /* Task name — like ref "This body text has enough contrast"
+     Softer than title: #b8b8be instead of harsh white */
+  .task-name {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 400;
+    color: #b8b8be;
+    letter-spacing: -0.01em;
+  }
+
+  /* Date — like ref "A subtle description text" */
+  .task-date {
+    font-size: 13px;
+    font-weight: 400;
+    color: #6e6e76;
+    letter-spacing: -0.005em;
+  }
+
+  .flame { color: #C9A84C; font-size: 14px; flex-shrink: 0; }
+
+  .submit-bar {
+    padding: 16px 20px;
+    border-top: 1px solid #2c2c34;
+    margin-top: auto;
+  }
+  .submit-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    background: #222228;
+    color: #6e6e76;
+    border: 1px solid #2c2c34;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    letter-spacing: -0.005em;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #C9A84C;
+    margin-bottom: 2px;
+    padding-top: 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .section-sub {
+    font-size: 12px;
+    color: #6e6e76;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: -0.005em;
+  }
+
+  /* Maintenance tasks — softer body text like ref description */
+  .maint-task {
+    font-size: 15px;
+    font-weight: 400;
+    color: #9a9aa2;
+    letter-spacing: -0.01em;
+  }
+
+  .done { opacity: 0.25; text-decoration: line-through; }
+
+  .comparison { margin-top: 52px; padding-top: 32px; border-top: 1px solid #2c2c34; max-width: 720px; }
+  .comp-label { font-size: 14px; color: #6e6e76; font-weight: 600; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  /* Hierarchy demo */
+  .hierarchy { margin-top: 16px; padding: 24px; background: #1b1b22; border: 1px solid #2c2c34; border-radius: 14px; max-width: 500px; }
+  .h-row { padding: 10px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(44,44,52,0.3); }
+  .h-row:last-child { border: none; }
+  .h-label { font-size: 11px; color: #58585e; font-weight: 400; }
+</style></head><body>
+
+<span class="draft-label">Visual Draft D3 — Softer Titles (less harsh whites)</span>
+<div class="page-title">Tasks</div>
+
+<div class="grid">
+  <!-- Studio Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Studio Tasks</div>
+    </div>
+    <div class="task-list">
+      <div class="section-label">Team Dailies <span class="section-sub">Resets daily at 9:00 AM</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Submit media content to Dropbox</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Take trash out</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Put away cables</span></div>
+
+      <div style="height: 20px"></div>
+      <div class="section-label">Additional Tasks <span class="section-sub">0/8</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Organize desktop & downloads</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Clear and sort email inbox</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Review and update task notes</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Check team comms</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Back up session files</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Tidy shared drive folders</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Review platform notifications</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Update availability calendar</span></div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+
+  <!-- My Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">My Tasks</div>
+      <div class="pill-row">
+        <div class="pill active">Today</div>
+        <div class="pill">Upcoming</div>
+      </div>
+    </div>
+    <div class="create-btn">+ Create Task</div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Draft Q2 social media calendar</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">5:00 PM</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Schedule newsletter send</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">3:00 PM</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Post session highlight reel</span>
+        <span class="task-date">6:00 PM</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.3)"></div>
+        <span class="task-name">Respond to influencer DMs</span>
+        <span class="task-date">12:00 PM</span>
+      </div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+
+  <!-- Team Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Team Tasks</div>
+      <div class="pill-row">
+        <div class="pill active">Marketing</div>
+        <div class="pill">Media</div>
+        <div class="pill">Engineer</div>
+        <div class="pill">Intern</div>
+        <div class="pill">Admin</div>
+      </div>
+      <div class="pill-row">
+        <div class="pill">Day</div>
+        <div class="pill active">Week</div>
+      </div>
+    </div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Draft Q2 social media calendar</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">Today</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Review Instagram analytics</span>
+        <span class="task-date">Apr 15</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Update brand guidelines</span>
+        <span class="task-date">Apr 18</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.3)"></div>
+        <span class="task-name">Create podcast promo copy</span>
+        <span class="task-date">Apr 16</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.3)"></div>
+        <span class="task-name">Schedule newsletter send</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">Today</span>
+      </div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+</div>
+
+<div class="comparison">
+  <div class="comp-label">Lightness hierarchy (matched to reference images)</div>
+  <div class="hierarchy">
+    <div class="h-row"><span style="font-size:26px;font-weight:700;color:#d8d8dc">Tasks</span><span class="h-label">Page title · #d8d8dc · 700</span></div>
+    <div class="h-row"><span style="font-size:16px;font-weight:700;color:#d0d0d6">My Tasks</span><span class="h-label">Card title · #d0d0d6 · 700</span></div>
+    <div class="h-row"><span style="font-size:11px;font-weight:600;color:#C9A84C;text-transform:uppercase;letter-spacing:0.06em">TEAM DAILIES</span><span class="h-label">Section · gold · 600</span></div>
+    <div class="h-row"><span style="font-size:15px;font-weight:400;color:#b8b8be">Draft Q2 social media calendar</span><span class="h-label">Task name · #b8b8be · 400</span></div>
+    <div class="h-row"><span style="font-size:15px;font-weight:400;color:#9a9aa2">Organize desktop & downloads</span><span class="h-label">Maint task · #9a9aa2 · 400</span></div>
+    <div class="h-row"><span style="font-size:13px;font-weight:400;color:#6e6e76">Apr 15</span><span class="h-label">Date · #6e6e76 · 400</span></div>
+  </div>
+</div>
+
+</body></html>

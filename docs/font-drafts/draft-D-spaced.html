@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Draft D — Reference Spacing & Font Match</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #131318;
+    color: #e6e6ea;
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 36px;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+  }
+
+  .draft-label { color: #C9A84C; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 28px; display: block; }
+
+  /* Page title — like "Select styles" active tab weight */
+  .page-title { font-size: 26px; font-weight: 700; color: #f4f4f6; margin-bottom: 28px; letter-spacing: -0.02em; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 1080px; }
+
+  /* Cards — surface like the "Recursive" card in reference */
+  .card {
+    background: #1b1b22;
+    border: 1px solid #2c2c34;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Card header — generous padding like reference tab bar spacing */
+  .card-header {
+    padding: 18px 20px 16px;
+    border-bottom: 1px solid #2c2c34;
+  }
+  /* Title — like "Recursive" bold label */
+  .card-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #f0f0f3;
+    letter-spacing: -0.02em;
+  }
+
+  /* Pills — like "Glyphs  About  License  Pairings" tab row */
+  .pill-row { display: flex; gap: 2px; margin-top: 14px; flex-wrap: wrap; }
+  .pill {
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    color: #78787e;
+    background: transparent;
+    letter-spacing: -0.005em;
+  }
+  .pill:hover { color: #a0a0a6; }
+  /* Active pill — like "Select styles" with underline accent, we use gold fill */
+  .pill.active {
+    color: #C9A84C;
+    background: rgba(201, 168, 76, 0.08);
+    border-color: rgba(201, 168, 76, 0.22);
+  }
+
+  /* Create task button */
+  .create-btn {
+    margin: 16px 20px 0;
+    padding: 10px 16px;
+    border-radius: 10px;
+    background: rgba(201, 168, 76, 0.07);
+    color: #C9A84C;
+    border: 1px solid rgba(201, 168, 76, 0.2);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: -0.005em;
+  }
+
+  /* Task list area */
+  .task-list { padding: 4px 20px; flex: 1; }
+
+  /* Task row — generous vertical spacing like reference list items */
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 0;
+    border-bottom: 1px solid rgba(44, 44, 52, 0.45);
+  }
+  .task-row:last-child { border: none; }
+
+  /* Checkbox — like reference category checkboxes */
+  .checkbox {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    border: 1.5px solid #46464e;
+    flex-shrink: 0;
+  }
+
+  /* Task name — like "Serif", "Sans Serif" list items: 15px, medium, bright */
+  .task-name {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 500;
+    color: #e2e2e6;
+    letter-spacing: -0.01em;
+  }
+
+  /* Date — like "Variable" label: visible grey, medium weight */
+  .task-date {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6e6e76;
+    letter-spacing: -0.005em;
+  }
+
+  .flame { color: #C9A84C; font-size: 14px; flex-shrink: 0; }
+
+  /* Submit bar */
+  .submit-bar {
+    padding: 16px 20px;
+    border-top: 1px solid #2c2c34;
+    margin-top: auto;
+  }
+  .submit-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    background: #222228;
+    color: #6e6e76;
+    border: 1px solid #2c2c34;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    letter-spacing: -0.005em;
+  }
+
+  /* Section labels — like "Categories" button style: uppercase, accented */
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #C9A84C;
+    margin-bottom: 2px;
+    padding-top: 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  /* Sub label — like "Arrow Type, Stephen Nixon" subtitle */
+  .section-sub {
+    font-size: 12px;
+    color: #6e6e76;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: -0.005em;
+  }
+
+  /* Maintenance tasks — like subtitle text: readable but softer than primary */
+  .maint-task {
+    font-size: 15px;
+    font-weight: 500;
+    color: #aeaeb6;
+    letter-spacing: -0.01em;
+  }
+
+  .done { opacity: 0.25; text-decoration: line-through; }
+
+  /* Comparison notes */
+  .comparison { margin-top: 52px; padding-top: 32px; border-top: 1px solid #2c2c34; max-width: 720px; }
+  .comp-label { font-size: 14px; color: #6e6e76; font-weight: 600; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .note { font-size: 14px; color: #9898a0; line-height: 2; }
+  .note strong { color: #C9A84C; font-weight: 600; }
+  .vs { display: inline-block; background: #222228; border: 1px solid #2c2c34; border-radius: 6px; padding: 2px 8px; font-size: 11px; color: #6e6e76; font-weight: 600; margin: 0 4px; }
+</style></head><body>
+
+<span class="draft-label">Visual Draft D — Reference Spacing & Font Match</span>
+<div class="page-title">Tasks</div>
+
+<div class="grid">
+  <!-- Studio Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Studio Tasks</div>
+    </div>
+    <div class="task-list">
+      <div class="section-label">Team Dailies <span class="section-sub">Resets daily at 9:00 AM</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Submit media content to Dropbox</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Take trash out</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Put away cables</span></div>
+
+      <div style="height: 20px"></div>
+      <div class="section-label">Additional Tasks <span class="section-sub">0/8</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Organize desktop & downloads</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Clear and sort email inbox</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Review and update task notes</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Check team comms</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Back up session files</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Tidy shared drive folders</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Review platform notifications</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Update availability calendar</span></div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+
+  <!-- My Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">My Tasks</div>
+      <div class="pill-row">
+        <div class="pill active">Today</div>
+        <div class="pill">Upcoming</div>
+      </div>
+    </div>
+    <div class="create-btn">+ Create Task</div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Draft Q2 social media calendar</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">5:00 PM</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Schedule newsletter send</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">3:00 PM</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Post session highlight reel</span>
+        <span class="task-date">6:00 PM</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.3)"></div>
+        <span class="task-name">Respond to influencer DMs</span>
+        <span class="task-date">12:00 PM</span>
+      </div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+
+  <!-- Team Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Team Tasks</div>
+      <div class="pill-row">
+        <div class="pill active">Marketing</div>
+        <div class="pill">Media</div>
+        <div class="pill">Engineer</div>
+        <div class="pill">Intern</div>
+        <div class="pill">Admin</div>
+      </div>
+      <div class="pill-row">
+        <div class="pill">Day</div>
+        <div class="pill active">Week</div>
+      </div>
+    </div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Draft Q2 social media calendar</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">Today</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Review Instagram analytics</span>
+        <span class="task-date">Apr 15</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Update brand guidelines</span>
+        <span class="task-date">Apr 18</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.3)"></div>
+        <span class="task-name">Create podcast promo copy</span>
+        <span class="task-date">Apr 16</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.3)"></div>
+        <span class="task-name">Schedule newsletter send</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">Today</span>
+      </div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+</div>
+
+<div class="comparison">
+  <div class="comp-label">What this draft matches from the reference</div>
+  <div class="note">
+    <strong>Font sizes:</strong> 15px task names <span class="vs">was 13px</span> · 13px dates <span class="vs">was 9px</span> · 16px titles <span class="vs">was 13px</span><br>
+    <strong>Font weight:</strong> 500 medium across all body text (like "Glyphs", "About", "Serif" in ref)<br>
+    <strong>Letter spacing:</strong> -0.01em tight tracking (matches Inter in reference)<br>
+    <strong>Row padding:</strong> 13px vertical <span class="vs">was 6px</span> — matches the generous list spacing in reference<br>
+    <strong>Card padding:</strong> 18-20px <span class="vs">was 14-16px</span> — more breathing room like the reference card<br>
+    <strong>Pill tabs:</strong> 13px / 500wt <span class="vs">was 10-11px</span> — matches "Glyphs  About  License" sizing<br>
+    <strong>Inactive tab color:</strong> #78787e — matches the dimmed tabs in reference<br>
+    <strong>Background:</strong> #131318 — slightly warmer than pure black, like reference<br>
+    <strong>Card surface:</strong> #1b1b22 — visible card lift, like the "Recursive" card in reference<br>
+    <strong>Borders:</strong> #2c2c34 — like the dropdown/card borders in reference
+  </div>
+</div>
+
+</body></html>

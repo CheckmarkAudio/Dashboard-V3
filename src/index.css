@@ -18,16 +18,16 @@
   --color-gold-muted: #A8893D;
   --color-gold-dim: #8a6e2f;
 
-  /* -------- Neutral surfaces -------- */
-  --color-bg: #0A0A0A;
-  --color-surface: #141414;
-  --color-surface-alt: #1C1C1C;
-  --color-surface-hover: #242424;
-  --color-border: #2A2A2A;
-  --color-border-light: #333333;
-  --color-text: #F5F5F5;
-  --color-text-muted: #999999;
-  --color-text-light: #666666;
+  /* -------- Neutral surfaces (D5 refined dark) -------- */
+  --color-bg: #131318;
+  --color-surface: #1b1b22;
+  --color-surface-alt: #222228;
+  --color-surface-hover: #2a2a32;
+  --color-border: #2c2c34;
+  --color-border-light: #46464e;
+  --color-text: #d0d0d6;
+  --color-text-muted: #b0b0b8;
+  --color-text-light: #6e6e76;
 
   /* -------- Semantic status colors (for chips, badges, toasts, alerts) --------
      Each status has a foreground (-text) and a translucent surface (-bg) so

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Draft D5 — Uniform Body Text</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #131318;
+    color: #e6e6ea;
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 36px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .draft-label { color: #C9A84C; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 28px; display: block; }
+
+  /* D5: ALL unchecked list text uses one uniform color */
+
+  /* Page title — tighter kerning like reference, heavier weight for punch */
+  .page-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #d4d4d8;
+    margin-bottom: 28px;
+    letter-spacing: -0.04em;
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 1080px; }
+
+  .card {
+    background: #1b1b22;
+    border: 1px solid #2c2c34;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-header {
+    padding: 18px 20px 16px;
+    border-bottom: 1px solid #2c2c34;
+  }
+  /* Card title — tight kerning like "This title text has enough contrast" */
+  .card-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #ccccd2;
+    letter-spacing: -0.035em;
+  }
+
+  .pill-row { display: flex; gap: 2px; margin-top: 14px; flex-wrap: wrap; }
+  .pill {
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 400;
+    cursor: pointer;
+    border: 1px solid transparent;
+    color: #78787e;
+    background: transparent;
+    letter-spacing: -0.01em;
+  }
+  .pill:hover { color: #a0a0a6; }
+  .pill.active {
+    color: #C9A84C;
+    font-weight: 500;
+    background: rgba(201, 168, 76, 0.08);
+    border-color: rgba(201, 168, 76, 0.22);
+  }
+
+  .create-btn {
+    margin: 16px 20px 0;
+    padding: 10px 16px;
+    border-radius: 10px;
+    background: rgba(201, 168, 76, 0.07);
+    color: #C9A84C;
+    border: 1px solid rgba(201, 168, 76, 0.2);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: -0.01em;
+  }
+
+  .task-list { padding: 4px 20px; flex: 1; }
+
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(44, 44, 52, 0.45);
+  }
+  .task-row:last-child { border: none; }
+
+  .checkbox {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    border: 1.5px solid #46464e;
+    flex-shrink: 0;
+  }
+
+  /* Body text — uniform color for ALL unchecked list items */
+  .task-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 400;
+    color: #b0b0b8;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  .task-date {
+    font-size: 11px;
+    font-weight: 400;
+    color: #6e6e76;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .flame { flex-shrink: 0; }
+
+  .submit-bar {
+    padding: 16px 20px;
+    border-top: 1px solid #2c2c34;
+    margin-top: auto;
+  }
+  .submit-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    background: #222228;
+    color: #6e6e76;
+    border: 1px solid #2c2c34;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    letter-spacing: -0.01em;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #C9A84C;
+    margin-bottom: 2px;
+    padding-top: 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .section-sub {
+    font-size: 12px;
+    color: #6e6e76;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: -0.005em;
+  }
+
+  /* Maintenance tasks — SAME size and color as task-name */
+  .maint-task {
+    font-size: 14px;
+    font-weight: 400;
+    color: #b0b0b8;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .done { opacity: 0.25; text-decoration: line-through; }
+
+  /* Comparison */
+  .comparison { margin-top: 52px; padding-top: 32px; border-top: 1px solid #2c2c34; max-width: 720px; }
+  .comp-label { font-size: 14px; color: #6e6e76; font-weight: 600; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .demo-box { margin-top: 16px; padding: 28px; background: #0a0a0c; border: 1px solid #2c2c34; border-radius: 14px; max-width: 520px; }
+  .demo-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #ccccd2;
+    letter-spacing: -0.035em;
+    line-height: 1.3;
+    margin-bottom: 12px;
+  }
+  .demo-body {
+    font-size: 16px;
+    font-weight: 400;
+    color: #8a8a90;
+    letter-spacing: -0.005em;
+    line-height: 1.5;
+  }
+  .note { font-size: 13px; color: #6e6e76; line-height: 1.8; margin-top: 20px; }
+  .note strong { color: #C9A84C; font-weight: 600; }
+</style></head><body>
+
+<span class="draft-label">Visual Draft D5 — Uniform Body Text Color</span>
+<div class="page-title">Tasks</div>
+
+<div class="grid">
+  <!-- Studio Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Studio Tasks</div>
+    </div>
+    <div class="task-list">
+      <div class="section-label">Team Dailies <span class="section-sub">Resets daily at 9:00 AM</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Submit media content to Dropbox</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Take trash out</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Put away cables</span></div>
+
+      <div style="height: 20px"></div>
+      <div class="section-label">Additional Tasks <span class="section-sub">0/8</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Organize desktop & downloads</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Clear and sort email inbox</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Review and update task notes</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Check team comms</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Back up session files</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Tidy shared drive folders</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Review platform notifications</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Update availability calendar</span></div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+
+  <!-- My Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">My Tasks</div>
+      <div class="pill-row">
+        <div class="pill active">Today</div>
+        <div class="pill">Upcoming</div>
+      </div>
+    </div>
+    <div class="create-btn">+ Create Task</div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Draft Q2 social media calendar</span>
+        <svg class="flame" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+        <span class="task-date">5:00 PM</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Schedule newsletter send</span>
+        <svg class="flame" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+        <span class="task-date">3:00 PM</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Post session highlight reel</span>
+        <span class="task-date">6:00 PM</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.3)"></div>
+        <span class="task-name">Respond to influencer DMs</span>
+        <span class="task-date">12:00 PM</span>
+      </div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+
+  <!-- Team Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Team Tasks</div>
+      <div class="pill-row">
+        <div class="pill active">Marketing</div>
+        <div class="pill">Media</div>
+        <div class="pill">Engineer</div>
+        <div class="pill">Intern</div>
+        <div class="pill">Admin</div>
+      </div>
+      <div class="pill-row">
+        <div class="pill">Day</div>
+        <div class="pill active">Week</div>
+      </div>
+    </div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Draft Q2 social media calendar</span>
+        <svg class="flame" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+        <span class="task-date">Today</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Review Instagram analytics</span>
+        <span class="task-date">Apr 15</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Update brand guidelines</span>
+        <span class="task-date">Apr 18</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.3)"></div>
+        <span class="task-name">Create podcast promo copy</span>
+        <span class="task-date">Apr 16</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.3)"></div>
+        <span class="task-name">Schedule newsletter send</span>
+        <svg class="flame" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+        <span class="task-date">Today</span>
+      </div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+</div>
+
+<div class="comparison">
+  <div class="comp-label">Reference title style comparison</div>
+  <div class="demo-box">
+    <div class="demo-title">This title text has enough contrast.</div>
+    <div class="demo-body">This body text has enough contrast.</div>
+  </div>
+  <div class="note">
+    <strong>Kerning:</strong> Titles now use -0.035em letter-spacing (tight like reference)<br>
+    <strong>Body text:</strong> -0.005em (slightly looser, creating visual separation from titles)<br>
+    <strong>Title weight:</strong> 700-800 bold (condensed feel matching reference serif-like tightness)<br>
+    <strong>Body weight:</strong> 400 regular (thin, airy — clear contrast with bold titles)<br>
+    <strong>Title color:</strong> #ccccd2 (warm off-white, not harsh — matches reference grey-white)
+  </div>
+</div>
+
+</body></html>

@@ -100,7 +100,7 @@ export default function Sessions() {
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
       {/* Header */}
-      <h1 className="text-2xl font-bold">Manage studio bookings</h1>
+      <h1 className="text-[28px] font-extrabold tracking-tight text-text">Manage studio bookings</h1>
 
       {/* Top category tabs */}
       <div className="flex gap-2 flex-wrap">

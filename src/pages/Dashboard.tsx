@@ -234,7 +234,7 @@ export default function Dashboard() {
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
       <div className="flex items-center justify-between mb-3">
-        <h1 className="text-2xl font-bold">Overview</h1>
+        <h1 className="text-[28px] font-extrabold tracking-tight text-text">Overview</h1>
         <div className="flex items-center gap-4">
           {platforms.map((p) => (
             <div key={p.name} className="flex items-center gap-1.5">
@@ -255,7 +255,7 @@ export default function Dashboard() {
           <div className="px-4 py-3 border-b border-border">
             <div className="flex items-center justify-between mb-2">
               <Link to="/daily" className="flex items-center gap-1 group">
-                <h2 className="text-[13px] font-bold text-text group-hover:text-gold transition-colors">Upcoming Tasks</h2>
+                <h2 className="text-[16px] font-bold text-text tracking-tight group-hover:text-gold transition-colors">Upcoming Tasks</h2>
                 <ChevronRight size={12} className="text-text-muted group-hover:text-gold transition-colors" />
               </Link>
             </div>
@@ -273,7 +273,7 @@ export default function Dashboard() {
                       {isPending && <Check size={10} className="text-gold" />}
                     </div>
                   </button>
-                  <span className="flex-1 text-[13px] text-text truncate">{task.title}</span>
+                  <span className="flex-1 text-[14px] font-normal text-text-muted tracking-tight truncate">{task.title}</span>
                   <PriorityIcon priority={task.priority} />
                   <span className="text-[9px] text-text-light shrink-0">{task.due.split(',')[0]}</span>
                 </div>
@@ -297,7 +297,7 @@ export default function Dashboard() {
         {/* Column 2: Team Snapshot */}
         <div className="bg-surface rounded-2xl border border-border overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-border">
-            <h2 className="text-[13px] font-bold text-text">Team</h2>
+            <h2 className="text-[16px] font-bold text-text tracking-tight">Team</h2>
           </div>
           <div className="flex-1">
             {teamMembers.map((m) => (
@@ -320,7 +320,7 @@ export default function Dashboard() {
           <div className="px-4 py-3 border-b border-border">
             <Link to="/calendar" className="flex items-center gap-1.5 group">
               <CalendarIcon size={13} className="text-gold" />
-              <h2 className="text-[13px] font-bold text-text group-hover:text-gold transition-colors">Calendar</h2>
+              <h2 className="text-[16px] font-bold text-text tracking-tight group-hover:text-gold transition-colors">Calendar</h2>
               <ChevronRight size={12} className="text-text-muted group-hover:text-gold transition-colors" />
             </Link>
             <p className="text-[10px] text-text-muted mt-1">{dateStr}</p>
@@ -330,7 +330,7 @@ export default function Dashboard() {
               <div key={i} className="flex items-center gap-2 py-1">
                 <span className="text-[10px] text-text-muted font-medium w-[48px] shrink-0">{event.time}</span>
                 <div className="w-1 h-3 rounded-full shrink-0" style={{ backgroundColor: event.color }} />
-                <span className="text-[13px] text-text truncate">{event.title}</span>
+                <span className="text-[14px] font-normal text-text-muted tracking-tight truncate">{event.title}</span>
               </div>
             ))}
           </div>

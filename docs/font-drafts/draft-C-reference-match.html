@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Draft C — Reference Match</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #121216;
+    color: #e8e8ec;
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 32px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page-title { font-size: 24px; font-weight: 700; color: #f2f2f4; margin-bottom: 24px; }
+  .draft-label { color: #C9A84C; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 24px; display: block; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; max-width: 1050px; }
+
+  .card {
+    background: #1c1c22;
+    border: 1px solid #2e2e36;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-header {
+    padding: 16px 18px;
+    border-bottom: 1px solid #2e2e36;
+  }
+  .card-title { font-size: 15px; font-weight: 700; color: #f2f2f4; }
+
+  .pill-row { display: flex; gap: 4px; margin-top: 10px; flex-wrap: wrap; }
+  .pill {
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    color: #7a7a84;
+    background: transparent;
+  }
+  .pill.active {
+    color: #C9A84C;
+    background: rgba(201, 168, 76, 0.08);
+    border-color: rgba(201, 168, 76, 0.25);
+  }
+
+  .create-btn {
+    margin: 14px 18px 0;
+    padding: 9px 16px;
+    border-radius: 10px;
+    background: rgba(201, 168, 76, 0.08);
+    color: #C9A84C;
+    border: 1px solid rgba(201, 168, 76, 0.22);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .task-list { padding: 6px 18px; flex: 1; }
+
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(46, 46, 54, 0.5);
+  }
+  .task-row:last-child { border: none; }
+
+  .checkbox {
+    width: 17px; height: 17px;
+    border-radius: 5px;
+    border: 1.5px solid #44444e;
+    flex-shrink: 0;
+  }
+
+  .task-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: #e4e4e8;
+    letter-spacing: -0.01em;
+  }
+
+  .task-date {
+    font-size: 12px;
+    font-weight: 500;
+    color: #7a7a84;
+  }
+
+  .flame { color: #C9A84C; font-size: 13px; }
+
+  .submit-bar {
+    padding: 14px 18px;
+    border-top: 1px solid #2e2e36;
+    margin-top: auto;
+  }
+  .submit-btn {
+    width: 100%;
+    padding: 11px;
+    border-radius: 10px;
+    background: #222228;
+    color: #7a7a84;
+    border: 1px solid #2e2e36;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #C9A84C;
+    margin-bottom: 4px;
+    padding-top: 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .section-sub {
+    font-size: 11px;
+    color: #7a7a84;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .maint-task {
+    font-size: 14px;
+    font-weight: 500;
+    color: #b4b4bc;
+    letter-spacing: -0.01em;
+  }
+
+  .done { opacity: 0.28; text-decoration: line-through; }
+
+  .comparison { margin-top: 48px; padding-top: 28px; border-top: 1px solid #2e2e36; max-width: 700px; }
+  .comp-label { font-size: 13px; color: #7a7a84; font-weight: 600; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .note { font-size: 13px; color: #9a9aa2; line-height: 1.8; }
+  .note strong { color: #C9A84C; font-weight: 600; }
+</style></head><body>
+
+<span class="draft-label">Visual Draft C — Reference-Matched Dark Mode</span>
+<div class="page-title">Tasks</div>
+
+<div class="grid">
+  <!-- Studio Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Studio Tasks</div>
+    </div>
+    <div class="task-list">
+      <div class="section-label">Team Dailies <span class="section-sub">Resets daily at 9:00 AM</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Submit media content to Dropbox</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Take trash out</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Put away cables</span></div>
+
+      <div style="height: 16px"></div>
+      <div class="section-label">Additional Tasks <span class="section-sub">0/8</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Organize desktop & downloads</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Clear and sort email inbox</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Review and update task notes</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Check team comms</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Back up session files</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Tidy shared drive folders</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Review platform notifications</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Update availability calendar</span></div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+
+  <!-- My Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">My Tasks</div>
+      <div class="pill-row">
+        <div class="pill active">Today</div>
+        <div class="pill">Upcoming</div>
+      </div>
+    </div>
+    <div class="create-btn">+ Create Task</div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Draft Q2 social media calendar</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">5:00 PM</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Schedule newsletter send</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">3:00 PM</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Post session highlight reel</span>
+        <span class="task-date">6:00 PM</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.15); border-color: rgba(201,168,76,0.35)"></div>
+        <span class="task-name">Respond to influencer DMs</span>
+        <span class="task-date">12:00 PM</span>
+      </div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+
+  <!-- Team Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Team Tasks</div>
+      <div class="pill-row">
+        <div class="pill active">Marketing</div>
+        <div class="pill">Media</div>
+        <div class="pill">Engineer</div>
+        <div class="pill">Intern</div>
+        <div class="pill">Admin</div>
+      </div>
+      <div class="pill-row">
+        <div class="pill">Day</div>
+        <div class="pill active">Week</div>
+      </div>
+    </div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Draft Q2 social media calendar</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">Today</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Review Instagram analytics</span>
+        <span class="task-date">Apr 15</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Update brand guidelines</span>
+        <span class="task-date">Apr 18</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.15); border-color: rgba(201,168,76,0.35)"></div>
+        <span class="task-name">Create podcast promo copy</span>
+        <span class="task-date">Apr 16</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.15); border-color: rgba(201,168,76,0.35)"></div>
+        <span class="task-name">Schedule newsletter send</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">Today</span>
+      </div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+</div>
+
+<div class="comparison">
+  <div class="comp-label">Color values matched to reference screenshot</div>
+  <div class="note">
+    <strong>Background:</strong> #121216 (dark charcoal, not pure black — matches reference bg)<br>
+    <strong>Card surface:</strong> #1c1c22 (visible lift from bg — like the dropdown card in reference)<br>
+    <strong>Primary text:</strong> #e4e4e8 at 14px weight 500 (like "Serif", "Sans Serif" in reference)<br>
+    <strong>Secondary text:</strong> #b4b4bc (like "Arrow Type, Stephen Nixon" — clearly readable grey)<br>
+    <strong>Muted text:</strong> #7a7a84 at 12px weight 500 (like "Reset" in reference — visible but quiet)<br>
+    <strong>Borders:</strong> #2e2e36 (like the card/dropdown borders in reference)<br>
+    <strong>Checkboxes:</strong> #44444e borders (like the category checkboxes in reference)<br>
+    <strong>Row padding:</strong> 11px (matches reference list item spacing)<br>
+    <strong>Pills:</strong> 12px medium weight (like "Pairings" tab style in reference)
+  </div>
+</div>
+
+</body></html>

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Draft A — Refined Dark (reference-inspired)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #101014;
+    color: #e8e8ec;
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 32px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page-title { font-size: 24px; font-weight: 700; color: #f0f0f2; margin-bottom: 20px; }
+  .draft-label { color: #C9A84C; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 24px; display: block; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 1000px; }
+
+  .card {
+    background: #18181c;
+    border: 1px solid #2a2a30;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #2a2a30;
+  }
+  .card-title { font-size: 14px; font-weight: 700; color: #f0f0f2; }
+  .card-subtitle { font-size: 11px; color: #88888e; margin-top: 2px; font-weight: 500; }
+
+  .pill-row { display: flex; gap: 4px; margin-top: 10px; }
+  .pill {
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    color: #88888e;
+    background: transparent;
+  }
+  .pill.active {
+    color: #C9A84C;
+    background: rgba(201, 168, 76, 0.1);
+    border-color: rgba(201, 168, 76, 0.3);
+  }
+
+  .create-btn {
+    margin: 12px 16px 0;
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: rgba(201, 168, 76, 0.1);
+    color: #C9A84C;
+    border: 1px solid rgba(201, 168, 76, 0.25);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .task-list { padding: 8px 16px; flex: 1; }
+
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(42, 42, 48, 0.4);
+  }
+  .task-row:last-child { border: none; }
+
+  .checkbox {
+    width: 16px; height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid #3a3a42;
+    flex-shrink: 0;
+  }
+
+  .task-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: #d4d4d8;
+  }
+
+  .task-date {
+    font-size: 11px;
+    font-weight: 500;
+    color: #6e6e76;
+  }
+
+  .flame { color: #C9A84C; font-size: 12px; }
+
+  .submit-bar {
+    padding: 12px 16px;
+    border-top: 1px solid #2a2a30;
+    margin-top: auto;
+  }
+  .submit-btn {
+    width: 100%;
+    padding: 10px;
+    border-radius: 10px;
+    background: #1e1e24;
+    color: #6e6e76;
+    border: 1px solid #2a2a30;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  /* Section labels inside maintenance */
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #C9A84C;
+    margin-bottom: 6px;
+    padding-top: 4px;
+  }
+  .section-sub {
+    font-size: 10px;
+    color: #6e6e76;
+    font-weight: 500;
+  }
+
+  .maint-task {
+    font-size: 13px;
+    font-weight: 450;
+    color: #a0a0a6;
+  }
+
+  .done { opacity: 0.35; text-decoration: line-through; }
+
+  .comparison { margin-top: 40px; padding-top: 24px; border-top: 1px solid #2a2a30; }
+  .comp-label { font-size: 12px; color: #6e6e76; font-weight: 600; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .note { font-size: 12px; color: #88888e; line-height: 1.6; max-width: 600px; margin-top: 16px; }
+</style></head><body>
+
+<span class="draft-label">Visual Draft A — Refined Dark Mode (reference-inspired)</span>
+<div class="page-title">Tasks</div>
+
+<div class="grid">
+  <!-- Studio Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Studio Tasks</div>
+    </div>
+    <div class="task-list">
+      <div class="section-label">Team Dailies <span class="section-sub">Resets daily at 9:00 AM</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Submit media content to Dropbox</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Take trash out</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Put away cables</span></div>
+
+      <div style="height: 12px"></div>
+      <div class="section-label">Additional Tasks <span class="section-sub">0/8</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Organize desktop & downloads</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Clear and sort email inbox</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Review and update task notes</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Check team comms</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Back up session files</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Tidy shared drive folders</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Review platform notifications</span></div>
+      <div class="task-row"><div class="checkbox"></div><span class="maint-task">Update availability calendar</span></div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+
+  <!-- My Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">My Tasks</div>
+      <div class="pill-row">
+        <div class="pill active">Today</div>
+        <div class="pill">Upcoming</div>
+      </div>
+    </div>
+    <div class="create-btn">+ Create Task</div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Draft Q2 social media calendar</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">5:00 PM</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Schedule newsletter send</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">3:00 PM</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Post session highlight reel</span>
+        <span class="task-date">6:00 PM</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.2); border-color: rgba(201,168,76,0.4)"></div>
+        <span class="task-name">Respond to influencer DMs</span>
+        <span class="task-date">12:00 PM</span>
+      </div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+
+  <!-- Team Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Team Tasks</div>
+      <div class="pill-row">
+        <div class="pill active">Marketing</div>
+        <div class="pill">Media</div>
+        <div class="pill">Engineer</div>
+        <div class="pill">Intern</div>
+        <div class="pill">Admin</div>
+      </div>
+      <div class="pill-row">
+        <div class="pill">Day</div>
+        <div class="pill active">Week</div>
+      </div>
+    </div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Draft Q2 social media calendar</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">Today</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Review Instagram analytics</span>
+        <span class="task-date">Apr 15</span>
+      </div>
+      <div class="task-row">
+        <div class="checkbox"></div>
+        <span class="task-name">Update brand guidelines</span>
+        <span class="task-date">Apr 18</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.2); border-color: rgba(201,168,76,0.4)"></div>
+        <span class="task-name">Create podcast promo copy</span>
+        <span class="task-date">Apr 16</span>
+      </div>
+      <div class="task-row done">
+        <div class="checkbox" style="background: rgba(201,168,76,0.2); border-color: rgba(201,168,76,0.4)"></div>
+        <span class="task-name">Schedule newsletter send</span>
+        <span class="flame">🔥</span>
+        <span class="task-date">Today</span>
+      </div>
+    </div>
+    <div class="submit-bar"><div class="submit-btn">✓ Submit Completed</div></div>
+  </div>
+</div>
+
+<div class="comparison">
+  <div class="comp-label">What changed from current site</div>
+  <div class="note">
+    • Background: #0A0A0A → #101014 (slightly warmer dark, less pure black)<br>
+    • Card surface: #141414 → #18181c (more visible card edges)<br>
+    • Task names: #F5F5F5 → #d4d4d8 (slightly softer white, easier on eyes)<br>
+    • Date/subtitle text: #666666 → #6e6e76 (brighter, more readable)<br>
+    • Muted text: #999999 → #a0a0a6 (noticeably brighter)<br>
+    • Font weight on secondary text: 400 → 500 (medium weight, crisper)<br>
+    • All small fonts: bumped ~1px for readability<br>
+    • Borders: #2A2A2A → #2a2a30 (hint of cool tone)<br>
+    • Overall: maintains sleek dark premium feel, but text pops more
+  </div>
+</div>
+
+</body></html>
