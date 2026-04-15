@@ -5,24 +5,29 @@ import ErrorBoundary from './components/ErrorBoundary'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import DailyChecklist from './pages/DailyChecklist'
-import WeeklyChecklist from './pages/WeeklyChecklist'
-import DailyNotes from './pages/DailyNotes'
-import Schedule from './pages/Schedule'
-import Projects from './pages/Projects'
 import Sessions from './pages/Sessions'
 import Calendar from './pages/Calendar'
 import Content from './pages/Content'
-import Pipeline from './pages/Pipeline'
-import Education from './pages/Education'
-import Reviews from './pages/Reviews'
-import KPIDashboard from './pages/KPIDashboard'
 import TeamManager from './pages/admin/TeamManager'
 import Templates from './pages/admin/Templates'
 import MyTeam from './pages/admin/MyTeam'
 import BusinessHealth from './pages/admin/BusinessHealth'
+import AnalyticsMockup from './pages/admin/AnalyticsMockup'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminHub from './pages/admin/Hub'
 import Profile from './pages/Profile'
+
+/**
+ * Foundation-First Phase 1: deprecated member routes (/weekly, /notes,
+ * /schedule, /projects, /pipeline, /education, /reviews, /kpis) redirect
+ * to / so old bookmarks keep working while the canonical IA narrows to
+ * Overview / Tasks / Calendar / Booking / Content + admin. Their page
+ * files are left on disk (unrouted) per the plan; they'll be pruned once
+ * Phase 2 confirms nothing else depends on them.
+ */
+const DEPRECATED_ROUTES = [
+  'weekly', 'notes', 'schedule', 'projects', 'pipeline', 'education', 'reviews', 'kpis',
+]
 
 export default function App() {
   return (
@@ -39,17 +44,15 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="profile/:memberId" element={<Profile />} />
           <Route path="daily" element={<DailyChecklist />} />
-          <Route path="weekly" element={<WeeklyChecklist />} />
-          <Route path="notes" element={<DailyNotes />} />
-          <Route path="schedule" element={<Schedule />} />
-          <Route path="projects" element={<Projects />} />
           <Route path="sessions" element={<Sessions />} />
           <Route path="calendar" element={<Calendar />} />
           <Route path="content" element={<Content />} />
-          <Route path="pipeline" element={<Pipeline />} />
-          <Route path="education" element={<Education />} />
-          <Route path="reviews" element={<Reviews />} />
-          <Route path="kpis" element={<KPIDashboard />} />
+
+          {/* Deprecated member routes — redirect to Overview */}
+          {DEPRECATED_ROUTES.map(path => (
+            <Route key={path} path={path} element={<Navigate to="/" replace />} />
+          ))}
+
           <Route
             path="admin"
             element={<ProtectedRoute adminOnly><AdminHub /></ProtectedRoute>}
@@ -69,6 +72,10 @@ export default function App() {
           <Route
             path="admin/health"
             element={<ProtectedRoute adminOnly><BusinessHealth /></ProtectedRoute>}
+          />
+          <Route
+            path="admin/flywheel"
+            element={<ProtectedRoute adminOnly><AnalyticsMockup /></ProtectedRoute>}
           />
           <Route
             path="admin/settings"

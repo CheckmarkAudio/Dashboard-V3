@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useRouteAnnounce } from '../hooks/useRouteAnnounce'
+import { useQuickKeyListener } from '../hooks/useQuickKeyListener'
 import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
@@ -11,8 +12,8 @@ import checkmarkLogo from '../assets/checkmark-audio-logo.png'
 import type { LucideProps } from 'lucide-react'
 import {
   LayoutDashboard, Users, Calendar, Settings,
-  LogOut, LogIn, Menu, X, ChevronDown, ClipboardList, CheckSquare,
-  BarChart3, Briefcase, Lightbulb, Clock,
+  LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
+  BarChart3, Briefcase, Lightbulb, Clock, PieChart,
 } from 'lucide-react'
 
 type NavLinkDef = {
@@ -47,21 +48,48 @@ function NavItem({ link, onNavigate }: { link: NavLinkDef; onNavigate: () => voi
   )
 }
 
+/**
+ * Horizontal variant used in the desktop top nav strip. Lighter visual weight
+ * than the sidebar NavItem — icon + label sit inline, active state is a soft
+ * outline + gold text rather than a bg-pill-with-bar, matching the reference
+ * aesthetic (readable, spacious, no vertical accent bar).
+ */
+function TopNavItem({ link }: { link: NavLinkDef }) {
+  return (
+    <NavLink
+      to={link.to}
+      end={link.to === '/' || link.to === '/admin'}
+      className={({ isActive }) =>
+        [
+          'flex items-center gap-2 h-9 px-3 rounded-lg text-[13px] font-medium transition-all duration-200 focus-ring whitespace-nowrap',
+          isActive
+            ? 'text-gold bg-white/[0.03] ring-1 ring-border-light'
+            : 'text-text-muted hover:text-text hover:bg-white/[0.04]',
+        ].join(' ')
+      }
+    >
+      <link.icon size={15} strokeWidth={2} aria-hidden="true" />
+      {link.label}
+    </NavLink>
+  )
+}
+
 /* ── Menu-Sidebar v5.2 — Main menu ── */
 const mainLinks: NavLinkDef[] = [
   { to: '/', icon: LayoutDashboard, label: 'Overview' },
   { to: '/daily', icon: CheckSquare, label: 'Tasks' },
   { to: '/calendar', icon: Calendar, label: 'Calendar' },
-  { to: '/sessions', icon: Briefcase, label: 'Booking Agent' },
-  { to: '/content', icon: Lightbulb, label: 'Forum' },
+  { to: '/sessions', icon: Briefcase, label: 'Booking' },
+  { to: '/content', icon: Lightbulb, label: 'Content' },
 ]
 
 /* ── Menu-Sidebar v5.2 — Admin menu ── */
 const adminLinks: NavLinkDef[] = [
-  { to: '/admin', icon: TeamHubIcon as ComponentType<LucideProps>, label: 'Team Hub' },
-  { to: '/admin/templates', icon: ClipboardList, label: 'Assign Tasks' },
+  { to: '/admin', icon: TeamHubIcon as ComponentType<LucideProps>, label: 'Hub' },
+  { to: '/admin/templates', icon: ClipboardList, label: 'Assign' },
   { to: '/admin/my-team', icon: Users, label: 'Members' },
   { to: '/admin/health', icon: BarChart3, label: 'Analytics' },
+  { to: '/admin/flywheel', icon: PieChart, label: 'Flywheel' },
 ]
 const settingsLink: NavLinkDef = { to: '/admin/settings', icon: Settings, label: 'Settings' }
 
@@ -77,6 +105,7 @@ export default function Layout() {
   const drawerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(drawerRef, sidebarOpen)
   useRouteAnnounce()
+  useQuickKeyListener()
 
   useEffect(() => {
     if (!sidebarOpen) return
@@ -140,116 +169,135 @@ export default function Layout() {
     <div className="flex flex-col h-screen bg-bg">
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
-      {/* ── Header (full-width, flat, sticky — Menu-Sidebar v5.2) ── */}
-      <header className="h-14 border-b border-border bg-surface flex items-center px-4 lg:px-6 shrink-0 z-40">
-        {/* Mobile hamburger */}
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="p-2 rounded-xl hover:bg-surface-hover transition-colors text-text-muted lg:hidden mr-2"
-          aria-label="Open navigation menu"
-        >
-          <Menu size={20} aria-hidden="true" />
-        </button>
+      {/* ── Top header (two-row: logo/controls + horizontal nav) ── */}
+      <header className="border-b border-border bg-surface shrink-0 z-40 sticky top-0">
+        {/* Row 1: logo · (mobile hamburger) · right-aligned controls */}
+        <div className="h-14 flex items-center px-4 lg:px-6">
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 rounded-xl hover:bg-surface-hover transition-colors text-text-muted lg:hidden mr-2"
+            aria-label="Open navigation menu"
+          >
+            <Menu size={20} aria-hidden="true" />
+          </button>
 
-        {/* Left: Logo + title */}
-        <div className="flex items-center gap-3">
-          <img
-            src={checkmarkLogo}
-            alt="Checkmark Audio logo"
-            className="w-8 h-8 object-contain"
-          />
-          <div className="leading-tight">
-            <h1 className="font-bold text-sm tracking-tight text-text">Checkmark Audio</h1>
-            <p className="text-[11px] text-gold font-medium">dashboard</p>
+          {/* Left: Logo + title */}
+          <div className="flex items-center gap-3">
+            <img
+              src={checkmarkLogo}
+              alt="Checkmark Audio logo"
+              className="w-8 h-8 object-contain"
+            />
+            <div className="leading-tight">
+              <h1 className="font-bold text-sm tracking-tight text-text">Checkmark Audio</h1>
+              <p className="text-[11px] text-gold font-medium">dashboard</p>
+            </div>
+          </div>
+
+          {/* Right section: Clock + Profile */}
+          <div className="ml-auto flex items-center gap-4">
+            {/* Clock In / Clock Out */}
+            {!clockedIn ? (
+              <button
+                onClick={() => { setClockedIn(true); setClockInTime(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })) }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold text-black text-[12px] font-bold hover:bg-gold-muted transition-all shadow-sm"
+              >
+                <Clock size={13} />
+                Clock In
+              </button>
+            ) : (
+              <>
+                {showSelfReport && <SelfReportModal clockInTime={clockInTime} onClose={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime('') }} onLogout={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime(''); navigate('/login') }} />}
+                <button
+                  onClick={() => setShowSelfReport(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
+                  {clockInTime} · Clock Out
+                </button>
+              </>
+            )}
+
+            {/* Profile — clickable to the signed-in user's own profile */}
+            <button
+              onClick={() => profile?.id && navigate(`/profile/${profile.id}`)}
+              disabled={!profile?.id}
+              className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer focus-ring rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div
+                className="w-10 h-10 rounded-full bg-surface-alt border-2 border-border-light text-gold flex items-center justify-center text-[14px] font-bold shrink-0"
+                title={profile?.email ?? 'Signed in'}
+              >
+                {profile?.display_name?.charAt(0)?.toUpperCase() ?? '?'}
+              </div>
+              <div className="text-right hidden sm:block">
+                <p className="text-[13px] font-semibold text-text tracking-tight truncate max-w-[140px]">
+                  {profile?.display_name ?? 'User'}
+                </p>
+                <p className="text-[11px] text-text-light truncate max-w-[180px]">
+                  {profile?.role ?? 'Member'}
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="shrink-0 p-2 rounded-lg text-text-light hover:bg-surface-hover hover:text-red-400 transition-colors focus-ring"
+              aria-label={`Sign out of ${profile?.email ?? 'this account'}`}
+              title="Sign out"
+            >
+              <LogOut size={16} aria-hidden="true" />
+            </button>
           </div>
         </div>
 
-        {/* Right section: Clock + Profile */}
-        <div className="ml-auto flex items-center gap-4">
-          {/* Clock In / Clock Out */}
-          {!clockedIn ? (
-            <button
-              onClick={() => { setClockedIn(true); setClockInTime(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })) }}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold text-black text-[12px] font-bold hover:bg-gold-muted transition-all shadow-sm"
-            >
-              <Clock size={13} />
-              Clock In
-            </button>
-          ) : (
+        {/* Row 2: horizontal top nav (desktop) — all main + admin links inline */}
+        <nav
+          className="hidden lg:flex items-center gap-1 px-4 lg:px-6 h-11 border-t border-border/60 overflow-x-auto"
+          aria-label="Primary navigation"
+        >
+          {mainLinks.map(link => (
+            <TopNavItem key={link.to} link={link} />
+          ))}
+          {isAdmin && (
             <>
-              {showSelfReport && <SelfReportModal clockInTime={clockInTime} onClose={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime('') }} onLogout={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime(''); navigate('/login') }} />}
-              <button
-                onClick={() => setShowSelfReport(true)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
-                {clockInTime} · Clock Out
-              </button>
+              <span className="mx-2 h-5 w-px bg-border/60" aria-hidden="true" />
+              {adminLinks.map(link => (
+                <TopNavItem key={link.to} link={link} />
+              ))}
+              <TopNavItem link={settingsLink} />
             </>
           )}
-
-          {/* Profile — clickable to profile page */}
-          <button onClick={() => navigate('/profile/jordan')} className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer focus-ring rounded-xl">
-            <div
-              className="w-10 h-10 rounded-full bg-surface-alt border-2 border-border-light text-gold flex items-center justify-center text-[14px] font-bold shrink-0"
-              title={profile?.email ?? 'Signed in'}
-            >
-              {profile?.display_name?.charAt(0)?.toUpperCase() ?? '?'}
-            </div>
-            <div className="text-right hidden sm:block">
-              <p className="text-[13px] font-semibold text-text tracking-tight truncate max-w-[140px]">
-                {profile?.display_name ?? 'User'}
-              </p>
-              <p className="text-[11px] text-text-light truncate max-w-[180px]">
-                {profile?.role ?? 'Member'}
-              </p>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="shrink-0 p-2 rounded-lg text-text-light hover:bg-surface-hover hover:text-red-400 transition-colors focus-ring"
-            aria-label={`Sign out of ${profile?.email ?? 'this account'}`}
-            title="Sign out"
-          >
-            <LogOut size={16} aria-hidden="true" />
-          </button>
-        </div>
+        </nav>
       </header>
 
-      <div className="flex flex-1 min-h-0">
-        {/* ── Desktop sidebar ── */}
-        <aside className="hidden lg:flex w-[220px] border-r border-border bg-surface flex-col shrink-0">
-          {sidebar}
-        </aside>
+      {/* ── Mobile drawer (unchanged — uses vertical sidebar JSX) ── */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" ref={drawerRef} role="dialog" aria-modal="true" aria-label="Navigation menu">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" role="presentation" onClick={() => setSidebarOpen(false)} />
+          <aside className="relative w-[220px] bg-surface h-full shadow-2xl animate-slide-in">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-surface-hover text-text-muted"
+              aria-label="Close navigation menu"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+            {sidebar}
+          </aside>
+        </div>
+      )}
 
-        {/* ── Mobile drawer ── */}
-        {sidebarOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden" ref={drawerRef} role="dialog" aria-modal="true" aria-label="Navigation menu">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" role="presentation" onClick={() => setSidebarOpen(false)} />
-            <aside className="relative w-[220px] bg-surface h-full shadow-2xl animate-slide-in">
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-surface-hover text-text-muted"
-                aria-label="Close navigation menu"
-              >
-                <X size={18} aria-hidden="true" />
-              </button>
-              {sidebar}
-            </aside>
-          </div>
-        )}
-
-        {/* ── Main content ── */}
-        <main id="main-content" className="flex-1 flex flex-col min-w-0" tabIndex={-1}>
-          <div className="flex-1 overflow-y-auto p-4 lg:p-8">
-            <ErrorBoundary key={location.pathname} label="This page">
-              <Outlet />
-            </ErrorBoundary>
-          </div>
-        </main>
-      </div>
+      {/* ── Main content (now full-width — nav lives in the top header) ── */}
+      <main id="main-content" className="flex-1 flex flex-col min-w-0 overflow-hidden" tabIndex={-1}>
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+          <ErrorBoundary key={location.pathname} label="This page">
+            <Outlet />
+          </ErrorBoundary>
+        </div>
+      </main>
 
       <ForcePasswordChangeModal />
     </div>

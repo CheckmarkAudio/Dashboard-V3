@@ -18,16 +18,19 @@
   --color-gold-muted: #A8893D;
   --color-gold-dim: #8a6e2f;
 
-  /* -------- Neutral surfaces (D5 refined dark) -------- */
-  --color-bg: #131318;
-  --color-surface: #1b1b22;
-  --color-surface-alt: #222228;
-  --color-surface-hover: #2a2a32;
-  --color-border: #2c2c34;
-  --color-border-light: #46464e;
-  --color-text: #d0d0d6;
-  --color-text-muted: #b0b0b8;
-  --color-text-light: #6e6e76;
+  /* -------- Neutral surfaces (D6 — slightly lighter for readability parity) --------
+     Intentional bump from D5: ~+3 on each surface step and ~+6 on borders so
+     panels, dividers, and input affordances read clearly against the bg without
+     shifting the overall dark-on-gold brand feel. Body text follows suit. */
+  --color-bg: #15151b;
+  --color-surface: #1e1e25;
+  --color-surface-alt: #26262d;
+  --color-surface-hover: #2e2e36;
+  --color-border: #34343d;
+  --color-border-light: #4d4d57;
+  --color-text: #e2e2ea;
+  --color-text-muted: #bcbcc6;
+  --color-text-light: #7e7e88;
 
   /* -------- Semantic status colors (for chips, badges, toasts, alerts) --------
      Each status has a foreground (-text) and a translucent surface (-bg) so
