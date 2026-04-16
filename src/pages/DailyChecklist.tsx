@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
-import { useTasks } from '../contexts/TaskContext'
 import CreateTaskModal from '../components/CreateTaskModal'
-import { Check, Send, Plus, Flame, Eye, EyeOff } from 'lucide-react'
+import { Check, Plus, Flame, Eye, EyeOff } from 'lucide-react'
 
 /* ── Shared task row — used identically in all 3 columns ── */
 function TaskRow({ title, due, priority, isDone, isPending, onCheck, onClickTitle, hideToday }: {
@@ -255,7 +254,6 @@ type SignOff = { name: string; date: string }
 /* ═══ COLUMN 3: Maintenance ═══ */
 function MaintenanceCol() {
   const { profile } = useAuth()
-  const [studioTime, setStudioTime] = useState('Day')
   // Team Dailies state
   const [dailyChecked, setDailyChecked] = useState<Set<string>>(new Set())
   const [dailySignOffs, setDailySignOffs] = useState<Record<string, SignOff>>({})

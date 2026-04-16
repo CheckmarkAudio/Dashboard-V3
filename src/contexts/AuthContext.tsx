@@ -3,13 +3,23 @@ import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { normalizeEmail } from '../lib/email'
 import type { TeamMember } from '../types'
+import {
+  canAccessAdmin,
+  getAppRole,
+  getRoleCapabilities,
+  type AppCapability,
+  type AppRole,
+} from '../domain/permissions'
 
 interface AuthContextType {
   user: SupabaseUser | null
   profile: TeamMember | null
   session: Session | null
   loading: boolean
+  appRole: AppRole
+  capabilities: AppCapability[]
   isAdmin: boolean
+  canAccessAdmin: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -32,7 +42,10 @@ function DevAuthProvider({ children }: { children: ReactNode }) {
     profile: mockProfile,
     session: null,
     loading: false,
+    appRole: 'admin' as AppRole,
+    capabilities: getRoleCapabilities('admin'),
     isAdmin: true,
+    canAccessAdmin: true,
     signIn: async () => ({ error: null }),
     signOut: async () => {},
     refreshProfile: async () => {},
@@ -214,16 +227,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null)
   }, [])
 
-  const value = useMemo(() => ({
-    user,
-    profile,
-    session,
-    loading,
-    isAdmin: profile?.role === 'admin',
-    signIn,
-    signOut,
-    refreshProfile,
-  }), [user, profile, session, loading, signIn, signOut, refreshProfile])
+  const value = useMemo(() => {
+    const appRole = getAppRole(profile)
+    return {
+      user,
+      profile,
+      session,
+      loading,
+      appRole,
+      capabilities: getRoleCapabilities(appRole),
+      isAdmin: canAccessAdmin(appRole),
+      canAccessAdmin: canAccessAdmin(appRole),
+      signIn,
+      signOut,
+      refreshProfile,
+    }
+  }, [user, profile, session, loading, signIn, signOut, refreshProfile])
 
   return (
     <AuthContext.Provider value={value}>

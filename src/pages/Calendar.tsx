@@ -8,9 +8,19 @@ import { ChevronLeft, ChevronRight, StickyNote, Plus } from 'lucide-react'
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7) // 7 AM to 7 PM
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+function splitClockParts(value: string): [string, string] {
+  const [left = '0', right = '0'] = value.split(':')
+  return [left, right]
+}
+
+function parseClock(value: string): [number, number] {
+  const [hours, minutes] = splitClockParts(value)
+  return [Number(hours), Number(minutes)]
+}
+
 // Compute real today and this week's dates dynamically
 function getTodayKey(): string {
-  return new Date().toISOString().split('T')[0]
+  return new Date().toISOString().split('T')[0] ?? ''
 }
 
 function getWeekDays(weekOffset: number = 0): { day: string; date: string; key: string }[] {
@@ -22,10 +32,10 @@ function getWeekDays(weekOffset: number = 0): { day: string; date: string; key: 
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    days.push({
-      day: DAY_NAMES[d.getDay()],
+      days.push({
+      day: DAY_NAMES[d.getDay()] ?? '',
       date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      key: d.toISOString().split('T')[0],
+      key: d.toISOString().split('T')[0] ?? '',
     })
   }
   return days
@@ -37,12 +47,12 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 function timeToMinutes(t: string): number {
-  const [h, m] = t.split(':').map(Number)
+  const [h, m] = parseClock(t)
   return h * 60 + m
 }
 
 function formatTime12(t: string): string {
-  const [h, m] = t.split(':').map(Number)
+  const [h, m] = parseClock(t)
   const ampm = h >= 12 ? 'PM' : 'AM'
   const hr = h % 12 || 12
   return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`
@@ -106,8 +116,9 @@ export default function Calendar() {
     const map: Record<string, typeof bookings> = {}
     for (const b of bookings) {
       if (b.status === 'Cancelled') continue
-      if (!map[b.date]) map[b.date] = []
-      map[b.date].push(b)
+      const group = map[b.date] ?? []
+      group.push(b)
+      map[b.date] = group
     }
     return map
   }, [bookings])
@@ -248,7 +259,7 @@ export default function Calendar() {
               {/* Day headers — clickable */}
               <div className="grid grid-cols-[36px_repeat(7,1fr)] border-b border-border/30">
                 <div />
-                {WEEK.map((wd, i) => {
+                {WEEK.map((wd) => {
                   const isActualToday = wd.key === TODAY_KEY
                   const isSelected = wd.key === selectedDate
                   return (

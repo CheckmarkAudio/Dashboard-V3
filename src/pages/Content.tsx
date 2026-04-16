@@ -146,7 +146,6 @@ export default function Content() {
               <p className="text-[13px] text-text-light text-center py-8">No messages yet. Start the conversation!</p>
             )}
             {messages.map(msg => {
-              const isMe = msg.sender_id === (profile?.id ?? 'dev-user')
               return (
                 <div key={msg.id} className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-surface-alt border border-border-light text-gold flex items-center justify-center text-[12px] font-bold shrink-0 mt-0.5">

@@ -19,22 +19,32 @@ const TIME_PRESETS = [
   '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM',
 ]
 
+function splitClockParts(value: string): [string, string] {
+  const [left = '', right = ''] = value.split(':')
+  return [left, right]
+}
+
+function parseClock(value: string): [number, number] {
+  const [hours, minutes] = splitClockParts(value)
+  return [Number(hours), Number(minutes)]
+}
+
 function to24(t: string): string {
-  const [time, period] = t.split(' ')
-  let [h, m] = time.split(':').map(Number)
+  const [time = '00:00', period = 'AM'] = t.split(' ')
+  let [h, m] = parseClock(time)
   if (period === 'PM' && h !== 12) h += 12
   if (period === 'AM' && h === 12) h = 0
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
 }
 
 function to12(t: string): string {
-  const [h, m] = t.split(':').map(Number)
+  const [h, m] = parseClock(t)
   const period = h >= 12 ? 'PM' : 'AM'
   const hr = h % 12 || 12
   return `${hr}:${m.toString().padStart(2, '0')} ${period}`
 }
 
-const today = () => new Date().toISOString().split('T')[0]
+const today = () => new Date().toISOString().split('T')[0] ?? ''
 
 export default function CreateBookingModal({ onClose, prefillDate, prefillTime }: { onClose: () => void; prefillDate?: string; prefillTime?: string }) {
   const { addBooking, checkConflict } = useTasks()
@@ -49,7 +59,7 @@ export default function CreateBookingModal({ onClose, prefillDate, prefillTime }
   const [startTime, setStartTime] = useState(prefillTime || '10:00')
   const [endTime, setEndTime] = useState(() => {
     if (prefillTime) {
-      const [h, m] = prefillTime.split(':').map(Number)
+      const [h, m] = parseClock(prefillTime)
       return `${(h + 1).toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
     }
     return '12:00'

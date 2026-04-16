@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useRouteAnnounce } from '../hooks/useRouteAnnounce'
 import { useQuickKeyListener } from '../hooks/useQuickKeyListener'
+import { APP_ROUTES } from '../app/routes'
 import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
@@ -76,25 +77,25 @@ function TopNavItem({ link }: { link: NavLinkDef }) {
 
 /* ── Menu-Sidebar v5.2 — Main menu ── */
 const mainLinks: NavLinkDef[] = [
-  { to: '/', icon: LayoutDashboard, label: 'Overview' },
-  { to: '/daily', icon: CheckSquare, label: 'Tasks' },
-  { to: '/calendar', icon: Calendar, label: 'Calendar' },
-  { to: '/sessions', icon: Briefcase, label: 'Booking' },
-  { to: '/content', icon: Lightbulb, label: 'Content' },
+  { to: APP_ROUTES.member.overview, icon: LayoutDashboard, label: 'Overview' },
+  { to: APP_ROUTES.member.tasks, icon: CheckSquare, label: 'Tasks' },
+  { to: APP_ROUTES.member.calendar, icon: Calendar, label: 'Calendar' },
+  { to: APP_ROUTES.member.booking, icon: Briefcase, label: 'Booking' },
+  { to: APP_ROUTES.member.content, icon: Lightbulb, label: 'Content' },
 ]
 
 /* ── Menu-Sidebar v5.2 — Admin menu ── */
 const adminLinks: NavLinkDef[] = [
-  { to: '/admin', icon: TeamHubIcon as ComponentType<LucideProps>, label: 'Hub' },
-  { to: '/admin/templates', icon: ClipboardList, label: 'Assign' },
-  { to: '/admin/my-team', icon: Users, label: 'Members' },
-  { to: '/admin/health', icon: BarChart3, label: 'Analytics' },
-  { to: '/admin/flywheel', icon: PieChart, label: 'Flywheel' },
+  { to: APP_ROUTES.admin.hub, icon: TeamHubIcon as ComponentType<LucideProps>, label: 'Hub' },
+  { to: APP_ROUTES.admin.templates, icon: ClipboardList, label: 'Assign' },
+  { to: APP_ROUTES.admin.members, icon: Users, label: 'Members' },
+  { to: APP_ROUTES.admin.analytics, icon: BarChart3, label: 'Analytics' },
+  { to: APP_ROUTES.admin.flywheel, icon: PieChart, label: 'Flywheel' },
 ]
-const settingsLink: NavLinkDef = { to: '/admin/settings', icon: Settings, label: 'Settings' }
+const settingsLink: NavLinkDef = { to: APP_ROUTES.admin.settings, icon: Settings, label: 'Settings' }
 
 export default function Layout() {
-  const { profile, isAdmin, signOut } = useAuth()
+  const { profile, canAccessAdmin, appRole, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [clockedIn, setClockedIn] = useState(false)
   const [clockInTime, setClockInTime] = useState('')
@@ -118,7 +119,7 @@ export default function Layout() {
 
   const handleSignOut = async () => {
     try { await signOut() } catch {}
-    navigate('/login')
+    navigate(APP_ROUTES.auth.login)
   }
 
   const closeDrawer = () => setSidebarOpen(false)
@@ -132,7 +133,7 @@ export default function Layout() {
           <NavItem key={link.to} link={link} onNavigate={closeDrawer} />
         ))}
 
-        {isAdmin && (
+        {canAccessAdmin && (
           <>
             <div className="pt-4 pb-1">
               <button
@@ -208,7 +209,7 @@ export default function Layout() {
               </button>
             ) : (
               <>
-                {showSelfReport && <SelfReportModal clockInTime={clockInTime} onClose={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime('') }} onLogout={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime(''); navigate('/login') }} />}
+                {showSelfReport && <SelfReportModal clockInTime={clockInTime} onClose={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime('') }} onLogout={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime(''); navigate(APP_ROUTES.auth.login) }} />}
                 <button
                   onClick={() => setShowSelfReport(true)}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all"
@@ -236,7 +237,7 @@ export default function Layout() {
                   {profile?.display_name ?? 'User'}
                 </p>
                 <p className="text-[11px] text-text-light truncate max-w-[180px]">
-                  {profile?.role ?? 'Member'}
+                  {appRole}
                 </p>
               </div>
             </button>
@@ -261,7 +262,7 @@ export default function Layout() {
           {mainLinks.map(link => (
             <TopNavItem key={link.to} link={link} />
           ))}
-          {isAdmin && (
+          {canAccessAdmin && (
             <>
               <span className="mx-2 h-5 w-px bg-border/60" aria-hidden="true" />
               {adminLinks.map(link => (

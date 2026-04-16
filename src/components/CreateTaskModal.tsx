@@ -4,10 +4,10 @@ import { useTasks, STAGE_COLORS, type TaskCategory } from '../contexts/TaskConte
 import { X } from 'lucide-react'
 
 const KPI_STAGES: { key: TaskCategory; label: string; color: string }[] = [
-  { key: 'Deliver', label: 'Deliver', color: STAGE_COLORS.Deliver },
-  { key: 'Capture', label: 'Capture', color: STAGE_COLORS.Capture },
-  { key: 'Share', label: 'Share', color: STAGE_COLORS.Share },
-  { key: 'Attract', label: 'Attract', color: STAGE_COLORS.Attract },
+  { key: 'Deliver', label: 'Deliver', color: STAGE_COLORS.Deliver ?? '#34d399' },
+  { key: 'Capture', label: 'Capture', color: STAGE_COLORS.Capture ?? '#38bdf8' },
+  { key: 'Share', label: 'Share', color: STAGE_COLORS.Share ?? '#a78bfa' },
+  { key: 'Attract', label: 'Attract', color: STAGE_COLORS.Attract ?? '#fbbf24' },
 ]
 
 const OTHER_CATEGORIES: { key: TaskCategory; label: string }[] = [
@@ -16,7 +16,7 @@ const OTHER_CATEGORIES: { key: TaskCategory; label: string }[] = [
   { key: 'Maintenance', label: 'Maintenance' },
 ]
 
-const today = () => new Date().toISOString().split('T')[0]
+const today = () => new Date().toISOString().split('T')[0] ?? ''
 
 export default function CreateTaskModal({ onClose }: { onClose: () => void }) {
   const { addTask } = useTasks()

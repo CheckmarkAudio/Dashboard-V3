@@ -74,7 +74,7 @@ export default function MyTeam() {
                           <Globe size={14} />
                         </a>
                       )}
-                      {m.socials && m.socials.length > 0 && (
+                      {m.socials?.[0] && (
                         <a href={m.socials[0].url} target="_blank" rel="noopener noreferrer" className="text-text-light hover:text-gold transition-colors" title={m.socials[0].platform}>
                           <ExternalLink size={13} />
                         </a>

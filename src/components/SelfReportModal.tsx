@@ -19,10 +19,14 @@ export default function SelfReportModal({ clockInTime, onClose, onLogout }: { cl
   const totalCompleted = completedTasks.length + completedBookings.length
 
   // Group sessions by type
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = new Date().toISOString().split('T')[0] ?? ''
   const todaySessions = completedBookings.filter(b => b.date <= todayStr)
   const sessionsByType: Record<string, typeof todaySessions> = {}
-  for (const s of todaySessions) { if (!sessionsByType[s.type]) sessionsByType[s.type] = []; sessionsByType[s.type].push(s) }
+  for (const s of todaySessions) {
+    const group = sessionsByType[s.type] ?? []
+    group.push(s)
+    sessionsByType[s.type] = group
+  }
 
   // Live clock that updates every second
   const [now, setNow] = useState(new Date())

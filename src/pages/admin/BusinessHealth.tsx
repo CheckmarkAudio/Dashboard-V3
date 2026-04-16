@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useTasks } from '../../contexts/TaskContext'
-import { Check, Send } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 const STAGES = [
@@ -111,7 +111,7 @@ export default function BusinessHealth() {
                     contentStyle={{ background: '#1b1b22', border: '1px solid #2c2c34', borderRadius: 10, fontSize: 12 }}
                     labelStyle={{ color: '#d0d0d6', fontWeight: 700 }}
                     itemStyle={{ color: '#b0b0b8' }}
-                    formatter={(value: number) => [`${value}%`, 'Completed']}
+                    formatter={(value) => [`${Number(value ?? 0)}%`, 'Completed']}
                     cursor={{ fill: 'rgba(201, 168, 76, 0.05)' }}
                   />
                   <Bar dataKey="completed" radius={[6, 6, 0, 0]}>

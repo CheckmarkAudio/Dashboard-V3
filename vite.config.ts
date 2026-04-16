@@ -46,7 +46,7 @@ function deployToRoot() {
 // overrides the default if set (e.g. when deploying to a preview
 // subdirectory); the client reads the same value at runtime via
 // `import.meta.env.BASE_URL` (Vite exposes `base` there automatically).
-const BASE_PATH = process.env.VITE_BASE_PATH ?? '/Intern-Dashboard/'
+const BASE_PATH = process.env.VITE_BASE_PATH ?? '/Dashboard-V3/'
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), deployToRoot()],
