@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { AdminOverviewProvider } from '../../contexts/AdminOverviewContext'
 import { supabase } from '../../lib/supabase'
 import { localDateKey } from '../../lib/dates'
 import { useToast } from '../Toast'
@@ -116,7 +117,9 @@ export default function TeamPulseTab() {
     <div className="space-y-6">
       {/* Phase 5.3 — pending task_edit_requests, admin-only. Lives at the top
           of TeamPulseTab so approvals are never more than one click away. */}
-      <ApprovalsPanel />
+      <AdminOverviewProvider>
+        <ApprovalsPanel />
+      </AdminOverviewProvider>
 
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-4">

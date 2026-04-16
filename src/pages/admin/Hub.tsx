@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { AdminOverviewProvider } from '../../contexts/AdminOverviewContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
 import {
@@ -165,26 +166,27 @@ export default function AdminHub() {
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-6 animate-fade-in">
-      <PageHeader
-        icon={UsersRound}
-        title="Team Hub"
-        subtitle="Everything you need to orchestrate your team, in one place."
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={loadMembers}
-              loading={loading}
-            >
-              Refresh
-            </Button>
-          </div>
-        }
-      />
+    <AdminOverviewProvider>
+      <div className="max-w-[1400px] mx-auto space-y-6 animate-fade-in">
+        <PageHeader
+          icon={UsersRound}
+          title="Team Hub"
+          subtitle="Everything you need to orchestrate your team, in one place."
+          actions={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={loadMembers}
+                loading={loading}
+              >
+                Refresh
+              </Button>
+            </div>
+          }
+        />
 
-      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+        <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         {/* Left rail — member list */}
         <aside className="space-y-2">
           <div className="bg-surface rounded-2xl border border-border p-2">
@@ -292,8 +294,9 @@ export default function AdminHub() {
             <CalendarTab selectedMember={selectedMember} />
           )}
         </section>
+        </div>
       </div>
-    </div>
+    </AdminOverviewProvider>
   )
 }
 

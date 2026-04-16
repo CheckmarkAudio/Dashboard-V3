@@ -19,6 +19,7 @@ interface WorkspacePanelProps {
   definitions: WorkspaceWidgetDefinition[]
   controlsTitle?: string
   controlsDescription: string
+  showControls?: boolean
 }
 
 export default function WorkspacePanel({
@@ -28,6 +29,7 @@ export default function WorkspacePanel({
   definitions,
   controlsTitle = 'Workspace Controls',
   controlsDescription,
+  showControls = true,
 }: WorkspacePanelProps) {
   const definitionsById = useMemo(
     () => new Map(definitions.map((widget) => [widget.id, widget])),
@@ -49,45 +51,47 @@ export default function WorkspacePanel({
 
   return (
     <div className="space-y-4">
-      <Card flush flat>
-        <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-section text-text">{controlsTitle}</h2>
-            <p className="mt-1 text-caption">{controlsDescription}</p>
+      {showControls && (
+        <Card flush flat>
+          <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-section text-text">{controlsTitle}</h2>
+              <p className="mt-1 text-caption">{controlsDescription}</p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              iconLeft={<RotateCcw size={14} />}
+              onClick={resetLayout}
+            >
+              Reset layout
+            </Button>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            iconLeft={<RotateCcw size={14} />}
-            onClick={resetLayout}
-          >
-            Reset layout
-          </Button>
-        </div>
-        <div className="p-5 flex flex-wrap gap-2">
-          {layout.widgets
-            .slice()
-            .sort((a, b) => a.order - b.order)
-            .map((widget) => {
-              const definition = definitionsById.get(widget.id)
-              if (!definition) return null
-              return (
-                <button
-                  key={widget.id}
-                  type="button"
-                  onClick={() => toggleWidgetVisibility(widget.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                    widget.visible
-                      ? 'bg-gold/10 text-gold border-gold/30'
-                      : 'bg-surface-alt text-text-muted border-border hover:text-text'
-                  }`}
-                >
-                  {widget.visible ? 'Hide' : 'Show'} {definition.title}
-                </button>
-              )
-            })}
-        </div>
-      </Card>
+          <div className="p-5 flex flex-wrap gap-2">
+            {layout.widgets
+              .slice()
+              .sort((a, b) => a.order - b.order)
+              .map((widget) => {
+                const definition = definitionsById.get(widget.id)
+                if (!definition) return null
+                return (
+                  <button
+                    key={widget.id}
+                    type="button"
+                    onClick={() => toggleWidgetVisibility(widget.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      widget.visible
+                        ? 'bg-gold/10 text-gold border-gold/30'
+                        : 'bg-surface-alt text-text-muted border-border hover:text-text'
+                    }`}
+                  >
+                    {widget.visible ? 'Hide' : 'Show'} {definition.title}
+                  </button>
+                )
+              })}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch auto-rows-[minmax(260px,auto)]">
         {visibleWidgets.map((widget, index) => {

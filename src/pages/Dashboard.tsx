@@ -1,4 +1,5 @@
 import { LayoutDashboard } from 'lucide-react'
+import { MemberOverviewProvider } from '../contexts/MemberOverviewContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import WorkspacePanel from '../components/dashboard/WorkspacePanel'
@@ -17,15 +18,18 @@ export default function Dashboard() {
       <PageHeader
         icon={LayoutDashboard}
         title="Overview"
-        subtitle="Your personalized studio workspace. Reorder panels now; richer widget controls come next."
+        subtitle="Your day at a glance: what needs attention, what is booked, and what still needs to be finished today."
       />
-      <WorkspacePanel
-        role={appRole}
-        userId={profile?.id ?? 'guest'}
-        scope={scope}
-        definitions={memberDefinitions}
-        controlsDescription="This is the start of the widget system. Widgets are now registered, persisted per user, and ready for deeper customization."
-      />
+      <MemberOverviewProvider>
+        <WorkspacePanel
+          role={appRole}
+          userId={profile?.id ?? 'guest'}
+          scope={scope}
+          definitions={memberDefinitions}
+          controlsDescription="This is the start of the widget system. Widgets are now registered, persisted per user, and ready for deeper customization."
+          showControls={false}
+        />
+      </MemberOverviewProvider>
     </div>
   )
 }

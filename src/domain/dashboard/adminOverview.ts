@@ -1,6 +1,7 @@
 import { localDateKey } from '../../lib/dates'
 import { loadWeekEvents } from '../../lib/calendar'
 import { supabase } from '../../lib/supabase'
+import type { PendingTaskEdit } from '../../hooks/useChecklist'
 import type { CalendarEvent, TeamMember } from '../../types'
 
 export interface AdminOverviewTeamMember {
@@ -20,6 +21,12 @@ export interface AdminOverviewSnapshot {
   pendingEditRequests: number
   pendingSubmissionReviews: number
   members: AdminOverviewTeamMember[]
+}
+
+export interface EnrichedApprovalRequest extends PendingTaskEdit {
+  requester_display_name: string
+  instance_date: string | null
+  instance_frequency: string | null
 }
 
 export async function loadAdminOverviewSnapshot(): Promise<AdminOverviewSnapshot> {
@@ -122,4 +129,42 @@ export async function loadAdminTodaySchedule(): Promise<CalendarEvent[]> {
   return events
     .filter((event) => event.date === today && event.kind !== 'schedule_focus')
     .sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''))
+}
+
+export async function loadPendingApprovalRequests(): Promise<EnrichedApprovalRequest[]> {
+  const reqsRes = await supabase
+    .from('task_edit_requests')
+    .select('id, instance_id, item_id, change_type, proposed_text, previous_text, proposed_category, status, requested_at, requested_by')
+    .eq('status', 'pending')
+    .order('requested_at', { ascending: false })
+
+  if (reqsRes.error) throw reqsRes.error
+
+  const requests = (reqsRes.data ?? []) as PendingTaskEdit[]
+  if (requests.length === 0) return []
+
+  const requesterIds = Array.from(new Set(requests.map((request) => request.requested_by)))
+  const instanceIds = Array.from(new Set(requests.map((request) => request.instance_id)))
+
+  const [usersRes, instancesRes] = await Promise.all([
+    supabase.from('intern_users').select('id, display_name').in('id', requesterIds),
+    supabase.from('intern_checklist_instances').select('id, period_date, frequency').in('id', instanceIds),
+  ])
+
+  if (usersRes.error) throw usersRes.error
+  if (instancesRes.error) throw instancesRes.error
+
+  const userMap = new Map(
+    ((usersRes.data ?? []) as Array<{ id: string; display_name: string }>).map((user) => [user.id, user.display_name]),
+  )
+  const instanceMap = new Map(
+    ((instancesRes.data ?? []) as Array<{ id: string; period_date: string; frequency: string }>).map((instance) => [instance.id, instance]),
+  )
+
+  return requests.map((request) => ({
+    ...request,
+    requester_display_name: userMap.get(request.requested_by) ?? 'Unknown',
+    instance_date: instanceMap.get(request.instance_id)?.period_date ?? null,
+    instance_frequency: instanceMap.get(request.instance_id)?.frequency ?? null,
+  }))
 }

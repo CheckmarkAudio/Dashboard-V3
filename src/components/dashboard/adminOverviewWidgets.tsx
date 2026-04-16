@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertCircle,
@@ -10,9 +9,7 @@ import {
   Users,
 } from 'lucide-react'
 import { APP_ROUTES } from '../../app/routes'
-import { loadAdminOverviewSnapshot, loadAdminTodaySchedule } from '../../domain/dashboard/adminOverview'
-import type { AdminOverviewSnapshot } from '../../domain/dashboard/adminOverview'
-import type { CalendarEvent } from '../../types'
+import { useAdminOverviewContext } from '../../contexts/AdminOverviewContext'
 
 function formatTimeLabel(value?: string | null): string {
   if (!value) return 'All day'
@@ -24,64 +21,8 @@ function formatTimeLabel(value?: string | null): string {
   return `${hour12}:${String(minute).padStart(2, '0')} ${suffix}`
 }
 
-function useAdminOverviewSnapshotState() {
-  const [snapshot, setSnapshot] = useState<AdminOverviewSnapshot | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    loadAdminOverviewSnapshot()
-      .then((next) => {
-        if (cancelled) return
-        setSnapshot(next)
-        setError(null)
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return
-        const message = err instanceof Error ? err.message : 'Failed to load overview data'
-        setError(message)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [])
-
-  return { snapshot, loading, error }
-}
-
-function useAdminTodayScheduleState() {
-  const [events, setEvents] = useState<CalendarEvent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    loadAdminTodaySchedule()
-      .then((next) => {
-        if (cancelled) return
-        setEvents(next)
-        setError(null)
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return
-        const message = err instanceof Error ? err.message : 'Failed to load today schedule'
-        setError(message)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [])
-
-  return { events, loading, error }
-}
-
 export function TeamFocusWidget() {
-  const { snapshot, loading, error } = useAdminOverviewSnapshotState()
+  const { snapshot, loading, error } = useAdminOverviewContext()
 
   if (loading) {
     return (
@@ -155,7 +96,7 @@ export function TeamFocusWidget() {
 }
 
 export function ApprovalQueueWidget() {
-  const { snapshot, loading, error } = useAdminOverviewSnapshotState()
+  const { snapshot, loading, error } = useAdminOverviewContext()
 
   if (loading) {
     return (
@@ -206,7 +147,7 @@ export function ApprovalQueueWidget() {
 }
 
 export function AdminScheduleWidget() {
-  const { events, loading, error } = useAdminTodayScheduleState()
+  const { schedule: events, loading, error } = useAdminOverviewContext()
 
   if (loading) {
     return (

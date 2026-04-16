@@ -1,48 +1,32 @@
-import type { BookingItem, TaskItem } from '../../contexts/TaskContext'
+import { getKPITrend } from '../../lib/kpi'
+import type { MemberKPI, MemberKPIEntry } from '../../types'
 
 export interface FlywheelChartDatum {
-  name: 'Deliver' | 'Capture' | 'Share' | 'Attract' | 'Book'
+  name: 'Tasks' | 'Sessions' | 'Must-Do' | 'KPI'
   pct: number
 }
 
-export function getTodayBookings(bookings: BookingItem[], todayKey: string): BookingItem[] {
-  return bookings
-    .filter((booking) => booking.date === todayKey && booking.status !== 'Cancelled')
-    .sort((a, b) => a.startTime.localeCompare(b.startTime))
-}
-
-function stageCompletion(tasks: TaskItem[], stage: FlywheelChartDatum['name']): number {
-  const stageTasks = tasks.filter((task) => task.stage === stage)
-  if (stageTasks.length === 0) return 0
-  const completed = stageTasks.filter((task) => task.completed).length
-  return Math.round((completed / stageTasks.length) * 100)
-}
-
-export function getFlywheelChartData(
-  tasks: TaskItem[],
-  bookings: BookingItem[],
+export function buildMemberPerformanceChartData(
+  dailyCompletion: number,
+  sessionCount: number,
+  mustDoComplete: boolean,
+  primaryKpi: MemberKPI | null,
+  kpiEntries: MemberKPIEntry[],
 ): FlywheelChartDatum[] {
+  const latestKpi = kpiEntries[kpiEntries.length - 1]?.value ?? null
+  const kpiPct = primaryKpi && primaryKpi.target_value && latestKpi !== null
+    ? Math.min(100, Math.round((Number(latestKpi) / Number(primaryKpi.target_value)) * 100))
+    : 0
+
   return [
-    { name: 'Deliver', pct: stageCompletion(tasks, 'Deliver') },
-    { name: 'Capture', pct: stageCompletion(tasks, 'Capture') },
-    { name: 'Share', pct: stageCompletion(tasks, 'Share') },
-    { name: 'Attract', pct: stageCompletion(tasks, 'Attract') },
-    {
-      name: 'Book',
-      pct: bookings.length
-        ? Math.round((bookings.filter((booking) => booking.status === 'Confirmed').length / bookings.length) * 100)
-        : 0,
-    },
+    { name: 'Tasks', pct: dailyCompletion },
+    { name: 'Sessions', pct: Math.min(100, sessionCount * 25) },
+    { name: 'Must-Do', pct: mustDoComplete ? 100 : 0 },
+    { name: 'KPI', pct: kpiPct },
   ]
 }
 
-export function getFlywheelCompletionSummary(tasks: TaskItem[], bookings: BookingItem[]) {
-  const completedCount =
-    tasks.filter((task) => task.completed).length +
-    bookings.filter((booking) => booking.status === 'Confirmed').length
-
-  return {
-    completedCount,
-    totalCount: tasks.length + bookings.length,
-  }
+export function getKpiTrendLabel(entries: MemberKPIEntry[]): 'up' | 'down' | 'flat' | null {
+  if (entries.length === 0) return null
+  return getKPITrend(entries)
 }

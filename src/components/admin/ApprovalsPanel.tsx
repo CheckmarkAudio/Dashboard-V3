@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAdminOverviewContext } from '../../contexts/AdminOverviewContext'
 import { useToast } from '../Toast'
 import { Badge, Button, Input, Modal } from '../ui'
 import type { PendingTaskEdit } from '../../hooks/useChecklist'
+import type { EnrichedApprovalRequest } from '../../domain/dashboard/adminOverview'
 import {
   Check, X, Clock, Plus, Pencil, Trash2, Loader2, CheckCircle2, Layers,
 } from 'lucide-react'
@@ -23,18 +25,12 @@ import {
  * Phase 5.4 will also render it inside the new admin Hub's Approvals tab.
  */
 
-interface EnrichedRequest extends PendingTaskEdit {
-  // Enriched fields we look up for display:
-  requester_display_name: string
-  instance_date: string | null
-  instance_frequency: string | null
-}
+type EnrichedRequest = EnrichedApprovalRequest
 
 export default function ApprovalsPanel() {
   const { isAdmin } = useAuth()
   const { toast } = useToast()
-  const [requests, setRequests] = useState<EnrichedRequest[]>([])
-  const [loading, setLoading] = useState(true)
+  const { approvalRequests, loading, refetch } = useAdminOverviewContext()
   const [busyId, setBusyId] = useState<string | null>(null)
   // Per-row template sync toggle — defaults to true (mirror change to template).
   const [applyToTemplate, setApplyToTemplate] = useState<Record<string, boolean>>({})
@@ -42,67 +38,10 @@ export default function ApprovalsPanel() {
   const [rejectReason, setRejectReason] = useState('')
   const [rejecting, setRejecting] = useState(false)
 
-  const load = useCallback(async () => {
-    if (!isAdmin) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-
-    // Fetch pending requests. task_edit_requests has team-scoped RLS that
-    // restricts SELECT to the admin's team already, so we don't need to
-    // filter by team_id explicitly here.
-    const { data: reqs, error: reqErr } = await supabase
-      .from('task_edit_requests')
-      .select('id, instance_id, item_id, change_type, proposed_text, previous_text, proposed_category, status, requested_at, requested_by')
-      .eq('status', 'pending')
-      .order('requested_at', { ascending: false })
-    if (reqErr) {
-      console.error('[ApprovalsPanel] failed to load requests:', reqErr)
-      toast('Failed to load pending approvals', 'error')
-      setLoading(false)
-      return
-    }
-    if (!reqs || reqs.length === 0) {
-      setRequests([])
-      setLoading(false)
-      return
-    }
-
-    // Look up requester display names + instance dates in parallel.
-    const requesterIds = Array.from(new Set(reqs.map(r => r.requested_by)))
-    const instanceIds = Array.from(new Set(reqs.map(r => r.instance_id)))
-    const [usersRes, instancesRes] = await Promise.all([
-      supabase.from('intern_users').select('id, display_name').in('id', requesterIds),
-      supabase.from('intern_checklist_instances').select('id, period_date, frequency').in('id', instanceIds),
-    ])
-    const userMap = new Map(
-      (usersRes.data ?? []).map((u: { id: string; display_name: string }) => [u.id, u.display_name])
-    )
-    const instMap = new Map(
-      (instancesRes.data ?? []).map((i: { id: string; period_date: string; frequency: string }) => [i.id, i])
-    )
-
-    setRequests(
-      (reqs as PendingTaskEdit[]).map(r => ({
-        ...r,
-        requester_display_name: userMap.get(r.requested_by) ?? 'Unknown',
-        instance_date: instMap.get(r.instance_id)?.period_date ?? null,
-        instance_frequency: instMap.get(r.instance_id)?.frequency ?? null,
-      })),
-    )
-    setLoading(false)
-  }, [isAdmin, toast])
-
-  useEffect(() => { load() }, [load])
+  const requests = approvalRequests
 
   const handleApprove = async (req: EnrichedRequest) => {
     setBusyId(req.id)
-    // Remove optimistically so the UI feels snappy. If the RPC errors we
-    // put it back and toast the problem.
-    const before = requests
-    setRequests(prev => prev.filter(r => r.id !== req.id))
-
     const sync = applyToTemplate[req.id] !== false
     const { error } = await supabase.rpc('approve_task_edit_request', {
       p_request_id: req.id,
@@ -112,12 +51,12 @@ export default function ApprovalsPanel() {
     if (error) {
       console.error('[ApprovalsPanel] approve failed:', error)
       toast(error.message || 'Approve failed', 'error')
-      setRequests(before)
       setBusyId(null)
       return
     }
 
     toast(sync ? 'Approved and updated template' : 'Approved — instance only')
+    await refetch()
     setBusyId(null)
   }
 
@@ -144,7 +83,7 @@ export default function ApprovalsPanel() {
       return
     }
     toast('Request rejected')
-    setRequests(prev => prev.filter(r => r.id !== rejectTarget.id))
+    await refetch()
     setRejectTarget(null)
     setRejectReason('')
   }
@@ -172,7 +111,7 @@ export default function ApprovalsPanel() {
             <Badge variant="warning" size="sm">{requests.length}</Badge>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
+        <Button variant="ghost" size="sm" onClick={() => void refetch()} disabled={loading}>
           {loading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : 'Refresh'}
         </Button>
       </header>
