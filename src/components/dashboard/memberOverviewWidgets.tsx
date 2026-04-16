@@ -12,7 +12,11 @@ import {
 } from 'lucide-react'
 import { APP_ROUTES } from '../../app/routes'
 import { useTasks } from '../../contexts/TaskContext'
-import type { OverviewWidgetDefinition } from '../../domain/workspaces/types'
+import {
+  getFlywheelChartData,
+  getFlywheelCompletionSummary,
+  getTodayBookings,
+} from '../../domain/dashboard/memberOverview'
 
 const platforms = [
   { name: 'Instagram', icon: Instagram, followers: '128.4K' },
@@ -140,10 +144,7 @@ export function TodayCalendarWidget() {
     day: 'numeric',
     year: 'numeric',
   })
-
-  const todayBookings = bookings
-    .filter((booking) => booking.date === todayKey && booking.status !== 'Cancelled')
-    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+  const todayBookings = getTodayBookings(bookings, todayKey)
 
   return (
     <div className="flex flex-col h-full">
@@ -290,14 +291,8 @@ export function TeamTasksWidget() {
 
 export function FlywheelSummaryWidget() {
   const { tasks, bookings } = useTasks()
-
-  const chartData = [
-    { name: 'Deliver', pct: (() => { const stage = tasks.filter((task) => task.stage === 'Deliver'); return stage.length ? Math.round((stage.filter((task) => task.completed).length / stage.length) * 100) : 0 })() },
-    { name: 'Capture', pct: (() => { const stage = tasks.filter((task) => task.stage === 'Capture'); return stage.length ? Math.round((stage.filter((task) => task.completed).length / stage.length) * 100) : 0 })() },
-    { name: 'Share', pct: (() => { const stage = tasks.filter((task) => task.stage === 'Share'); return stage.length ? Math.round((stage.filter((task) => task.completed).length / stage.length) * 100) : 0 })() },
-    { name: 'Attract', pct: (() => { const stage = tasks.filter((task) => task.stage === 'Attract'); return stage.length ? Math.round((stage.filter((task) => task.completed).length / stage.length) * 100) : 0 })() },
-    { name: 'Book', pct: bookings.length ? Math.round((bookings.filter((booking) => booking.status === 'Confirmed').length / bookings.length) * 100) : 0 },
-  ]
+  const chartData = getFlywheelChartData(tasks, bookings)
+  const completion = getFlywheelCompletionSummary(tasks, bookings)
 
   return (
     <div className="h-full flex flex-col">
@@ -307,9 +302,7 @@ export function FlywheelSummaryWidget() {
           <ChevronRight size={12} className="text-text-light group-hover:text-gold transition-colors" />
         </Link>
         <span className="text-[10px] text-text-light">
-          {tasks.filter((task) => task.completed).length + bookings.filter((booking) => booking.status === 'Confirmed').length}
-          {' / '}
-          {tasks.length + bookings.length} completed
+          {completion.completedCount} / {completion.totalCount} completed
         </span>
       </div>
       <div className="h-[110px]">
@@ -331,38 +324,3 @@ export function FlywheelSummaryWidget() {
     </div>
   )
 }
-
-export const OVERVIEW_WIDGET_DEFINITIONS: OverviewWidgetDefinition[] = [
-  {
-    id: 'team_snapshot',
-    title: 'Team Snapshot',
-    description: 'Quick access to the current team and top channels.',
-    defaultSpan: 1,
-    allowedRoles: ['member', 'admin', 'owner'],
-    component: TeamSnapshotWidget,
-  },
-  {
-    id: 'today_calendar',
-    title: 'Today Calendar',
-    description: 'Your current booking picture for today.',
-    defaultSpan: 1,
-    allowedRoles: ['member', 'admin', 'owner'],
-    component: TodayCalendarWidget,
-  },
-  {
-    id: 'team_tasks',
-    title: 'Team Tasks',
-    description: 'Position-based team task snapshot.',
-    defaultSpan: 1,
-    allowedRoles: ['member', 'admin', 'owner'],
-    component: TeamTasksWidget,
-  },
-  {
-    id: 'flywheel_summary',
-    title: 'Flywheel Summary',
-    description: 'Fast read on progress across the core business loop.',
-    defaultSpan: 3,
-    allowedRoles: ['member', 'admin', 'owner'],
-    component: FlywheelSummaryWidget,
-  },
-]

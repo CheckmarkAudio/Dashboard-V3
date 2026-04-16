@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AppRole } from '../domain/permissions'
-import { getDefaultOverviewLayout } from '../domain/workspaces/overviewDefaults'
+import { getDefaultWorkspaceLayout } from '../domain/workspaces/registry'
 import { loadWorkspaceLayout, saveWorkspaceLayout } from '../domain/workspaces/storage'
-import type { OverviewWidgetDefinition, WorkspaceLayout, WorkspaceWidgetState } from '../domain/workspaces/types'
+import type {
+  WorkspaceLayout,
+  WorkspaceScope,
+  WorkspaceWidgetDefinition,
+  WorkspaceWidgetState,
+} from '../domain/workspaces/types'
 
-interface UseOverviewWorkspaceOptions {
+interface UseWorkspaceLayoutOptions {
+  scope: WorkspaceScope
   role: AppRole
   userId: string
-  definitions: OverviewWidgetDefinition[]
+  definitions: WorkspaceWidgetDefinition[]
 }
 
 function sortWidgets(widgets: WorkspaceWidgetState[]): WorkspaceWidgetState[] {
@@ -16,16 +22,17 @@ function sortWidgets(widgets: WorkspaceWidgetState[]): WorkspaceWidgetState[] {
 
 function sanitizeLayout(
   layout: WorkspaceLayout,
+  scope: WorkspaceScope,
   role: AppRole,
-  definitions: OverviewWidgetDefinition[],
+  definitions: WorkspaceWidgetDefinition[],
 ): WorkspaceLayout {
   const allowedIds = new Set(
     definitions
-      .filter((widget) => widget.allowedRoles.includes(role))
+      .filter((widget) => widget.scopes.includes(scope) && widget.allowedRoles.includes(role))
       .map((widget) => widget.id),
   )
 
-  const defaults = getDefaultOverviewLayout(role)
+  const defaults = getDefaultWorkspaceLayout(scope, role)
   const existing = sortWidgets(layout.widgets).filter((widget) => allowedIds.has(widget.id))
   const existingIds = new Set(existing.map((widget) => widget.id))
   const missing = defaults.widgets.filter((widget) => !existingIds.has(widget.id))
@@ -41,20 +48,20 @@ function sanitizeLayout(
   }
 }
 
-export function useOverviewWorkspace({
+export function useWorkspaceLayout({
+  scope,
   role,
   userId,
   definitions,
-}: UseOverviewWorkspaceOptions) {
-  const scope = role === 'owner' || role === 'admin' ? 'admin_overview' : 'member_overview'
+}: UseWorkspaceLayoutOptions) {
   const [layout, setLayout] = useState<WorkspaceLayout>(() => {
     const saved = loadWorkspaceLayout(scope, userId)
-    return sanitizeLayout(saved ?? getDefaultOverviewLayout(role), role, definitions)
+    return sanitizeLayout(saved ?? getDefaultWorkspaceLayout(scope, role), scope, role, definitions)
   })
 
   useEffect(() => {
-    setLayout((current) => sanitizeLayout(current, role, definitions))
-  }, [role, definitions])
+    setLayout((current) => sanitizeLayout(current, scope, role, definitions))
+  }, [scope, role, definitions])
 
   useEffect(() => {
     saveWorkspaceLayout(layout, userId)
@@ -93,7 +100,7 @@ export function useOverviewWorkspace({
   }
 
   const resetLayout = () => {
-    setLayout(getDefaultOverviewLayout(role))
+    setLayout(getDefaultWorkspaceLayout(scope, role))
   }
 
   return {

@@ -15,8 +15,11 @@ import {
 } from '../../components/ui'
 import ApprovalsPanel from '../../components/admin/ApprovalsPanel'
 import MemberAssignmentsPanel from '../../components/admin/MemberAssignmentsPanel'
+import WorkspacePanel from '../../components/dashboard/WorkspacePanel'
+import { WORKSPACE_WIDGET_DEFINITIONS } from '../../components/dashboard/widgetRegistry'
 import { loadWeekEvents } from '../../lib/calendar'
 import { addDays, startOfWeek } from '../../lib/time'
+import { getWorkspaceScopeForRole } from '../../domain/workspaces/registry'
 import type { TeamMember, ChecklistItem, CalendarEvent } from '../../types'
 import {
   UsersRound, LayoutDashboard, ListChecks, Clock, Calendar, User as UserIcon,
@@ -55,7 +58,7 @@ interface MemberSnapshot {
  */
 export default function AdminHub() {
   useDocumentTitle('Team Hub - Checkmark Audio')
-  const { isAdmin } = useAuth()
+  const { isAdmin, appRole, profile } = useAuth()
   const { toast } = useToast()
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
@@ -275,6 +278,8 @@ export default function AdminHub() {
               snapshots={snapshots}
               selectedMember={selectedMember}
               loading={loading}
+              role={appRole}
+              userId={profile?.id ?? 'guest'}
             />
           )}
           {tab === 'tasks' && (
@@ -299,12 +304,19 @@ function OverviewTab({
   snapshots,
   selectedMember,
   loading,
+  role,
+  userId,
 }: {
   members: TeamMember[]
   snapshots: Map<string, MemberSnapshot>
   selectedMember: TeamMember | null
   loading: boolean
+  role: 'owner' | 'admin' | 'member'
+  userId: string
 }) {
+  const scope = getWorkspaceScopeForRole(role)
+  const definitions = WORKSPACE_WIDGET_DEFINITIONS.filter((widget) => widget.scopes.includes(scope))
+
   if (loading && members.length === 0) {
     return (
       <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
@@ -331,18 +343,26 @@ function OverviewTab({
     )
   }
 
-  // If a specific member is selected, show their detail card. Otherwise
-  // show the whole team as a grid of summary cards.
-  if (selectedMember) {
-    const snap = snapshots.get(selectedMember.id)
-    return <MemberDetail member={selectedMember} snapshot={snap} />
-  }
-
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-      {members.map(m => (
-        <MemberDetail key={m.id} member={m} snapshot={snapshots.get(m.id)} compact />
-      ))}
+    <div className="space-y-4">
+      <WorkspacePanel
+        role={role}
+        userId={userId}
+        scope={scope}
+        definitions={definitions}
+        controlsTitle="Admin Workspace Controls"
+        controlsDescription="Admin overview is now widget-based too, so the team command center can evolve without entangling the rest of the admin app."
+      />
+
+      {selectedMember ? (
+        <MemberDetail member={selectedMember} snapshot={snapshots.get(selectedMember.id)} />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+          {members.map(m => (
+            <MemberDetail key={m.id} member={m} snapshot={snapshots.get(m.id)} compact />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
