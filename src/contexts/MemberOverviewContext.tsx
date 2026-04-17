@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useAuth } from './AuthContext'
 import { useChecklist } from '../hooks/useChecklist'
-import { supabase } from '../lib/supabase'
+import { supabase, withSupabaseRetry } from '../lib/supabase'
 import { localDateKey } from '../lib/dates'
 import { getMustDoConfig } from '../lib/mustDoConfig'
 import type { DailyNote, DeliverableSubmission, MemberKPI, MemberKPIEntry } from '../types'
@@ -62,32 +62,37 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
     const mustDoConfig = getMustDoConfig(profile.position ?? 'intern')
 
     try {
-      const [noteRes, submissionRes, sessionsRes, kpisRes, instancesRes] = await Promise.all([
-        supabase.from('intern_daily_notes').select('*').eq('intern_id', profile.id).eq('note_date', today).maybeSingle(),
-        supabase
-          .from('deliverable_submissions')
-          .select('*')
-          .eq('intern_id', profile.id)
-          .eq('submission_date', today)
-          .eq('submission_type', mustDoConfig.submissionType)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from('sessions')
-          .select('id, client_name, start_time, end_time, session_type, status, room')
-          .eq('session_date', today)
-          .eq('created_by', profile.id)
-          .order('start_time'),
-        supabase.from('member_kpis').select('*').eq('intern_id', profile.id).limit(1),
-        supabase
-          .from('intern_checklist_instances')
-          .select('id, period_date')
-          .eq('frequency', 'daily')
-          .eq('intern_id', profile.id)
-          .order('period_date', { ascending: false })
-          .limit(14),
-      ])
+      // Wrap the whole parallel fetch in the retry helper so a transient
+      // auth-lock error on any one query retries the entire batch rather
+      // than surfacing the failure to the user.
+      const [noteRes, submissionRes, sessionsRes, kpisRes, instancesRes] = await withSupabaseRetry(() =>
+        Promise.all([
+          supabase.from('intern_daily_notes').select('*').eq('intern_id', profile.id).eq('note_date', today).maybeSingle(),
+          supabase
+            .from('deliverable_submissions')
+            .select('*')
+            .eq('intern_id', profile.id)
+            .eq('submission_date', today)
+            .eq('submission_type', mustDoConfig.submissionType)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from('sessions')
+            .select('id, client_name, start_time, end_time, session_type, status, room')
+            .eq('session_date', today)
+            .eq('created_by', profile.id)
+            .order('start_time'),
+          supabase.from('member_kpis').select('*').eq('intern_id', profile.id).limit(1),
+          supabase
+            .from('intern_checklist_instances')
+            .select('id, period_date')
+            .eq('frequency', 'daily')
+            .eq('intern_id', profile.id)
+            .order('period_date', { ascending: false })
+            .limit(14),
+        ]),
+      )
 
       if (noteRes.error) throw noteRes.error
       if (submissionRes.error) throw submissionRes.error

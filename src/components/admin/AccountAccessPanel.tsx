@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, CheckCircle2, Key, Loader2, Mail, RotateCw, Shield, ShieldCheck, User as UserIcon } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { supabase, withSupabaseRetry } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
 import { Button, Modal } from '../ui'
@@ -172,12 +172,19 @@ export default function AccountAccessPanel() {
   const refetch = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, error: err } = await supabase
-        .from('intern_users')
-        .select('id, email, display_name, role, position, status')
-        .order('display_name')
-      if (err) throw err
-      setUsers((data ?? []) as AccessUser[])
+      // withSupabaseRetry silently absorbs transient auth-lock errors
+      // ("Lock ... was released because another request stole it") and
+      // network blips — up to 3 attempts with exponential backoff.
+      // Only real errors (RLS, validation, etc.) propagate to the UI.
+      const rows = await withSupabaseRetry(async () => {
+        const { data, error: err } = await supabase
+          .from('intern_users')
+          .select('id, email, display_name, role, position, status')
+          .order('display_name')
+        if (err) throw err
+        return (data ?? []) as AccessUser[]
+      })
+      setUsers(rows)
       setError(null)
     } catch (err) {
       setError(errorMessage(err, 'Failed to load accounts'))
@@ -281,24 +288,16 @@ export default function AccountAccessPanel() {
   }
 
   if (error) {
-    // Most common root cause: stale JWT after a long session (>60 min)
-    // or after the owner bounced between accounts. We surface the raw
-    // error so it's diagnosable, AND offer a one-click retry — no more
-    // "hard refresh the whole page" hacks.
-    const looksLikeAuthIssue = /jwt|auth|401|403|permission|session/i.test(error)
+    // If we're showing this, the error survived 3 auto-retries —
+    // so it's real, not a transient hiccup. Present it calmly with a
+    // clear action rather than a noisy warning.
     return (
       <div className="space-y-3">
-        <div className="flex items-start gap-2 text-sm text-amber-300 px-3 py-3 rounded-lg bg-status-warning-bg border border-amber-400/30">
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+        <div className="flex items-start gap-3 text-sm px-4 py-3.5 rounded-xl bg-surface-alt/60 border border-border">
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-400" />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-amber-200">Couldn't load accounts</p>
-            <p className="text-xs text-amber-300/90 mt-0.5 break-words">{error}</p>
-            {looksLikeAuthIssue && (
-              <p className="text-xs text-amber-300/70 mt-1.5">
-                This usually means your sign-in has aged out. Signing out and back in takes 10 seconds
-                and clears it up — otherwise try retry.
-              </p>
-            )}
+            <p className="font-semibold text-text">We couldn't load accounts.</p>
+            <p className="text-[12px] text-text-muted mt-0.5 break-words">{error}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -309,7 +308,7 @@ export default function AccountAccessPanel() {
             onClick={() => void refetch()}
             loading={loading}
           >
-            Retry
+            Try again
           </Button>
         </div>
       </div>

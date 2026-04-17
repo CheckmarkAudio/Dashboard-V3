@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { loadAdminOverviewSnapshot, loadAdminTodaySchedule, loadPendingApprovalRequests } from '../domain/dashboard/adminOverview'
+import { withSupabaseRetry } from '../lib/supabase'
 import type {
   AdminOverviewSnapshot,
   EnrichedApprovalRequest,
@@ -35,11 +36,15 @@ export function AdminOverviewProvider({ children }: { children: ReactNode }) {
   const refetch = useCallback(async () => {
     setLoading(true)
     try {
-      const [nextSnapshot, nextSchedule, nextRequests] = await Promise.all([
-        loadAdminOverviewSnapshot(),
-        loadAdminTodaySchedule(),
-        loadPendingApprovalRequests(),
-      ])
+      // Retry transient auth-lock / network errors silently; real errors
+      // still surface after 3 attempts.
+      const [nextSnapshot, nextSchedule, nextRequests] = await withSupabaseRetry(() =>
+        Promise.all([
+          loadAdminOverviewSnapshot(),
+          loadAdminTodaySchedule(),
+          loadPendingApprovalRequests(),
+        ]),
+      )
       setSnapshot(nextSnapshot)
       setSchedule(nextSchedule)
       setApprovalRequests(nextRequests)
