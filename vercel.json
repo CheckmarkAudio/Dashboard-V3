@@ -3,13 +3,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-
-  "//": "SPA fallback. React Router owns every route on the client, so any request that doesn't map to a static asset must serve index.html and let the client render the correct view. Without this, refreshing /admin or sharing a deep link returns a 404.",
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
-
-  "//headers": "Cache immutable hashed bundles aggressively, and ensure index.html is always fresh so users pick up new deploys immediately. This is the behavior GitHub Pages couldn't give us.",
   "headers": [
     {
       "source": "/assets/(.*)",
