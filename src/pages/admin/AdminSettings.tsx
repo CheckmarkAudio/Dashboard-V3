@@ -2,9 +2,10 @@ import { useState, type ComponentType, type ChangeEvent } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useQuickKeys } from '../../hooks/useQuickKeys'
+import AccountAccessPanel from '../../components/admin/AccountAccessPanel'
 import type { LucideProps } from 'lucide-react'
 import {
-  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard,
+  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield,
 } from 'lucide-react'
 
 /**
@@ -13,6 +14,7 @@ import {
  * title + subtitle (reference layout — Theme/Branding/Quick Keys etc.).
  */
 type SectionKey =
+  | 'account-access'
   | 'theme'
   | 'branding'
   | 'quick-keys'
@@ -28,12 +30,13 @@ type Section = {
 }
 
 const SECTIONS: Section[] = [
-  { key: 'theme',         icon: Sun,       title: 'Theme',         subtitle: 'Colors and appearance' },
-  { key: 'branding',      icon: ImageIcon, title: 'Branding',      subtitle: 'Logos and header' },
-  { key: 'quick-keys',    icon: Keyboard,  title: 'Quick Keys',    subtitle: 'Keyboard shortcuts' },
-  { key: 'organization',  icon: Globe,     title: 'Organization',  subtitle: 'Name and branding' },
-  { key: 'notifications', icon: Bell,      title: 'Notifications', subtitle: 'Alerts and preferences' },
-  { key: 'database',      icon: Database,  title: 'Database',      subtitle: 'Connection and admin' },
+  { key: 'account-access', icon: Shield,    title: 'Account Access', subtitle: 'Admin vs employee permissions' },
+  { key: 'theme',          icon: Sun,       title: 'Theme',          subtitle: 'Colors and appearance' },
+  { key: 'branding',       icon: ImageIcon, title: 'Branding',       subtitle: 'Logos and header' },
+  { key: 'quick-keys',     icon: Keyboard,  title: 'Quick Keys',     subtitle: 'Keyboard shortcuts' },
+  { key: 'organization',   icon: Globe,     title: 'Organization',   subtitle: 'Name and branding' },
+  { key: 'notifications',  icon: Bell,      title: 'Notifications',  subtitle: 'Alerts and preferences' },
+  { key: 'database',       icon: Database,  title: 'Database',       subtitle: 'Connection and admin' },
 ]
 
 /**
@@ -109,7 +112,7 @@ function KeyCapInput({
 export default function AdminSettings() {
   useDocumentTitle('Settings - Checkmark Audio')
   const { profile } = useAuth()
-  const [activeSection, setActiveSection] = useState<SectionKey>('theme')
+  const [activeSection, setActiveSection] = useState<SectionKey>('account-access')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -176,6 +179,8 @@ export default function AdminSettings() {
 
         {/* ── Right: active section content ── */}
         <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px]">
+          {activeSection === 'account-access' && <AccountAccessPanel />}
+
           {activeSection === 'theme' && (
             <div className="space-y-6">
               <header>
@@ -454,22 +459,25 @@ export default function AdminSettings() {
         </section>
       </div>
 
-      {/* ── Save bar (global to all sections) ── */}
-      <div className="flex items-center justify-end gap-3 mt-6">
-        {saved && (
-          <span className="text-sm text-emerald-400 font-medium" role="status" aria-live="polite">
-            Settings saved!
-          </span>
-        )}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm disabled:opacity-50"
-        >
-          {saving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
-          Save Settings
-        </button>
-      </div>
+      {/* ── Save bar (global to most sections; hidden on Account Access
+            since that panel commits every toggle inline via RPC). ── */}
+      {activeSection !== 'account-access' && (
+        <div className="flex items-center justify-end gap-3 mt-6">
+          {saved && (
+            <span className="text-sm text-emerald-400 font-medium" role="status" aria-live="polite">
+              Settings saved!
+            </span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
+            Save Settings
+          </button>
+        </div>
+      )}
     </div>
   )
 }
