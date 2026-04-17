@@ -1,9 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Copy, Key, Loader2, Shield, ShieldCheck, User as UserIcon } from 'lucide-react'
+import { AlertCircle, Copy, Key, Loader2, RotateCw, Shield, ShieldCheck, User as UserIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
 import { Button, Modal } from '../ui'
+
+/**
+ * Best-effort extraction of a human-readable error message from any
+ * shape Supabase / fetch / JS might throw. Preferring the most specific
+ * field first so we never fall back to "Something went wrong".
+ */
+function errorMessage(err: unknown, fallback: string): string {
+  if (!err) return fallback
+  if (typeof err === 'string') return err
+  if (err instanceof Error && err.message) return err.message
+  if (typeof err === 'object') {
+    const e = err as Record<string, unknown>
+    if (typeof e.message === 'string' && e.message) return e.message
+    if (typeof e.error === 'string' && e.error) return e.error
+    if (typeof e.error_description === 'string' && e.error_description) return e.error_description
+  }
+  return fallback
+}
 
 /**
  * Generate a reasonably secure, readable temporary password.
@@ -164,7 +182,7 @@ export default function AccountAccessPanel() {
       setUsers((data ?? []) as AccessUser[])
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load accounts')
+      setError(errorMessage(err, 'Failed to load accounts'))
     } finally {
       setLoading(false)
     }
@@ -189,7 +207,7 @@ export default function AccountAccessPanel() {
     if (rpcErr) {
       // Roll back and surface the error.
       setUsers((prev) => prev.map((u) => (u.id === target.id ? { ...u, role: target.role } : u)))
-      setToast({ kind: 'err', message: rpcErr.message || 'Failed to update access' })
+      setToast({ kind: 'err', message: errorMessage(rpcErr, 'Failed to update access') })
     } else {
       setToast({
         kind: 'ok',
@@ -212,16 +230,30 @@ export default function AccountAccessPanel() {
     if (!resetTarget) return
     setResetPending(true)
     const newPassword = generateTempPassword()
-    const { error: rpcErr } = await supabase.rpc('owner_reset_member_password', {
-      p_user_id: resetTarget.id,
-      p_new_password: newPassword,
+
+    // Invoke the edge function instead of the old SQL RPC. The edge
+    // function uses Supabase's admin API (supabase.auth.admin.updateUserById)
+    // which keeps GoTrue's internal bookkeeping consistent — required
+    // to avoid the "updateUser hangs forever" bug that occurs when
+    // passwords are injected by raw SQL.
+    const { data, error: fnErr } = await supabase.functions.invoke<{
+      ok: boolean
+      error?: string
+      email?: string
+    }>('admin-reset-password', {
+      body: { user_id: resetTarget.id, new_password: newPassword },
     })
     setResetPending(false)
-    if (rpcErr) {
-      setResetResult({ kind: 'err', message: rpcErr.message || 'Failed to reset password' })
-    } else {
-      setResetResult({ kind: 'ok', password: newPassword })
+
+    if (fnErr) {
+      setResetResult({ kind: 'err', message: errorMessage(fnErr, 'Failed to reset password') })
+      return
     }
+    if (!data?.ok) {
+      setResetResult({ kind: 'err', message: data?.error ?? 'Failed to reset password' })
+      return
+    }
+    setResetResult({ kind: 'ok', password: newPassword })
   }, [resetTarget])
 
   const closeResetModal = useCallback(() => {
@@ -266,10 +298,37 @@ export default function AccountAccessPanel() {
   }
 
   if (error) {
+    // Most common root cause: stale JWT after a long session (>60 min)
+    // or after the owner bounced between accounts. We surface the raw
+    // error so it's diagnosable, AND offer a one-click retry — no more
+    // "hard refresh the whole page" hacks.
+    const looksLikeAuthIssue = /jwt|auth|401|403|permission|session/i.test(error)
     return (
-      <div className="flex items-center gap-2 text-sm text-amber-300 px-3 py-4 rounded-lg bg-status-warning-bg border border-amber-400/30">
-        <AlertCircle size={16} />
-        <span>{error}</span>
+      <div className="space-y-3">
+        <div className="flex items-start gap-2 text-sm text-amber-300 px-3 py-3 rounded-lg bg-status-warning-bg border border-amber-400/30">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-amber-200">Couldn't load accounts</p>
+            <p className="text-xs text-amber-300/90 mt-0.5 break-words">{error}</p>
+            {looksLikeAuthIssue && (
+              <p className="text-xs text-amber-300/70 mt-1.5">
+                This usually means your sign-in has aged out. Signing out and back in takes 10 seconds
+                and clears it up — otherwise try retry.
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            iconLeft={<RotateCw size={14} />}
+            onClick={() => void refetch()}
+            loading={loading}
+          >
+            Retry
+          </Button>
+        </div>
       </div>
     )
   }
