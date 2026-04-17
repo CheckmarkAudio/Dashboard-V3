@@ -5,6 +5,31 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Checkmark Audio - Team Dashboard</title>
+
+    <!--
+      Supabase password-recovery detection, FIRST THING after the
+      document loads. This runs before the JS bundle is parsed and
+      before the supabase-js client is constructed, so it reliably
+      catches `type=recovery` in the URL hash before supabase strips
+      it. The flag is read synchronously by AuthContext and drives
+      the top-level RecoveryGate.
+
+      The earlier approach put this in main.tsx's body — that runs
+      AFTER all ES module imports resolve, which is AFTER supabase-js
+      has already started processing the URL. An inline head script
+      is the only place guaranteed to run before any bundle code.
+    -->
+    <script>
+      (function () {
+        try {
+          var hash = window.location.hash || ''
+          var search = window.location.search || ''
+          if (hash.indexOf('type=recovery') !== -1 || search.indexOf('type=recovery') !== -1) {
+            window.sessionStorage.setItem('pending_password_recovery', '1')
+          }
+        } catch (e) { /* private mode: rely on onAuthStateChange fallback */ }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
