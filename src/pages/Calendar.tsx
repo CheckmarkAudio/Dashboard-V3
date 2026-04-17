@@ -1,8 +1,35 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
-import { useTasks } from '../contexts/TaskContext'
 import CreateBookingModal from '../components/CreateBookingModal'
-import { ChevronLeft, ChevronRight, StickyNote, Plus } from 'lucide-react'
+import { loadWeekEvents } from '../lib/calendar'
+import { addDays, startOfWeek } from '../lib/time'
+import { ChevronLeft, ChevronRight, StickyNote, Plus, AlertCircle, Loader2 } from 'lucide-react'
+
+/**
+ * Calendar-friendly booking row. Flattened from the real `sessions`
+ * + `intern_schedule_templates` join returned by `loadWeekEvents`, with
+ * field names aligned to the existing Calendar UI so the render tree
+ * below stays readable.
+ */
+interface CalendarBooking {
+  id: string
+  client: string
+  description: string
+  date: string
+  startTime: string
+  endTime: string
+  assignee: string
+  studio: string
+  status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Completed'
+  type: string
+}
+
+const SESSION_TYPE_TO_UI: Record<string, string> = {
+  recording: 'engineering',
+  mixing: 'engineering',
+  lesson: 'music_lesson',
+  meeting: 'consultation',
+}
 
 /* ── Time grid config ── */
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7) // 7 AM to 7 PM
@@ -67,10 +94,62 @@ function durationLabel(start: string, end: string): string {
 
 export default function Calendar() {
   useDocumentTitle('Calendar - Checkmark Audio')
-  const { bookings } = useTasks()
   const TODAY_KEY = getTodayKey()
   const [weekOffset, setWeekOffset] = useState(0)
   const WEEK = getWeekDays(weekOffset)
+  const [bookings, setBookings] = useState<CalendarBooking[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Load real session rows for the viewed week. Refetches any time the
+  // user navigates to a different week via the chevron controls.
+  const refetch = useCallback(async () => {
+    setLoading(true)
+    try {
+      const weekStart = addDays(startOfWeek(new Date()), weekOffset * 7)
+      const { events } = await loadWeekEvents({ weekStart, scope: 'team' })
+      const mapped: CalendarBooking[] = events
+        .filter((evt) => evt.kind === 'session' || evt.kind === 'meeting')
+        .map((evt) => {
+          // evt.id is prefixed `session:<uuid>` — preserve the original
+          // uuid so note-persistence keys don't accidentally collide with
+          // schedule focus entries.
+          const id = evt.id.startsWith('session:') ? evt.id.slice('session:'.length) : evt.id
+          // Title is "Recording · Client Name" or just "Recording" — split
+          // defensively so we always have a client label to render.
+          const [leftLabel, rightLabel] = evt.title.split(' · ')
+          const client = rightLabel?.trim() || leftLabel?.trim() || 'Studio session'
+          const description = rightLabel ? (leftLabel ?? '') : (evt.subtitle ?? '')
+          // Fall back to 'engineering' so TYPE_LABELS has a hit; the real
+          // session_type is lost in the `loadWeekEvents` projection so
+          // we derive from the event title prefix.
+          const lowerLeft = (leftLabel ?? '').toLowerCase()
+          const uiType = SESSION_TYPE_TO_UI[lowerLeft] ?? 'engineering'
+          return {
+            id,
+            client,
+            description: description || 'Studio session',
+            date: evt.date,
+            startTime: evt.start_time ?? '00:00',
+            endTime: evt.end_time ?? '00:00',
+            assignee: evt.member_name ?? 'Unassigned',
+            studio: evt.subtitle ?? 'TBD',
+            status: 'Confirmed' as const,
+            type: uiType,
+          }
+        })
+      setBookings(mapped)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load calendar')
+    } finally {
+      setLoading(false)
+    }
+  }, [weekOffset])
+
+  useEffect(() => {
+    void refetch()
+  }, [refetch])
   const weekStart = WEEK[0]?.date ?? ''
   const weekEnd = WEEK[6]?.date ?? ''
   const weekLabel = weekOffset === 0 ? 'This Week' : weekOffset === 1 ? 'Next Week' : weekOffset === -1 ? 'Last Week' : `${weekOffset > 0 ? '+' : ''}${weekOffset} Weeks`
@@ -132,10 +211,19 @@ export default function Calendar() {
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
-      {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime('') }} prefillDate={bookingPrefillDate} prefillTime={bookingPrefillTime} />}
+      {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime(''); void refetch() }} prefillDate={bookingPrefillDate} prefillTime={bookingPrefillTime} />}
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
+          {loading && <Loader2 size={14} className="animate-spin text-text-light" aria-label="Loading calendar" />}
+          {error && (
+            <span className="flex items-center gap-1 text-xs text-amber-300">
+              <AlertCircle size={12} />
+              {error}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2 text-text-muted">
           <button onClick={() => { if (weekOffset > -1) setWeekOffset(weekOffset - 1) }} className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset <= -1 ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronLeft size={16} /></button>
           <button onClick={() => setWeekOffset(0)} className="text-xs font-semibold text-gold hover:underline">{weekLabel}</button>

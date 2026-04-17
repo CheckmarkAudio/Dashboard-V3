@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { useWorkspaceLayout } from '../../hooks/useWorkspaceLayout'
 import type { AppRole } from '../../domain/permissions'
@@ -6,10 +6,17 @@ import type { WorkspaceScope, WorkspaceWidgetDefinition, WidgetSpan } from '../.
 import DashboardWidgetFrame from './DashboardWidgetFrame'
 import { Button, Card } from '../ui'
 
-function spanClass(span: WidgetSpan): string {
-  if (span === 3) return 'lg:col-span-3'
-  if (span === 2) return 'lg:col-span-2'
-  return 'lg:col-span-1'
+/**
+ * Fluid span sizing for a CSS-Grid `auto-fit` / `minmax(320px, 1fr)` layout.
+ *
+ * The parent grid uses `repeat(auto-fit, minmax(320px, 1fr))` so columns
+ * reflow algorithmically based on available width (no fixed 3-column
+ * breakpoint). When a widget asks for `span 3` on a grid where only 2
+ * tracks fit, browsers clamp the span to the available tracks, so we can
+ * express span as a simple integer without overflow concerns.
+ */
+function widgetGridStyle(span: WidgetSpan): CSSProperties {
+  return { gridColumn: `span ${span}` }
 }
 
 interface WorkspacePanelProps {
@@ -93,13 +100,16 @@ export default function WorkspacePanel({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch auto-rows-[minmax(260px,auto)]">
+      <div
+        className="grid gap-4 items-stretch auto-rows-[minmax(260px,auto)]"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}
+      >
         {visibleWidgets.map((widget, index) => {
           const definition = definitionsById.get(widget.id)
           if (!definition) return null
           const WidgetComponent = definition.component
           return (
-            <div key={widget.id} className={spanClass(widget.span)}>
+            <div key={widget.id} style={widgetGridStyle(widget.span)}>
               <DashboardWidgetFrame
                 title={definition.title}
                 description={definition.description}

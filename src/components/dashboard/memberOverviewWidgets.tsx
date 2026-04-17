@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { APP_ROUTES } from '../../app/routes'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
-import { buildMemberPerformanceChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
+import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
 
 function splitClockParts(value: string): [string, string] {
   const [left = '0', right = '0'] = value.split(':')
@@ -241,7 +241,7 @@ export function FlywheelSummaryWidget() {
   const status = <WidgetStatus error={error} loading={loading} />
   if (loading || error) return status
 
-  const chartData = buildMemberPerformanceChartData(
+  const chartData = buildMemberFlywheelChartData(
     daily.percentage,
     todaySessions.length,
     !!mustDoSubmission,
@@ -250,11 +250,20 @@ export function FlywheelSummaryWidget() {
   )
   const kpiTrendLabel = getKpiTrendLabel(kpiEntries)
 
+  // Recharts needs a numeric value; unbacked stages render with value 0
+  // but we style them differently via Cell fill/opacity so they read as
+  // "coming soon" rather than "zero."
+  const recharts = chartData.map((entry) => ({
+    name: entry.name,
+    pct: entry.pct ?? 0,
+    backed: entry.backed,
+  }))
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-2">
         <Link to={APP_ROUTES.admin.analytics} className="flex items-center gap-1 group">
-          <h3 className="text-[14px] font-bold text-text tracking-tight group-hover:text-gold transition-colors">Today’s Performance</h3>
+          <h3 className="text-[14px] font-bold text-text tracking-tight group-hover:text-gold transition-colors">Flywheel Today</h3>
           <ChevronRight size={12} className="text-text-light group-hover:text-gold transition-colors" />
         </Link>
         <span className="text-[10px] text-text-light">
@@ -271,10 +280,14 @@ export function FlywheelSummaryWidget() {
       )}
       <div className="h-[110px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData}>
-            <Bar dataKey="pct" radius={[4, 4, 0, 0]} barSize={34}>
-              {chartData.map((entry) => (
-                <Cell key={entry.name} fill="#C9A84C" fillOpacity={0.72} />
+          <BarChart data={recharts}>
+            <Bar dataKey="pct" radius={[4, 4, 0, 0]} barSize={30}>
+              {recharts.map((entry) => (
+                <Cell
+                  key={entry.name}
+                  fill="#C9A84C"
+                  fillOpacity={entry.backed ? 0.72 : 0.22}
+                />
               ))}
             </Bar>
           </BarChart>
@@ -282,7 +295,13 @@ export function FlywheelSummaryWidget() {
       </div>
       <div className="flex justify-between px-1 mt-1">
         {chartData.map((entry) => (
-          <span key={entry.name} className="text-[9px] text-text-light">{entry.name}</span>
+          <span
+            key={entry.name}
+            className={`text-[9px] ${entry.backed ? 'text-text-light' : 'text-text-light/50 italic'}`}
+            title={entry.backed ? undefined : 'Awaiting flywheel event ledger'}
+          >
+            {entry.name}
+          </span>
         ))}
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">

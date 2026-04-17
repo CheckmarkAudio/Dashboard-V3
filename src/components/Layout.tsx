@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type ComponentType } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useRouteAnnounce } from '../hooks/useRouteAnnounce'
 import { useQuickKeyListener } from '../hooks/useQuickKeyListener'
@@ -14,7 +15,7 @@ import type { LucideProps } from 'lucide-react'
 import {
   LayoutDashboard, Users, Calendar, Settings,
   LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
-  BarChart3, Briefcase, Lightbulb, Clock, PieChart,
+  BarChart3, Briefcase, Lightbulb, Clock, PieChart, Sun, Moon,
 } from 'lucide-react'
 
 type NavLinkDef = {
@@ -96,6 +97,7 @@ const settingsLink: NavLinkDef = { to: APP_ROUTES.admin.settings, icon: Settings
 
 export default function Layout() {
   const { profile, canAccessAdmin, appRole, signOut } = useAuth()
+  const { resolved: resolvedTheme, toggle: toggleTheme } = useTheme()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [clockedIn, setClockedIn] = useState(false)
   const [clockInTime, setClockInTime] = useState('')
@@ -196,8 +198,20 @@ export default function Layout() {
             </div>
           </div>
 
-          {/* Right section: Clock + Profile */}
+          {/* Right section: Theme toggle + Clock + Profile */}
           <div className="ml-auto flex items-center gap-4">
+            {/* Theme toggle — light/dark. System preference stays accessible
+                via ThemeContext for anyone who wants a future Settings UI. */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="shrink-0 p-2 rounded-lg text-text-muted hover:bg-surface-hover hover:text-gold transition-colors focus-ring"
+              aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+              title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {resolvedTheme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+            </button>
+
             {/* Clock In / Clock Out */}
             {!clockedIn ? (
               <button

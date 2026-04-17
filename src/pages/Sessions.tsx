@@ -1,27 +1,24 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
-import { useTasks } from '../contexts/TaskContext'
 import CreateBookingModal from '../components/CreateBookingModal'
-import { ExternalLink } from 'lucide-react'
+import { loadSessionsWindow, type SessionCategory, type SessionListItem } from '../domain/sessions/queries'
+import { ExternalLink, AlertCircle, Loader2 } from 'lucide-react'
 
 /* ── Booking categories ── */
-const CATEGORIES = ['All', 'Engineer', 'Consult', 'Trailing', 'Music Lesson', 'Education'] as const
-type Category = typeof CATEGORIES[number]
-
-const BOOKING_TYPE_TO_CATEGORY: Record<string, Category> = {
-  engineering: 'Engineer',
-  training: 'Trailing',
-  education: 'Education',
-  music_lesson: 'Music Lesson',
-  consultation: 'Consult',
-}
+const CATEGORIES: readonly ('All' | SessionCategory)[] = [
+  'All', 'Engineer', 'Consult', 'Trailing', 'Music Lesson', 'Education',
+] as const
+type CategoryTab = typeof CATEGORIES[number]
 
 /* ── Status dot ── */
 function StatusLabel({ status }: { status: string }) {
+  const lower = status.toLowerCase()
   return (
     <span className="flex items-center gap-1.5 text-[13px] text-text-muted">
-      {status === 'Confirmed' && <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />}
-      {status === 'Cancelled' && <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />}
+      {lower === 'confirmed' && <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />}
+      {lower === 'completed' && <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />}
+      {lower === 'pending' && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
+      {lower === 'cancelled' && <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />}
       {status}
     </span>
   )
@@ -29,35 +26,32 @@ function StatusLabel({ status }: { status: string }) {
 
 export default function Sessions() {
   useDocumentTitle('Booking Agent - Checkmark Audio')
-  const { bookings } = useTasks()
-  const [activeCategory, setActiveCategory] = useState<Category>('All')
+  const [activeCategory, setActiveCategory] = useState<CategoryTab>('All')
   const [showBooking, setShowBooking] = useState(false)
+  const [sessions, setSessions] = useState<SessionListItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Map context bookings to display format
-  const allBookings = bookings.map(b => ({
-    id: b.id,
-    client: b.client,
-    description: b.description,
-    date: b.date,
-    startTime: b.startTime,
-    endTime: b.endTime,
-    engineer: b.assignee,
-    studio: b.studio,
-    status: b.status,
-    category: BOOKING_TYPE_TO_CATEGORY[b.type] ?? ('Engineer' as Category),
-  }))
+  const refetch = useCallback(async () => {
+    setLoading(true)
+    try {
+      const next = await loadSessionsWindow()
+      setSessions(next)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load sessions')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  // Filter by category
+  useEffect(() => {
+    void refetch()
+  }, [refetch])
+
   const filtered = activeCategory === 'All'
-    ? allBookings
-    : allBookings.filter(b => b.category === activeCategory)
-
-  // Sort by date (closest first)
-  const sorted = [...filtered].sort((a, b) => {
-    const dateA = a.date + a.startTime
-    const dateB = b.date + b.startTime
-    return dateA.localeCompare(dateB)
-  })
+    ? sessions
+    : sessions.filter((row) => row.category === activeCategory)
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
@@ -81,8 +75,13 @@ export default function Sessions() {
         ))}
       </div>
 
-      {/* Book a Session CTA */}
-      {showBooking && <CreateBookingModal onClose={() => setShowBooking(false)} />}
+      {/* Book a Session CTA.
+          NOTE: CreateBookingModal still writes through TaskContext (ephemeral
+          in-memory state) rather than inserting a real `sessions` row. That
+          mutation migration is intentionally deferred — it needs a real
+          conflict-check query against the sessions table. Page refetches on
+          modal close so future real inserts will flow through. */}
+      {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); void refetch() }} />}
       <button
         onClick={() => setShowBooking(true)}
         className="w-full py-3.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-sm font-bold flex items-center justify-center gap-2 transition-colors"
@@ -93,7 +92,7 @@ export default function Sessions() {
 
       {/* Current bookings */}
       <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
           <h2 className="text-sm font-semibold text-text">Current bookings</h2>
           <div className="flex gap-1 flex-wrap">
             {CATEGORIES.map((cat) => (
@@ -114,44 +113,55 @@ export default function Sessions() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="px-5 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wide">Client</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wide">Date</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wide">Engineer</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wide">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/30">
-              {sorted.map((booking) => (
-                <tr key={booking.id} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="px-5 py-3.5">
-                    <p className="text-[14px] font-medium text-text tracking-tight">{booking.client}</p>
-                    <p className="text-[11px] text-text-light">{booking.description}</p>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <p className="text-[13px] text-text-muted">{booking.date}</p>
-                    <p className="text-[11px] text-text-light">{booking.startTime} – {booking.endTime}</p>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <p className="text-[13px] text-text-muted">{booking.engineer}</p>
-                    <p className="text-[11px] text-text-light">{booking.studio}</p>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <StatusLabel status={booking.status} />
-                  </td>
+          {loading ? (
+            <div className="px-5 py-10 flex items-center justify-center text-text-light">
+              <Loader2 size={18} className="animate-spin" />
+            </div>
+          ) : error ? (
+            <div className="px-5 py-8 flex items-center gap-2 text-sm text-amber-300">
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/50">
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wide">Client</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wide">Date</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wide">Engineer</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wide">Status</th>
                 </tr>
-              ))}
-              {sorted.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-5 py-8 text-center text-text-muted text-sm">
-                    No bookings for this category yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {filtered.map((booking) => (
+                  <tr key={booking.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-5 py-3.5">
+                      <p className="text-[14px] font-medium text-text tracking-tight">{booking.client}</p>
+                      <p className="text-[11px] text-text-light">{booking.description}</p>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <p className="text-[13px] text-text-muted">{booking.date}</p>
+                      <p className="text-[11px] text-text-light">{booking.startTime} – {booking.endTime}</p>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <p className="text-[13px] text-text-muted">{booking.engineer}</p>
+                      <p className="text-[11px] text-text-light">{booking.studio}</p>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <StatusLabel status={booking.status} />
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-8 text-center text-text-muted text-sm">
+                      No bookings for this category yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

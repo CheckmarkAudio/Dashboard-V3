@@ -33,8 +33,8 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
   },
   {
     id: 'flywheel_summary',
-    title: 'Daily Performance',
-    description: 'A fast visual read on today’s work, sessions, and KPI momentum.',
+    title: 'Flywheel Today',
+    description: 'Deliver · Capture · Share · Attract · Book — your daily snapshot on the business loop.',
     defaultSpan: 3,
     allowedRoles: ['member', 'admin', 'owner'],
     scopes: ['member_overview'],

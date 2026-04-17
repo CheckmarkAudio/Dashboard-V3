@@ -95,11 +95,37 @@
   50% { box-shadow: 0 0 0 8px rgba(201, 168, 76, 0); }
 }
 
+/* --------  Light theme surface overrides --------
+   The `@theme` block above defines the dashboard's default (dark) palette.
+   When `<html data-theme="light">` is set by ThemeContext, these overrides
+   swap only the neutral surface, border, and text tokens so the Tailwind
+   utilities (bg-surface, text-text, border-border, etc.) automatically
+   flip to light mode. Brand gold, status colors, and flywheel stage hues
+   stay constant across both themes for identity consistency.
+*/
+:root[data-theme='light'] {
+  --color-bg: #f6f5f1;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f0efea;
+  --color-surface-hover: #e7e5dc;
+  --color-border: #d9d7cf;
+  --color-border-light: #b6b3a6;
+  --color-text: #1c1c22;
+  --color-text-muted: #3f3f46;
+  --color-text-light: #6b6b72;
+}
+
 body {
   background-color: var(--color-bg);
   font-family: var(--font-sans);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+:root[data-theme='light'] body {
+  color-scheme: light;
 }
 
 @layer base {
@@ -140,7 +166,7 @@ body {
 
 @layer utilities {
   .glass {
-    background: rgba(20, 20, 20, 0.8);
+    background: color-mix(in srgb, var(--color-bg) 80%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }

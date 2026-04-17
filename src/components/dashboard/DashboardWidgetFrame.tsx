@@ -26,7 +26,11 @@ export default function DashboardWidgetFrame({
   children,
 }: DashboardWidgetFrameProps) {
   return (
-    <Card flush flat className="h-full overflow-hidden">
+    // `containerType: inline-size` makes this frame a CSS containment
+    // context so widget children can use `@container` queries to adapt
+    // their internal layout to the widget's own width, independent of
+    // viewport. Pairs with the auto-fit grid in WorkspacePanel.
+    <Card flush flat className="h-full overflow-hidden" style={{ containerType: 'inline-size' }}>
       <CardHeader className="items-start">
         <div className="min-w-0">
           <h2 className="text-section text-text">{title}</h2>
