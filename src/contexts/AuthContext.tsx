@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { supabase, withSupabaseRetry } from '../lib/supabase'
 import { normalizeEmail } from '../lib/email'
 import type { TeamMember } from '../types'
 import {
@@ -128,14 +128,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return 'found'
     }
 
-    // 1) Primary lookup: profile row whose PK already matches the auth uid.
-    const { data, error } = await supabase
-      .from('intern_users')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle()
-    if (error) {
-      console.error('[AuthContext] Profile lookup failed:', error.message, error.code)
+    // 1) Primary lookup: profile row whose PK already matches the auth
+    //    uid. Wrapped in withSupabaseRetry so a transient auth-lock
+    //    ("Lock ... was released because another request stole it") or
+    //    network blip doesn't leave the user in a profile-less state
+    //    where the UI silently falls back to `member` role.
+    let data: TeamMember | null = null
+    try {
+      data = await withSupabaseRetry(async () => {
+        const res = await supabase
+          .from('intern_users')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle()
+        if (res.error) throw res.error
+        return (res.data ?? null) as TeamMember | null
+      })
+    } catch (error) {
+      const pgErr = error as { message?: string; code?: string }
+      console.error('[AuthContext] Profile lookup failed after retries:', pgErr.message, pgErr.code)
       // For the owner, engage the fallback rather than leaving them in
       // a profile-less limbo state.
       const ownerFallback = synthesizeOwnerIfApplicable()
@@ -144,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // reject) prevents a transient blip from forcibly signing them out.
       return 'error'
     }
-    if (data) { setProfile(data as TeamMember); return 'found' }
+    if (data) { setProfile(data); return 'found' }
 
     // 2) Secondary lookup: an admin may have pre-seeded a row keyed by email
     //    before this user signed up (legacy TeamManager flow created rows
@@ -153,13 +164,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     //    update relinks the pre-seeded row to the new auth uid and the
     //    user inherits all their historical data automatically.
     if (email) {
-      const { data: emailMatch, error: emailErr } = await supabase
-        .from('intern_users')
-        .select('*')
-        .ilike('email', email)
-        .maybeSingle()
-      if (emailErr) {
-        console.error('[AuthContext] Email lookup failed:', emailErr.message)
+      let emailMatch: TeamMember | null = null
+      try {
+        emailMatch = await withSupabaseRetry(async () => {
+          const res = await supabase
+            .from('intern_users')
+            .select('*')
+            .ilike('email', email)
+            .maybeSingle()
+          if (res.error) throw res.error
+          return (res.data ?? null) as TeamMember | null
+        })
+      } catch (emailErr) {
+        const pgErr = emailErr as { message?: string }
+        console.error('[AuthContext] Email lookup failed after retries:', pgErr.message)
         return 'error'
       }
       if (emailMatch && emailMatch.id !== userId) {
@@ -224,6 +242,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true
+
+    // Detect password-recovery BEFORE supabase-js consumes the URL hash.
+    //
+    // Supabase's client parses `#type=recovery&access_token=…` inside
+    // its own constructor (effectively synchronous), which happens
+    // before this effect's `onAuthStateChange` subscribe below gets a
+    // chance to run. Result: the `PASSWORD_RECOVERY` event is fired
+    // into a void, no listener catches it, and the user just lands on
+    // the dashboard instead of seeing the "Set your password" modal.
+    //
+    // We work around the race by checking the URL ourselves here —
+    // whichever path fires first (this sync check OR the async event),
+    // isPasswordRecovery flips on, and ForcePasswordChangeModal shows
+    // up correctly.
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash ?? ''
+      const search = window.location.search ?? ''
+      if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+        setIsPasswordRecovery(true)
+      }
+    }
 
     const timeout = setTimeout(() => {
       if (mounted) setLoading(false)
