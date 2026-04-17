@@ -23,7 +23,16 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: VITE_BASE_PATH=/Dashboard-V3/ VITE_DEMO_MODE=true npx vite build
+      # Supabase public env vars are inlined here on purpose: the
+      # publishable/anon key is designed to be exposed in client bundles
+      # (security is enforced by RLS, not key secrecy). VITE_DEMO_MODE
+      # is intentionally not set so the production build uses the real
+      # AuthProvider against the Checkmark Intern Manager project.
+      - run: |
+          VITE_BASE_PATH=/Dashboard-V3/ \
+          VITE_SUPABASE_URL=https://ncljfjdcyswoeitsooty.supabase.co \
+          VITE_SUPABASE_ANON_KEY=sb_publishable_PjiISv3UpItxg200UOsa8w_JI67vZA6 \
+          npx vite build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
