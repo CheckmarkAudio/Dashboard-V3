@@ -73,11 +73,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<TeamMember | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
+  // Initialize from the sessionStorage flag set in main.tsx BEFORE
+  // React mounted. That flag is the bulletproof path — `main.tsx` runs
+  // earlier than any React effect, so it catches the recovery hash
+  // before supabase-js can strip it. Fallback: the PASSWORD_RECOVERY
+  // event listener below will also set this flag if the sessionStorage
+  // path missed it somehow.
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(() => {
+    try {
+      return window.sessionStorage.getItem('pending_password_recovery') === '1'
+    } catch {
+      return false
+    }
+  })
   const sessionInitialized = useRef(false)
 
   const clearPasswordRecovery = useCallback(() => {
     setIsPasswordRecovery(false)
+    try { window.sessionStorage.removeItem('pending_password_recovery') } catch { /* ignore */ }
   }, [])
 
   // Phase 6.4 — `buildFallbackProfile` was removed. Previously, if the

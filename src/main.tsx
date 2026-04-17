@@ -9,6 +9,27 @@ import { ToastProvider } from './components/Toast'
 import App from './App'
 import './index.css'
 
+// Detect a Supabase password-recovery link BEFORE React mounts and
+// before supabase-js strips the hash from the URL. We persist the
+// intent into sessionStorage so AuthContext can reliably pick it up
+// regardless of whether its useEffect runs before or after the hash
+// is consumed. Without this, there's a race where users click the
+// recovery email, supabase-js consumes the token silently, and the
+// app defaults them to the login page instead of the "set your
+// password" flow.
+if (typeof window !== 'undefined') {
+  const hash = window.location.hash ?? ''
+  const search = window.location.search ?? ''
+  if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+    try {
+      window.sessionStorage.setItem('pending_password_recovery', '1')
+    } catch {
+      // sessionStorage can throw in privacy-mode browsers; the
+      // onAuthStateChange PASSWORD_RECOVERY listener still catches it.
+    }
+  }
+}
+
 // Phase 3.1 — react-query cache layer.
 // One client for the whole app. Defaults tuned for an admin dashboard:
 //   * `staleTime: 30s` — most data doesn't change within a page-to-page
