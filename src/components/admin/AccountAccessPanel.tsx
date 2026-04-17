@@ -1,8 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Loader2, Shield, ShieldCheck, User as UserIcon } from 'lucide-react'
+import { AlertCircle, Copy, Key, Loader2, Shield, ShieldCheck, User as UserIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
+import { Button, Modal } from '../ui'
+
+/**
+ * Generate a reasonably secure, readable temporary password.
+ * Length 14 gives ~80 bits of entropy with the allowed alphabet, which
+ * is fine for a one-shot value the user will immediately change on
+ * first sign-in via the ForcePasswordChangeModal.
+ */
+function generateTempPassword(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%'
+  const buf = new Uint32Array(14)
+  crypto.getRandomValues(buf)
+  return Array.from(buf, (n) => alphabet[n % alphabet.length]).join('')
+}
 
 /**
  * Account Access panel (owner-only).
@@ -34,12 +48,14 @@ function UserRow({
   isPrimaryOwner,
   busy,
   onToggle,
+  onResetPassword,
 }: {
   user: AccessUser
   isOwnerViewer: boolean
   isPrimaryOwner: boolean
   busy: boolean
   onToggle: (user: AccessUser) => void
+  onResetPassword: (user: AccessUser) => void
 }) {
   const initial = user.display_name?.charAt(0)?.toUpperCase() ?? user.email.charAt(0).toUpperCase()
   const positionLabel = user.position
@@ -72,7 +88,21 @@ function UserRow({
         </p>
       </div>
 
-      {/* Toggle (owner-only). Non-owner viewers see read-only state. */}
+      {/* Reset password — owner-only, never shown on the primary owner row */}
+      {isOwnerViewer && !isPrimaryOwner && (
+        <button
+          type="button"
+          onClick={() => onResetPassword(user)}
+          disabled={busy}
+          title={`Reset password for ${user.display_name}`}
+          aria-label={`Reset password for ${user.display_name}`}
+          className="shrink-0 p-2 rounded-lg text-text-muted hover:bg-surface-hover hover:text-gold transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Key size={14} aria-hidden="true" />
+        </button>
+      )}
+
+      {/* Admin toggle (owner-only). Non-owner viewers see read-only state. */}
       <label
         className={[
           'flex items-center gap-2 shrink-0',
@@ -114,6 +144,14 @@ export default function AccountAccessPanel() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; message: string } | null>(null)
+
+  // Reset-password modal state. Lives here (not in the row component) so
+  // the temp password stays visible until the owner explicitly closes
+  // the modal — avoids any risk of it disappearing before they copy it.
+  const [resetTarget, setResetTarget] = useState<AccessUser | null>(null)
+  const [resetPending, setResetPending] = useState(false)
+  const [resetResult, setResetResult] = useState<{ kind: 'ok'; password: string } | { kind: 'err'; message: string } | null>(null)
+  const [resetCopied, setResetCopied] = useState(false)
 
   const refetch = useCallback(async () => {
     setLoading(true)
@@ -161,6 +199,46 @@ export default function AccountAccessPanel() {
     setBusyId(null)
     setTimeout(() => setToast(null), 4000)
   }, [isOwnerViewer])
+
+  const onResetPassword = useCallback((target: AccessUser) => {
+    if (!isOwnerViewer) return
+    if ((target.email ?? '').toLowerCase() === OWNER_EMAIL) return
+    setResetTarget(target)
+    setResetResult(null)
+    setResetCopied(false)
+  }, [isOwnerViewer])
+
+  const confirmReset = useCallback(async () => {
+    if (!resetTarget) return
+    setResetPending(true)
+    const newPassword = generateTempPassword()
+    const { error: rpcErr } = await supabase.rpc('owner_reset_member_password', {
+      p_user_id: resetTarget.id,
+      p_new_password: newPassword,
+    })
+    setResetPending(false)
+    if (rpcErr) {
+      setResetResult({ kind: 'err', message: rpcErr.message || 'Failed to reset password' })
+    } else {
+      setResetResult({ kind: 'ok', password: newPassword })
+    }
+  }, [resetTarget])
+
+  const closeResetModal = useCallback(() => {
+    setResetTarget(null)
+    setResetResult(null)
+    setResetCopied(false)
+  }, [])
+
+  const copyTempPassword = useCallback(async (password: string) => {
+    try {
+      await navigator.clipboard.writeText(password)
+      setResetCopied(true)
+      setTimeout(() => setResetCopied(false), 2500)
+    } catch {
+      // Clipboard API may be unavailable; fall back to leaving it visible.
+    }
+  }, [])
 
   const { admins, employees } = useMemo(() => {
     const admins: AccessUser[] = []
@@ -257,6 +335,7 @@ export default function AccountAccessPanel() {
                 isPrimaryOwner={u.email.toLowerCase() === OWNER_EMAIL}
                 busy={busyId === u.id}
                 onToggle={onToggle}
+                onResetPassword={onResetPassword}
               />
             ))
           )}
@@ -281,11 +360,84 @@ export default function AccountAccessPanel() {
                 isPrimaryOwner={false}
                 busy={busyId === u.id}
                 onToggle={onToggle}
+                onResetPassword={onResetPassword}
               />
             ))
           )}
         </section>
       </div>
+
+      {/* ── Reset password modal ──
+          Two-stage flow: confirm → generate + call RPC → display temp
+          password so the owner can share it with the team member. The
+          next login triggers ForcePasswordChangeModal, so this value is
+          one-shot. */}
+      {resetTarget && (
+        <Modal
+          open
+          onClose={closeResetModal}
+          title={resetResult?.kind === 'ok' ? 'Temporary password created' : 'Reset password'}
+          description={
+            resetResult?.kind === 'ok'
+              ? `${resetTarget.display_name} will be prompted to choose a new password the next time they sign in.`
+              : `Generate a new temporary password for ${resetTarget.display_name}. They'll be forced to set their own on the next sign-in.`
+          }
+          size="sm"
+          footer={
+            resetResult?.kind === 'ok' ? (
+              <Button variant="primary" onClick={closeResetModal}>Done</Button>
+            ) : (
+              <>
+                <Button variant="ghost" onClick={closeResetModal} disabled={resetPending}>Cancel</Button>
+                <Button
+                  variant="primary"
+                  onClick={() => void confirmReset()}
+                  loading={resetPending}
+                  iconLeft={!resetPending ? <Key size={14} aria-hidden="true" /> : undefined}
+                >
+                  Generate password
+                </Button>
+              </>
+            )
+          }
+        >
+          {resetResult?.kind === 'ok' ? (
+            <div className="space-y-3">
+              <p className="text-[13px] text-text-muted">
+                Share this password with <span className="font-semibold text-text">{resetTarget.email}</span>.
+                They'll use it once to sign in, then be prompted to set their own.
+              </p>
+              <div className="flex items-stretch gap-2">
+                <code className="flex-1 px-3 py-2.5 rounded-lg bg-surface-alt border border-border text-text text-sm font-mono select-all break-all">
+                  {resetResult.password}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => void copyTempPassword(resetResult.password)}
+                  className="shrink-0 px-3 rounded-lg border border-border bg-surface-alt hover:bg-surface-hover text-sm font-semibold text-text focus-ring transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Copy size={13} aria-hidden="true" />
+                    {resetCopied ? 'Copied' : 'Copy'}
+                  </span>
+                </button>
+              </div>
+              <p className="text-[11px] text-text-light">
+                This password won't be shown again. If you close this window before copying, just reset it again.
+              </p>
+            </div>
+          ) : resetResult?.kind === 'err' ? (
+            <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+              {resetResult.message}
+            </div>
+          ) : (
+            <p className="text-[13px] text-text-muted">
+              A secure temporary password will be generated and shown to you once. You'll need to send it to{' '}
+              <span className="font-semibold text-text">{resetTarget.email}</span> out of band.
+            </p>
+          )}
+        </Modal>
+      )}
     </div>
   )
 }
