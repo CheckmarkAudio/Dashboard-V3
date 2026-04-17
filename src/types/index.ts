@@ -176,6 +176,8 @@ export interface Session {
   room: string | null
   notes: string | null
   created_by: string | null
+  /** Team member actually working the session. Nullable until admin sets one. */
+  assigned_to: string | null
   created_at: string
 }
 

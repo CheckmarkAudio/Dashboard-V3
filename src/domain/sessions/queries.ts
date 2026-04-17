@@ -75,7 +75,7 @@ export async function loadSessionsWindow(): Promise<SessionListItem[]> {
   const [sessionsRes, membersRes] = await Promise.all([
     supabase
       .from('sessions')
-      .select('id, client_name, session_date, start_time, end_time, session_type, status, room, notes, created_by')
+      .select('id, client_name, session_date, start_time, end_time, session_type, status, room, notes, created_by, assigned_to')
       .gte('session_date', lookbackYMD)
       .order('session_date', { ascending: false })
       .order('start_time', { ascending: true })
@@ -103,6 +103,7 @@ export async function loadSessionsWindow(): Promise<SessionListItem[]> {
     room: string | null
     notes: string | null
     created_by: string | null
+    assigned_to: string | null
   }>
 
   // Upcoming first (today and after, ascending), then past (descending).
@@ -113,18 +114,70 @@ export async function loadSessionsWindow(): Promise<SessionListItem[]> {
     .filter((row) => row.session_date < today)
     .sort((a, b) => (b.session_date + b.start_time).localeCompare(a.session_date + a.start_time))
 
-  return [...upcoming, ...past].map((row) => ({
-    id: row.id,
-    client: row.client_name ?? 'Studio session',
-    description: descriptionFromRow(row),
-    date: row.session_date,
-    startTime: row.start_time,
-    endTime: row.end_time,
-    engineer: row.created_by ? (nameById.get(row.created_by) ?? 'Unassigned') : 'Unassigned',
-    studio: row.room ?? 'TBD',
-    status: titleCaseStatus(row.status),
-    category: categoryFromSessionType(row.session_type),
-    sessionType: row.session_type,
-    rawStatus: row.status,
-  }))
+  return [...upcoming, ...past].map((row) => {
+    // Prefer the explicit assignee for the "Engineer" column. Fall back
+    // to `created_by` for legacy rows booked before `assigned_to` existed
+    // so old sessions still show a name instead of "Unassigned".
+    const workingMember = row.assigned_to ?? row.created_by
+    return {
+      id: row.id,
+      client: row.client_name ?? 'Studio session',
+      description: descriptionFromRow(row),
+      date: row.session_date,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      engineer: workingMember ? (nameById.get(workingMember) ?? 'Unassigned') : 'Unassigned',
+      studio: row.room ?? 'TBD',
+      status: titleCaseStatus(row.status),
+      category: categoryFromSessionType(row.session_type),
+      sessionType: row.session_type,
+      rawStatus: row.status,
+    }
+  })
+}
+
+/**
+ * Check whether any non-cancelled session overlaps the given window in
+ * the given room. Used by the booking modal to warn before committing a
+ * double-book. Returns the first conflicting row (or null). We do the
+ * overlap math in SQL so we don't have to pull the full day's schedule
+ * client-side, and filter out cancelled rows so a cancellation doesn't
+ * lock out the slot.
+ */
+export interface SessionConflict {
+  id: string
+  client_name: string | null
+  start_time: string
+  end_time: string
+  room: string | null
+}
+
+export async function findSessionConflict(input: {
+  sessionDate: string
+  startTime: string
+  endTime: string
+  room: string
+  /** Exclude this session id from conflict lookup (used when editing). */
+  excludeId?: string | null
+}): Promise<SessionConflict | null> {
+  // Postgres time comparison: two ranges overlap iff a.start < b.end AND a.end > b.start.
+  const startHM = input.startTime.length === 5 ? `${input.startTime}:00` : input.startTime
+  const endHM = input.endTime.length === 5 ? `${input.endTime}:00` : input.endTime
+
+  let q = supabase
+    .from('sessions')
+    .select('id, client_name, start_time, end_time, room')
+    .eq('session_date', input.sessionDate)
+    .eq('room', input.room)
+    .neq('status', 'cancelled')
+    .lt('start_time', endHM)
+    .gt('end_time', startHM)
+    .limit(1)
+
+  if (input.excludeId) q = q.neq('id', input.excludeId)
+
+  const { data, error } = await q
+  if (error) throw error
+  const row = data?.[0]
+  return row ? (row as SessionConflict) : null
 }

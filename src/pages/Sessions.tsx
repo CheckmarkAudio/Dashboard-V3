@@ -76,11 +76,12 @@ export default function Sessions() {
       </div>
 
       {/* Book a Session CTA.
-          NOTE: CreateBookingModal still writes through TaskContext (ephemeral
-          in-memory state) rather than inserting a real `sessions` row. That
-          mutation migration is intentionally deferred — it needs a real
-          conflict-check query against the sessions table. Page refetches on
-          modal close so future real inserts will flow through. */}
+          Phase A migration (April 2026): CreateBookingModal now inserts
+          directly into the Supabase `sessions` table and runs an async
+          conflict check via findSessionConflict. Page refetches on
+          modal close so the new row shows in the table below. Recurring
+          (Weekly/Monthly) is disabled in the modal pending Phase B
+          (Weekly Approval workflow, separate task). */}
       {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); void refetch() }} />}
       <button
         onClick={() => setShowBooking(true)}
