@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile({
         id: userId,
         email: OWNER_EMAIL,
-        display_name: 'Owner',
+        display_name: 'Checkmark Admin',
         role: 'admin',
         position: 'owner',
         status: 'active',
