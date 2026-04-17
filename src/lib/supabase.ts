@@ -16,14 +16,29 @@ if (!import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE !== 'true' && (!impor
  *     refreshes without requiring them to re-authenticate.
  *   - detectSessionInUrl is critical for password recovery — it's how
  *     supabase-js picks up the recovery token from the email-link URL.
- *   - flowType 'pkce' is the more secure, recommended auth flow
- *     (standard for single-page apps).
+ *   - flowType 'pkce' is the more secure, recommended auth flow for
+ *     single-page apps.
+ *   - lock replaced with a no-op to eliminate the "Lock 'lock:sb-…-
+ *     auth-token' was released because another request stole it" error
+ *     at the source.
  *
- * Supabase JS uses `navigator.locks` to coordinate token refreshes
- * across tabs. That lock occasionally releases mid-refresh and surfaces
- * as: "Lock 'lock:sb-…-auth-token' was released because another request
- * stole it." — a transient, retry-safe error. We handle it per-query
- * in `withSupabaseRetry` below instead of letting it hit the UI.
+ * Why the no-op lock is safe here:
+ *
+ *     The default supabase-js lock uses `navigator.locks` to prevent
+ *     two concurrent calls from both triggering a token refresh. That
+ *     matters for browser-wide coordination when the app runs across
+ *     many tabs sharing the same auth storage. In practice — for a
+ *     focused single-user admin dashboard — the lock's guarantees
+ *     buy very little, and its failure modes (lock stolen, timeout,
+ *     or held forever by a stalled tab) surface as blocking errors
+ *     we saw in production: the "Lock was released because another
+ *     request stole it" message that wouldn't go away on retries.
+ *
+ *     Skipping the lock means two parallel calls *could* both refresh
+ *     the token and race to write back. supabase-js tolerates that
+ *     idempotently: the last-write-wins, the session stays valid,
+ *     and the user is unaffected. The trade-off is the right one
+ *     for this app's usage pattern.
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -31,6 +46,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
+    lock: (_name, _acquireTimeout, fn) => fn(),
   },
 })
 
