@@ -49,14 +49,12 @@ export type BookingItem = {
   status: 'Confirmed' | 'Placed' | 'Cancelled'
 }
 
-export const EXISTING_CLIENTS = [
-  'The Podcast Hub',
-  'Stanford Music',
-  'Aprt Media',
-  'James Wilson',
-  'Maya Thompson',
-  'Project Alpha',
-]
+// Past / known clients. Starts empty; populated from real booking
+// history once the app switches `CreateBookingModal` to persisted
+// sessions. Previously this was 6 hardcoded demo clients (The Podcast
+// Hub, Stanford Music, etc.) that surfaced as "suggested clients"
+// everywhere — pre-onboarding cleanup removed them.
+export const EXISTING_CLIENTS: string[] = []
 
 interface TaskContextType {
   tasks: TaskItem[]
@@ -78,49 +76,15 @@ function stageColorFor(stage: string): string {
   return STAGE_COLORS[stage] ?? '#C9A84C'
 }
 
-const INITIAL_TASKS: TaskItem[] = [
-  // Deliver
-  { id: 'd1', title: 'Send final mixes to 3 clients', priority: true, due: 'Today, 3:00 PM', startDate: 'Apr 10', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
-  { id: 'd2', title: 'Upload mastered revisions', priority: true, due: 'Today, 5:00 PM', startDate: 'Apr 10', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
-  { id: 'd3', title: 'Confirm delivery satisfaction', priority: false, due: 'Tomorrow, 10:00 AM', startDate: 'Apr 11', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: false, category: 'Deliver', recurring: false },
-  { id: 'd4', title: 'Request testimonial from latest session', priority: false, due: 'Wed, Apr 15', startDate: 'Apr 9', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
-  { id: 'd5', title: 'Submit podcast intro script', priority: true, due: 'Today, 6:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
-  { id: 'd6', title: 'Archive completed project files', priority: false, due: 'Fri, Apr 17', startDate: 'Apr 9', assignee: 'Taylor Morgan', stage: 'Deliver', stageColor: '#34d399', completed: true, category: 'Deliver', recurring: false },
-  // Capture
-  { id: 'c1', title: "Edit Jordan Lee's session block", priority: true, due: 'Today, 5:00 PM', startDate: 'Apr 11', assignee: 'You', stage: 'Capture', stageColor: '#38bdf8', completed: true, category: 'Capture', recurring: false },
-  { id: 'c2', title: 'Record B-roll for promo reel', priority: false, due: 'Tomorrow, 2:00 PM', startDate: 'Apr 10', assignee: 'Sam Rivera', stage: 'Capture', stageColor: '#38bdf8', completed: false, category: 'Capture', recurring: false },
-  { id: 'c3', title: 'Capture client testimonial audio', priority: true, due: 'Today, 4:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Capture', stageColor: '#38bdf8', completed: true, category: 'Capture', recurring: false },
-  { id: 'c4', title: 'Log new lead from website form', priority: false, due: 'Today, 6:00 PM', startDate: 'Apr 12', assignee: 'Alex Kim', stage: 'Capture', stageColor: '#38bdf8', completed: false, category: 'Capture', recurring: false },
-  // Share
-  { id: 's1', title: 'Platform analytics report', priority: false, due: 'Wed, Apr 15', startDate: 'Apr 9', assignee: 'Alex Kim', stage: 'Share', stageColor: '#a78bfa', completed: false, category: 'Share', recurring: false },
-  { id: 's2', title: 'Update team weekly summary', priority: false, due: 'Fri, Apr 17', startDate: 'Apr 10', assignee: 'Taylor Morgan', stage: 'Share', stageColor: '#a78bfa', completed: true, category: 'Share', recurring: false },
-  { id: 's3', title: 'Post session highlight to Instagram', priority: false, due: 'Today, 7:00 PM', startDate: 'Apr 12', assignee: 'Sam Rivera', stage: 'Share', stageColor: '#a78bfa', completed: false, category: 'Share', recurring: false },
-  { id: 's4', title: 'Draft newsletter content', priority: false, due: 'Thu, Apr 16', startDate: 'Apr 11', assignee: 'Alex Kim', stage: 'Share', stageColor: '#a78bfa', completed: true, category: 'Share', recurring: false },
-  // Attract
-  { id: 'a1', title: 'Review client proposal draft', priority: false, due: 'Tomorrow, 10:00 AM', startDate: 'Apr 11', assignee: 'Sam Rivera', stage: 'Attract', stageColor: '#fbbf24', completed: false, category: 'Attract', recurring: false },
-  { id: 'a2', title: 'Follow up on consultation inquiry', priority: true, due: 'Today, 2:00 PM', startDate: 'Apr 12', assignee: 'You', stage: 'Attract', stageColor: '#fbbf24', completed: true, category: 'Attract', recurring: false },
-  { id: 'a3', title: 'Update portfolio page with new work', priority: false, due: 'Fri, Apr 17', startDate: 'Apr 9', assignee: 'Alex Kim', stage: 'Attract', stageColor: '#fbbf24', completed: false, category: 'Attract', recurring: false },
-]
-
-// Bookings are the SINGLE SOURCE OF TRUTH for all calendar/booking data site-wide.
-// Calendar page, Overview widget, Booking Agent, and KPI Book stage all read from here.
-const INITIAL_BOOKINGS: BookingItem[] = [
-  // Monday Apr 14
-  { id: 'bk1', description: 'Recording Session', client: 'The Podcast Hub', type: 'engineering', date: '2026-04-14', startTime: '10:00', endTime: '12:00', startDate: '2026-04-10', assignee: 'Sarah K.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
-  { id: 'bk2', description: 'Vocal Recording', client: 'James Wilson', type: 'engineering', date: '2026-04-14', startTime: '14:00', endTime: '16:00', startDate: '2026-04-11', assignee: 'Dave L.', studio: 'Studio B', recurring: false, status: 'Confirmed' },
-  // Tuesday Apr 15 (today)
-  { id: 'bk3', description: 'Final Mix', client: 'Project Alpha', type: 'engineering', date: '2026-04-15', startTime: '09:00', endTime: '13:00', startDate: '2026-04-10', assignee: 'Ben J.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
-  { id: 'bk6', description: 'Piano Lesson', client: 'Ava Martinez', type: 'music_lesson', date: '2026-04-15', startTime: '14:00', endTime: '15:00', startDate: '2026-04-12', assignee: 'Sarah K.', studio: 'Studio B', recurring: false, status: 'Confirmed' },
-  { id: 'bk7', description: 'Mixing Session', client: 'Stanford Music', type: 'engineering', date: '2026-04-15', startTime: '16:00', endTime: '18:00', startDate: '2026-04-13', assignee: 'Dave L.', studio: 'Studio A', recurring: false, status: 'Placed' },
-  // Wednesday Apr 16
-  { id: 'bk4', description: 'Consulting Session', client: 'Maya Thompson', type: 'consultation', date: '2026-04-16', startTime: '11:00', endTime: '12:00', startDate: '2026-04-12', assignee: 'Sarah K.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
-  { id: 'bk8', description: 'Podcast Edit Review', client: 'Aprt Media', type: 'engineering', date: '2026-04-16', startTime: '14:00', endTime: '16:00', startDate: '2026-04-14', assignee: 'Ben J.', studio: 'Studio B', recurring: false, status: 'Placed' },
-  // Thursday Apr 17
-  { id: 'bk5', description: 'Training Session', client: 'New Intern', type: 'training', date: '2026-04-17', startTime: '09:00', endTime: '17:00', startDate: '2026-04-14', assignee: 'Dave L.', studio: 'Studio B', recurring: false, status: 'Placed' },
-  // Friday Apr 18
-  { id: 'bk9', description: 'Album Mastering', client: 'Stanford Music', type: 'engineering', date: '2026-04-18', startTime: '10:00', endTime: '14:00', startDate: '2026-04-15', assignee: 'Ben J.', studio: 'Studio A', recurring: false, status: 'Confirmed' },
-  { id: 'bk10', description: 'Voice Lesson', client: 'Quinn Roberts', type: 'music_lesson', date: '2026-04-18', startTime: '15:00', endTime: '16:00', startDate: '2026-04-15', assignee: 'Sarah K.', studio: 'Studio B', recurring: false, status: 'Confirmed' },
-]
+// Pre-onboarding cleanup: TaskContext no longer seeds the app with
+// demo tasks or bookings. Anything the UI displays now reflects real,
+// user-created state. The full in-memory TaskContext will eventually
+// be retired in favor of Supabase-backed queries (see
+// CreateBookingModal migration on the todo list) — until then, this
+// context starts empty and is only populated by user actions during
+// the session.
+const INITIAL_TASKS: TaskItem[] = []
+const INITIAL_BOOKINGS: BookingItem[] = []
 
 export function TaskProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<TaskItem[]>(INITIAL_TASKS)

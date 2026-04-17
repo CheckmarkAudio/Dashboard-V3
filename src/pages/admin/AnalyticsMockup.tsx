@@ -2,22 +2,34 @@ import { useState } from 'react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
+  PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from 'recharts'
-import { Download, Printer, RefreshCcw, Target, CheckSquare, Briefcase } from 'lucide-react'
+import {
+  Download, Printer, RefreshCcw, Target, CheckSquare, Briefcase, Info, PieChart as PieChartIcon,
+} from 'lucide-react'
 
 /**
- * Analytics mockup — modelled after the accountant P&L / Other Reports layout.
- * All data is hard-coded for the design pass; the real page will hydrate
- * these same shapes from bookings + tasks queries later.
+ * Flywheel Analytics.
  *
- * Accent colour swap vs. the reference: the reference uses blue as its
- * primary accent; we substitute the Checkmark gold so the mockup stays on
- * brand. Flywheel stage colours (emerald/sky/violet/amber/rose) come from
- * the index.css theme tokens.
+ * The page layout is the permanent design — Tasks & Bookings summary,
+ * tasks-by-KPI donut, Other Reports (employee + studio breakdowns),
+ * monthly trend bar chart, bookings line, employee stacked bars.
+ *
+ * The data that drives it starts empty on purpose. Pre-onboarding, the
+ * original demo numbers (42 Deliver tasks, 7 hardcoded employees, etc.)
+ * lived in `const` blocks at the top of this file and gave anyone
+ * viewing the page a false impression of activity. Those are all
+ * replaced with empty arrays / zero counts. Each section detects the
+ * empty case and renders a calm placeholder instead of a chart
+ * showing `0 / 0 / 0`, so the overall layout still communicates
+ * "this is where analytics live" without fabricating anything.
+ *
+ * When the flywheel event ledger ships (Phase 2 of the rebuild
+ * blueprint), this page's data sources will switch to live Supabase
+ * queries and the charts will naturally populate with real numbers.
  */
 
-// ── Mock data ───────────────────────────────────────────────────────────
+// ── Preset date filters ────────────────────────────────────────────────
 
 type Preset = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all'
 const PRESETS: { key: Preset; label: string }[] = [
@@ -29,49 +41,18 @@ const PRESETS: { key: Preset; label: string }[] = [
   { key: 'all',     label: 'All Time' },
 ]
 
-// Monthly bookings + tasks trend (for the grouped bar chart at the bottom)
-const MONTHLY_TREND = [
-  { month: '2025-10', bookings: 18, tasks: 64, studio: 12 },
-  { month: '2025-11', bookings: 25, tasks: 82, studio: 18 },
-  { month: '2025-12', bookings:  9, tasks: 31, studio:  7 },
-  { month: '2026-01', bookings: 28, tasks: 95, studio: 22 },
-  { month: '2026-02', bookings: 22, tasks: 78, studio: 15 },
-  { month: '2026-03', bookings: 12, tasks: 48, studio:  9 },
-]
+// ── Live-data shapes (currently empty; populated once the flywheel
+//    event ledger + real queries land) ────────────────────────────────
 
-// Tasks broken down by flywheel KPI stage
-const TASKS_BY_KPI = [
-  { stage: 'Deliver', count: 42, color: '#34d399' }, // emerald-400
-  { stage: 'Capture', count: 35, color: '#38bdf8' }, // sky-400
-  { stage: 'Share',   count: 28, color: '#a78bfa' }, // violet-400
-  { stage: 'Attract', count: 31, color: '#fbbf24' }, // amber-400
-  { stage: 'Book',    count: 22, color: '#fb7185' }, // rose-400
-]
+const MONTHLY_TREND: { month: string; bookings: number; tasks: number; studio: number }[] = []
+const TASKS_BY_KPI: { stage: string; count: number; color: string }[] = []
+const TASKS_BY_EMPLOYEE: { name: string; tasks: number; kpi: number; studio: number }[] = []
+const STUDIO_BUCKETS: { label: string; count: number }[] = []
 
-// Tasks by employee (for the Other Reports-style list)
-const TASKS_BY_EMPLOYEE = [
-  { name: 'Jordan Lee',     tasks: 34, kpi: 28, studio: 6 },
-  { name: 'Sam Rivera',     tasks: 28, kpi: 22, studio: 6 },
-  { name: 'Alex Kim',       tasks: 24, kpi: 19, studio: 5 },
-  { name: 'Taylor Morgan',  tasks: 22, kpi: 17, studio: 5 },
-  { name: 'Casey Chen',     tasks: 18, kpi: 14, studio: 4 },
-  { name: 'Morgan Davis',   tasks: 15, kpi: 12, studio: 3 },
-  { name: 'Riley Thompson', tasks: 12, kpi:  9, studio: 3 },
-]
-
-const STUDIO_BUCKETS = [
-  { label: 'Setup / Teardown',    count: 18 },
-  { label: 'Studio Maintenance',  count: 14 },
-  { label: 'Gear Inventory',      count: 11 },
-  { label: 'Cable Management',    count:  8 },
-  { label: 'General Cleanup',     count:  7 },
-]
-
-// Derived totals for the summary card
-const TOTAL_BOOKINGS = MONTHLY_TREND.reduce((s, r) => s + r.bookings, 0)
-const TOTAL_TASKS   = MONTHLY_TREND.reduce((s, r) => s + r.tasks, 0)
-const TOTAL_STUDIO  = MONTHLY_TREND.reduce((s, r) => s + r.studio, 0)
-const TOTAL_KPI_TASKS = TOTAL_TASKS - TOTAL_STUDIO
+const TOTAL_BOOKINGS   = MONTHLY_TREND.reduce((s, r) => s + r.bookings, 0)
+const TOTAL_TASKS      = MONTHLY_TREND.reduce((s, r) => s + r.tasks, 0)
+const TOTAL_STUDIO     = MONTHLY_TREND.reduce((s, r) => s + r.studio, 0)
+const TOTAL_KPI_TASKS  = TOTAL_TASKS - TOTAL_STUDIO
 
 // ── Small primitives ───────────────────────────────────────────────────
 
@@ -109,6 +90,20 @@ function SummaryStat({
   )
 }
 
+/**
+ * Empty-state panel for chart containers. Keeps the section's height
+ * so the layout grid doesn't collapse, and gives a single consistent
+ * message across every chart on the page.
+ */
+function ChartEmptyState({ height = 'h-64', message }: { height?: string; message: string }) {
+  return (
+    <div className={`${height} flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-surface-alt/30 text-center px-6`}>
+      <Info size={18} className="text-text-light" aria-hidden="true" />
+      <p className="text-[13px] text-text-muted max-w-[44ch]">{message}</p>
+    </div>
+  )
+}
+
 // ── Chart tooltip style (reused) ───────────────────────────────────────
 const tooltipStyle = {
   background: '#1e1e25',
@@ -127,6 +122,11 @@ export default function AnalyticsMockup() {
   const [from, setFrom] = useState('1900-01-01')
   const [to, setTo] = useState('2999-12-31')
 
+  const hasTrendData    = MONTHLY_TREND.length > 0
+  const hasKpiData      = TASKS_BY_KPI.length > 0 && TASKS_BY_KPI.some(k => k.count > 0)
+  const hasEmployeeData = TASKS_BY_EMPLOYEE.length > 0
+  const hasStudioData   = STUDIO_BUCKETS.length > 0
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
       <div>
@@ -135,6 +135,20 @@ export default function AnalyticsMockup() {
         <p className="text-text-muted text-sm mt-1">
           Bookings and tasks across KPIs, employees, and studio work.
         </p>
+      </div>
+
+      {/* ── First-run notice ──
+          PieChartIcon matches the Flywheel nav entry in Layout.tsx so
+          the callout reads as in-family with the sidebar iconography. */}
+      <div className="bg-surface rounded-2xl border border-gold/30 bg-gold/[0.04] p-5">
+        <div className="flex items-center gap-3">
+          <span className="shrink-0 w-10 h-10 rounded-lg bg-gold/10 border border-gold/25 flex items-center justify-center">
+            <PieChartIcon size={18} className="text-gold" aria-hidden="true" />
+          </span>
+          <p className="text-[14px] text-text">
+            Analytics will populate with Tasks, Booking &amp; Session data.
+          </p>
+        </div>
       </div>
 
       {/* ── Date Range card ── */}
@@ -184,44 +198,47 @@ export default function AnalyticsMockup() {
 
       {/* ── Two-column: Tasks overview (donut) + Other Reports (lists) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Tasks overview — mirror of "Profit & Loss" */}
+        {/* Tasks overview */}
         <div className="bg-surface rounded-2xl border border-border p-5">
           <h2 className="text-lg font-bold mb-3">Tasks &amp; Bookings</h2>
           <div className="space-y-0">
-            <SummaryStat icon={Briefcase}  label="Bookings"   value={TOTAL_BOOKINGS}   accent="muted" />
-            <SummaryStat icon={Target}     label="KPI Tasks"  value={TOTAL_KPI_TASKS}  accent="muted" />
-            <SummaryStat icon={CheckSquare} label="Studio Tasks" value={TOTAL_STUDIO} accent="muted" />
-            <SummaryStat icon={CheckSquare} label="Total Tasks" value={TOTAL_TASKS}   accent="gold" />
+            <SummaryStat icon={Briefcase}   label="Bookings"     value={TOTAL_BOOKINGS}   accent="muted" />
+            <SummaryStat icon={Target}      label="KPI Tasks"    value={TOTAL_KPI_TASKS}  accent="muted" />
+            <SummaryStat icon={CheckSquare} label="Studio Tasks" value={TOTAL_STUDIO}     accent="muted" />
+            <SummaryStat icon={CheckSquare} label="Total Tasks"  value={TOTAL_TASKS}      accent="gold" />
           </div>
 
           {/* Donut — tasks by KPI stage */}
           <div className="mt-4">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-text-light mb-2">Tasks by KPI Stage</p>
-            <div className="h-64" aria-hidden="true">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={TASKS_BY_KPI}
-                    dataKey="count"
-                    nameKey="stage"
-                    innerRadius={55}
-                    outerRadius={90}
-                    paddingAngle={2}
-                    stroke="none"
-                  >
-                    {TASKS_BY_KPI.map(entry => (
-                      <Cell key={entry.stage} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} />
-                  <Legend verticalAlign="bottom" height={28} iconType="circle" wrapperStyle={{ fontSize: 12, color: '#bcbcc6' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            {hasKpiData ? (
+              <div className="h-64" aria-hidden="true">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={TASKS_BY_KPI}
+                      dataKey="count"
+                      nameKey="stage"
+                      innerRadius={55}
+                      outerRadius={90}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      {TASKS_BY_KPI.map(entry => (
+                        <Cell key={entry.stage} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <ChartEmptyState message="The donut will split across Deliver, Capture, Share, Attract, and Book as your team completes tasks tagged with KPI stages." />
+            )}
           </div>
         </div>
 
-        {/* Other reports — mirror of the right card */}
+        {/* Other reports */}
         <div className="bg-surface rounded-2xl border border-border p-5">
           <h2 className="text-lg font-bold mb-3">Other Reports</h2>
 
@@ -229,21 +246,25 @@ export default function AnalyticsMockup() {
           <div className="bg-surface-alt/50 rounded-xl py-2 px-3 mb-2 text-center">
             <p className="text-sm font-semibold text-text">Tasks by Employee</p>
           </div>
-          <div className="space-y-0">
-            {TASKS_BY_EMPLOYEE.map(emp => (
-              <div key={emp.name} className="flex items-center justify-between py-2 border-b border-border last:border-b-0">
-                <span className="text-sm text-text">{emp.name}</span>
-                <span className="flex items-center gap-2 text-sm">
-                  <span className="text-[11px] text-text-muted tabular-nums">
-                    <span className="text-emerald-400 font-semibold">{emp.kpi}</span>
-                    <span className="text-text-light mx-1">·</span>
-                    <span className="text-amber-400 font-semibold">{emp.studio}</span>
+          {hasEmployeeData ? (
+            <div className="space-y-0">
+              {TASKS_BY_EMPLOYEE.map(emp => (
+                <div key={emp.name} className="flex items-center justify-between py-2 border-b border-border last:border-b-0">
+                  <span className="text-sm text-text">{emp.name}</span>
+                  <span className="flex items-center gap-2 text-sm">
+                    <span className="text-[11px] text-text-muted tabular-nums">
+                      <span className="text-emerald-400 font-semibold">{emp.kpi}</span>
+                      <span className="text-text-light mx-1">·</span>
+                      <span className="text-amber-400 font-semibold">{emp.studio}</span>
+                    </span>
+                    <span className="font-bold text-text tabular-nums w-8 text-right">{emp.tasks}</span>
                   </span>
-                  <span className="font-bold text-text tabular-nums w-8 text-right">{emp.tasks}</span>
-                </span>
-              </div>
-            ))}
-          </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ChartEmptyState height="h-40" message="Each team member will list here with their KPI vs. studio task counts once work is logged." />
+          )}
           <p className="text-[11px] text-text-light mt-2 flex items-center gap-3">
             <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-400" /> KPI</span>
             <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-amber-400" /> Studio</span>
@@ -253,44 +274,51 @@ export default function AnalyticsMockup() {
           <div className="bg-surface-alt/50 rounded-xl py-2 px-3 mb-2 mt-5 text-center">
             <p className="text-sm font-semibold text-text">Studio Tasks (unassigned)</p>
           </div>
-          <div className="space-y-0">
-            {STUDIO_BUCKETS.map(b => (
-              <div key={b.label} className="flex items-center justify-between py-2 border-b border-border last:border-b-0">
-                <span className="text-sm text-text">{b.label}</span>
-                <span className="font-bold text-text tabular-nums">{b.count}</span>
-              </div>
-            ))}
-          </div>
+          {hasStudioData ? (
+            <div className="space-y-0">
+              {STUDIO_BUCKETS.map(b => (
+                <div key={b.label} className="flex items-center justify-between py-2 border-b border-border last:border-b-0">
+                  <span className="text-sm text-text">{b.label}</span>
+                  <span className="font-bold text-text tabular-nums">{b.count}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ChartEmptyState height="h-40" message="Studio maintenance tasks (setup, cleanup, gear inventory, etc.) will appear here as they're logged." />
+          )}
         </div>
       </div>
 
-      {/* ── Monthly trend — grouped bar chart (mirror of Income/Expenses/Profit) ── */}
+      {/* ── Monthly trend — grouped bar chart ── */}
       <div className="bg-surface rounded-2xl border border-border p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-bold">Monthly Trend</h2>
             <p className="text-[13px] text-text-muted mt-0.5">Bookings, KPI tasks, and studio tasks — last 6 months.</p>
           </div>
-          {/* Custom legend dots so colours match the bar palette */}
           <div className="flex items-center gap-4 text-xs">
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-400" /> Bookings</span>
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-gold" /> KPI Tasks</span>
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-amber-400" /> Studio Tasks</span>
           </div>
         </div>
-        <div className="h-72" aria-hidden="true">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={MONTHLY_TREND} barCategoryGap="30%">
-              <CartesianGrid stroke="#34343d" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={false} tickLine={false} width={40} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-              <Bar dataKey="bookings" name="Bookings"    fill="#34d399" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="tasks"    name="KPI Tasks"   fill="#C9A84C" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="studio"   name="Studio"      fill="#fbbf24" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {hasTrendData ? (
+          <div className="h-72" aria-hidden="true">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={MONTHLY_TREND} barCategoryGap="30%">
+                <CartesianGrid stroke="#34343d" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={false} tickLine={false} width={40} />
+                <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                <Bar dataKey="bookings" name="Bookings"    fill="#34d399" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="tasks"    name="KPI Tasks"   fill="#C9A84C" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="studio"   name="Studio"      fill="#fbbf24" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <ChartEmptyState height="h-72" message="The 6-month grouped bar chart will show bookings, KPI tasks, and studio tasks side-by-side per month." />
+        )}
       </div>
 
       {/* ── Bookings trend line ── */}
@@ -302,33 +330,31 @@ export default function AnalyticsMockup() {
           </div>
           <p className="text-2xl font-bold text-gold tabular-nums">{TOTAL_BOOKINGS}</p>
         </div>
-        <div className="h-56" aria-hidden="true">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={MONTHLY_TREND}>
-              <defs>
-                <linearGradient id="bookings-line" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#C9A84C" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#C9A84C" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="#34343d" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={false} tickLine={false} width={32} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} />
-              <Line
-                type="monotone"
-                dataKey="bookings"
-                stroke="#C9A84C"
-                strokeWidth={2.5}
-                dot={{ r: 4, fill: '#C9A84C' }}
-                activeDot={{ r: 6 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        {hasTrendData ? (
+          <div className="h-56" aria-hidden="true">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={MONTHLY_TREND}>
+                <CartesianGrid stroke="#34343d" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={false} tickLine={false} width={32} />
+                <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} />
+                <Line
+                  type="monotone"
+                  dataKey="bookings"
+                  stroke="#C9A84C"
+                  strokeWidth={2.5}
+                  dot={{ r: 4, fill: '#C9A84C' }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <ChartEmptyState height="h-56" message="A line will trace confirmed bookings over time once sessions are created in the Booking page." />
+        )}
       </div>
 
-      {/* ── Tasks by Employee — stacked horizontal-ish bar chart ── */}
+      {/* ── Tasks by Employee — stacked horizontal bar chart ── */}
       <div className="bg-surface rounded-2xl border border-border p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -340,18 +366,22 @@ export default function AnalyticsMockup() {
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-amber-400" /> Studio</span>
           </div>
         </div>
-        <div className="h-80" aria-hidden="true">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={TASKS_BY_EMPLOYEE} layout="vertical" barCategoryGap="25%">
-              <CartesianGrid stroke="#34343d" strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
-              <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#e2e2ea' }} axisLine={false} tickLine={false} width={120} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-              <Bar dataKey="kpi"    name="KPI"    stackId="t" fill="#34d399" radius={[4, 0, 0, 4]} />
-              <Bar dataKey="studio" name="Studio" stackId="t" fill="#fbbf24" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {hasEmployeeData ? (
+          <div className="h-80" aria-hidden="true">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={TASKS_BY_EMPLOYEE} layout="vertical" barCategoryGap="25%">
+                <CartesianGrid stroke="#34343d" strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#e2e2ea' }} axisLine={false} tickLine={false} width={120} />
+                <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                <Bar dataKey="kpi"    name="KPI"    stackId="t" fill="#34d399" radius={[4, 0, 0, 4]} />
+                <Bar dataKey="studio" name="Studio" stackId="t" fill="#fbbf24" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <ChartEmptyState height="h-80" message="A stacked bar will show each employee's KPI and studio task counts once tasks start being completed." />
+        )}
       </div>
     </div>
   )
