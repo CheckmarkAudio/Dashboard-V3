@@ -73,18 +73,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // `rejectAndSignOut` on `false`, signing the user out cleanly.
 
   /**
-   * Look up the signed-in auth user's profile in `intern_users`. Returns
-   * `true` if a profile was found (or successfully relinked from a
-   * pre-seeded row) and `false` if no admin-provisioned row exists for
-   * this user.
+   * Look up the signed-in auth user's profile in `intern_users`.
    *
-   * Phase 6.4 — On `false`, the caller MUST sign the user out. We no
-   * longer auto-create a profile or fall back to `buildFallbackProfile`
-   * — both of those paths bypassed the admin-only-account-creation rule
-   * by silently letting any rogue `auth.users` row become a usable
-   * dashboard session. The hard reject is the enforcement point.
+   *   - 'found'      → profile loaded into state, caller proceeds
+   *   - 'not_found'  → no admin-provisioned row exists for this user;
+   *                    caller MUST sign them out (admin-only-provisioning
+   *                    enforcement, Phase 6.4)
+   *   - 'error'      → transient lookup failure (network, RLS hiccup,
+   *                    JWT not yet attached). Caller MUST NOT sign out
+   *                    in this case — that was the bug behind the
+   *                    "boots me out on every login" symptom. Leave the
+   *                    session intact so a subsequent auth-state event
+   *                    or manual refresh can retry the load.
    */
-  const fetchProfile = useCallback(async (authUser: SupabaseUser): Promise<boolean> => {
+  type ProfileFetchResult = 'found' | 'not_found' | 'error'
+  const fetchProfile = useCallback(async (authUser: SupabaseUser): Promise<ProfileFetchResult> => {
     const userId = authUser.id
     // Always normalize emails — the DB has a CHECK (email = lower(email))
     // constraint on intern_users plus RLS policies that compare via
@@ -97,8 +100,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('*')
       .eq('id', userId)
       .maybeSingle()
-    if (error) console.error('[AuthContext] Profile lookup failed:', error.message, error.code)
-    if (data) { setProfile(data as TeamMember); return true }
+    if (error) {
+      console.error('[AuthContext] Profile lookup failed:', error.message, error.code)
+      // A query error is *ambiguous* — the row may exist but RLS or the
+      // network blocked the read. Bailing here (instead of falling into
+      // the email fallback + reject path) prevents a transient blip from
+      // forcibly signing the user out.
+      return 'error'
+    }
+    if (data) { setProfile(data as TeamMember); return 'found' }
 
     // 2) Secondary lookup: an admin may have pre-seeded a row keyed by email
     //    before this user signed up (legacy TeamManager flow created rows
@@ -112,7 +122,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .select('*')
         .ilike('email', email)
         .maybeSingle()
-      if (emailErr) console.error('[AuthContext] Email lookup failed:', emailErr.message)
+      if (emailErr) {
+        console.error('[AuthContext] Email lookup failed:', emailErr.message)
+        return 'error'
+      }
       if (emailMatch && emailMatch.id !== userId) {
         const { data: updated, error: updateErr } = await supabase
           .from('intern_users')
@@ -120,19 +133,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq('id', emailMatch.id)
           .select('*')
           .maybeSingle()
-        if (!updateErr && updated) {
-          setProfile(updated as TeamMember)
-          return true
+        if (updateErr) {
+          console.error('[AuthContext] Profile PK-relink failed:', updateErr.message, updateErr.code)
+          return 'error'
         }
-        if (updateErr) console.error('[AuthContext] Profile PK-relink failed:', updateErr.message, updateErr.code)
+        if (updated) {
+          setProfile(updated as TeamMember)
+          return 'found'
+        }
+      } else if (emailMatch) {
+        // Same id as auth uid but the primary lookup didn't return it —
+        // unusual race. Treat as found.
+        setProfile(emailMatch as TeamMember)
+        return 'found'
       }
     }
 
-    // 3) No row found and no email-match cascade-link possible. This
-    //    user was NOT provisioned by an admin. Refuse to load. The
-    //    caller signs them out and surfaces the message via sessionStorage.
+    // 3) Both lookups completed cleanly with no matching row. This user
+    //    genuinely was NOT provisioned by an admin. The caller signs
+    //    them out and surfaces the message via sessionStorage.
     console.error('[AuthContext] No intern_users profile for auth user', userId, email)
-    return false
+    return 'not_found'
   }, [])
 
   const refreshProfile = useCallback(async () => {
@@ -170,11 +191,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        let ok = false
-        try { ok = await fetchProfile(session.user) } catch (err) {
+        let result: 'found' | 'not_found' | 'error' = 'error'
+        try { result = await fetchProfile(session.user) } catch (err) {
           console.error('Failed to load profile on init:', err)
         }
-        if (!ok) await rejectAndSignOut()
+        // Only sign out on a definitive "no row exists" verdict. A
+        // transient 'error' leaves the session intact so the next
+        // auth-state event or refreshProfile() call can recover.
+        if (result === 'not_found') await rejectAndSignOut()
       }
       setLoading(false)
     }).catch((err) => {
@@ -188,11 +212,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        let ok = false
-        try { ok = await fetchProfile(session.user) } catch (err) {
+        let result: 'found' | 'not_found' | 'error' = 'error'
+        try { result = await fetchProfile(session.user) } catch (err) {
           console.error('Failed to load profile on auth change:', err)
         }
-        if (!ok) await rejectAndSignOut()
+        if (result === 'not_found') await rejectAndSignOut()
       } else {
         setProfile(null)
       }
