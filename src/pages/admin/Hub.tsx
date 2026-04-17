@@ -357,14 +357,13 @@ function OverviewTab({
         controlsDescription="Admin overview is now widget-based too, so the team command center can evolve without entangling the rest of the admin app."
       />
 
-      {selectedMember ? (
+      {/* Per-member detail card renders only when the admin has
+          actively selected someone from the member search. The default
+          grid-of-cards was removed in April 2026 because the Team
+          Directory widget + Team Focus widget above already surface
+          the team at a glance; the grid was redundant clutter. */}
+      {selectedMember && (
         <MemberDetail member={selectedMember} snapshot={snapshots.get(selectedMember.id)} />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-          {members.map(m => (
-            <MemberDetail key={m.id} member={m} snapshot={snapshots.get(m.id)} compact />
-          ))}
-        </div>
       )}
     </div>
   )
