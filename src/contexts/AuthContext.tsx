@@ -302,30 +302,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (mounted) setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Supabase documents a specific footgun: don't await supabase
+    // client calls *inside* the onAuthStateChange callback. Doing so
+    // risks deadlocking GoTrue's internal state machine because some
+    // events (like PASSWORD_RECOVERY) are dispatched while the client
+    // is still holding an internal lock. Our previous implementation
+    // awaited fetchProfile here, which made the recovery path brittle
+    // and occasionally miss events.
+    //
+    // Fix: the callback now does ONLY synchronous React-state updates.
+    // Any supabase work (fetchProfile, signOut) is deferred to the
+    // next tick via setTimeout(0) so the client can finish its
+    // internal housekeeping first.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return
       if (event === 'INITIAL_SESSION' && sessionInitialized.current) return
 
       // Supabase fires PASSWORD_RECOVERY when a user lands on the app
       // via the recovery link in the password-reset email. Flip the
-      // flag so ForcePasswordChangeModal opens and walks them through
-      // setting a new password. Cleared on successful password update.
+      // flag so RecoveryGate renders the "Set your password" screen.
       if (event === 'PASSWORD_RECOVERY') {
         setIsPasswordRecovery(true)
       }
 
       setSession(session)
       setUser(session?.user ?? null)
+
       if (session?.user) {
-        let result: 'found' | 'not_found' | 'error' = 'error'
-        try { result = await fetchProfile(session.user) } catch (err) {
-          console.error('Failed to load profile on auth change:', err)
-        }
-        if (result === 'not_found') await rejectAndSignOut()
+        // Defer the profile lookup + sign-out decision so we don't
+        // block inside the auth state change dispatch.
+        const authUser = session.user
+        setTimeout(() => {
+          if (!mounted) return
+          fetchProfile(authUser)
+            .then((result) => {
+              if (!mounted) return
+              if (result === 'not_found') {
+                void rejectAndSignOut()
+              }
+            })
+            .catch((err) => {
+              console.error('Failed to load profile on auth change:', err)
+            })
+        }, 0)
       } else {
         setProfile(null)
         // Fully signed out — any recovery flow in progress is abandoned.
         setIsPasswordRecovery(false)
+        try { window.sessionStorage.removeItem('pending_password_recovery') } catch { /* ignore */ }
       }
       setLoading(false)
     })

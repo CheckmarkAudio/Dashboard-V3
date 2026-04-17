@@ -1,8 +1,7 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { KeyRound, Loader2 } from 'lucide-react'
+import { KeyRound } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Button, Input } from '../ui'
 
@@ -31,28 +30,33 @@ import { Button, Input } from '../ui'
  *     of the recovery token, so no second login is needed.
  */
 export default function RecoveryGate({ children }: { children: ReactNode }) {
-  const { isPasswordRecovery, user, clearPasswordRecovery } = useAuth()
+  const { isPasswordRecovery, clearPasswordRecovery } = useAuth()
   const navigate = useNavigate()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // If isPasswordRecovery was set but supabase-js hasn't finished
-  // establishing the session yet, user will still be null for a
-  // moment. Once user is set, we're ready to let them submit.
-  const sessionReady = !!user
+  // Previously we gated the form on React's `user` state being set,
+  // which created a window where the user stared at a spinner while
+  // waiting for supabase-js to update the context. We now render the
+  // form immediately — supabase.auth.updateUser() works off the
+  // stored session, which is already present by the time we got here
+  // (either the URL hash was consumed or the PASSWORD_RECOVERY event
+  // fired). No need to block on React state catching up.
 
-  // Defensive: if somehow isPasswordRecovery got stuck on with no
-  // supabase session to back it, give up after 8 seconds and clear
-  // the flag so the user isn't permanently stuck staring at a spinner.
+  // Defensive: if the flag got set but no actual session was
+  // established within 10 seconds (e.g., the recovery token was
+  // invalid/expired), clear the flag and fall through to normal
+  // routing so the user isn't permanently stuck here.
   useEffect(() => {
-    if (!isPasswordRecovery || sessionReady) return
-    const bail = setTimeout(() => {
-      if (!sessionReady) clearPasswordRecovery()
-    }, 8000)
+    if (!isPasswordRecovery) return
+    const bail = setTimeout(async () => {
+      const { data } = await supabase.auth.getSession()
+      if (!data.session) clearPasswordRecovery()
+    }, 10_000)
     return () => clearTimeout(bail)
-  }, [isPasswordRecovery, sessionReady, clearPasswordRecovery])
+  }, [isPasswordRecovery, clearPasswordRecovery])
 
   if (!isPasswordRecovery) return <>{children}</>
 
@@ -94,51 +98,44 @@ export default function RecoveryGate({ children }: { children: ReactNode }) {
         </div>
 
         <div className="bg-surface rounded-2xl border border-border p-7">
-          {!sessionReady ? (
-            <div className="flex items-center justify-center py-8 text-text-light">
-              <Loader2 size={20} className="animate-spin" aria-hidden="true" />
-              <span className="ml-2 text-sm">Verifying reset link…</span>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Input
-                id="recovery-new-password"
-                label="New password"
-                type="password"
-                required
-                minLength={8}
-                autoComplete="new-password"
-                autoFocus
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                hint="At least 8 characters."
-              />
-              <Input
-                id="recovery-confirm-password"
-                label="Confirm new password"
-                type="password"
-                required
-                minLength={8}
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-              {error && (
-                <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                  {error}
-                </div>
-              )}
-              <Button
-                type="submit"
-                variant="primary"
-                block
-                loading={submitting}
-                iconLeft={!submitting ? <KeyRound size={14} aria-hidden="true" /> : undefined}
-              >
-                Update password
-              </Button>
-            </form>
-          )}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              id="recovery-new-password"
+              label="New password"
+              type="password"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              autoFocus
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              hint="At least 8 characters."
+            />
+            <Input
+              id="recovery-confirm-password"
+              label="Confirm new password"
+              type="password"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            {error && (
+              <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                {error}
+              </div>
+            )}
+            <Button
+              type="submit"
+              variant="primary"
+              block
+              loading={submitting}
+              iconLeft={!submitting ? <KeyRound size={14} aria-hidden="true" /> : undefined}
+            >
+              Update password
+            </Button>
+          </form>
         </div>
       </div>
     </div>
