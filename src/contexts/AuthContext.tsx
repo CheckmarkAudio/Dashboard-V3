@@ -21,9 +21,17 @@ interface AuthContextType {
   capabilities: AppCapability[]
   isAdmin: boolean
   canAccessAdmin: boolean
+  /**
+   * True only when the current session was established by clicking a
+   * Supabase password-reset email link. Used by ForcePasswordChangeModal
+   * to show the "set your password" UI so the user finishes the recovery
+   * flow. Cleared once they update their password successfully.
+   */
+  isPasswordRecovery: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  clearPasswordRecovery: () => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -47,9 +55,11 @@ function DevAuthProvider({ children }: { children: ReactNode }) {
     capabilities: getRoleCapabilities('admin'),
     isAdmin: true,
     canAccessAdmin: true,
+    isPasswordRecovery: false,
     signIn: async () => ({ error: null }),
     signOut: async () => {},
     refreshProfile: async () => {},
+    clearPasswordRecovery: () => {},
   }), [])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
@@ -63,7 +73,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<TeamMember | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
   const sessionInitialized = useRef(false)
+
+  const clearPasswordRecovery = useCallback(() => {
+    setIsPasswordRecovery(false)
+  }, [])
 
   // Phase 6.4 — `buildFallbackProfile` was removed. Previously, if the
   // intern_users lookup failed we'd synthesize a profile from auth.user
@@ -238,6 +253,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
       if (event === 'INITIAL_SESSION' && sessionInitialized.current) return
+
+      // Supabase fires PASSWORD_RECOVERY when a user lands on the app
+      // via the recovery link in the password-reset email. Flip the
+      // flag so ForcePasswordChangeModal opens and walks them through
+      // setting a new password. Cleared on successful password update.
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true)
+      }
+
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -248,6 +272,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (result === 'not_found') await rejectAndSignOut()
       } else {
         setProfile(null)
+        // Fully signed out — any recovery flow in progress is abandoned.
+        setIsPasswordRecovery(false)
       }
       setLoading(false)
     })
@@ -295,11 +321,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       capabilities: getRoleCapabilities(appRole),
       isAdmin: canAccessAdmin(appRole),
       canAccessAdmin: canAccessAdmin(appRole),
+      isPasswordRecovery,
       signIn,
       signOut,
       refreshProfile,
+      clearPasswordRecovery,
     }
-  }, [user, profile, session, loading, signIn, signOut, refreshProfile])
+  }, [user, profile, session, loading, isPasswordRecovery, signIn, signOut, refreshProfile, clearPasswordRecovery])
 
   return (
     <AuthContext.Provider value={value}>
