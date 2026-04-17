@@ -351,11 +351,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // no future code path can accidentally re-enable self-signup from the
   // client.
 
+  /**
+   * Hard sign-out that cannot fail to clear the local session.
+   *
+   * The previous implementation awaited supabase.auth.signOut() with
+   * default global scope and caught errors silently. If the global
+   * revoke request failed (rate-limited, offline, or the refresh token
+   * was already rejected server-side), localStorage still held the
+   * session — so the next render would restore the user and the UI
+   * looked like sign-out did nothing. That's what was happening for
+   * Bridget.
+   *
+   * Fix: always run a LOCAL signOut first (clears localStorage and
+   * cannot fail on the network), THEN fire-and-forget a global revoke
+   * as a best-effort server cleanup, THEN wipe React state. The user
+   * is guaranteed to be signed out locally within a tick.
+   */
   const signOut = useCallback(async () => {
-    try { await supabase.auth.signOut() } catch {}
+    try {
+      // scope: 'local' clears the stored session and subscribers
+      // without making a network call to /auth/v1/logout. It cannot
+      // fail on a network or rate-limit error.
+      await supabase.auth.signOut({ scope: 'local' })
+    } catch { /* swallow — local scope doesn't network, but be defensive */ }
+
+    // Best-effort global revoke so the refresh token is invalidated
+    // server-side. If this fails, we're still signed out locally.
+    void supabase.auth.signOut({ scope: 'global' }).catch(() => {})
+
     setUser(null)
     setSession(null)
     setProfile(null)
+    setIsPasswordRecovery(false)
+    try { window.sessionStorage.removeItem('pending_password_recovery') } catch { /* ignore */ }
   }, [])
 
   const value = useMemo(() => {
