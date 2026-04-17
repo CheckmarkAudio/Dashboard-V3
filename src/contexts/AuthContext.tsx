@@ -281,7 +281,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(() => {
-    const appRole = getAppRole(profile)
+    // Pass user.email so OWNER_EMAIL always resolves to 'owner' even if
+    // profile is still loading, errored, or null. This is the load-
+    // bearing line that guarantees the owner sees admin nav as soon as
+    // they're authenticated, independent of intern_users lookup state.
+    const appRole = getAppRole(profile, user?.email)
     return {
       user,
       profile,

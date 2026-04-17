@@ -62,7 +62,22 @@ function normalizeEmail(email?: string | null): string {
   return (email ?? '').trim().toLowerCase()
 }
 
-export function getAppRole(profile: TeamMember | null): AppRole {
+/**
+ * Resolve the effective app role for a signed-in user.
+ *
+ * `authEmail` is optional — pass the `user.email` from Supabase Auth so
+ * the owner-email check can fire even when `profile` is null (for
+ * example, while the `intern_users` lookup is still in flight, erroring,
+ * or RLS is misconfigured). This is the strongest guarantee that
+ * `checkmarkaudio@gmail.com` ALWAYS resolves to 'owner' regardless of
+ * what the profile row looks like.
+ */
+export function getAppRole(profile: TeamMember | null, authEmail?: string | null): AppRole {
+  // Owner-email pin: if the signed-in auth email matches OWNER_EMAIL,
+  // resolve as owner regardless of profile state. Supabase Auth already
+  // verified the password before this runs, so this cannot be spoofed.
+  if (normalizeEmail(authEmail) === OWNER_EMAIL) return 'owner'
+
   if (!profile) return 'member'
   if (
     normalizeEmail(profile.email) === OWNER_EMAIL ||
