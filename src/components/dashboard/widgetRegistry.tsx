@@ -2,6 +2,7 @@ import type { WorkspaceWidgetDefinition } from '../../domain/workspaces/types'
 import { WORKSPACE_WIDGET_REGISTRATIONS } from '../../domain/workspaces/registry'
 import {
   FlywheelSummaryWidget,
+  TeamDirectoryWidget,
   TeamSnapshotWidget,
   TeamTasksWidget,
   TodayCalendarWidget,
@@ -17,6 +18,7 @@ const widgetComponents: Record<WorkspaceWidgetDefinition['id'], WorkspaceWidgetD
   team_snapshot: TeamSnapshotWidget,
   today_calendar: TodayCalendarWidget,
   team_tasks: TeamTasksWidget,
+  team_directory: TeamDirectoryWidget,
   flywheel_summary: FlywheelSummaryWidget,
   team_focus: TeamFocusWidget,
   approval_queue: ApprovalQueueWidget,

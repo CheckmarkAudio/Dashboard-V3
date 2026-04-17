@@ -4,9 +4,11 @@ export interface TeamMember {
   display_name: string
   role: string
   position?: string
+  department?: string
   avatar_url?: string
   phone?: string
   start_date?: string
+  end_date?: string
   status?: string
   created_at?: string
   team_id?: string

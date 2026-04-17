@@ -9,6 +9,7 @@ export type WorkspaceWidgetId =
   | 'team_snapshot'
   | 'today_calendar'
   | 'team_tasks'
+  | 'team_directory'
   | 'flywheel_summary'
   | 'team_focus'
   | 'approval_queue'

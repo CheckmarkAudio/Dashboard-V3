@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { chatSupabase } from '../lib/chatSupabase'
+import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import { Send, Hash, Users } from 'lucide-react'
-import { TEAM } from '../data/team'
 
 type Channel = { id: string; name: string; slug: string; description: string }
 type Message = { id: string; channel_id: string; sender_name: string; sender_id: string; sender_initial: string; content: string; created_at: string }
@@ -17,6 +18,16 @@ export default function Content() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Team members for the sidebar. Shares cache with other pages via
+  // teamMemberKeys.list() so reloading the Forum doesn't re-fetch.
+  const teamQuery = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+  })
+  const activeMembers = (teamQuery.data ?? []).filter(
+    (m) => m.status?.toLowerCase() !== 'inactive',
+  )
 
   // Load channels
   useEffect(() => {
@@ -114,10 +125,13 @@ export default function Content() {
               <Users size={10} /> Members
             </p>
             <div className="space-y-1">
-              {TEAM.filter(m => m.status === 'Active').map(m => (
+              {activeMembers.length === 0 && !teamQuery.isLoading && (
+                <p className="text-[11px] text-text-light italic">No members yet</p>
+              )}
+              {activeMembers.map(m => (
                 <div key={m.id} className="flex items-center gap-2 py-0.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-                  <span className="text-[11px] text-text-muted truncate">{m.name}</span>
+                  <span className="text-[11px] text-text-muted truncate">{m.display_name}</span>
                 </div>
               ))}
             </div>

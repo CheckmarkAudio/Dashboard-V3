@@ -7,10 +7,31 @@ import type {
 } from './types'
 
 export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
+  // Member Overview — ADHD-friendly layout.
+  //
+  // Ordering here = default render order. Tasks lead as the hero
+  // because it's the ONE thing a member needs to act on every day;
+  // Snapshot and Calendar follow as quick-glance context; Team
+  // Directory sits as reference material below the fold.
+  //
+  // Flywheel Summary was removed from the member Overview in April
+  // 2026 as part of the ADHD-friendly default. The full flywheel
+  // chart still lives under /admin/health. The `flywheel_summary`
+  // ID is kept in the type union so any saved layouts that still
+  // reference it resolve gracefully (WorkspacePanel no-ops missing
+  // definitions).
+  {
+    id: 'team_tasks',
+    title: 'Today Tasks',
+    description: 'Your checklist for the day, built from live task data.',
+    defaultSpan: 2,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: ['member_overview'],
+  },
   {
     id: 'team_snapshot',
-    title: 'Today Focus',
-    description: 'The core daily progress markers your team member needs right now.',
+    title: 'Daily Snapshot',
+    description: 'Progress, streak, and must-do status for today at a glance.',
     defaultSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
     scopes: ['member_overview'],
@@ -24,20 +45,12 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     scopes: ['member_overview'],
   },
   {
-    id: 'team_tasks',
-    title: 'Today Tasks',
-    description: 'Your checklist for the day, built from live task data.',
-    defaultSpan: 1,
+    id: 'team_directory',
+    title: 'Team',
+    description: 'Quick-reference row of teammates. Click any avatar to open their profile.',
+    defaultSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview'],
-  },
-  {
-    id: 'flywheel_summary',
-    title: 'Flywheel Today',
-    description: 'Deliver · Capture · Share · Attract · Book — your daily snapshot on the business loop.',
-    defaultSpan: 3,
-    allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview'],
+    scopes: ['member_overview', 'admin_overview'],
   },
   {
     id: 'team_focus',

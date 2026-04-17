@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
 import {
   AlertCircle,
@@ -12,10 +13,13 @@ import {
   Target,
   TrendingDown,
   TrendingUp,
+  Users,
 } from 'lucide-react'
 import { APP_ROUTES } from '../../app/routes'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
 import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
+import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
+import type { TeamMember } from '../../types'
 
 function splitClockParts(value: string): [string, string] {
   const [left = '0', right = '0'] = value.split(':')
@@ -232,6 +236,98 @@ export function TeamTasksWidget() {
       <div className="pt-4 mt-auto text-[11px] text-text-light">
         Click any task to mark it complete and keep your day moving.
       </div>
+    </div>
+  )
+}
+
+/**
+ * TeamDirectoryWidget — quick-reference row of teammates on Overview.
+ *
+ * Horizontal avatar strip sourced from `intern_users` via the shared
+ * react-query cache. Active members surface first; inactive fall to
+ * the end at reduced opacity so they're findable but de-emphasized.
+ * Each avatar links to the member's profile page. Empty state covers
+ * the pre-onboarding case where no members exist yet.
+ */
+export function TeamDirectoryWidget() {
+  const teamQuery = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+  })
+
+  if (teamQuery.isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center text-text-light">
+        <Loader2 size={18} className="animate-spin" />
+      </div>
+    )
+  }
+
+  if (teamQuery.error) {
+    return (
+      <div className="h-full flex items-center gap-2 text-sm text-amber-300">
+        <AlertCircle size={16} />
+        <span>Could not load team: {(teamQuery.error as Error).message}</span>
+      </div>
+    )
+  }
+
+  const members: TeamMember[] = teamQuery.data ?? []
+
+  if (members.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-center">
+        <div>
+          <Users size={20} className="text-text-light mx-auto mb-2" aria-hidden="true" />
+          <p className="text-[13px] text-text-light italic">No team members yet.</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Active first, inactive last (dimmed). Treat anything not explicitly
+  // 'inactive' (case-insensitive) as active so the default status or
+  // missing status still shows up.
+  const ordered = [...members].sort((a, b) => {
+    const aInactive = a.status?.toLowerCase() === 'inactive'
+    const bInactive = b.status?.toLowerCase() === 'inactive'
+    if (aInactive === bInactive) return a.display_name.localeCompare(b.display_name)
+    return aInactive ? 1 : -1
+  })
+
+  return (
+    <div className="flex flex-col h-full">
+      <div
+        className="flex-1 overflow-x-auto overflow-y-hidden"
+        aria-label="Team members — scroll horizontally for more"
+      >
+        <div className="flex gap-4 py-2">
+          {ordered.map((m) => {
+            const inactive = m.status?.toLowerCase() === 'inactive'
+            const initial = m.display_name?.charAt(0)?.toUpperCase() ?? '?'
+            return (
+              <Link
+                key={m.id}
+                to={`/profile/${m.id}`}
+                className={`group flex flex-col items-center gap-1.5 shrink-0 w-[72px] focus-ring rounded-lg transition-all ${
+                  inactive ? 'opacity-50 hover:opacity-80' : 'hover:-translate-y-0.5'
+                }`}
+                title={m.position ? `${m.display_name} — ${m.position}` : m.display_name}
+              >
+                <div className="w-12 h-12 rounded-full bg-surface-alt border-2 border-border-light text-gold flex items-center justify-center text-[15px] font-bold shrink-0 group-hover:border-gold/50 transition-colors">
+                  {initial}
+                </div>
+                <span className="text-[11px] font-medium text-text-muted tracking-tight truncate max-w-full group-hover:text-text transition-colors">
+                  {m.display_name.split(' ')[0]}
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+      <p className="text-[11px] text-text-light mt-2">
+        Click a teammate to open their profile.
+      </p>
     </div>
   )
 }
