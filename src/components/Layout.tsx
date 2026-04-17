@@ -223,7 +223,24 @@ export default function Layout() {
               </button>
             ) : (
               <>
-                {showSelfReport && <SelfReportModal clockInTime={clockInTime} onClose={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime('') }} onLogout={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime(''); navigate(APP_ROUTES.auth.login) }} />}
+                {showSelfReport && (
+                  <SelfReportModal
+                    clockInTime={clockInTime}
+                    onClose={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime('') }}
+                    // Log Out must actually end the Supabase session — the
+                    // previous version only navigated to /login, which
+                    // bounced right back to / because the session was
+                    // still active. Reuse handleSignOut so the session is
+                    // destroyed locally (and best-effort server-side)
+                    // before we reset clock-in state and navigate.
+                    onLogout={async () => {
+                      setShowSelfReport(false)
+                      setClockedIn(false)
+                      setClockInTime('')
+                      await handleSignOut()
+                    }}
+                  />
+                )}
                 <button
                   onClick={() => setShowSelfReport(true)}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all"
