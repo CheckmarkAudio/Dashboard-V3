@@ -13,7 +13,23 @@ export type AppCapability =
   | 'view_team_analytics'
   | 'manage_workspace_defaults'
 
-const OWNER_EMAIL = 'checkmarkaudio@gmail.com'
+/**
+ * The single, hardcoded primary-admin identity for the studio. This
+ * email is treated as `owner` in three independent places:
+ *
+ *   1. `getAppRole()` below — even without a profile row, the email
+ *      check resolves to 'owner'.
+ *   2. The DB triggers on `intern_users` (migration
+ *      `protect_owner_account_checkmarkaudio`) — coerce role/position
+ *      back to owner on any UPDATE and refuse DELETE.
+ *   3. `fetchProfile()` in AuthContext — synthesizes an owner profile
+ *      if the Supabase lookup fails, so transient query problems can
+ *      never lock the owner out.
+ *
+ * If you need to change the primary owner, update this constant AND
+ * the DB triggers in the same change set. Do not change just one.
+ */
+export const OWNER_EMAIL = 'checkmarkaudio@gmail.com'
 
 const ROLE_CAPABILITIES: Record<AppRole, AppCapability[]> = {
   owner: [

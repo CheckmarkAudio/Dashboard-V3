@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { normalizeEmail } from '../lib/email'
 import type { TeamMember } from '../types'
 import {
+  OWNER_EMAIL,
   canAccessAdmin,
   getAppRole,
   getRoleCapabilities,
@@ -94,6 +95,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // `lower(email)`, so any casing drift silently creates ghost profiles.
     const email = normalizeEmail(authUser.email)
 
+    // Helper: if all the DB-backed lookups fail or return no rows AND
+    //         the auth email is the hardcoded owner, synthesize an owner
+    //         profile. Safe because OWNER_EMAIL is hardcoded and only
+    //         someone with that email's verified password reaches here.
+    const synthesizeOwnerIfApplicable = (): ProfileFetchResult | null => {
+      if (email !== OWNER_EMAIL) return null
+      console.warn('[AuthContext] OWNER_EMAIL fallback engaged — synthesizing owner profile because intern_users lookup did not return the row.')
+      setProfile({
+        id: userId,
+        email: OWNER_EMAIL,
+        display_name: 'Owner',
+        role: 'admin',
+        position: 'owner',
+        status: 'active',
+      } as TeamMember)
+      return 'found'
+    }
+
     // 1) Primary lookup: profile row whose PK already matches the auth uid.
     const { data, error } = await supabase
       .from('intern_users')
@@ -102,10 +121,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle()
     if (error) {
       console.error('[AuthContext] Profile lookup failed:', error.message, error.code)
-      // A query error is *ambiguous* — the row may exist but RLS or the
-      // network blocked the read. Bailing here (instead of falling into
-      // the email fallback + reject path) prevents a transient blip from
-      // forcibly signing the user out.
+      // For the owner, engage the fallback rather than leaving them in
+      // a profile-less limbo state.
+      const ownerFallback = synthesizeOwnerIfApplicable()
+      if (ownerFallback) return ownerFallback
+      // For non-owner users, bailing on 'error' (instead of falling into
+      // reject) prevents a transient blip from forcibly signing them out.
       return 'error'
     }
     if (data) { setProfile(data as TeamMember); return 'found' }
@@ -149,9 +170,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // 3) Both lookups completed cleanly with no matching row. This user
-    //    genuinely was NOT provisioned by an admin. The caller signs
-    //    them out and surfaces the message via sessionStorage.
+    // 3) Owner email last-resort fallback (covers the no-row case). The
+    //    error-path fallback is handled inside synthesizeOwnerIfApplicable
+    //    above; calling it here covers the "queries succeeded but no row
+    //    matched" case.
+    const ownerFallback = synthesizeOwnerIfApplicable()
+    if (ownerFallback) return ownerFallback
+
+    // 4) Both lookups completed cleanly with no matching row, and the
+    //    user is not the owner. They genuinely were NOT provisioned by
+    //    an admin. The caller signs them out and surfaces the message
+    //    via sessionStorage.
     console.error('[AuthContext] No intern_users profile for auth user', userId, email)
     return 'not_found'
   }, [])
