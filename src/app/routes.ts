@@ -15,8 +15,13 @@ export const APP_ROUTES = {
     team: '/admin/team',
     templates: '/admin/templates',
     members: '/admin/my-team',
+    // Analytics merged the standalone Flywheel page in April 2026.
+    // All KPI charts, monthly trends, employee breakdowns, and the
+    // stage drill-down live at `/admin/health` under BusinessHealth.
+    // The legacy `/admin/flywheel` route is intentionally gone — a
+    // stale bookmark hits the app-level fallback route and lands on
+    // the member Overview, which is safer than 404-ing.
     analytics: '/admin/health',
-    flywheel: '/admin/flywheel',
     settings: '/admin/settings',
   },
 } as const

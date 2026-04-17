@@ -15,7 +15,7 @@ import type { LucideProps } from 'lucide-react'
 import {
   LayoutDashboard, Users, Calendar, Settings,
   LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
-  BarChart3, Briefcase, Lightbulb, Clock, PieChart, Sun, Moon,
+  BarChart3, Briefcase, MessageSquare, Clock, Sun, Moon,
 } from 'lucide-react'
 
 type NavLinkDef = {
@@ -76,22 +76,27 @@ function TopNavItem({ link }: { link: NavLinkDef }) {
   )
 }
 
-/* ── Menu-Sidebar v5.2 — Main menu ── */
+/* ── Menu-Sidebar v5.2 — Main menu ──
+   Note: "Content" was renamed to "Forum" in April 2026 to reflect what
+   the page actually is (team discussion channels) rather than the more
+   generic original name. The route URL stays as `/content` so existing
+   bookmarks still work. */
 const mainLinks: NavLinkDef[] = [
   { to: APP_ROUTES.member.overview, icon: LayoutDashboard, label: 'Overview' },
   { to: APP_ROUTES.member.tasks, icon: CheckSquare, label: 'Tasks' },
   { to: APP_ROUTES.member.calendar, icon: Calendar, label: 'Calendar' },
   { to: APP_ROUTES.member.booking, icon: Briefcase, label: 'Booking' },
-  { to: APP_ROUTES.member.content, icon: Lightbulb, label: 'Content' },
+  { to: APP_ROUTES.member.content, icon: MessageSquare, label: 'Forum' },
 ]
 
-/* ── Menu-Sidebar v5.2 — Admin menu ── */
+/* ── Menu-Sidebar v5.2 — Admin menu ──
+   "Flywheel" removed in April 2026; everything merged into Analytics.
+   Same chart content now lives under /admin/health. */
 const adminLinks: NavLinkDef[] = [
   { to: APP_ROUTES.admin.hub, icon: TeamHubIcon as ComponentType<LucideProps>, label: 'Hub' },
   { to: APP_ROUTES.admin.templates, icon: ClipboardList, label: 'Assign' },
   { to: APP_ROUTES.admin.members, icon: Users, label: 'Members' },
   { to: APP_ROUTES.admin.analytics, icon: BarChart3, label: 'Analytics' },
-  { to: APP_ROUTES.admin.flywheel, icon: PieChart, label: 'Flywheel' },
 ]
 const settingsLink: NavLinkDef = { to: APP_ROUTES.admin.settings, icon: Settings, label: 'Settings' }
 
