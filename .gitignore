@@ -4,3 +4,8 @@ dist
 .env.local
 *.local
 .DS_Store
+
+# Build output — Vercel builds from src/, never commit dist/ or copies of it
+dist/
+dist-ssr/
+*.tsbuildinfo
