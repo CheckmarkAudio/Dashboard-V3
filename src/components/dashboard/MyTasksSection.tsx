@@ -191,7 +191,7 @@ export default function MyTasksSection() {
       </div>
 
       {/* Task rows — internal scroll keeps the page itself non-scrolling. */}
-      <div className="flex-1 min-h-0 overflow-y-auto -mx-1 pr-1">
+      <div className="flex-1 min-h-0 -mx-1 pr-1">
         {filtered.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center px-4">
             <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">

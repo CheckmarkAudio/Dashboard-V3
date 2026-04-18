@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties, type ReactNode } from 'react'
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { RotateCcw } from 'lucide-react'
 import {
   DndContext,
@@ -36,24 +36,22 @@ import { Button, Card } from '../ui'
  * Rows: `auto-rows-min` — each row sizes to its content so a short
  * widget doesn't leave vertical padding.
  *
- * `maxHeight` is the ceiling. A widget with more content than its cap
- * clips + scrolls internally (`flex-1 overflow-y-auto` inside each
- * widget), instead of pushing the whole row taller. Without this cap
- * a long list (e.g. the Tasks widget with 30+ items) would make
- * Overview render as one tall scroll of items.
+ * `maxHeight` caps a collapsed widget. When the user clicks the bottom
+ * chevron ("drop-down" affordance), SortableWidget removes the cap and
+ * the widget grows to show all its content — no side-scrollbars.
  */
 const ROW_HEIGHT_PX = 340
 const ROW_GAP_PX = 16
 
-function widgetGridStyle(span: WidgetSpan, rowSpan: WidgetRowSpan = 1): CSSProperties {
+function widgetGridStyle(
+  span: WidgetSpan,
+  rowSpan: WidgetRowSpan = 1,
+  expanded = false,
+): CSSProperties {
   return {
     gridColumn: `span ${span}`,
     gridRow: rowSpan > 1 ? `span ${rowSpan}` : undefined,
-    // Capped flex-column so auto-rows-min hugs short widgets but long
-    // widgets clip at the ceiling and their inner overflow-y-auto
-    // scroll kicks in. `overflow: hidden` is what actually forces the
-    // clip — `max-height` alone wouldn't stop overflow painting.
-    maxHeight: `${rowSpan * ROW_HEIGHT_PX + (rowSpan - 1) * ROW_GAP_PX}px`,
+    maxHeight: expanded ? 'none' : `${rowSpan * ROW_HEIGHT_PX + (rowSpan - 1) * ROW_GAP_PX}px`,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -61,33 +59,46 @@ function widgetGridStyle(span: WidgetSpan, rowSpan: WidgetRowSpan = 1): CSSPrope
   }
 }
 
-// Individual sortable widget wrapper. Keeps dnd-kit wiring isolated
-// from the rest of the panel. Applies the sortable transform to the
-// outer cell and exposes a render-prop so the child knows whether it
-// is currently being dragged (for dim/elevation effects).
+// Individual sortable widget wrapper. Owns its local expand state —
+// each widget expands/collapses independently. When expanded, the
+// outer cell's max-height is dropped so the widget grows to fit all
+// of its content rather than clipping or scrolling internally.
 function SortableWidget({
   id,
-  style,
+  span,
+  rowSpan,
   children,
 }: {
   id: WorkspaceWidgetId
-  style: CSSProperties
-  children: (dragHandleProps: DragHandleProps) => ReactNode
+  span: WidgetSpan
+  rowSpan: WidgetRowSpan
+  children: (args: {
+    dragHandleProps: DragHandleProps
+    isExpanded: boolean
+    onToggleExpand: () => void
+  }) => ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  const combinedStyle: CSSProperties = {
-    ...style,
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const style: CSSProperties = {
+    ...widgetGridStyle(span, rowSpan, isExpanded),
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? 10 : undefined,
     opacity: isDragging ? 0.85 : 1,
   }
+
   return (
-    <div ref={setNodeRef} style={combinedStyle} className={isDragging ? 'ring-2 ring-gold/60 rounded-2xl shadow-2xl' : ''}>
+    <div ref={setNodeRef} style={style} className={isDragging ? 'ring-2 ring-gold/60 rounded-2xl shadow-2xl' : ''}>
       {children({
-        attributes: attributes as DragHandleProps['attributes'],
-        listeners: listeners as DragHandleProps['listeners'],
-        isDragging,
+        dragHandleProps: {
+          attributes: attributes as DragHandleProps['attributes'],
+          listeners: listeners as DragHandleProps['listeners'],
+          isDragging,
+        },
+        isExpanded,
+        onToggleExpand: () => setIsExpanded((prev) => !prev),
       })}
     </div>
   )
@@ -210,17 +221,17 @@ export default function WorkspacePanel({
                 <SortableWidget
                   key={widget.id}
                   id={widget.id as WorkspaceWidgetId}
-                  style={widgetGridStyle(
-                    widget.span,
-                    widget.rowSpan ?? definition.defaultRowSpan ?? 1,
-                  )}
+                  span={widget.span}
+                  rowSpan={widget.rowSpan ?? definition.defaultRowSpan ?? 1}
                 >
-                  {(dragHandleProps) => (
+                  {({ dragHandleProps, isExpanded, onToggleExpand }) => (
                     <DashboardWidgetFrame
                       title={definition.title}
                       description={definition.description}
                       visible={widget.visible}
                       dragHandleProps={dragHandleProps}
+                      isExpanded={isExpanded}
+                      onToggleExpand={onToggleExpand}
                     >
                       <WidgetComponent />
                     </DashboardWidgetFrame>

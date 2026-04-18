@@ -1,5 +1,5 @@
-import type { HTMLAttributes, ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical } from 'lucide-react'
+import { useLayoutEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react'
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Eye, EyeOff, GripVertical } from 'lucide-react'
 import { Button } from '../ui'
 
 // Drag-handle props are exactly what @dnd-kit hands out from
@@ -20,11 +20,12 @@ interface DashboardWidgetFrameProps {
   onMoveUp?: () => void
   onMoveDown?: () => void
   onToggleVisibility?: () => void
-  // When present, the header shows a grip icon and the ENTIRE title area
-  // becomes a drag zone. Action buttons on the right (eye, move-arrows)
-  // stay clickable since the PointerSensor has a 6px activation distance
-  // so plain clicks don't trigger a drag.
   dragHandleProps?: DragHandleProps
+  // Expand / collapse — when `onToggleExpand` is present, the frame
+  // renders a chevron strip on its bottom border that the user can
+  // click to reveal content hidden by the cell's max-height cap.
+  isExpanded?: boolean
+  onToggleExpand?: () => void
   children: ReactNode
 }
 
@@ -38,28 +39,50 @@ export default function DashboardWidgetFrame({
   onMoveDown,
   onToggleVisibility,
   dragHandleProps,
+  isExpanded = false,
+  onToggleExpand,
   children,
 }: DashboardWidgetFrameProps) {
   // Bind drag attributes/listeners to the whole title zone so the user
-  // can grab anywhere on the top bar — not just the grip dot. Action
-  // buttons opt out via stopPropagation in their own handlers.
+  // can grab anywhere on the top bar. Action buttons on the right opt
+  // out thanks to the 6px sensor activation distance.
   const dragZoneProps = dragHandleProps
     ? { ...(dragHandleProps.attributes ?? {}), ...(dragHandleProps.listeners ?? {}) }
     : undefined
 
+  // Detect real overflow so the expand affordance only renders when
+  // there's actually something hidden below the fold. Compares the
+  // content's full scrollHeight against its rendered clientHeight +
+  // re-checks on resize (ResizeObserver). When the widget fits, the
+  // chevron strip stays off.
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  const [hasOverflow, setHasOverflow] = useState(false)
+  useLayoutEffect(() => {
+    const el = bodyRef.current
+    if (!el) return
+    const check = () => {
+      setHasOverflow(el.scrollHeight > el.clientHeight + 1)
+    }
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    // Also observe children so nested content changes (e.g. data
+    // arriving after loading) re-trigger the check.
+    Array.from(el.children).forEach((child) => ro.observe(child))
+    return () => ro.disconnect()
+  }, [children, isExpanded])
+
+  const showChevron = !!onToggleExpand && (hasOverflow || isExpanded)
+
   return (
-    // `widget-card` is defined in src/index.css and matches the v1
-    // mockup (gradient, 22px radius, hairline border, inner highlight).
-    // `containerType: inline-size` lets widget children use @container
-    // queries to adapt to widget width independent of viewport.
+    // `widget-card` — mockup-matched gradient + 22px radius + hairline
+    // border. `containerType: inline-size` lets widget children use
+    // @container queries to adapt to widget width.
     <div
       className="widget-card h-full flex flex-col overflow-hidden group/widget"
       style={{ containerType: 'inline-size' }}
     >
-      {/* ─── Header ──────────────────────────────────────────────────
-          The entire title area is a drag zone when dragHandleProps is
-          present. Visual grip icon anchors the interaction for users
-          who haven't learned the convention yet. */}
+      {/* ─── Header ─────────────────────────────────────────────── */}
       <div className="px-4 py-3 border-b border-white/5 flex items-start justify-between gap-3">
         <div
           {...(dragZoneProps ?? {})}
@@ -122,8 +145,34 @@ export default function DashboardWidgetFrame({
         )}
       </div>
 
-      {/* ─── Body ─────────────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 px-4 py-4 flex flex-col">{children}</div>
+      {/* ─── Body ───────────────────────────────────────────────── */}
+      <div ref={bodyRef} className="flex-1 min-h-0 px-4 py-4 flex flex-col">
+        {children}
+      </div>
+
+      {/* ─── Drop-down affordance ───────────────────────────────────
+          Only rendered when there's actual overflow or the widget is
+          currently expanded. Click the strip to toggle the cell's
+          max-height cap on SortableWidget. */}
+      {showChevron && (
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-label={isExpanded ? `Collapse ${title}` : `Show more ${title}`}
+          aria-expanded={isExpanded}
+          className="relative shrink-0 h-6 w-full border-t border-white/5 text-gold/50 hover:text-gold hover:bg-gold/5 transition-colors flex items-center justify-center focus-ring"
+        >
+          {/* Gentle fade hint when collapsed — implies more content
+              below the fold without adding any text label. */}
+          {!isExpanded && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-b from-transparent to-[rgba(16,17,23,0.95)]"
+            />
+          )}
+          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+      )}
     </div>
   )
 }
