@@ -228,16 +228,36 @@ export function AdminAssignWidget() {
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto -mx-1 space-y-0.5">
           {recentQuery.isLoading ? (
-            <div className="h-full flex items-center justify-center text-text-light">
-              <Loader2 size={18} className="animate-spin" />
+            <div className="flex items-center gap-2 px-2 py-2 text-text-light">
+              <Loader2 size={14} className="animate-spin" />
+              <span className="text-[12px]">Loading…</span>
             </div>
           ) : recent.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center px-4">
-              <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
-                <Sparkles size={18} className="text-gold" aria-hidden="true" />
+            // Top-aligned empty state + "ideas to try" tips. Previously
+            // this state was vertically centered inside a 2-row widget
+            // cell which made the widget look like a giant void. The
+            // tips now fill the space with something useful so the
+            // widget feels intentional even on a fresh install.
+            <div className="px-1 py-1 space-y-3">
+              <div className="flex items-start gap-2.5 px-1">
+                <div className="shrink-0 w-8 h-8 rounded-lg bg-gold/10 ring-1 ring-gold/20 flex items-center justify-center">
+                  <Sparkles size={15} className="text-gold" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="text-[13px] font-semibold text-text leading-tight">Nothing assigned yet</p>
+                  <p className="text-[11px] text-text-light leading-snug mt-0.5">
+                    Pick a tile above to send out your first delegation.
+                  </p>
+                </div>
               </div>
-              <p className="text-[14px] font-medium text-text">Nothing assigned yet</p>
-              <p className="text-[12px] text-text-light mt-0.5">Pick a tile above to get started.</p>
+              <div className="pt-2 border-t border-border/30 space-y-1">
+                <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold mb-1 px-1">
+                  Ideas to try
+                </p>
+                <AssignTip icon={CalendarPlus} tone="sky" text="Book next week's first session" />
+                <AssignTip icon={Plus} tone="emerald" text="Drop a one-off task into a member's day" />
+                <AssignTip icon={FolderPlus} tone="violet" text="Apply the Daily Checklist to a new hire" />
+              </div>
             </div>
           ) : (
             recent.map((r) => (
@@ -281,6 +301,33 @@ export function AdminAssignWidget() {
       {flow === 'session' && <CreateBookingModal onClose={handleClose} />}
       {flow === 'task' && <AssignTaskModal onClose={handleClose} />}
       {flow === 'group' && <AssignGroupModal onClose={handleClose} />}
+    </div>
+  )
+}
+
+// Inline tip row — mirrors the kind-icon styling of the tile row so
+// empty-state hints feel like "here's what each tile does" rather
+// than generic tutorial copy.
+function AssignTip({
+  icon: Icon,
+  tone,
+  text,
+}: {
+  icon: React.ComponentType<{ size?: number; className?: string }>
+  tone: 'sky' | 'emerald' | 'violet'
+  text: string
+}) {
+  const toneMap = {
+    sky:     'bg-sky-500/10 text-sky-300',
+    emerald: 'bg-emerald-500/10 text-emerald-300',
+    violet:  'bg-violet-500/10 text-violet-300',
+  }[tone]
+  return (
+    <div className="flex items-center gap-2 px-1 py-1">
+      <div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center ${toneMap}`}>
+        <Icon size={12} />
+      </div>
+      <p className="text-[12px] text-text-muted leading-snug">{text}</p>
     </div>
   )
 }
@@ -1054,18 +1101,28 @@ export function AdminTeamWidget() {
 
       <div className="flex-1 min-h-0">
         {teamQuery.isLoading ? (
-          <div className="h-full flex items-center justify-center text-text-light">
-            <Loader2 size={18} className="animate-spin" />
+          <div className="flex items-center gap-2 px-2 py-2 text-text-light">
+            <Loader2 size={14} className="animate-spin" />
+            <span className="text-[12px]">Loading…</span>
           </div>
         ) : teamQuery.error ? (
-          <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
-            <AlertCircle size={16} className="shrink-0" />
-            <span className="truncate">Could not load team</span>
+          <div className="flex items-center gap-2 text-sm text-amber-300 px-2 py-2">
+            <AlertCircle size={14} className="shrink-0" />
+            <span className="text-[12px] truncate">Could not load team</span>
           </div>
         ) : members.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-4">
-            <Users size={20} className="text-text-light mb-2" />
-            <p className="text-[12px] text-text-light italic">No active members yet.</p>
+          // Top-aligned empty state to match the Assign widget — keeps
+          // the widget from looking hollowed out when the team is empty.
+          <div className="flex items-start gap-2.5 px-1 py-1">
+            <div className="shrink-0 w-8 h-8 rounded-lg bg-gold/10 ring-1 ring-gold/20 flex items-center justify-center">
+              <Users size={15} className="text-gold" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-text leading-tight">No active members yet</p>
+              <p className="text-[11px] text-text-light leading-snug mt-0.5">
+                Invite the crew from Team Manager — they'll show up here with online dots.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="flex flex-wrap gap-3 py-2">
