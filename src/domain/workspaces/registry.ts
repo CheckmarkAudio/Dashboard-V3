@@ -7,49 +7,24 @@ import type {
 } from './types'
 
 export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
-  // Member Overview — ADHD-friendly layout.
+  // Overview = launchpad to the 4 main user-facing nav items
+  // (Tasks · Calendar · Booking · Forum). Each widget previews one of
+  // those pages. Same layout for member AND admin scope so the Overview
+  // is consistent across roles. Admin-specific widgets (TeamFocus,
+  // ApprovalQueue, AdminShortcuts, AdminSchedule) live in the admin Hub
+  // page, NOT on Overview — Overview is a daily-status surface, not an
+  // admin console.
   //
-  // Ordering here = default render order. Tasks lead as the hero
-  // because it's the ONE thing a member needs to act on every day;
-  // Snapshot and Calendar follow as quick-glance context; Team
-  // Directory sits as reference material below the fold.
+  // Visual order in the 3-col mixed-size grid:
+  //   Row 1: today_calendar (span 2) + booking_snapshot (span 1)
+  //   Row 2: team_tasks      (span 2) + [forum_notifications coming Piece 5]
   //
-  // Flywheel Summary was removed from the member Overview in April
-  // 2026 as part of the ADHD-friendly default. The full flywheel
-  // chart still lives under /admin/health. The `flywheel_summary`
-  // ID is kept in the type union so any saved layouts that still
-  // reference it resolve gracefully (WorkspacePanel no-ops missing
-  // definitions).
-  // ADHD-friendly Overview: 4 compact widgets in a single viewport row.
-  // No scrolling required at desktop widths. Each widget is a quick-glance
-  // snapshot — the deeper data lives on its dedicated nav page.
-  //
-  // Order = render order. Calendar first (what's now), Tasks second (what
-  // to do), Booking third (what's next), Progress last (how am I doing).
-  // Mixed-size grid (3 cols at desktop): hero widgets take 2 cols, KPI
-  // widgets take 1. Pattern matches the v1.0 design system reference —
-  // wide chart on left, smaller KPIs on right, all clean rectangles.
-  // Render order: hero rows on top, KPI rows on bottom.
+  // Component IDs intentionally kept short and stable so saved layouts
+  // in localStorage resolve cleanly across renames.
   {
     id: 'today_calendar',
-    title: 'Today Schedule',
-    description: "Today's sessions with live status pills.",
-    defaultSpan: 2,
-    allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview', 'admin_overview'],
-  },
-  {
-    id: 'team_snapshot',
-    title: 'Daily Snapshot',
-    description: 'Progress, streak, and must-do.',
-    defaultSpan: 1,
-    allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview', 'admin_overview'],
-  },
-  {
-    id: 'team_tasks',
-    title: 'My tasks',
-    description: 'Today by flywheel stage.',
+    title: 'Calendar',
+    description: "Today's schedule.",
     defaultSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
     scopes: ['member_overview', 'admin_overview'],
@@ -57,22 +32,57 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
   {
     id: 'booking_snapshot',
     title: 'Booking',
-    description: 'Upcoming sessions and the next slot.',
+    description: 'Upcoming sessions and quick book.',
     defaultSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
     scopes: ['member_overview', 'admin_overview'],
   },
-  // Removed from Overview as part of the ADHD-friendly refresh:
-  //   - team_directory (Members) — redundant with the full /admin/my-team page
-  //   - team_activity — too long for a glance + currently mock data
-  // Kept as a registered ID in types.ts so older saved layouts still resolve.
+  {
+    id: 'team_tasks',
+    title: 'Tasks',
+    description: 'Today by flywheel stage.',
+    defaultSpan: 2,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: ['member_overview', 'admin_overview'],
+  },
+  // ─── Registered but NOT scoped to Overview anymore ────────────────────
+  // The widget components still exist in src/components/dashboard/ and
+  // remain mapped in widgetRegistry.tsx. They're available for a future
+  // "widget bank" feature where users opt-in to extra widgets. Keeping
+  // them registered (with empty scopes) means saved layouts resolve and
+  // we can re-enable any of them by changing scopes back without touching
+  // the type union or the widget map.
+  {
+    id: 'team_snapshot',
+    title: 'Daily Snapshot',
+    description: 'Progress, streak, and must-do.',
+    defaultSpan: 1,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: [],
+  },
+  {
+    id: 'team_directory',
+    title: 'Team',
+    description: 'Quick-reference row of teammates.',
+    defaultSpan: 2,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: [],
+  },
+  {
+    id: 'team_activity',
+    title: 'Team activity',
+    description: 'Recent team actions tagged by flywheel stage.',
+    defaultSpan: 1,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: [],
+  },
   {
     id: 'team_focus',
     title: 'Team Focus',
     description: 'Live team completion, submissions, and member momentum.',
     defaultSpan: 2,
     allowedRoles: ['admin', 'owner'],
-    scopes: ['admin_overview'],
+    scopes: [],
   },
   {
     id: 'approval_queue',
@@ -80,7 +90,7 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'Pending edits and submissions that need admin attention.',
     defaultSpan: 1,
     allowedRoles: ['admin', 'owner'],
-    scopes: ['admin_overview'],
+    scopes: [],
   },
   {
     id: 'admin_schedule',
@@ -88,7 +98,7 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'The studio schedule for today across the team.',
     defaultSpan: 2,
     allowedRoles: ['admin', 'owner'],
-    scopes: ['admin_overview'],
+    scopes: [],
   },
   {
     id: 'admin_shortcuts',
@@ -96,7 +106,7 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'Jump directly into the key admin workspaces.',
     defaultSpan: 1,
     allowedRoles: ['admin', 'owner'],
-    scopes: ['admin_overview'],
+    scopes: [],
   },
 ]
 
