@@ -230,10 +230,13 @@ export function TodayCalendarWidget() {
         {weekdays.map((d) => (
           <div
             key={d.label}
-            className={`flex flex-col items-center justify-center py-2 rounded-lg transition-colors ${
+            // Today's tile gets a richer gold gradient with a white
+            // highlight line at the top, matching the mockup. Other
+            // days use a subtle resting background.
+            className={`flex flex-col items-center justify-center py-2 rounded-xl transition-colors ${
               d.isToday
-                ? 'bg-gold/15 ring-1 ring-gold/40'
-                : 'bg-surface-alt/60 hover:bg-surface-hover/60'
+                ? 'bg-gradient-to-b from-gold/28 to-gold/12 ring-1 ring-gold/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+                : 'bg-white/[0.02] hover:bg-white/[0.04] border border-transparent hover:border-white/8'
             }`}
           >
             <p
@@ -284,7 +287,9 @@ export function TodayCalendarWidget() {
             return (
               <div
                 key={session.id}
-                className="flex items-stretch gap-3 px-1.5 py-2.5 rounded-lg hover:bg-surface-hover/40 transition-colors"
+                // Lift on hover — subtle border and brighter bg so
+                // the session row reads as tappable.
+                className="flex items-stretch gap-3 px-2 py-2.5 rounded-xl border border-transparent bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10 transition-all"
               >
                 <div className="shrink-0 w-14 text-right border-r border-border/40 pr-3 flex flex-col justify-center">
                   <p className="text-[15px] font-semibold tracking-tight text-text leading-none">{hourMin}</p>
@@ -379,7 +384,10 @@ export function BookingSnapshotWidget() {
         <p className="text-[11px] uppercase tracking-wider text-text-light font-medium">
           Upcoming today
         </p>
-        <p className="mt-1 text-[40px] leading-none font-bold tracking-tight text-text">
+        {/* Magazine-cover sized number — thin weight, tight spacing,
+            first thing the eye catches on the Booking widget. Matches
+            the Workspace-UI-Draft mockup. */}
+        <p className="mt-2 text-[56px] leading-none font-light tracking-[-0.04em] text-text tabular-nums">
           {loading ? '–' : upcoming.length}
         </p>
         <p className="mt-1 text-[12px] text-text-light">
@@ -596,8 +604,12 @@ export function ForumNotificationsWidget() {
                 key={c.channel_id}
                 to={`${APP_ROUTES.member.content}${c.channel_slug ? `?channel=${c.channel_slug}` : ''}`}
                 onClick={() => handleChannelClick(c.channel_id)}
-                className={`group relative flex items-start gap-2.5 px-1.5 py-2 rounded-lg transition-colors ${
-                  unread ? 'bg-gold/5 hover:bg-gold/10' : 'hover:bg-surface-hover/40'
+                // Lift on hover — border + brighter bg so the row
+                // reads as clickable. Unread channels stay tinted gold.
+                className={`group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all ${
+                  unread
+                    ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
+                    : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
                 }`}
               >
                 {/* Avatar — sender initial of latest message, or # if empty. */}

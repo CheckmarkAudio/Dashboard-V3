@@ -209,7 +209,9 @@ export default function MyTasksSection() {
           return (
             <div
               key={task.id}
-              className={`group flex items-center gap-2.5 px-1.5 py-2 rounded-lg transition-colors hover:bg-surface-hover/40 ${
+              // Row lifts on hover — border + brighter bg so the row
+              // feels tactile, matching the Workspace-UI-Draft pattern.
+              className={`group flex items-center gap-2.5 px-2 py-2 rounded-xl border border-transparent bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10 transition-all ${
                 task.is_completed ? 'opacity-50' : ''
               }`}
             >

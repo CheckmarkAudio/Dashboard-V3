@@ -84,8 +84,12 @@ function TopNavItem({ link }: { link: NavLinkDef }) {
       className={({ isActive }) =>
         [
           'flex items-center gap-2 h-9 px-3 rounded-lg text-[13px] font-medium transition-all duration-200 focus-ring whitespace-nowrap',
+          // Active nav link now reads as a gold-filled pill (matches the
+          // Workspace-UI-Draft mockup). Gradient top-light → bottom-dark
+          // with a faint white highlight line inside, so it feels
+          // dimensional rather than flat.
           isActive
-            ? 'text-gold bg-white/[0.03] ring-1 ring-border-light'
+            ? 'text-gold font-semibold bg-gradient-to-b from-gold/20 to-gold/8 ring-1 ring-gold/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
             : 'text-text-muted hover:text-text hover:bg-white/[0.04]',
         ].join(' ')
       }
