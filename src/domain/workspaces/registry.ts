@@ -91,18 +91,19 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 // type (`AdminWidgetRegistration[]` only accepts `AdminWidgetId`).
 // ═════════════════════════════════════════════════════════════════════
 //
-// Render order (3-col grid with mixed row spans):
-//   Row 1: admin_assign (2×2) + admin_notifications (1×1)
-//   Row 2: admin_assign …     + admin_team          (1×1)
-//   Row 3: admin_flywheel(2×2)+ admin_approvals     (1×2)
-//   Row 4: admin_flywheel …   + admin_approvals …
+// Render order — matches the member Overview rhythm so both pages
+// feel uniform. Every widget is one row tall (~340px) like the
+// member side; no more tall hero widgets.
+//
+//   Row 1: admin_assign    (col 2) + admin_notifications (col 1)
+//   Row 2: admin_flywheel  (col 2) + admin_team          (col 1)
+//   Row 3: admin_approvals (col 3 — full width)
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
     id: 'admin_assign',
     title: 'Assign',
     description: 'Send out sessions, tasks, or task groups.',
     defaultSpan: 2,
-    defaultRowSpan: 2,
     allowedRoles: ['admin', 'owner'],
   },
   {
@@ -113,6 +114,13 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
+    id: 'admin_flywheel',
+    title: 'Flywheel',
+    description: 'KPIs across the five flywheel stages.',
+    defaultSpan: 2,
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
     id: 'admin_team',
     title: 'Team',
     description: 'Your crew at a glance.',
@@ -120,19 +128,10 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
-    id: 'admin_flywheel',
-    title: 'Flywheel',
-    description: 'KPIs across the five flywheel stages.',
-    defaultSpan: 2,
-    defaultRowSpan: 2,
-    allowedRoles: ['admin', 'owner'],
-  },
-  {
     id: 'admin_approvals',
     title: 'Approvals',
     description: 'Pending requests from the team.',
-    defaultSpan: 1,
-    defaultRowSpan: 2,
+    defaultSpan: 3,
     allowedRoles: ['admin', 'owner'],
   },
 ]
@@ -195,7 +194,7 @@ function buildDefaultWidgetState(
 // Bump whenever the default widget order / span / scope assignment
 // changes. Saved layouts whose `version` does not match are discarded
 // in storage.ts so the new default ordering takes effect for everyone.
-export const WORKSPACE_LAYOUT_VERSION = 5
+export const WORKSPACE_LAYOUT_VERSION = 6
 
 // Default layouts per scope. The page passes its scope in, picks the
 // matching array, and produces widget state. Scope is used only for
