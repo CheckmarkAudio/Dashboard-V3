@@ -99,10 +99,11 @@ export default function WorkspacePanel({
         </Card>
       )}
 
-      <div
-        className="grid gap-4 items-stretch auto-rows-[minmax(260px,auto)]"
-        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}
-      >
+      {/* 3-col grid at desktop with mixed widget sizes (still all clean
+          rectangles — no L-shapes, no irregular packing). Hero widgets
+          take 2 cols; KPI widgets take 1 col. Fixed row height keeps
+          widgets perfectly aligned. Stacks responsively on smaller widths. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-[340px]">
         {visibleWidgets.map((widget) => {
           const definition = definitionsById.get(widget.id)
           if (!definition) return null

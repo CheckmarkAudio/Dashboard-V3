@@ -31,10 +31,10 @@ export default function DashboardWidgetFrame({
     // their internal layout to the widget's own width, independent of
     // viewport. Pairs with the auto-fit grid in WorkspacePanel.
     <Card flush flat className="h-full overflow-hidden" style={{ containerType: 'inline-size' }}>
-      <CardHeader className="items-start">
+      <CardHeader className="items-start !px-3 !py-2.5">
         <div className="min-w-0">
-          <h2 className="text-section text-text">{title}</h2>
-          {description && <p className="mt-1 text-caption">{description}</p>}
+          <h2 className="text-[14px] font-semibold tracking-tight text-text leading-tight">{title}</h2>
+          {description && <p className="mt-0.5 text-[10px] text-text-light leading-tight">{description}</p>}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {onMoveUp && (
@@ -68,7 +68,7 @@ export default function DashboardWidgetFrame({
           )}
         </div>
       </CardHeader>
-      <CardBody className="h-full">{children}</CardBody>
+      <CardBody className="h-full !px-3 !py-3 flex flex-col min-h-0">{children}</CardBody>
     </Card>
   )
 }

@@ -26,10 +26,22 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
   //
   // Order = render order. Calendar first (what's now), Tasks second (what
   // to do), Booking third (what's next), Progress last (how am I doing).
+  // Mixed-size grid (3 cols at desktop): hero widgets take 2 cols, KPI
+  // widgets take 1. Pattern matches the v1.0 design system reference —
+  // wide chart on left, smaller KPIs on right, all clean rectangles.
+  // Render order: hero rows on top, KPI rows on bottom.
   {
     id: 'today_calendar',
     title: 'Today Schedule',
     description: "Today's sessions with live status pills.",
+    defaultSpan: 2,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: ['member_overview', 'admin_overview'],
+  },
+  {
+    id: 'team_snapshot',
+    title: 'Daily Snapshot',
+    description: 'Progress, streak, and must-do.',
     defaultSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
     scopes: ['member_overview', 'admin_overview'],
@@ -38,7 +50,7 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     id: 'team_tasks',
     title: 'My tasks',
     description: 'Today by flywheel stage.',
-    defaultSpan: 1,
+    defaultSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
     scopes: ['member_overview', 'admin_overview'],
   },
@@ -46,14 +58,6 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     id: 'booking_snapshot',
     title: 'Booking',
     description: 'Upcoming sessions and the next slot.',
-    defaultSpan: 1,
-    allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview', 'admin_overview'],
-  },
-  {
-    id: 'team_snapshot',
-    title: 'Daily Snapshot',
-    description: 'Progress, streak, and must-do status for today at a glance.',
     defaultSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
     scopes: ['member_overview', 'admin_overview'],
