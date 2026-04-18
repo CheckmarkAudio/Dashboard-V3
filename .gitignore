@@ -9,3 +9,9 @@ dist
 dist/
 dist-ssr/
 *.tsbuildinfo
+
+# Claude Code worktrees — filesystem state, not for git
+.claude/worktrees/
+
+# Local DB snapshots from Supabase MCP exports — contain real user data, never commit
+backups/

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ComponentType } from 'react'
+import { Suspense, useState, useRef, useEffect, type ComponentType } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -16,7 +16,27 @@ import {
   LayoutDashboard, Users, Calendar, Settings,
   LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
   BarChart3, Briefcase, MessageSquare, Clock, Sun, Moon,
+  Loader2,
 } from 'lucide-react'
+
+/**
+ * Shared fallback for the route-level Suspense boundary. Kept minimal
+ * and centered so the header/nav stay fixed and only the page area
+ * shows a spinner while a lazy route chunk streams in. The fallback
+ * role/aria-label lets screen readers announce the loading state.
+ */
+function RouteLoadingFallback() {
+  return (
+    <div
+      className="flex items-center justify-center py-24 text-text-light"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading page"
+    >
+      <Loader2 size={22} className="animate-spin text-gold" aria-hidden="true" />
+    </div>
+  )
+}
 
 type NavLinkDef = {
   to: string
@@ -331,7 +351,9 @@ export default function Layout() {
       <main id="main-content" className="flex-1 flex flex-col min-w-0 overflow-hidden" tabIndex={-1}>
         <div className="flex-1 overflow-y-auto p-4 lg:p-8">
           <ErrorBoundary key={location.pathname} label="This page">
-            <Outlet />
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <Outlet />
+            </Suspense>
           </ErrorBoundary>
         </div>
       </main>
