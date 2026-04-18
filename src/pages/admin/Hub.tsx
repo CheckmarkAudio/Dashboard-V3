@@ -3,7 +3,7 @@ import { AdminOverviewProvider } from '../../contexts/AdminOverviewContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { EmptyState, PageHeader } from '../../components/ui'
 import WorkspacePanel from '../../components/dashboard/WorkspacePanel'
-import { WORKSPACE_WIDGET_DEFINITIONS } from '../../components/dashboard/widgetRegistry'
+import { ADMIN_WIDGET_DEFINITIONS } from '../../components/dashboard/widgetRegistry'
 import { UsersRound, Shield } from 'lucide-react'
 
 /**
@@ -45,10 +45,6 @@ export default function AdminHub() {
     )
   }
 
-  const definitions = WORKSPACE_WIDGET_DEFINITIONS.filter((widget) =>
-    widget.scopes.includes(ADMIN_SCOPE),
-  )
-
   return (
     <AdminOverviewProvider>
       <div className="max-w-[1400px] mx-auto space-y-6 animate-fade-in">
@@ -62,7 +58,7 @@ export default function AdminHub() {
           role={appRole}
           userId={profile?.id ?? 'guest'}
           scope={ADMIN_SCOPE}
-          definitions={definitions}
+          definitions={ADMIN_WIDGET_DEFINITIONS}
           showControls={false}
           controlsDescription=""
         />

@@ -1,34 +1,31 @@
-import type { AppRole } from '../permissions'
 import type {
+  AdminWidgetRegistration,
+  MemberWidgetRegistration,
   WorkspaceLayout,
   WorkspaceScope,
   WorkspaceWidgetRegistration,
   WorkspaceWidgetState,
 } from './types'
 
-export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
-  // ─── Member Overview ("/") ────────────────────────────────────────────
-  // The 4 widgets on a member's Overview launchpad, each previewing a
-  // main nav item (Tasks / Calendar / Booking / Forum).
-  //
-  // Visual order in the 3-col mixed-size grid:
-  //   Row 1: team_tasks     (col 2) + forum_notifications (col 1)
-  //   Row 2: today_calendar (col 2) + booking_snapshot    (col 1)
-  //
-  // Registration order IS the default render order; layout version is
-  // bumped whenever this order changes so existing saved layouts reset
-  // to the new default.
-  //
-  // Admins are routed to `/admin` (Hub) for their landing screen and
-  // do NOT see these member widgets — each is scoped to 'member_overview'
-  // only. The Hub has its own dedicated widgets below.
+// ═════════════════════════════════════════════════════════════════════
+// MEMBER — widgets on the member Overview page ("/").
+//
+// The array type (`MemberWidgetRegistration[]`) makes TypeScript refuse
+// any entry whose `id` is not a `MemberWidgetId`. If you try to add
+// 'admin_assign' here you will get a compile error — the admin Hub is
+// an entirely different list below.
+// ═════════════════════════════════════════════════════════════════════
+//
+// Render order top to bottom:
+//   Row 1: team_tasks (col 2)     + forum_notifications (col 1)
+//   Row 2: today_calendar (col 2) + booking_snapshot    (col 1)
+export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
   {
     id: 'team_tasks',
     title: 'Tasks',
     description: 'Today by flywheel stage.',
     defaultSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview'],
   },
   {
     id: 'forum_notifications',
@@ -36,7 +33,6 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'Unread messages across channels.',
     defaultSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview'],
   },
   {
     id: 'today_calendar',
@@ -44,7 +40,6 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: "Today's schedule.",
     defaultSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview'],
   },
   {
     id: 'booking_snapshot',
@@ -52,22 +47,56 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'Upcoming sessions and quick book.',
     defaultSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview'],
   },
+]
 
-  // ─── Admin Hub ("/admin") ─────────────────────────────────────────────
-  // Five widget snapshots of the admin surfaces: Assign, Flywheel,
-  // Notifications (admin tools), Team directory, Approvals.
-  //
-  // Visual order in the 3-col grid with mixed row spans:
-  //   Row 1: admin_assign (col 2, row 2) + admin_notifications (col 1)
-  //   Row 2: admin_assign continues       + admin_team         (col 1)
-  //   Row 3: admin_flywheel (col 2, row 2)+ admin_approvals    (col 1, row 2)
-  //   Row 4: admin_flywheel continues     + admin_approvals continues
-  //
-  // Two big rectangles on the left (Assign + Flywheel) and three
-  // stacked widgets on the right (Notifications + Team + Approvals),
-  // where Approvals is intentionally taller to balance the grid.
+// Member-side widget bank — registered but NOT on the Overview grid.
+// Kept so saved layouts from earlier versions still resolve to valid
+// component refs. Move one into MEMBER_WIDGET_REGISTRATIONS to show it.
+export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
+  {
+    id: 'team_snapshot',
+    title: 'Daily Snapshot',
+    description: 'Progress, streak, and must-do.',
+    defaultSpan: 1,
+    allowedRoles: ['member', 'admin', 'owner'],
+  },
+  {
+    id: 'team_directory',
+    title: 'Team',
+    description: 'Quick-reference row of teammates.',
+    defaultSpan: 2,
+    allowedRoles: ['member', 'admin', 'owner'],
+  },
+  {
+    id: 'team_activity',
+    title: 'Team activity',
+    description: 'Recent team actions tagged by flywheel stage.',
+    defaultSpan: 1,
+    allowedRoles: ['member', 'admin', 'owner'],
+  },
+  {
+    id: 'flywheel_summary',
+    title: 'Flywheel Summary',
+    description: 'Five-stage snapshot on the member surface.',
+    defaultSpan: 2,
+    allowedRoles: ['member', 'admin', 'owner'],
+  },
+]
+
+// ═════════════════════════════════════════════════════════════════════
+// ADMIN — widgets on the admin Hub page ("/admin").
+//
+// Never mix with MEMBER above. TypeScript enforces it via the array's
+// type (`AdminWidgetRegistration[]` only accepts `AdminWidgetId`).
+// ═════════════════════════════════════════════════════════════════════
+//
+// Render order (3-col grid with mixed row spans):
+//   Row 1: admin_assign (2×2) + admin_notifications (1×1)
+//   Row 2: admin_assign …     + admin_team          (1×1)
+//   Row 3: admin_flywheel(2×2)+ admin_approvals     (1×2)
+//   Row 4: admin_flywheel …   + admin_approvals …
+export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
     id: 'admin_assign',
     title: 'Assign',
@@ -75,7 +104,6 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     defaultSpan: 2,
     defaultRowSpan: 2,
     allowedRoles: ['admin', 'owner'],
-    scopes: ['admin_overview'],
   },
   {
     id: 'admin_notifications',
@@ -83,7 +111,6 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'Unread channels + quick post as admin.',
     defaultSpan: 1,
     allowedRoles: ['admin', 'owner'],
-    scopes: ['admin_overview'],
   },
   {
     id: 'admin_team',
@@ -91,7 +118,6 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'Your crew at a glance.',
     defaultSpan: 1,
     allowedRoles: ['admin', 'owner'],
-    scopes: ['admin_overview'],
   },
   {
     id: 'admin_flywheel',
@@ -100,7 +126,6 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     defaultSpan: 2,
     defaultRowSpan: 2,
     allowedRoles: ['admin', 'owner'],
-    scopes: ['admin_overview'],
   },
   {
     id: 'admin_approvals',
@@ -109,47 +134,17 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     defaultSpan: 1,
     defaultRowSpan: 2,
     allowedRoles: ['admin', 'owner'],
-    scopes: ['admin_overview'],
   },
+]
 
-  // ─── Registered but not scoped anywhere (widget bank) ────────────────
-  // The widget components still exist in src/components/dashboard/ and
-  // remain mapped in widgetRegistry.tsx. They're available for a future
-  // "widget bank" feature where users opt-in to extra widgets. Keeping
-  // them registered (with empty scopes) means saved layouts resolve and
-  // we can re-enable any of them by changing scopes back without
-  // touching the type union or the widget map.
-  {
-    id: 'team_snapshot',
-    title: 'Daily Snapshot',
-    description: 'Progress, streak, and must-do.',
-    defaultSpan: 1,
-    allowedRoles: ['member', 'admin', 'owner'],
-    scopes: [],
-  },
-  {
-    id: 'team_directory',
-    title: 'Team',
-    description: 'Quick-reference row of teammates.',
-    defaultSpan: 2,
-    allowedRoles: ['member', 'admin', 'owner'],
-    scopes: [],
-  },
-  {
-    id: 'team_activity',
-    title: 'Team activity',
-    description: 'Recent team actions tagged by flywheel stage.',
-    defaultSpan: 1,
-    allowedRoles: ['member', 'admin', 'owner'],
-    scopes: [],
-  },
+// Admin-side widget bank — registered but NOT on the Hub grid today.
+export const ADMIN_BANK_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
     id: 'team_focus',
     title: 'Team Focus',
     description: 'Live team completion, submissions, and member momentum.',
     defaultSpan: 2,
     allowedRoles: ['admin', 'owner'],
-    scopes: [],
   },
   {
     id: 'approval_queue',
@@ -157,7 +152,6 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'Pending edits and submissions that need admin attention.',
     defaultSpan: 1,
     allowedRoles: ['admin', 'owner'],
-    scopes: [],
   },
   {
     id: 'admin_schedule',
@@ -165,7 +159,6 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'The studio schedule for today across the team.',
     defaultSpan: 2,
     allowedRoles: ['admin', 'owner'],
-    scopes: [],
   },
   {
     id: 'admin_shortcuts',
@@ -173,8 +166,18 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'Jump directly into the key admin workspaces.',
     defaultSpan: 1,
     allowedRoles: ['admin', 'owner'],
-    scopes: [],
   },
+]
+
+// Convenience aggregation — every registered widget on either side.
+// Useful for layout sanitization (e.g. "is this id still valid?") and
+// for the component-map lookup in widgetRegistry.tsx. Do NOT iterate
+// this for rendering — iterate the page-specific array above.
+export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
+  ...MEMBER_WIDGET_REGISTRATIONS,
+  ...MEMBER_BANK_REGISTRATIONS,
+  ...ADMIN_WIDGET_REGISTRATIONS,
+  ...ADMIN_BANK_REGISTRATIONS,
 ]
 
 function buildDefaultWidgetState(
@@ -189,31 +192,21 @@ function buildDefaultWidgetState(
   }))
 }
 
-export function getWorkspaceScopeForRole(role: AppRole): WorkspaceScope {
-  return role === 'owner' || role === 'admin' ? 'admin_overview' : 'member_overview'
-}
+// Bump whenever the default widget order / span / scope assignment
+// changes. Saved layouts whose `version` does not match are discarded
+// in storage.ts so the new default ordering takes effect for everyone.
+export const WORKSPACE_LAYOUT_VERSION = 5
 
-export function getWidgetRegistrationsForScope(
-  scope: WorkspaceScope,
-  role: AppRole,
-): WorkspaceWidgetRegistration[] {
-  return WORKSPACE_WIDGET_REGISTRATIONS.filter(
-    (widget) => widget.scopes.includes(scope) && widget.allowedRoles.includes(role),
-  )
-}
-
-// Bump whenever the default widget order / span changes. Saved layouts
-// whose `version` does not match are discarded (see storage.ts) so the
-// new default ordering takes effect for everyone, not just fresh users.
-export const WORKSPACE_LAYOUT_VERSION = 4
-
-export function getDefaultWorkspaceLayout(
-  scope: WorkspaceScope,
-  role: AppRole,
-): WorkspaceLayout {
+// Default layouts per scope. The page passes its scope in, picks the
+// matching array, and produces widget state. Scope is used only for
+// localStorage key differentiation — it never determines which
+// widgets render (the page already imported its own array for that).
+export function getDefaultWorkspaceLayout(scope: WorkspaceScope): WorkspaceLayout {
+  const registrations =
+    scope === 'admin_overview' ? ADMIN_WIDGET_REGISTRATIONS : MEMBER_WIDGET_REGISTRATIONS
   return {
     scope,
     version: WORKSPACE_LAYOUT_VERSION,
-    widgets: buildDefaultWidgetState(getWidgetRegistrationsForScope(scope, role)),
+    widgets: buildDefaultWidgetState(registrations),
   }
 }

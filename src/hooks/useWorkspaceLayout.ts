@@ -13,6 +13,10 @@ interface UseWorkspaceLayoutOptions {
   scope: WorkspaceScope
   role: AppRole
   userId: string
+  // Pre-scoped — the caller imports MEMBER_WIDGET_DEFINITIONS or
+  // ADMIN_WIDGET_DEFINITIONS directly; this hook never filters by
+  // role/scope again. See domain/workspaces/types.ts for the split
+  // rationale (architectural lockdown).
   definitions: WorkspaceWidgetDefinition[]
 }
 
@@ -28,11 +32,11 @@ function sanitizeLayout(
 ): WorkspaceLayout {
   const allowedIds = new Set(
     definitions
-      .filter((widget) => widget.scopes.includes(scope) && widget.allowedRoles.includes(role))
+      .filter((widget) => widget.allowedRoles.includes(role))
       .map((widget) => widget.id),
   )
 
-  const defaults = getDefaultWorkspaceLayout(scope, role)
+  const defaults = getDefaultWorkspaceLayout(scope)
   const existing = sortWidgets(layout.widgets).filter((widget) => allowedIds.has(widget.id))
   const existingIds = new Set(existing.map((widget) => widget.id))
   const missing = defaults.widgets.filter((widget) => !existingIds.has(widget.id))
@@ -56,7 +60,7 @@ export function useWorkspaceLayout({
 }: UseWorkspaceLayoutOptions) {
   const [layout, setLayout] = useState<WorkspaceLayout>(() => {
     const saved = loadWorkspaceLayout(scope, userId)
-    return sanitizeLayout(saved ?? getDefaultWorkspaceLayout(scope, role), scope, role, definitions)
+    return sanitizeLayout(saved ?? getDefaultWorkspaceLayout(scope), scope, role, definitions)
   })
 
   useEffect(() => {
@@ -100,7 +104,7 @@ export function useWorkspaceLayout({
   }
 
   const resetLayout = () => {
-    setLayout(getDefaultWorkspaceLayout(scope, role))
+    setLayout(getDefaultWorkspaceLayout(scope))
   }
 
   return {
