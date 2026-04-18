@@ -4,11 +4,17 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { EmptyState, PageHeader } from '../../components/ui'
 import WorkspacePanel from '../../components/dashboard/WorkspacePanel'
 import { WORKSPACE_WIDGET_DEFINITIONS } from '../../components/dashboard/widgetRegistry'
-import { getWorkspaceScopeForRole } from '../../domain/workspaces/registry'
 import { UsersRound, Shield } from 'lucide-react'
 
 /**
  * Admin Hub — the landing surface for owners/admins at /admin.
+ *
+ * Intentionally decoupled from the member Overview: this page ALWAYS
+ * renders the `admin_overview` scope. That constant is hardcoded here
+ * (not derived from role) so that Overview (`/`) and Hub (`/admin`)
+ * can never silently share widgets because of a role-lookup change
+ * elsewhere in the code. The two pages have completely separate
+ * widget sets and evolve independently.
  *
  * Five widget snapshots arranged in a 3-col grid with mixed row spans:
  *
@@ -17,19 +23,14 @@ import { UsersRound, Shield } from 'lucide-react'
  *   Row 3: Flywheel(2×2)· Approvals     (1×2)
  *   Row 4: Flywheel …   · Approvals …
  *
- * The widget definitions live in `domain/workspaces/registry.ts` with
- * `admin_overview` scope. Each widget fetches its own data; the
- * `AdminOverviewProvider` wraps the tree so widgets that need the
- * shared team / approvals snapshot (e.g. AdminApprovalsWidget) share
- * the same cache entry instead of each re-fetching independently.
- *
- * The old tabbed Hub (member-rail / Tasks / Approvals / Calendar tabs)
- * was replaced here when the Overview refresh landed in April 2026 —
- * the widgets cover the same surfaces with a cleaner, at-a-glance
- * layout. The underlying admin pages (`/admin/team`, `/admin/templates`,
+ * Each widget fetches its own data; `AdminOverviewProvider` wraps the
+ * tree so shared queries (team / approvals snapshot) hit one cache.
+ * The underlying admin pages (`/admin/team`, `/admin/templates`,
  * `/admin/health`, etc.) still exist for deep work and are reachable
  * from each widget's footer link.
  */
+const ADMIN_SCOPE = 'admin_overview' as const
+
 export default function AdminHub() {
   useDocumentTitle('Team Hub - Checkmark Audio')
   const { isAdmin, appRole, profile } = useAuth()
@@ -44,8 +45,9 @@ export default function AdminHub() {
     )
   }
 
-  const scope = getWorkspaceScopeForRole(appRole)
-  const definitions = WORKSPACE_WIDGET_DEFINITIONS.filter((widget) => widget.scopes.includes(scope))
+  const definitions = WORKSPACE_WIDGET_DEFINITIONS.filter((widget) =>
+    widget.scopes.includes(ADMIN_SCOPE),
+  )
 
   return (
     <AdminOverviewProvider>
@@ -59,7 +61,7 @@ export default function AdminHub() {
         <WorkspacePanel
           role={appRole}
           userId={profile?.id ?? 'guest'}
-          scope={scope}
+          scope={ADMIN_SCOPE}
           definitions={definitions}
           showControls={false}
           controlsDescription=""
