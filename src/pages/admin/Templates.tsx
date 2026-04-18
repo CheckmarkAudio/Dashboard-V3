@@ -393,38 +393,59 @@ export default function Templates() {
       </div>
 
       {showPresets && (
-        <div className="bg-surface rounded-xl border border-border p-5">
-          <h2 className="font-semibold mb-4">Preset Templates</h2>
-          <p className="text-sm text-text-muted mb-4">Pick a preset to start with, then customize it to your needs.</p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <FloatingDetailModal
+          onClose={() => setShowPresets(false)}
+          title="Preset Templates"
+          eyebrow="Quick Start"
+          maxWidth={720}
+        >
+          <p className="text-[13px] text-text-muted mb-4">Pick a preset to start with, then customize it to your needs.</p>
+          <div className="grid sm:grid-cols-2 gap-3">
             {PRESET_TEMPLATES.map((preset, i) => {
               const info = getTypeInfo(preset.type)
               return (
                 <button
                   key={i}
                   onClick={() => usePreset(preset)}
-                  className="text-left p-4 rounded-lg border border-border hover:border-gold/30 hover:shadow-sm transition-all"
+                  className="text-left p-4 rounded-xl border border-white/10 bg-white/[0.025] hover:border-gold/30 hover:bg-white/[0.05] transition-all"
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`p-1 rounded ${info.color}`}><info.icon size={14} aria-hidden="true" /></span>
-                    <span className="text-xs font-medium text-text-muted capitalize">{preset.type.replace('_', '-')}</span>
+                    <span className="text-[11px] font-semibold text-text-muted capitalize uppercase tracking-wider">{preset.type.replace('_', '-')}</span>
                     {preset.position && (
-                      <span className="text-xs bg-surface-alt px-1.5 py-0.5 rounded capitalize">{preset.position}</span>
+                      <span className="text-[10px] bg-surface-alt px-1.5 py-0.5 rounded capitalize">{preset.position}</span>
                     )}
                   </div>
-                  <h3 className="font-medium text-sm">{preset.name}</h3>
-                  <p className="text-xs text-text-muted mt-1">{preset.fields.length} fields</p>
+                  <h3 className="font-bold text-[14px] text-text">{preset.name}</h3>
+                  <p className="text-[12px] text-text-muted mt-1">{preset.fields.length} fields</p>
                 </button>
               )
             })}
           </div>
-        </div>
+        </FloatingDetailModal>
       )}
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-border p-6 space-y-5">
-          <h2 className="font-semibold">{editingTemplate ? 'Edit Template' : 'Create Template'}</h2>
-
+        <FloatingDetailModal
+          onClose={() => { setShowForm(false); resetForm() }}
+          title={editingTemplate ? editingTemplate.name : 'Create Template'}
+          eyebrow={editingTemplate ? 'Edit Template' : 'New'}
+          maxWidth={720}
+          footer={
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => { setShowForm(false); resetForm() }}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-text-light hover:text-text">
+                Cancel
+              </button>
+              <button type="submit" form="template-edit-form" disabled={submitting}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-gradient-to-b from-gold to-gold-muted text-black font-extrabold text-[13px] disabled:opacity-50 hover:brightness-105 transition-all">
+                {submitting ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Save size={14} aria-hidden="true" />}
+                {editingTemplate ? 'Update' : 'Create'}
+              </button>
+            </div>
+          }
+        >
+        <form id="template-edit-form" onSubmit={handleSubmit} className="space-y-5">
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="template-name" className="block text-sm font-medium mb-1.5">Template Name *</label>
@@ -520,16 +541,8 @@ export default function Templates() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => { setShowForm(false); resetForm() }}
-              className="px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-surface-hover">Cancel</button>
-            <button type="submit" disabled={submitting}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm disabled:opacity-50">
-              {submitting ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
-              {editingTemplate ? 'Update Template' : 'Create Template'}
-            </button>
-          </div>
         </form>
+        </FloatingDetailModal>
       )}
 
       {filtered.length === 0 ? (
