@@ -682,22 +682,24 @@ function TemplateCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Matches the Workspace-UI-Draft mockup exactly:
+            gold "+ Assign" action on the left, then a colored pill
+            showing the current assignee (green) OR "Unassigned" (rose).
+            No role label — the mockup intentionally omits that. */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-gold/85 whitespace-nowrap">
+            <Plus size={12} aria-hidden="true" strokeWidth={2.2} />
+            Assign
+          </span>
           <span
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border whitespace-nowrap ${
+            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border whitespace-nowrap ${
               isUnassigned
                 ? 'border-rose-400/22 bg-rose-400/10 text-rose-300'
                 : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
             }`}
           >
-            <Plus size={11} aria-hidden="true" />
-            {isUnassigned ? 'Assign' : assignee.label}
+            {assignee.label}
           </span>
-          {template.position && (
-            <span className="text-[10px] text-text-light uppercase tracking-wider">
-              {template.position.replace(/_/g, ' ')}
-            </span>
-          )}
         </div>
       </div>
 
