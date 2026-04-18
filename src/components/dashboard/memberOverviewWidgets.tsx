@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
@@ -9,6 +10,7 @@ import {
   FileText,
   Flame,
   Loader2,
+  Plus,
   Target,
   TrendingDown,
   TrendingUp,
@@ -20,6 +22,7 @@ import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/das
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import type { TeamMember } from '../../types'
 import MyTasksSection from './MyTasksSection'
+import CreateBookingModal from '../CreateBookingModal'
 
 // Stage tokens shared between the activity feed + status pills.
 // Sourced from the v1.0 design system (Deliver/Capture/Share/Attract/Book).
@@ -332,33 +335,28 @@ const MOCK_ACTIVITY: { id: string; stage: Stage; actor: string; text: string; ti
 ]
 
 /**
- * Booking Snapshot — compact upcoming-sessions counter for Overview.
- * Shows: large count of upcoming sessions today + the next session
- * label/time + a deeper-dive link to the booking page. Scoped to the
- * day so it stays small and scannable for ADHD-friendly Overview.
+ * Booking Snapshot — compact upcoming counter + "Book a Session" CTA.
+ *
+ * The CTA opens the canonical CreateBookingModal (same one Sessions.tsx
+ * and Calendar.tsx use), so a booking made from Overview behaves
+ * identically to one made from any other entry point. After save, the
+ * Member context refetches automatically via MemberOverviewProvider.
+ *
+ * Like the Calendar widget, the chrome (TODAY eyebrow + count + CTA)
+ * renders regardless of data state. Loading/error scope only to the
+ * "Next session" detail line.
  */
 export function BookingSnapshotWidget() {
-  const { todaySessions, loading, error } = useMemberOverviewContext()
+  const { todaySessions, loading, error, refetch } = useMemberOverviewContext()
+  const [showBooking, setShowBooking] = useState(false)
 
-  if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center text-text-light">
-        <Loader2 size={18} className="animate-spin" />
-      </div>
-    )
-  }
-  if (error) {
-    return (
-      <div className="h-full flex items-center gap-2 text-sm text-amber-300">
-        <AlertCircle size={16} />
-        <span>{error}</span>
-      </div>
-    )
-  }
+  const todayLabel = new Date()
+    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    .toUpperCase()
 
   // Sort by start_time so "next" really is the soonest upcoming.
   const now = new Date()
-  const upcoming = todaySessions
+  const upcoming = (todaySessions ?? [])
     .filter((s) => {
       const [eh, em] = parseClock(s.end_time)
       const end = new Date(now); end.setHours(eh, em, 0, 0)
@@ -369,18 +367,30 @@ export function BookingSnapshotWidget() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* TODAY eyebrow — matches Tasks + Calendar widget pattern. */}
+      <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70 mb-2 shrink-0">
+        TODAY · {todayLabel}
+      </p>
+
+      {/* Big number + next-session detail. */}
       <div className="flex-1 flex flex-col justify-center">
         <p className="text-[11px] uppercase tracking-wider text-text-light font-medium">
           Upcoming today
         </p>
         <p className="mt-1 text-[40px] leading-none font-bold tracking-tight text-text">
-          {upcoming.length}
+          {loading ? '–' : upcoming.length}
         </p>
         <p className="mt-1 text-[12px] text-text-light">
-          {upcoming.length === 1 ? 'session left' : 'sessions left'}
+          {loading ? 'loading…' : upcoming.length === 1 ? 'session left' : 'sessions left'}
         </p>
 
-        {next && (
+        {/* Next-session detail — error state scoped here so chrome stays. */}
+        {error ? (
+          <div className="mt-4 pt-3 border-t border-border/40 flex items-center gap-2 text-[12px] text-amber-300">
+            <AlertCircle size={14} className="shrink-0" />
+            <span className="truncate">Could not load sessions</span>
+          </div>
+        ) : next ? (
           <div className="mt-4 pt-3 border-t border-border/40">
             <p className="text-[10px] uppercase tracking-wider text-text-light font-medium">
               Next
@@ -392,24 +402,43 @@ export function BookingSnapshotWidget() {
               {formatTime12(next.start_time)} · {next.room ?? 'Room TBD'}
             </p>
           </div>
-        )}
-
-        {!next && (
+        ) : !loading ? (
           <p className="mt-4 pt-3 border-t border-border/40 text-[12px] text-text-light italic">
             Nothing else today.
           </p>
-        )}
+        ) : null}
       </div>
 
+      {/* "Book a Session" CTA — opens canonical CreateBookingModal.
+          Same gold pill styling as the Sessions page primary action. */}
+      <button
+        type="button"
+        onClick={() => setShowBooking(true)}
+        className="mt-3 w-full py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-[13px] font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0"
+      >
+        <Plus size={15} aria-hidden="true" />
+        Book a Session
+      </button>
+
+      {/* Footer link to /booking page for browsing all sessions. */}
       <Link
         to={APP_ROUTES.member.booking}
-        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-text-light hover:text-gold transition-colors group"
+        className="mt-2 text-[12px] text-text-light hover:text-gold transition-colors flex items-center justify-between group shrink-0"
       >
-        <span>All bookings</span>
-        <span className="flex items-center gap-1 font-medium group-hover:text-gold">
+        <span>See all sessions</span>
+        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
           Open booking <ChevronRight size={12} />
         </span>
       </Link>
+
+      {showBooking && (
+        <CreateBookingModal
+          onClose={() => {
+            setShowBooking(false)
+            void refetch()
+          }}
+        />
+      )}
     </div>
   )
 }
