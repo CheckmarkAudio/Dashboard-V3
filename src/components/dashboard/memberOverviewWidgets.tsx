@@ -179,61 +179,140 @@ function SessionStatusPill({ status }: { status: ReturnType<typeof computeSessio
 }
 
 /**
- * Today Schedule — refreshed per v1.0 design system "Today's sessions" card.
- * Time gutter on left, name+subtitle in middle, status pill on right.
+ * Calendar widget — TODAY anchor + Mon-Sun weekday strip + today's
+ * session list. The weekday strip ensures the widget has visible
+ * structure even when the day is empty (no sessions). Pattern lifted
+ * from src/pages/Calendar.tsx so the widget feels like a mini version
+ * of the full Calendar page.
  */
+function buildWeekdayStrip(): { date: Date; label: string; dayNum: number; isToday: boolean }[] {
+  // Week starts on Monday (matches Calendar.tsx convention).
+  const today = new Date()
+  const day = today.getDay() // 0 = Sunday
+  const mondayOffset = day === 0 ? -6 : 1 - day
+  const monday = new Date(today)
+  monday.setDate(today.getDate() + mondayOffset)
+  monday.setHours(0, 0, 0, 0)
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const todayKey = today.toDateString()
+  return labels.map((label, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return { date: d, label, dayNum: d.getDate(), isToday: d.toDateString() === todayKey }
+  })
+}
+
 export function TodayCalendarWidget() {
   const { todaySessions, loading, error } = useMemberOverviewContext()
-  const status = <WidgetStatus error={error} loading={loading} />
-  if (loading || error) return status
-
-  if (todaySessions.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
-            <CalendarIcon size={18} className="text-gold" aria-hidden="true" />
-          </div>
-          <p className="text-[14px] font-medium text-text">No sessions today</p>
-          <p className="text-[12px] text-text-light mt-0.5">Your day is open.</p>
-        </div>
-      </div>
-    )
-  }
-
+  // Note: chrome (TODAY eyebrow + weekday strip) renders regardless of
+  // data state — those are date-derived, not Supabase-dependent. Only
+  // the session list inside shows loading/error.
+  const weekdays = buildWeekdayStrip()
   const now = new Date()
+  const todayLabel = now
+    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    .toUpperCase()
 
   return (
-    <div className="flex flex-col h-full -mx-1">
-      {todaySessions.map((session) => {
-        const formatted = formatTime12(session.start_time)
-        const [hourMin, ampm] = formatted.split(' ')
-        const sessionStatus = computeSessionStatus(session.start_time, session.end_time, now)
-        const sessionType = session.session_type.replace(/_/g, ' ')
-        const sessionTypeCap = sessionType.charAt(0).toUpperCase() + sessionType.slice(1)
-        return (
+    <div className="flex flex-col h-full">
+      {/* TODAY eyebrow — matches the Tasks widget pattern. */}
+      <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70 mb-2 shrink-0">
+        TODAY · {todayLabel}
+      </p>
+
+      {/* Weekday strip — Mon-Sun. Today highlighted in gold. */}
+      <div className="grid grid-cols-7 gap-1 mb-3 shrink-0">
+        {weekdays.map((d) => (
           <div
-            key={session.id}
-            className="flex items-stretch gap-3 px-1 py-3 rounded-lg hover:bg-surface-hover/40 transition-colors"
+            key={d.label}
+            className={`flex flex-col items-center justify-center py-2 rounded-lg transition-colors ${
+              d.isToday
+                ? 'bg-gold/15 ring-1 ring-gold/40'
+                : 'bg-surface-alt/60 hover:bg-surface-hover/60'
+            }`}
           >
-            <div className="shrink-0 w-14 text-right border-r border-border/40 pr-3 flex flex-col justify-center">
-              <p className="text-[15px] font-semibold tracking-tight text-text leading-none">{hourMin}</p>
-              <p className="text-[10px] font-medium text-text-light tracking-wider uppercase mt-0.5">{ampm}</p>
-            </div>
-            <div className="flex-1 min-w-0 flex flex-col justify-center">
-              <p className="text-[14px] font-medium text-text truncate">
-                {session.client_name ?? 'Studio Session'} <span className="text-text-light font-normal">— {sessionTypeCap}</span>
-              </p>
-              <p className="text-[11px] text-text-light truncate mt-0.5">
-                {sessionTypeCap} · {session.room ?? 'Room TBD'} · {durationLabel(session.start_time, session.end_time)}
-              </p>
-            </div>
-            <div className="shrink-0 self-center">
-              <SessionStatusPill status={sessionStatus} />
-            </div>
+            <p
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                d.isToday ? 'text-gold' : 'text-text-light'
+              }`}
+            >
+              {d.label}
+            </p>
+            <p
+              className={`text-[16px] font-bold tabular-nums leading-tight mt-0.5 ${
+                d.isToday ? 'text-gold' : 'text-text'
+              }`}
+            >
+              {d.dayNum}
+            </p>
           </div>
-        )
-      })}
+        ))}
+      </div>
+
+      {/* Today's sessions list — internal scroll if many.
+          Loading/error scoped here so the chrome above stays visible. */}
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-1">
+        {loading ? (
+          <div className="h-full flex items-center justify-center text-text-light">
+            <Loader2 size={18} className="animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
+            <AlertCircle size={16} />
+            <span className="truncate">{error}</span>
+          </div>
+        ) : todaySessions.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center px-4">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
+              <CalendarIcon size={18} className="text-gold" aria-hidden="true" />
+            </div>
+            <p className="text-[14px] font-medium text-text">Your day is open</p>
+            <p className="text-[12px] text-text-light mt-0.5">No sessions scheduled today.</p>
+          </div>
+        ) : (
+          todaySessions.map((session) => {
+            const formatted = formatTime12(session.start_time)
+            const [hourMin, ampm] = formatted.split(' ')
+            const sessionStatus = computeSessionStatus(session.start_time, session.end_time, now)
+            const sessionType = session.session_type.replace(/_/g, ' ')
+            const sessionTypeCap = sessionType.charAt(0).toUpperCase() + sessionType.slice(1)
+            return (
+              <div
+                key={session.id}
+                className="flex items-stretch gap-3 px-1.5 py-2.5 rounded-lg hover:bg-surface-hover/40 transition-colors"
+              >
+                <div className="shrink-0 w-14 text-right border-r border-border/40 pr-3 flex flex-col justify-center">
+                  <p className="text-[15px] font-semibold tracking-tight text-text leading-none">{hourMin}</p>
+                  <p className="text-[10px] font-medium text-text-light tracking-wider uppercase mt-0.5">{ampm}</p>
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <p className="text-[14px] font-medium text-text truncate">
+                    {session.client_name ?? 'Studio Session'}{' '}
+                    <span className="text-text-light font-normal">— {sessionTypeCap}</span>
+                  </p>
+                  <p className="text-[11px] text-text-light truncate mt-0.5">
+                    {sessionTypeCap} · {session.room ?? 'Room TBD'} · {durationLabel(session.start_time, session.end_time)}
+                  </p>
+                </div>
+                <div className="shrink-0 self-center">
+                  <SessionStatusPill status={sessionStatus} />
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {/* Footer link */}
+      <Link
+        to={APP_ROUTES.member.calendar}
+        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
+      >
+        <span>{todaySessions.length === 0 ? 'Nothing today' : `${todaySessions.length} today`}</span>
+        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
+          Open calendar <ChevronRight size={12} />
+        </span>
+      </Link>
     </div>
   )
 }
