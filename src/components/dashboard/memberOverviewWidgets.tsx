@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
@@ -10,6 +10,7 @@ import {
   FileText,
   Flame,
   Loader2,
+  MessageSquare,
   Plus,
   Target,
   TrendingDown,
@@ -20,6 +21,7 @@ import { APP_ROUTES } from '../../app/routes'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
 import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
+import { supabase } from '../../lib/supabase'
 import type { TeamMember } from '../../types'
 import MyTasksSection from './MyTasksSection'
 import CreateBookingModal from '../CreateBookingModal'
@@ -439,6 +441,162 @@ export function BookingSnapshotWidget() {
           }}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * Forum Notifications widget — Discord-style "what's new in the team chat"
+ * preview for Overview. Reads the most recent N chat_messages joined with
+ * their channels, sorted newest first.
+ *
+ * NO unread tracking yet (deferred — see PROJECT_STATE.md "Notifications
+ * Phase 2"). When the chat_channel_reads table lands, swap this widget's
+ * count + per-row "new" badge to use real read state.
+ *
+ * Realtime subscription auto-refreshes the list when anyone posts a new
+ * message in any channel — uses the same supabase client + channel
+ * pattern Content.tsx uses for the chat thread itself.
+ */
+type ForumActivityRow = {
+  id: string
+  content: string
+  sender_name: string
+  sender_initial: string
+  created_at: string
+  channel_name: string
+  channel_slug: string
+}
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime()
+  const now = Date.now()
+  const diffMs = Math.max(0, now - then)
+  const mins = Math.round(diffMs / 60000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.round(hrs / 24)
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return `${days}d ago`
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+async function fetchRecentForumActivity(limit = 5): Promise<ForumActivityRow[]> {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('id, content, sender_name, sender_initial, created_at, chat_channels(id, name, slug)')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  type Row = {
+    id: string
+    content: string
+    sender_name: string
+    sender_initial: string
+    created_at: string
+    chat_channels: { id: string; name: string; slug: string } | null
+  }
+  return ((data ?? []) as Row[]).map((row) => ({
+    id: row.id,
+    content: row.content,
+    sender_name: row.sender_name,
+    sender_initial: row.sender_initial,
+    created_at: row.created_at,
+    channel_name: row.chat_channels?.name ?? 'Channel',
+    channel_slug: row.chat_channels?.slug ?? '',
+  }))
+}
+
+export function ForumNotificationsWidget() {
+  const todayLabel = new Date()
+    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    .toUpperCase()
+
+  const activityQuery = useQuery({
+    queryKey: ['forum-activity-overview'],
+    queryFn: () => fetchRecentForumActivity(5),
+    // Refresh every 60s to keep "Xm ago" labels reasonably current even
+    // without realtime updates kicking in.
+    refetchInterval: 60_000,
+  })
+
+  // Subscribe to new messages — refetch on INSERT in any channel.
+  // Using a single project-wide subscription keeps the cost minimal.
+  useEffect(() => {
+    const sub = supabase
+      .channel('overview-forum-activity')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => {
+        void activityQuery.refetch()
+      })
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(sub)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* TODAY eyebrow — matches sibling widgets. */}
+      <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70 mb-2 shrink-0">
+        TODAY · {todayLabel}
+      </p>
+
+      {/* Activity rows — internal scroll keeps the page itself non-scrolling. */}
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-1">
+        {activityQuery.isLoading ? (
+          <div className="h-full flex items-center justify-center text-text-light">
+            <Loader2 size={18} className="animate-spin" />
+          </div>
+        ) : activityQuery.error ? (
+          <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
+            <AlertCircle size={16} className="shrink-0" />
+            <span className="truncate">Could not load activity</span>
+          </div>
+        ) : (activityQuery.data ?? []).length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center px-4">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
+              <MessageSquare size={18} className="text-gold" aria-hidden="true" />
+            </div>
+            <p className="text-[14px] font-medium text-text">All quiet</p>
+            <p className="text-[12px] text-text-light mt-0.5">No recent forum messages.</p>
+          </div>
+        ) : (
+          (activityQuery.data ?? []).map((row) => (
+            <Link
+              key={row.id}
+              to={`${APP_ROUTES.member.content}${row.channel_slug ? `?channel=${row.channel_slug}` : ''}`}
+              className="group flex items-start gap-2.5 px-1.5 py-2 rounded-lg hover:bg-surface-hover/40 transition-colors"
+            >
+              <div className="shrink-0 w-7 h-7 rounded-full bg-surface-alt border border-border-light text-gold flex items-center justify-center text-[12px] font-bold">
+                {row.sender_initial}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] text-text leading-snug">
+                  <span className="font-semibold">{row.sender_name}</span>
+                  <span className="text-text-light"> in </span>
+                  <span className="text-gold/80">#{row.channel_name}</span>
+                </p>
+                <p className="text-[12px] text-text-muted truncate">{row.content}</p>
+                <p className="text-[10px] text-text-light mt-0.5">{relativeTime(row.created_at)}</p>
+              </div>
+            </Link>
+          ))
+        )}
+      </div>
+
+      {/* Footer link to Forum. */}
+      <Link
+        to={APP_ROUTES.member.content}
+        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
+      >
+        <span>{(activityQuery.data ?? []).length === 0 ? 'Open forum' : `${(activityQuery.data ?? []).length} recent`}</span>
+        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
+          Open forum <ChevronRight size={12} />
+        </span>
+      </Link>
     </div>
   )
 }

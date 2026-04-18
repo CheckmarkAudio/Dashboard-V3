@@ -45,6 +45,14 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
     scopes: ['member_overview', 'admin_overview'],
   },
+  {
+    id: 'forum_notifications',
+    title: 'Forum',
+    description: 'Recent messages across channels.',
+    defaultSpan: 1,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: ['member_overview', 'admin_overview'],
+  },
   // ─── Registered but NOT scoped to Overview anymore ────────────────────
   // The widget components still exist in src/components/dashboard/ and
   // remain mapped in widgetRegistry.tsx. They're available for a future

@@ -3,6 +3,7 @@ import { WORKSPACE_WIDGET_REGISTRATIONS } from '../../domain/workspaces/registry
 import {
   BookingSnapshotWidget,
   FlywheelSummaryWidget,
+  ForumNotificationsWidget,
   TeamActivityWidget,
   TeamDirectoryWidget,
   TeamSnapshotWidget,
@@ -23,6 +24,7 @@ const widgetComponents: Record<WorkspaceWidgetDefinition['id'], WorkspaceWidgetD
   team_activity: TeamActivityWidget,
   team_directory: TeamDirectoryWidget,
   booking_snapshot: BookingSnapshotWidget,
+  forum_notifications: ForumNotificationsWidget,
   flywheel_summary: FlywheelSummaryWidget,
   team_focus: TeamFocusWidget,
   approval_queue: ApprovalQueueWidget,
