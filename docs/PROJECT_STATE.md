@@ -13,8 +13,8 @@
 | **Live URL** | https://dashboard-v3-dusky.vercel.app |
 | **Hosting** | Vercel (auto-deploys from `main`) |
 | **Database** | Supabase project `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") |
-| **Latest commit** | `846673b` — Notifications widget with Discord-style unread tracking |
-| **Currently active** | Admin Hub redesign (pending) — Overview chapter complete |
+| **Latest commit** | `5a18d9d` — Admin Hub 5-widget redesign (Assign / Flywheel / Team / Notifications / Approvals) |
+| **Currently active** | Admin Hub landed; next: Assign page (or wherever the user takes us) |
 
 ---
 
@@ -136,6 +136,8 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 | 2026-04-18 | `07daea6` | Overview Piece 5B — forum recent-activity feed (transient, superseded by 846673b) |
 | 2026-04-18 | migration | `chat_channel_reads` table + RLS + `mark_channel_read()` RPC + `get_channel_notifications()` RPC for per-user unread tracking |
 | 2026-04-18 | `846673b` | **Overview Piece 5A** — Discord-style Notifications widget: per-channel unread badges, optimistic mark-read on click, realtime refresh on new messages |
+| 2026-04-18 | `8347d79` | Overview reorder — Tasks/Notifications on top row, Calendar/Booking on bottom; layout version bumped to 3 so all users pick up the new default |
+| 2026-04-18 | `5a18d9d` | **Admin Hub redesign** — 5 widgets (Assign, Flywheel, Team, Notifications, Approvals) in a 2-big-left + 3-right grid; added rowSpan support; Hub.tsx simplified to PageHeader + WorkspacePanel; admins no longer see member widgets on Hub |
 
 ---
 
@@ -150,9 +152,9 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 - ✅ Do not modify Settings dropdown content
 
 **Progress:**
-- ✅ **Overview (member) — complete.** 4 widgets: Calendar (weekday strip) / Tasks (flywheel pills + rotating sort) / Booking (CTA) / Notifications (unread tracking). All have a TODAY eyebrow so the whole page is temporally anchored.
-- ⏳ **Admin Hub** — up next.
-- ⏳ **Assign (admin)** — after Hub.
+- ✅ **Overview (member) — complete.** 4 widgets: Calendar (weekday strip) / Tasks (flywheel pills + rotating sort) / Booking (CTA) / Notifications (unread tracking). Row 1 Tasks+Notifications, row 2 Calendar+Booking. TODAY eyebrow on every widget.
+- ✅ **Admin Hub — complete.** 5 widgets in a 3×4 grid: Assign (2×2) + Notifications (1×1), Flywheel (2×2) + Team (1×1), Approvals (1×2). Functional Assign tiles open modals (Session→CreateBookingModal, Task→AssignTaskModal, Group→AssignGroupModal). Notifications widget has admin Post + Channel create. Flywheel aggregates team KPIs per stage. Approvals inlines approve/reject.
+- ⏳ **Assign (admin)** — user called this out as the worst-looking page; redesign when ready.
 
 **Out of scope for now:** all other pages. User wants to validate the design language on the highest-impact surfaces first.
 
@@ -219,6 +221,7 @@ Existing infrastructure to leverage:
 - ✅ **Schema rename Phase B** — 10 `intern_*` → `team_*` with compat views; atomic migration; 0 data risk
 - ✅ **Two new accounts** — Richard Baca (engineer/intern role), Matthan Bow (intern/intern role)
 - ✅ **Overview refresh (4 widgets)** — Calendar + Tasks + Booking + Notifications, each with a TODAY eyebrow; readable fonts; flywheel stage rotation on the All-tab; Discord-style unread tracking backed by `chat_channel_reads` + `get_channel_notifications()` RPC with realtime + optimistic mark-read on click.
+- ✅ **Admin Hub (5 widgets)** — Assign / Notifications / Team / Flywheel / Approvals, mixed-row-span grid. Assign widget includes `AssignTaskModal` + `AssignGroupModal` (new inline modals that write directly to `team_checklist_items` and `task_assignments`). Notifications widget adds admin post + create-channel flows. Flywheel aggregates team KPIs. Approvals inlines approve/reject RPC calls.
 
 ---
 
