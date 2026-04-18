@@ -11,6 +11,7 @@ export type WorkspaceWidgetId =
   | 'team_tasks'
   | 'team_activity'
   | 'team_directory'
+  | 'booking_snapshot'
   | 'flywheel_summary'
   | 'team_focus'
   | 'approval_queue'

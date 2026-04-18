@@ -1,31 +1,29 @@
 // ============================================================================
-// MyTasksSection — proof-of-concept Overview redesign per the v1.0 design system.
+// MyTasksSection — compact "tasks by flywheel stage" snapshot for Overview.
 //
-// Renders the member's daily checklist as the "My tasks · Across all flywheel
-// stages" surface from the design rendering. Each item is tagged with a
-// flywheel stage (deliver / capture / share / attract / book) by category
-// lookup so the filter chips do real work.
+// Shows ONE small row per flywheel stage (Deliver/Capture/Share/Attract/Book)
+// with a colored dot, the stage label, a progress bar, and "X / Y done".
+// Designed for the ADHD-friendly Overview where the whole page should fit
+// without scrolling — the long, scrollable task list lives on the Daily
+// Checklist page instead.
 //
-// CURRENT LIMITATIONS (POC scope):
+// CURRENT LIMITATIONS:
 //   - Stage tagging is a category-string lookup, not a DB-tracked field.
-//     When the flywheel event ledger lands (Phase 2 of the original blueprint),
-//     swap `mapCategoryToStage()` for a per-item stage column.
+//     When the flywheel event ledger lands, swap `mapCategoryToStage()`
+//     for a per-item stage column.
 //   - Reads from `useMemberOverviewContext().daily` (the existing checklist
-//     hook) so completion toggles already work, no new mutations needed.
-//   - No assignee avatar yet (the design shows initials on the right) —
-//     daily checklist items are scoped to the viewer, so "assignee = me" is
-//     implicit. Re-add when this surface goes multi-assignee.
+//     hook) so completion stays in sync without new mutations.
 // ============================================================================
 
-import { useMemo, useState } from 'react'
-import { Check, Loader2, AlertCircle } from 'lucide-react'
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
+import { Loader2, AlertCircle, ChevronRight } from 'lucide-react'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
+import { APP_ROUTES } from '../../app/routes'
 
 type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
-type FilterValue = 'all' | Stage
 
-const STAGES: { value: FilterValue; label: string }[] = [
-  { value: 'all',      label: 'All' },
+const STAGES: { value: Stage; label: string }[] = [
   { value: 'deliver',  label: 'Deliver' },
   { value: 'capture',  label: 'Capture' },
   { value: 'share',    label: 'Share' },
@@ -33,14 +31,12 @@ const STAGES: { value: FilterValue; label: string }[] = [
   { value: 'book',     label: 'Book' },
 ]
 
-// Visual tokens per stage — sourced from index.css (--color-stage-*-text/bg).
-// Kept inline here so the rendering matches the design system PDF chips.
-const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring: string }> = {
-  deliver: { dot: 'bg-emerald-400', text: 'text-emerald-300', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/30' },
-  capture: { dot: 'bg-sky-400',     text: 'text-sky-300',     bg: 'bg-sky-500/10',     ring: 'ring-sky-500/30' },
-  share:   { dot: 'bg-violet-400',  text: 'text-violet-300',  bg: 'bg-violet-500/10',  ring: 'ring-violet-500/30' },
-  attract: { dot: 'bg-amber-400',   text: 'text-amber-300',   bg: 'bg-amber-500/10',   ring: 'ring-amber-500/30' },
-  book:    { dot: 'bg-rose-400',    text: 'text-rose-300',    bg: 'bg-rose-500/10',    ring: 'ring-rose-500/30' },
+const STAGE_STYLES: Record<Stage, { dot: string; bar: string; text: string }> = {
+  deliver: { dot: 'bg-emerald-400', bar: 'bg-emerald-400', text: 'text-emerald-300' },
+  capture: { dot: 'bg-sky-400',     bar: 'bg-sky-400',     text: 'text-sky-300' },
+  share:   { dot: 'bg-violet-400',  bar: 'bg-violet-400',  text: 'text-violet-300' },
+  attract: { dot: 'bg-amber-400',   bar: 'bg-amber-400',   text: 'text-amber-300' },
+  book:    { dot: 'bg-rose-400',    bar: 'bg-rose-400',    text: 'text-rose-300' },
 }
 
 /**
@@ -57,30 +53,30 @@ function mapCategoryToStage(category: string | null | undefined): Stage {
   return 'deliver'
 }
 
+interface StageStat {
+  stage: Stage
+  total: number
+  done: number
+}
+
 export default function MyTasksSection() {
   const { daily, loading, error } = useMemberOverviewContext()
-  const [filter, setFilter] = useState<FilterValue>('all')
 
-  // Tag every item with a stage once, memoized so the filter pass is cheap.
-  const taggedItems = useMemo(
-    () =>
-      daily.items.map((item) => ({
-        ...item,
-        stage: mapCategoryToStage(item.category),
-      })),
-    [daily.items],
-  )
-
-  const counts = useMemo(() => {
-    const c: Record<FilterValue, number> = { all: 0, deliver: 0, capture: 0, share: 0, attract: 0, book: 0 }
-    for (const t of taggedItems) {
-      c.all += 1
-      c[t.stage] += 1
+  const stats = useMemo<StageStat[]>(() => {
+    const acc: Record<Stage, StageStat> = {
+      deliver: { stage: 'deliver', total: 0, done: 0 },
+      capture: { stage: 'capture', total: 0, done: 0 },
+      share:   { stage: 'share',   total: 0, done: 0 },
+      attract: { stage: 'attract', total: 0, done: 0 },
+      book:    { stage: 'book',    total: 0, done: 0 },
     }
-    return c
-  }, [taggedItems])
-
-  const filtered = filter === 'all' ? taggedItems : taggedItems.filter((t) => t.stage === filter)
+    for (const item of daily.items) {
+      const s = mapCategoryToStage(item.category)
+      acc[s].total += 1
+      if (item.is_completed) acc[s].done += 1
+    }
+    return STAGES.map((s) => acc[s.value])
+  }, [daily.items])
 
   if (loading) {
     return (
@@ -98,100 +94,51 @@ export default function MyTasksSection() {
     )
   }
 
+  const totalTasks = stats.reduce((sum, s) => sum + s.total, 0)
+  const totalDone = stats.reduce((sum, s) => sum + s.done, 0)
+
   return (
     <div className="flex flex-col h-full">
-      {/* Filter pills — tab style. Active = gold/15 chip with gold text.
-         Frame title "My tasks · Across all flywheel stages" comes from the
-         widget registry, so no internal h3 needed here. */}
-      <div className="flex flex-wrap items-center gap-1.5 mb-4">
-        {STAGES.map((s) => {
-          const isActive = filter === s.value
-          const stageStyle = s.value !== 'all' ? STAGE_STYLES[s.value as Stage] : null
-          return (
-            <button
-              key={s.value}
-              onClick={() => setFilter(s.value)}
-              className={`group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium tracking-tight transition-all ${
-                isActive
-                  ? 'bg-gold/15 text-gold ring-1 ring-gold/30'
-                  : 'bg-surface-alt text-text-muted hover:text-text border border-border/60 hover:border-border-light'
-              }`}
-            >
-              {stageStyle && <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot}`} aria-hidden="true" />}
-              <span>{s.label}</span>
-              {counts[s.value] > 0 && (
-                <span className={`tabular-nums text-[10px] ${isActive ? 'text-gold/80' : 'text-text-light'}`}>
-                  {counts[s.value]}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Task rows — checkbox + title + subtitle (left) + stage badge (right). */}
-      <div className="flex-1 -mx-1">
-        {filtered.length === 0 && (
-          <div className="py-12 text-center">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
-              <Check size={18} className="text-gold" aria-hidden="true" />
-            </div>
-            <p className="text-[14px] font-medium text-text">All clear</p>
-            <p className="text-[12px] text-text-light mt-0.5">
-              {filter === 'all' ? 'No tasks open for today.' : `Nothing in ${filter} stage today.`}
-            </p>
-          </div>
-        )}
-
-        {filtered.map((task) => {
-          const ss = STAGE_STYLES[task.stage]
+      {/* Stage rows — one per flywheel stage. Compact, scannable, color-coded. */}
+      <div className="flex-1 flex flex-col justify-center -my-1">
+        {stats.map((stat) => {
+          const ss = STAGE_STYLES[stat.stage]
+          const label = stat.stage.charAt(0).toUpperCase() + stat.stage.slice(1)
+          const pct = stat.total === 0 ? 0 : (stat.done / stat.total) * 100
+          const empty = stat.total === 0
           return (
             <div
-              key={task.id}
-              className={`group flex items-center gap-3 px-1 py-3 rounded-lg transition-colors hover:bg-surface-hover/40 ${
-                task.is_completed ? 'opacity-50' : ''
-              }`}
+              key={stat.stage}
+              className={`flex items-center gap-3 py-2 ${empty ? 'opacity-40' : ''}`}
             >
-              <button
-                onClick={() => void daily.toggleItem(task.id)}
-                aria-label={task.is_completed ? 'Mark task incomplete' : 'Mark task complete'}
-                className="shrink-0"
-              >
+              <span className={`w-2 h-2 rounded-full ${ss.dot} shrink-0`} aria-hidden="true" />
+              <span className={`text-[12px] font-medium tracking-tight w-16 shrink-0 ${ss.text}`}>
+                {label}
+              </span>
+              <div className="flex-1 h-1.5 rounded-full bg-surface-alt overflow-hidden">
                 <div
-                  className={`w-[20px] h-[20px] rounded-md border-[1.5px] flex items-center justify-center transition-all ${
-                    task.is_completed
-                      ? 'bg-gold/30 border-gold/50'
-                      : 'border-border-light group-hover:border-gold/60'
-                  }`}
-                >
-                  {task.is_completed && <Check size={12} className="text-gold" aria-hidden="true" />}
-                </div>
-              </button>
-
-              <div className="flex-1 min-w-0">
-                <p
-                  className={`text-[14px] font-normal tracking-tight truncate ${
-                    task.is_completed ? 'line-through text-text-light' : 'text-text'
-                  }`}
-                >
-                  {task.item_text}
-                </p>
-                {task.category && (
-                  <p className="text-[11px] text-text-light truncate mt-0.5">{task.category}</p>
-                )}
+                  className={`h-full rounded-full transition-all duration-500 ${ss.bar}`}
+                  style={{ width: `${pct}%` }}
+                />
               </div>
-
-              {/* Stage badge — colored dot + label, design-system styled. */}
-              <span
-                className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium tracking-tight ${ss.bg} ${ss.text} ring-1 ${ss.ring}`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${ss.dot}`} aria-hidden="true" />
-                {task.stage.charAt(0).toUpperCase() + task.stage.slice(1)}
+              <span className="text-[11px] tabular-nums text-text-light w-10 text-right shrink-0">
+                {empty ? '—' : `${stat.done}/${stat.total}`}
               </span>
             </div>
           )
         })}
       </div>
+
+      {/* Footer link to full checklist */}
+      <Link
+        to={APP_ROUTES.member.tasks}
+        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-text-light hover:text-gold transition-colors group"
+      >
+        <span>{totalDone}/{totalTasks} done today</span>
+        <span className="flex items-center gap-1 font-medium group-hover:text-gold">
+          Open full checklist <ChevronRight size={12} />
+        </span>
+      </Link>
     </div>
   )
 }

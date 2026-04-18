@@ -252,6 +252,89 @@ const MOCK_ACTIVITY: { id: string; stage: Stage; actor: string; text: string; ti
   { id: '5', stage: 'attract', actor: 'Marcus R.',  text: 'added a new invoice for The Artists Café',                  timeAgo: 'Yesterday' },
 ]
 
+/**
+ * Booking Snapshot — compact upcoming-sessions counter for Overview.
+ * Shows: large count of upcoming sessions today + the next session
+ * label/time + a deeper-dive link to the booking page. Scoped to the
+ * day so it stays small and scannable for ADHD-friendly Overview.
+ */
+export function BookingSnapshotWidget() {
+  const { todaySessions, loading, error } = useMemberOverviewContext()
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center text-text-light">
+        <Loader2 size={18} className="animate-spin" />
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="h-full flex items-center gap-2 text-sm text-amber-300">
+        <AlertCircle size={16} />
+        <span>{error}</span>
+      </div>
+    )
+  }
+
+  // Sort by start_time so "next" really is the soonest upcoming.
+  const now = new Date()
+  const upcoming = todaySessions
+    .filter((s) => {
+      const [eh, em] = parseClock(s.end_time)
+      const end = new Date(now); end.setHours(eh, em, 0, 0)
+      return end > now
+    })
+    .sort((a, b) => a.start_time.localeCompare(b.start_time))
+  const next = upcoming[0]
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex-1 flex flex-col justify-center">
+        <p className="text-[11px] uppercase tracking-wider text-text-light font-medium">
+          Upcoming today
+        </p>
+        <p className="mt-1 text-[40px] leading-none font-bold tracking-tight text-text">
+          {upcoming.length}
+        </p>
+        <p className="mt-1 text-[12px] text-text-light">
+          {upcoming.length === 1 ? 'session left' : 'sessions left'}
+        </p>
+
+        {next && (
+          <div className="mt-4 pt-3 border-t border-border/40">
+            <p className="text-[10px] uppercase tracking-wider text-text-light font-medium">
+              Next
+            </p>
+            <p className="mt-1 text-[13px] font-medium text-text truncate">
+              {next.client_name ?? 'Studio Session'}
+            </p>
+            <p className="text-[11px] text-gold mt-0.5">
+              {formatTime12(next.start_time)} · {next.room ?? 'Room TBD'}
+            </p>
+          </div>
+        )}
+
+        {!next && (
+          <p className="mt-4 pt-3 border-t border-border/40 text-[12px] text-text-light italic">
+            Nothing else today.
+          </p>
+        )}
+      </div>
+
+      <Link
+        to={APP_ROUTES.member.booking}
+        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-text-light hover:text-gold transition-colors group"
+      >
+        <span>All bookings</span>
+        <span className="flex items-center gap-1 font-medium group-hover:text-gold">
+          Open booking <ChevronRight size={12} />
+        </span>
+      </Link>
+    </div>
+  )
+}
+
 export function TeamActivityWidget() {
   return (
     <div className="flex flex-col h-full -mx-1">
