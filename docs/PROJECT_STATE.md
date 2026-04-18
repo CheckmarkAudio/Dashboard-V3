@@ -13,8 +13,8 @@
 | **Live URL** | https://dashboard-v3-dusky.vercel.app |
 | **Hosting** | Vercel (auto-deploys from `main`) |
 | **Database** | Supabase project `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") |
-| **Latest commit** | `4ac735c` — "maintanence" (intern→team rename code sweep) |
-| **Currently active** | UI design refresh (planning phase — see below) |
+| **Latest commit** | `846673b` — Notifications widget with Discord-style unread tracking |
+| **Currently active** | Admin Hub redesign (pending) — Overview chapter complete |
 
 ---
 
@@ -128,12 +128,20 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 | 2026-04-17 | `ba76dfb` | Code-split routes via React.lazy + Suspense in Layout |
 | 2026-04-17 | `4ac735c` | **Phase B rename** — 10 `intern_*` tables → `team_*` + compat views; 103 source refs updated; `src/types/database.ts` regenerated |
 | 2026-04-17 | (DB only) | Created accounts: Richard Baca (engineer), Matthan Bow (intern) — temp pw `ChangeMe2026!` |
+| 2026-04-18 | `c08b7e4` | Overview Piece 1 — removed Admin Shortcuts / Approval Queue / duplicate Today Schedule / Daily Snapshot; renamed "Today Schedule" → "Calendar" |
+| 2026-04-18 | `1d88558` | Overview Piece 2 — Tasks widget readable fonts (14px body) + TODAY eyebrow |
+| 2026-04-18 | `96d6d10` | Overview Piece 2.5 — smarter 3-pass stage mapping + rotating All-tab sort so colors span flywheel stages |
+| 2026-04-18 | `bcfd644` | Overview Piece 3 — Calendar widget: TODAY anchor + Mon–Sun weekday strip with today highlighted in gold |
+| 2026-04-18 | `e210c2b` | Overview Piece 4 — Booking widget: TODAY anchor + UPCOMING TODAY count + "+ Book a Session" CTA |
+| 2026-04-18 | `07daea6` | Overview Piece 5B — forum recent-activity feed (transient, superseded by 846673b) |
+| 2026-04-18 | migration | `chat_channel_reads` table + RLS + `mark_channel_read()` RPC + `get_channel_notifications()` RPC for per-user unread tracking |
+| 2026-04-18 | `846673b` | **Overview Piece 5A** — Discord-style Notifications widget: per-channel unread badges, optimistic mark-read on click, realtime refresh on new messages |
 
 ---
 
 ## Active
 
-**UI design refresh — scoped pilot** (current focus): Apply the v1.0 design system PDF to the live app on three pages first. See `~/.../My Drive/Checkmark Audio — Design System · Print.pdf` for the visual spec.
+**UI design refresh — scoped pilot** (in progress): Apply the v1.0 design system PDF to the live app on three pages first. See `~/.../My Drive/Checkmark Audio — Design System · Print.pdf` for the visual spec.
 
 **Locked constraints:**
 - ✅ Keep top nav (do not refactor to sidebar even though PDF shows sidebar)
@@ -141,10 +149,10 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 - ✅ Keep current header as-is
 - ✅ Do not modify Settings dropdown content
 
-**In-scope (refresh these three pages):**
-- Overview (member-side)
-- Assign (admin)
-- Hub (admin)
+**Progress:**
+- ✅ **Overview (member) — complete.** 4 widgets: Calendar (weekday strip) / Tasks (flywheel pills + rotating sort) / Booking (CTA) / Notifications (unread tracking). All have a TODAY eyebrow so the whole page is temporally anchored.
+- ⏳ **Admin Hub** — up next.
+- ⏳ **Assign (admin)** — after Hub.
 
 **Out of scope for now:** all other pages. User wants to validate the design language on the highest-impact surfaces first.
 
@@ -210,6 +218,7 @@ Existing infrastructure to leverage:
 - ✅ **Code splitting** — per-route React.lazy, separate chunks per page (BarChart 308KB only loads on Analytics)
 - ✅ **Schema rename Phase B** — 10 `intern_*` → `team_*` with compat views; atomic migration; 0 data risk
 - ✅ **Two new accounts** — Richard Baca (engineer/intern role), Matthan Bow (intern/intern role)
+- ✅ **Overview refresh (4 widgets)** — Calendar + Tasks + Booking + Notifications, each with a TODAY eyebrow; readable fonts; flywheel stage rotation on the All-tab; Discord-style unread tracking backed by `chat_channel_reads` + `get_channel_notifications()` RPC with realtime + optimistic mark-read on click.
 
 ---
 
