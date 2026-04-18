@@ -16,6 +16,13 @@ import {
   ApprovalQueueWidget,
   TeamFocusWidget,
 } from './adminOverviewWidgets'
+import {
+  AdminApprovalsWidget,
+  AdminAssignWidget,
+  AdminFlywheelWidget,
+  AdminNotificationsWidget,
+  AdminTeamWidget,
+} from './adminHubWidgets'
 
 const widgetComponents: Record<WorkspaceWidgetDefinition['id'], WorkspaceWidgetDefinition['component']> = {
   team_snapshot: TeamSnapshotWidget,
@@ -30,6 +37,11 @@ const widgetComponents: Record<WorkspaceWidgetDefinition['id'], WorkspaceWidgetD
   approval_queue: ApprovalQueueWidget,
   admin_schedule: AdminScheduleWidget,
   admin_shortcuts: AdminShortcutsWidget,
+  admin_assign: AdminAssignWidget,
+  admin_notifications: AdminNotificationsWidget,
+  admin_team: AdminTeamWidget,
+  admin_flywheel: AdminFlywheelWidget,
+  admin_approvals: AdminApprovalsWidget,
 }
 
 export const WORKSPACE_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition[] =

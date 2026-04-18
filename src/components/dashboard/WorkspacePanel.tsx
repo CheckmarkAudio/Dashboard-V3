@@ -2,21 +2,33 @@ import { useMemo, type CSSProperties } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { useWorkspaceLayout } from '../../hooks/useWorkspaceLayout'
 import type { AppRole } from '../../domain/permissions'
-import type { WorkspaceScope, WorkspaceWidgetDefinition, WidgetSpan } from '../../domain/workspaces/types'
+import type {
+  WorkspaceScope,
+  WorkspaceWidgetDefinition,
+  WidgetSpan,
+  WidgetRowSpan,
+} from '../../domain/workspaces/types'
 import DashboardWidgetFrame from './DashboardWidgetFrame'
 import { Button, Card } from '../ui'
 
 /**
- * Fluid span sizing for a CSS-Grid `auto-fit` / `minmax(320px, 1fr)` layout.
+ * Fluid span sizing for a CSS-Grid layout.
  *
- * The parent grid uses `repeat(auto-fit, minmax(320px, 1fr))` so columns
- * reflow algorithmically based on available width (no fixed 3-column
- * breakpoint). When a widget asks for `span 3` on a grid where only 2
- * tracks fit, browsers clamp the span to the available tracks, so we can
- * express span as a simple integer without overflow concerns.
+ * Columns: `grid-cols-3` on desktop (stacks to 2 then 1 at narrower widths).
+ * Rows: `auto-rows-[340px]` — a widget with `rowSpan = 2` occupies two
+ * adjacent rows (~680px + gap) and other widgets flow around it. Row
+ * spans are what give us the "two big rectangles on the left + three
+ * smaller widgets on the right" pattern on the admin Hub.
+ *
+ * When a widget asks for `span 3` on a grid where only 2 tracks fit,
+ * browsers clamp the span to the available tracks, so we can express
+ * both spans as simple integers without overflow concerns.
  */
-function widgetGridStyle(span: WidgetSpan): CSSProperties {
-  return { gridColumn: `span ${span}` }
+function widgetGridStyle(span: WidgetSpan, rowSpan: WidgetRowSpan = 1): CSSProperties {
+  return {
+    gridColumn: `span ${span}`,
+    gridRow: rowSpan > 1 ? `span ${rowSpan}` : undefined,
+  }
 }
 
 interface WorkspacePanelProps {
@@ -109,7 +121,7 @@ export default function WorkspacePanel({
           if (!definition) return null
           const WidgetComponent = definition.component
           return (
-            <div key={widget.id} style={widgetGridStyle(widget.span)}>
+            <div key={widget.id} style={widgetGridStyle(widget.span, widget.rowSpan ?? definition.defaultRowSpan ?? 1)}>
               <DashboardWidgetFrame
                 title={definition.title}
                 description={definition.description}
