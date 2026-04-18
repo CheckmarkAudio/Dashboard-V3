@@ -89,10 +89,22 @@ export default function MyTasksSection() {
     )
   }
 
+  // Today's date string for the eyebrow ("TODAY · WED, APR 17"). Computed
+  // at render so it updates without a refresh on day-change boundary.
+  const todayLabel = new Date()
+    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    .toUpperCase()
+
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Filter pills — compact tab style. Active = gold/15 chip. */}
-      <div className="flex flex-wrap items-center gap-1 mb-2 shrink-0">
+      {/* TODAY eyebrow — anchors the widget in time. ADHD-friendly: makes
+          it obvious at a glance that this is "right now, this morning". */}
+      <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70 mb-2 shrink-0">
+        TODAY · {todayLabel}
+      </p>
+
+      {/* Filter pills — readable at a glance. Active = gold/15 chip. */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-3 shrink-0">
         {STAGES.map((s) => {
           const isActive = filter === s.value
           const stageStyle = s.value !== 'all' ? STAGE_STYLES[s.value as Stage] : null
@@ -100,16 +112,16 @@ export default function MyTasksSection() {
             <button
               key={s.value}
               onClick={() => setFilter(s.value)}
-              className={`group inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium tracking-tight transition-all ${
+              className={`group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium tracking-tight transition-all ${
                 isActive
                   ? 'bg-gold/15 text-gold ring-1 ring-gold/30'
                   : 'bg-surface-alt text-text-muted hover:text-text border border-border/60'
               }`}
             >
-              {stageStyle && <span className={`w-1 h-1 rounded-full ${stageStyle.dot}`} aria-hidden="true" />}
+              {stageStyle && <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot}`} aria-hidden="true" />}
               <span>{s.label}</span>
               {counts[s.value] > 0 && (
-                <span className={`tabular-nums text-[9px] ${isActive ? 'text-gold/80' : 'text-text-light'}`}>
+                <span className={`tabular-nums text-[11px] ${isActive ? 'text-gold/80' : 'text-text-light'}`}>
                   {counts[s.value]}
                 </span>
               )}
@@ -122,11 +134,11 @@ export default function MyTasksSection() {
       <div className="flex-1 min-h-0 overflow-y-auto -mx-1 pr-1">
         {filtered.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center px-4">
-            <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gold/10 ring-1 ring-gold/20 mb-1.5">
-              <Check size={14} className="text-gold" aria-hidden="true" />
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
+              <Check size={18} className="text-gold" aria-hidden="true" />
             </div>
-            <p className="text-[12px] font-medium text-text">All clear</p>
-            <p className="text-[10px] text-text-light mt-0.5">
+            <p className="text-[14px] font-medium text-text">All clear</p>
+            <p className="text-[12px] text-text-light mt-0.5">
               {filter === 'all' ? 'No tasks open for today.' : `Nothing in ${filter} stage today.`}
             </p>
           </div>
@@ -137,7 +149,7 @@ export default function MyTasksSection() {
           return (
             <div
               key={task.id}
-              className={`group flex items-center gap-2 px-1 py-1.5 rounded-md transition-colors hover:bg-surface-hover/40 ${
+              className={`group flex items-center gap-2.5 px-1.5 py-2 rounded-lg transition-colors hover:bg-surface-hover/40 ${
                 task.is_completed ? 'opacity-50' : ''
               }`}
             >
@@ -147,18 +159,18 @@ export default function MyTasksSection() {
                 className="shrink-0"
               >
                 <div
-                  className={`w-[16px] h-[16px] rounded border-[1.5px] flex items-center justify-center transition-all ${
+                  className={`w-[18px] h-[18px] rounded-md border-[1.5px] flex items-center justify-center transition-all ${
                     task.is_completed
                       ? 'bg-gold/30 border-gold/50'
                       : 'border-border-light group-hover:border-gold/60'
                   }`}
                 >
-                  {task.is_completed && <Check size={10} className="text-gold" aria-hidden="true" />}
+                  {task.is_completed && <Check size={12} className="text-gold" aria-hidden="true" />}
                 </div>
               </button>
 
               <span
-                className={`flex-1 min-w-0 text-[12px] font-normal tracking-tight truncate ${
+                className={`flex-1 min-w-0 text-[14px] font-normal tracking-tight truncate ${
                   task.is_completed ? 'line-through text-text-light' : 'text-text'
                 }`}
               >
@@ -166,9 +178,9 @@ export default function MyTasksSection() {
               </span>
 
               <span
-                className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium tracking-tight ${ss.bg} ${ss.text} ring-1 ${ss.ring}`}
+                className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium tracking-tight ${ss.bg} ${ss.text} ring-1 ${ss.ring}`}
               >
-                <span className={`w-1 h-1 rounded-full ${ss.dot}`} aria-hidden="true" />
+                <span className={`w-1.5 h-1.5 rounded-full ${ss.dot}`} aria-hidden="true" />
                 {task.stage.charAt(0).toUpperCase() + task.stage.slice(1)}
               </span>
             </div>
@@ -179,10 +191,10 @@ export default function MyTasksSection() {
       {/* Footer link */}
       <Link
         to={APP_ROUTES.member.tasks}
-        className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[10px] text-text-light hover:text-gold transition-colors group shrink-0"
+        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
       >
         <span>{counts.all} today</span>
-        <span className="flex items-center gap-1 font-medium group-hover:text-gold">
+        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
           Full checklist <ChevronRight size={11} />
         </span>
       </Link>
