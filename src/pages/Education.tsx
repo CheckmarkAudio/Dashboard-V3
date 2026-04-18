@@ -83,7 +83,7 @@ export default function Education() {
 
   const loadTeam = useCallback(async () => {
     const { data, error } = await supabase
-      .from('intern_users')
+      .from('team_members')
       .select('*')
       .order('display_name')
     if (error) {

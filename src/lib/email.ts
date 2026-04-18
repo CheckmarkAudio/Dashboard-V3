@@ -3,7 +3,7 @@
  *
  * Every write to a table whose `email` column has a
  * `CHECK (email = lower(email))` constraint must go through this helper
- * (currently `intern_users` — `intern_leads` follows after its migration).
+ * (currently `team_members` — `team_leads` follows after its migration).
  * Reads should also normalize before `.eq('email', …)` lookups so they
  * match regardless of how the value was originally typed.
  */

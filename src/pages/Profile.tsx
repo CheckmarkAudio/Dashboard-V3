@@ -8,11 +8,11 @@ import type { TeamMember } from '../types'
 /**
  * Member profile page.
  *
- * Data source is the shared `intern_users` react-query cache, so a
+ * Data source is the shared `team_members` react-query cache, so a
  * click from the Overview Team widget or the admin Members directory
  * hits a warm cache with no refetch. Sections for bio / website /
  * socials are conditional — those columns don't exist on
- * `intern_users` today, so we render nothing rather than empty
+ * `team_members` today, so we render nothing rather than empty
  * scaffolding. When they're added the sections light up automatically.
  */
 export default function Profile() {

@@ -67,7 +67,7 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
       // than surfacing the failure to the user.
       const [noteRes, submissionRes, sessionsRes, kpisRes, instancesRes] = await withSupabaseRetry(() =>
         Promise.all([
-          supabase.from('intern_daily_notes').select('*').eq('intern_id', profile.id).eq('note_date', today).maybeSingle(),
+          supabase.from('team_daily_notes').select('*').eq('intern_id', profile.id).eq('note_date', today).maybeSingle(),
           supabase
             .from('deliverable_submissions')
             .select('*')
@@ -85,7 +85,7 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
             .order('start_time'),
           supabase.from('member_kpis').select('*').eq('intern_id', profile.id).limit(1),
           supabase
-            .from('intern_checklist_instances')
+            .from('team_checklist_instances')
             .select('id, period_date')
             .eq('frequency', 'daily')
             .eq('intern_id', profile.id)
@@ -122,7 +122,7 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
       const instances = (instancesRes.data ?? []) as Array<{ id: string }>
       if (instances.length > 0) {
         const itemsRes = await supabase
-          .from('intern_checklist_items')
+          .from('team_checklist_items')
           .select('instance_id, is_completed')
           .in('instance_id', instances.map((instance) => instance.id))
         if (itemsRes.error) throw itemsRes.error

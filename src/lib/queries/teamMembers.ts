@@ -1,4 +1,4 @@
-// Phase 3.1 — react-query factory for intern_users ("team members").
+// Phase 3.1 — react-query factory for team_members ("team members").
 //
 // Centralizes the select shape + query key so every page consuming
 // team-member rows shares one cache entry. The default `list()` mirrors
@@ -17,7 +17,7 @@ export const teamMemberKeys = {
 
 export async function fetchTeamMembers(): Promise<TeamMember[]> {
   const { data, error } = await supabase
-    .from('intern_users')
+    .from('team_members')
     .select('*')
     .order('display_name')
   if (error) throw error
@@ -26,7 +26,7 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
 
 export async function fetchDirectReports(managerId: string): Promise<TeamMember[]> {
   const { data, error } = await supabase
-    .from('intern_users')
+    .from('team_members')
     .select('*')
     .eq('managed_by', managerId)
     .order('display_name')

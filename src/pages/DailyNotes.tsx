@@ -38,14 +38,14 @@ export default function DailyNotes() {
   }, [profile, isAdmin])
 
   const loadTeamMembers = async () => {
-    const { data } = await supabase.from('intern_users').select('*')
+    const { data } = await supabase.from('team_members').select('*')
     if (data) setTeamMembers(data as TeamMember[])
   }
 
   const loadNotes = async () => {
     if (!profile) { setLoading(false); return }
     try {
-      let query = supabase.from('intern_daily_notes').select('*').order('note_date', { ascending: false })
+      let query = supabase.from('team_daily_notes').select('*').order('note_date', { ascending: false })
       if (!isAdmin) query = query.eq('intern_id', profile.id)
       const { data } = await query
       if (data) setNotes(data as DailyNote[])
@@ -62,7 +62,7 @@ export default function DailyNotes() {
       DEFAULT_PROMPTS.map(p => ({ question: p.label, answer: formData[p.id] || '' }))
     )
 
-    const { error } = await supabase.from('intern_daily_notes').insert({
+    const { error } = await supabase.from('team_daily_notes').insert({
       intern_id: profile.id,
       note_date: localDateKey(),
       content,
@@ -81,7 +81,7 @@ export default function DailyNotes() {
 
   const handleReply = async (noteId: string) => {
     if (!replyText.trim()) return
-    const { error } = await supabase.from('intern_daily_notes').update({ manager_reply: replyText }).eq('id', noteId)
+    const { error } = await supabase.from('team_daily_notes').update({ manager_reply: replyText }).eq('id', noteId)
     if (error) { toast('Failed to send reply', 'error'); return }
     setReplyingTo(null)
     setReplyText('')

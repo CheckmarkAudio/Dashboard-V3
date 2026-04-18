@@ -70,7 +70,7 @@ export default function AdminHub() {
   const loadMembers = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase
-      .from('intern_users')
+      .from('team_members')
       .select('*')
       .eq('status', 'active')
       .order('display_name')
@@ -91,7 +91,7 @@ export default function AdminHub() {
 
       const [instancesRes, pendingRes] = await Promise.all([
         supabase
-          .from('intern_checklist_instances')
+          .from('team_checklist_instances')
           .select('id, intern_id')
           .eq('frequency', 'daily')
           .eq('period_date', today)
@@ -111,7 +111,7 @@ export default function AdminHub() {
 
       const itemsRes = instanceIds.length > 0
         ? await supabase
-            .from('intern_checklist_items')
+            .from('team_checklist_items')
             .select('instance_id, is_completed')
             .in('instance_id', instanceIds)
         : { data: [] as Array<{ instance_id: string; is_completed: boolean }> }
@@ -503,7 +503,7 @@ function TasksTab({ selectedMember }: { selectedMember: TeamMember | null }) {
     ;(async () => {
       const today = new Date().toISOString().slice(0, 10)
       const { data: inst, error: instErr } = await supabase
-        .from('intern_checklist_instances')
+        .from('team_checklist_instances')
         .select('id')
         .eq('intern_id', selectedMember.id)
         .eq('frequency', frequency)
@@ -521,7 +521,7 @@ function TasksTab({ selectedMember }: { selectedMember: TeamMember | null }) {
         return
       }
       const { data: itemRows, error: itemErr } = await supabase
-        .from('intern_checklist_items')
+        .from('team_checklist_items')
         .select('*')
         .eq('instance_id', inst.id)
         .order('sort_order')

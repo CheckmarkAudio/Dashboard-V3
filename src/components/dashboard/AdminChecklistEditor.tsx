@@ -28,7 +28,7 @@ export default function AdminChecklistEditor({ member, onClose }: Props) {
   const loadItems = useCallback(async () => {
     setLoading(true)
     const { data: inst } = await supabase
-      .from('intern_checklist_instances')
+      .from('team_checklist_instances')
       .select('id')
       .eq('intern_id', member.id)
       .eq('frequency', 'daily')
@@ -38,7 +38,7 @@ export default function AdminChecklistEditor({ member, onClose }: Props) {
     if (inst) {
       setInstanceId(inst.id)
       const { data } = await supabase
-        .from('intern_checklist_items')
+        .from('team_checklist_items')
         .select('*')
         .eq('instance_id', inst.id)
         .order('sort_order')
@@ -61,7 +61,7 @@ export default function AdminChecklistEditor({ member, onClose }: Props) {
     // Optimistic update
     setItems(prev => prev.map(i => i.id === id ? { ...i, is_completed: next, completed_at: nextCompletedAt } : i))
     const { error } = await supabase
-      .from('intern_checklist_items')
+      .from('team_checklist_items')
       .update({ is_completed: next, completed_at: nextCompletedAt })
       .eq('id', id)
     if (error) {
@@ -75,7 +75,7 @@ export default function AdminChecklistEditor({ member, onClose }: Props) {
     if (!newItemText.trim() || !instanceId) return
     setSaving(true)
     const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.sort_order)) + 1 : 0
-    const { data, error } = await supabase.from('intern_checklist_items').insert({
+    const { data, error } = await supabase.from('team_checklist_items').insert({
       instance_id: instanceId,
       category: 'Manager added',
       item_text: newItemText.trim(),
@@ -94,7 +94,7 @@ export default function AdminChecklistEditor({ member, onClose }: Props) {
   const updateItemText = async (id: string) => {
     if (!editText.trim()) return
     setSaving(true)
-    const { error } = await supabase.from('intern_checklist_items').update({ item_text: editText.trim() }).eq('id', id)
+    const { error } = await supabase.from('team_checklist_items').update({ item_text: editText.trim() }).eq('id', id)
     if (error) toast('Failed to update', 'error')
     else {
       setItems(prev => prev.map(i => i.id === id ? { ...i, item_text: editText.trim() } : i))
@@ -105,7 +105,7 @@ export default function AdminChecklistEditor({ member, onClose }: Props) {
   }
 
   const removeItem = async (id: string) => {
-    const { error } = await supabase.from('intern_checklist_items').delete().eq('id', id)
+    const { error } = await supabase.from('team_checklist_items').delete().eq('id', id)
     if (error) toast('Failed to remove', 'error')
     else {
       setItems(prev => prev.filter(i => i.id !== id))

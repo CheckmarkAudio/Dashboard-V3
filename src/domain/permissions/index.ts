@@ -19,7 +19,7 @@ export type AppCapability =
  *
  *   1. `getAppRole()` below — even without a profile row, the email
  *      check resolves to 'owner'.
- *   2. The DB triggers on `intern_users` (migration
+ *   2. The DB triggers on `team_members` (migration
  *      `protect_owner_account_checkmarkaudio`) — coerce role/position
  *      back to owner on any UPDATE and refuse DELETE.
  *   3. `fetchProfile()` in AuthContext — synthesizes an owner profile
@@ -67,7 +67,7 @@ function normalizeEmail(email?: string | null): string {
  *
  * `authEmail` is optional — pass the `user.email` from Supabase Auth so
  * the owner-email check can fire even when `profile` is null (for
- * example, while the `intern_users` lookup is still in flight, erroring,
+ * example, while the `team_members` lookup is still in flight, erroring,
  * or RLS is misconfigured). This is the strongest guarantee that
  * `checkmarkaudio@gmail.com` ALWAYS resolves to 'owner' regardless of
  * what the profile row looks like.

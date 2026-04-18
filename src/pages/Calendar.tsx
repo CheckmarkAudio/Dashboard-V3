@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, StickyNote, Plus, AlertCircle, Loader2 } fro
 
 /**
  * Calendar-friendly booking row. Flattened from the real `sessions`
- * + `intern_schedule_templates` join returned by `loadWeekEvents`, with
+ * + `team_schedule_templates` join returned by `loadWeekEvents`, with
  * field names aligned to the existing Calendar UI so the render tree
  * below stays readable.
  */

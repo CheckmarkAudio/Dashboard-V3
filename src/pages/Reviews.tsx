@@ -31,17 +31,17 @@ export default function Reviews() {
     try {
       if (isAdmin) {
         const [usersRes, reviewsRes, scoresRes] = await Promise.all([
-          supabase.from('intern_users').select('*'),
-          supabase.from('intern_performance_reviews').select('*').order('created_at', { ascending: false }),
-          supabase.from('intern_performance_scores').select('*'),
+          supabase.from('team_members').select('*'),
+          supabase.from('team_performance_reviews').select('*').order('created_at', { ascending: false }),
+          supabase.from('team_performance_scores').select('*'),
         ])
         if (usersRes.data) setTeamMembers(usersRes.data as TeamMember[])
         if (reviewsRes.data) setReviews(reviewsRes.data as PerformanceReview[])
         if (scoresRes.data) setScores(scoresRes.data as PerformanceScore[])
       } else {
         const [reviewsRes, scoresRes] = await Promise.all([
-          supabase.from('intern_performance_reviews').select('*').eq('intern_id', profile.id).order('created_at', { ascending: false }),
-          supabase.from('intern_performance_scores').select('*'),
+          supabase.from('team_performance_reviews').select('*').eq('intern_id', profile.id).order('created_at', { ascending: false }),
+          supabase.from('team_performance_scores').select('*'),
         ])
         if (reviewsRes.data) setReviews(reviewsRes.data as PerformanceReview[])
         if (scoresRes.data) setScores(scoresRes.data as PerformanceScore[])
@@ -62,7 +62,7 @@ export default function Reviews() {
       ? Math.round((categoryScores.reduce((sum, [, v]) => sum + v, 0) / categoryScores.length) * 10) / 10
       : 0
 
-    const { data: review, error } = await supabase.from('intern_performance_reviews').insert({
+    const { data: review, error } = await supabase.from('team_performance_reviews').insert({
       intern_id: selectedMember,
       reviewer_id: profile.id,
       review_period: localDateKey(),
@@ -83,9 +83,9 @@ export default function Reviews() {
         category,
         score,
       }))
-      const { error: scoresError } = await supabase.from('intern_performance_scores').insert(scoreInserts)
+      const { error: scoresError } = await supabase.from('team_performance_scores').insert(scoreInserts)
       if (scoresError) {
-        await supabase.from('intern_performance_reviews').delete().eq('id', review.id)
+        await supabase.from('team_performance_reviews').delete().eq('id', review.id)
         toast('Failed to save scores. Review was not created.', 'error')
         setSubmitting(false)
         return

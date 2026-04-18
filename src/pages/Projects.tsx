@@ -107,7 +107,7 @@ export default function Projects() {
 
   const loadTeam = useCallback(async () => {
     const { data, error } = await supabase
-      .from('intern_users')
+      .from('team_members')
       .select('id, display_name')
       .order('display_name', { ascending: true })
     if (error) {

@@ -42,7 +42,7 @@ export default function YourDayTab() {
 
     try {
       const [noteRes, sessRes, kpisRes] = await Promise.all([
-        supabase.from('intern_daily_notes').select('*').eq('intern_id', profile.id).eq('note_date', today).maybeSingle(),
+        supabase.from('team_daily_notes').select('*').eq('intern_id', profile.id).eq('note_date', today).maybeSingle(),
         supabase.from('sessions').select('*').eq('session_date', today).order('start_time'),
         supabase.from('member_kpis').select('*').eq('intern_id', profile.id).limit(1),
       ])
@@ -71,7 +71,7 @@ export default function YourDayTab() {
           .eq('submission_date', today)
           .order('created_at', { ascending: false })
         if (subs) {
-          const { data: members } = await supabase.from('intern_users').select('id, display_name')
+          const { data: members } = await supabase.from('team_members').select('id, display_name')
           const memberMap = new Map((members ?? []).map((m: { id: string; display_name: string }) => [m.id, m.display_name]))
           setTeamSubmissions(subs.map((s: DeliverableSubmission) => ({ ...s, display_name: memberMap.get(s.intern_id) ?? 'Unknown' })))
         }
@@ -79,7 +79,7 @@ export default function YourDayTab() {
 
       try {
         const { data: instances } = await supabase
-          .from('intern_checklist_instances')
+          .from('team_checklist_instances')
           .select('id, period_date')
           .eq('frequency', 'daily')
           .eq('intern_id', profile.id)
@@ -89,7 +89,7 @@ export default function YourDayTab() {
           let s = 0
           for (const inst of instances) {
             const { data: cItems } = await supabase
-              .from('intern_checklist_items')
+              .from('team_checklist_items')
               .select('is_completed')
               .eq('instance_id', inst.id)
             if (!cItems || cItems.length === 0) break

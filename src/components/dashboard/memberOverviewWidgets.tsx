@@ -243,7 +243,7 @@ export function TeamTasksWidget() {
 /**
  * TeamDirectoryWidget — quick-reference row of teammates on Overview.
  *
- * Horizontal avatar strip sourced from `intern_users` via the shared
+ * Horizontal avatar strip sourced from `team_members` via the shared
  * react-query cache. Active members surface first; inactive fall to
  * the end at reduced opacity so they're findable but de-emphasized.
  * Each avatar links to the member's profile page. Empty state covers

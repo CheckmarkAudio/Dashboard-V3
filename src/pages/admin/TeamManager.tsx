@@ -90,7 +90,7 @@ export default function TeamManager() {
   }, [openMenuId])
 
   const loadMembers = async () => {
-    const { data } = await supabase.from('intern_users').select('*').order('display_name')
+    const { data } = await supabase.from('team_members').select('*').order('display_name')
     if (data) setMembers(data as TeamMember[])
     setLoading(false)
   }
@@ -138,7 +138,7 @@ export default function TeamManager() {
     if (editingMember) {
       setSubmitting(true)
       const position = formData.position === 'custom' ? customPosition : formData.position
-      const { error } = await supabase.from('intern_users').update({
+      const { error } = await supabase.from('team_members').update({
         display_name: formData.display_name.trim(),
         role: formData.role,
         position,
@@ -171,7 +171,7 @@ export default function TeamManager() {
     const position = formData.position === 'custom' ? customPosition : formData.position
     const email = normalizeEmail(formData.email)
 
-    // 1) Create the auth user + intern_users row atomically via the Edge Function.
+    // 1) Create the auth user + team_members row atomically via the Edge Function.
     const { data: result, error } = await supabase.functions.invoke<
       { ok: boolean; profile?: TeamMember; error?: string; where?: string }
     >('admin-create-member', {
@@ -330,7 +330,7 @@ export default function TeamManager() {
 
   const handleDelete = async () => {
     setConfirmState(s => ({ ...s, loading: true }))
-    const { error } = await supabase.from('intern_users').delete().eq('id', confirmState.memberId)
+    const { error } = await supabase.from('team_members').delete().eq('id', confirmState.memberId)
     if (error) toast('Failed to remove member', 'error')
     else toast('Member removed')
     setConfirmState({ open: false, memberId: '', memberName: '', loading: false })
@@ -341,7 +341,7 @@ export default function TeamManager() {
     setOpenMenuId(null)
     setActionLoadingId(member.id)
     const newStatus = member.status === 'active' ? 'inactive' : 'active'
-    const { error } = await supabase.from('intern_users').update({ status: newStatus }).eq('id', member.id)
+    const { error } = await supabase.from('team_members').update({ status: newStatus }).eq('id', member.id)
     if (error) toast('Failed to update status', 'error')
     else toast(`Member ${newStatus === 'active' ? 'activated' : 'deactivated'}`)
     setActionLoadingId(null)
@@ -352,7 +352,7 @@ export default function TeamManager() {
     setOpenMenuId(null)
     setActionLoadingId(member.id)
     const newRole = member.role === 'admin' ? 'intern' : 'admin'
-    const { error } = await supabase.from('intern_users').update({ role: newRole }).eq('id', member.id)
+    const { error } = await supabase.from('team_members').update({ role: newRole }).eq('id', member.id)
     if (error) toast('Failed to update role', 'error')
     else toast(`Role updated to ${newRole}`)
     setActionLoadingId(null)

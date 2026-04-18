@@ -72,7 +72,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
         if (!rpcError && instId) {
           setInstanceId(instId)
           const { data } = await supabase
-            .from('intern_checklist_items')
+            .from('team_checklist_items')
             .select('*')
             .eq('instance_id', instId)
             .order('sort_order')
@@ -87,7 +87,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
       const position = isOwn ? (profile?.position ?? 'intern') : 'intern'
 
       const { data: existing } = await supabase
-        .from('intern_checklist_instances')
+        .from('team_checklist_instances')
         .select('id')
         .eq('intern_id', userId)
         .eq('frequency', frequency)
@@ -98,7 +98,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
       if (existing) {
         setInstanceId(existing.id)
         const { data } = await supabase
-          .from('intern_checklist_items')
+          .from('team_checklist_items')
           .select('*')
           .eq('instance_id', existing.id)
           .order('sort_order')
@@ -157,7 +157,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
       }
 
       const { data: newInst } = await supabase
-        .from('intern_checklist_instances')
+        .from('team_checklist_instances')
         .insert({
           intern_id: profile.id,
           frequency,
@@ -203,7 +203,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
 
       if (newItems.length > 0) {
         const { data: inserted } = await supabase
-          .from('intern_checklist_items')
+          .from('team_checklist_items')
           .insert(newItems)
           .select('*')
         if (!mountedRef.current) return
@@ -264,7 +264,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
     )
 
     const { error } = await supabase
-      .from('intern_checklist_items')
+      .from('team_checklist_items')
       .update({
         is_completed: newCompleted,
         completed_at: nextCompletedAt,
@@ -367,7 +367,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
     if (!trimmed) return { error: 'Empty task text' }
     const nextOrder = items.length > 0 ? Math.max(...items.map(i => i.sort_order)) + 1 : 0
     const { data, error } = await supabase
-      .from('intern_checklist_items')
+      .from('team_checklist_items')
       .insert({
         instance_id: instanceId,
         category,
@@ -393,7 +393,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
     const previous = item.item_text
     setItems(prev => prev.map(i => (i.id === item_id ? { ...i, item_text: trimmed } : i)))
     const { error } = await supabase
-      .from('intern_checklist_items')
+      .from('team_checklist_items')
       .update({ item_text: trimmed })
       .eq('id', item_id)
     if (error) {
@@ -409,7 +409,7 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
     if (!item) return { error: 'Item not found' }
     const previousItems = items
     setItems(prev => prev.filter(i => i.id !== item_id))
-    const { error } = await supabase.from('intern_checklist_items').delete().eq('id', item_id)
+    const { error } = await supabase.from('team_checklist_items').delete().eq('id', item_id)
     if (error) {
       console.error('[useChecklist] deleteItem failed:', error)
       if (mountedRef.current) setItems(previousItems)

@@ -36,9 +36,9 @@ export default function TeamPulseTab() {
         { data: instances },
         { data: allSubs },
       ] = await Promise.all([
-        supabase.from('intern_users').select('*').order('display_name'),
+        supabase.from('team_members').select('*').order('display_name'),
         supabase.from('deliverable_submissions').select('intern_id').eq('submission_date', today),
-        supabase.from('intern_checklist_instances').select('id, intern_id').eq('frequency', 'daily').eq('period_date', today),
+        supabase.from('team_checklist_instances').select('id, intern_id').eq('frequency', 'daily').eq('period_date', today),
         supabase.from('deliverable_submissions').select('*').eq('submission_date', today).order('created_at', { ascending: false }),
       ])
 
@@ -53,7 +53,7 @@ export default function TeamPulseTab() {
       const checklistByMember = new Map<string, { done: number; total: number }>()
       if (instList.length > 0) {
         const { data: allItems } = await supabase
-          .from('intern_checklist_items')
+          .from('team_checklist_items')
           .select('instance_id, is_completed')
           .in('instance_id', instList.map(i => i.id))
         for (const row of (allItems ?? []) as { instance_id: string; is_completed: boolean }[]) {

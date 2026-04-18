@@ -3,13 +3,13 @@
 //
 // Called by the admin-side TeamManager UI to create a new team member
 // account. Combines Supabase Auth's admin API (to create the auth user with
-// an admin-chosen default password) and the intern_users profile insert into
+// an admin-chosen default password) and the team_members profile insert into
 // a single atomic operation: if either half fails, the other is rolled back
 // so we never leave a half-created account.
 //
 // ACCESS CONTROL
 //   - verify_jwt: true (set on deploy) — the caller's JWT is required.
-//   - The function re-runs an admin check against intern_users so even a
+//   - The function re-runs an admin check against team_members so even a
 //     leaked user JWT can't escalate privileges. Only team admins pass.
 //
 // SECRETS USED
@@ -112,7 +112,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ ok: false, error: "Not authenticated" }, 401)
   }
   const { data: callerProfile, error: callerProfileErr } = await caller
-    .from("intern_users")
+    .from("team_members")
     .select("id, role, team_id")
     .eq("id", callerUser.user.id)
     .maybeSingle()
@@ -143,7 +143,7 @@ Deno.serve(async (req: Request) => {
 
   const newUserId = createdAuth.user.id
 
-  // 3) Insert the intern_users row with id = new auth uid.
+  // 3) Insert the team_members row with id = new auth uid.
   const profileRow = {
     id: newUserId,
     email,
@@ -157,7 +157,7 @@ Deno.serve(async (req: Request) => {
     team_id: teamId,
   }
   const { data: inserted, error: insertErr } = await admin
-    .from("intern_users")
+    .from("team_members")
     .insert(profileRow)
     .select("*")
     .maybeSingle()

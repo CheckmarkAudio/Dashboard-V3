@@ -162,7 +162,7 @@ export default function Templates() {
   const loadTemplates = async () => {
     const [{ data: tData }, { data: mData }, { data: aData }] = await Promise.all([
       supabase.from('report_templates').select('*').order('created_at', { ascending: false }),
-      supabase.from('intern_users').select('*').order('display_name'),
+      supabase.from('team_members').select('*').order('display_name'),
       supabase.from('task_assignments').select('*'),
     ])
     if (tData) setTemplates(tData as ReportTemplate[])

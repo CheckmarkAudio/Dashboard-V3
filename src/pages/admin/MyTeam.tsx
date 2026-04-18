@@ -6,13 +6,13 @@ import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import type { TeamMember } from '../../types'
 
 /**
- * Admin Members directory — 8-column view sourced from intern_users.
+ * Admin Members directory — 8-column view sourced from team_members.
  *
  * Columns (approved April 2026): Member · Job Title · Department · Term
  * (start_date – end_date with "present" for indefinite) · Status · Access
  * (derived from role) · Email · Phone.
  *
- * The `department` and `end_date` columns were added to intern_users in
+ * The `department` and `end_date` columns were added to team_members in
  * the same April 2026 migration; free text + autocomplete on edit is
  * planned for TeamManager once this directory is wired. Until admins
  * populate those fields, empty cells render as em-dashes rather than

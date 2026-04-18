@@ -47,7 +47,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
  *
  * Example:
  *   const rows = await withSupabaseRetry(async () => {
- *     const { data, error } = await supabase.from('intern_users').select('*')
+ *     const { data, error } = await supabase.from('team_members').select('*')
  *     if (error) throw error
  *     return data ?? []
  *   })

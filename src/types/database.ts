@@ -1,29 +1,3 @@
-// ============================================================================
-// GENERATED FILE — do not hand-edit.
-//
-// Source of truth: the live Supabase schema for project ncljfjdcyswoeitsooty.
-// Generated via the Supabase Management API on 2026-04-11.
-//
-// To regenerate after a schema change:
-//   1. Apply your schema migration (via the SQL editor or the MCP tool).
-//   2. Run `mcp__supabase__generate_typescript_types` against the project, or
-//      locally `supabase gen types typescript --project-id ncljfjdcyswoeitsooty`.
-//   3. Overwrite this file with the output, preserving this header.
-//
-// How to use these types:
-//   import type { Tables, TablesInsert, TablesUpdate } from './database'
-//
-//   type TeamMemberRow = Tables<'intern_users'>
-//   type TeamMemberInsert = TablesInsert<'intern_users'>
-//   type TeamMemberUpdate = TablesUpdate<'intern_users'>
-//
-// The hand-written types in ./index.ts are still the primary interface the
-// pages use today. We'll port page-by-page during Phase 2/3 and eventually
-// retire the hand-written ones. Until then, treat `database.ts` as the
-// authoritative ground truth for what actually exists in the DB and
-// `index.ts` as a (possibly stale) convenience layer.
-// ============================================================================
-
 export type Json =
   | string
   | number
@@ -88,6 +62,78 @@ export type Database = {
             referencedRelation: "intern_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "artist_pipeline_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_channels: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          slug: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          channel_id: string
+          content: string
+          created_at: string | null
+          id: string
+          sender_id: string
+          sender_initial: string
+          sender_name: string
+        }
+        Insert: {
+          channel_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          sender_id: string
+          sender_initial?: string
+          sender_name: string
+        }
+        Update: {
+          channel_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          sender_id?: string
+          sender_initial?: string
+          sender_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
         ]
       }
       deliverable_submissions: {
@@ -139,10 +185,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "deliverable_submissions_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "deliverable_submissions_reviewed_by_fkey"
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliverable_submissions_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
             referencedColumns: ["id"]
           },
         ]
@@ -192,9 +252,547 @@ export type Database = {
             referencedRelation: "intern_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "education_students_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      intern_checklist_instances: {
+      member_kpi_entries: {
+        Row: {
+          created_at: string | null
+          entered_by: string | null
+          entry_date: string
+          id: string
+          kpi_id: string
+          notes: string | null
+          team_id: string | null
+          value: number
+        }
+        Insert: {
+          created_at?: string | null
+          entered_by?: string | null
+          entry_date: string
+          id?: string
+          kpi_id: string
+          notes?: string | null
+          team_id?: string | null
+          value: number
+        }
+        Update: {
+          created_at?: string | null
+          entered_by?: string | null
+          entry_date?: string
+          id?: string
+          kpi_id?: string
+          notes?: string | null
+          team_id?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_kpi_entries_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_kpi_entries_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_kpi_entries_kpi_id_fkey"
+            columns: ["kpi_id"]
+            isOneToOne: false
+            referencedRelation: "member_kpis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_kpis: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          flywheel_stage: string
+          id: string
+          intern_id: string
+          name: string
+          target_direction: string | null
+          target_value: number | null
+          team_id: string | null
+          unit: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          flywheel_stage: string
+          id?: string
+          intern_id: string
+          name: string
+          target_direction?: string | null
+          target_value?: number | null
+          team_id?: string | null
+          unit?: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          flywheel_stage?: string
+          id?: string
+          intern_id?: string
+          name?: string
+          target_direction?: string | null
+          target_value?: number | null
+          team_id?: string | null
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_kpis_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_kpis_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_kpis_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_kpis_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_metrics: {
+        Row: {
+          created_at: string | null
+          entered_by: string | null
+          follower_count: number
+          id: string
+          metric_date: string
+          platform: string
+          team_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          entered_by?: string | null
+          follower_count: number
+          id?: string
+          metric_date: string
+          platform: string
+          team_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          entered_by?: string | null
+          follower_count?: number
+          id?: string
+          metric_date?: string
+          platform?: string
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_metrics_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_metrics_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          assigned_to: string | null
+          client_name: string | null
+          created_at: string | null
+          due_date: string | null
+          id: string
+          name: string
+          notes: string | null
+          project_type: string
+          status: string
+          team_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          client_name?: string | null
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          project_type: string
+          status?: string
+          team_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          client_name?: string | null
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          project_type?: string
+          status?: string
+          team_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      report_templates: {
+        Row: {
+          created_at: string | null
+          fields: Json
+          id: string
+          is_default: boolean | null
+          name: string
+          position: string | null
+          team_id: string | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          fields?: Json
+          id?: string
+          is_default?: boolean | null
+          name: string
+          position?: string | null
+          team_id?: string | null
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          fields?: Json
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          position?: string | null
+          team_id?: string | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sessions: {
+        Row: {
+          assigned_to: string | null
+          client_name: string | null
+          created_at: string | null
+          created_by: string | null
+          end_time: string
+          id: string
+          notes: string | null
+          project_id: string | null
+          room: string | null
+          session_date: string
+          session_type: string
+          start_time: string
+          status: string
+          team_id: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          client_name?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          end_time: string
+          id?: string
+          notes?: string | null
+          project_id?: string | null
+          room?: string | null
+          session_date: string
+          session_type: string
+          start_time: string
+          status?: string
+          team_id?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          client_name?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          end_time?: string
+          id?: string
+          notes?: string | null
+          project_id?: string | null
+          room?: string | null
+          session_date?: string
+          session_type?: string
+          start_time?: string
+          status?: string
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_assignments: {
+        Row: {
+          assigned_by: string | null
+          created_at: string | null
+          id: string
+          intern_id: string | null
+          is_active: boolean | null
+          position: string | null
+          team_id: string | null
+          template_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string | null
+          id?: string
+          intern_id?: string | null
+          is_active?: boolean | null
+          position?: string | null
+          team_id?: string | null
+          template_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string | null
+          id?: string
+          intern_id?: string | null
+          is_active?: boolean | null
+          position?: string | null
+          team_id?: string | null
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_assignments_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignments_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignments_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignments_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignments_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "report_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_edit_requests: {
+        Row: {
+          apply_to_template: boolean
+          change_type: Database["public"]["Enums"]["task_edit_change_type"]
+          created_at: string
+          id: string
+          instance_id: string
+          item_id: string | null
+          previous_text: string | null
+          proposed_category: string | null
+          proposed_text: string | null
+          reject_reason: string | null
+          requested_at: string
+          requested_by: string
+          reviewed_at: string | null
+          reviewer_id: string | null
+          status: Database["public"]["Enums"]["task_edit_status"]
+          team_id: string | null
+        }
+        Insert: {
+          apply_to_template?: boolean
+          change_type: Database["public"]["Enums"]["task_edit_change_type"]
+          created_at?: string
+          id?: string
+          instance_id: string
+          item_id?: string | null
+          previous_text?: string | null
+          proposed_category?: string | null
+          proposed_text?: string | null
+          reject_reason?: string | null
+          requested_at?: string
+          requested_by: string
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          status?: Database["public"]["Enums"]["task_edit_status"]
+          team_id?: string | null
+        }
+        Update: {
+          apply_to_template?: boolean
+          change_type?: Database["public"]["Enums"]["task_edit_change_type"]
+          created_at?: string
+          id?: string
+          instance_id?: string
+          item_id?: string | null
+          previous_text?: string | null
+          proposed_category?: string | null
+          proposed_text?: string | null
+          reject_reason?: string | null
+          requested_at?: string
+          requested_by?: string
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          status?: Database["public"]["Enums"]["task_edit_status"]
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_edit_requests_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "intern_checklist_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_edit_requests_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "team_checklist_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_edit_requests_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "intern_checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_edit_requests_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "team_checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_edit_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_edit_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_edit_requests_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_edit_requests_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_checklist_instances: {
         Row: {
           created_at: string | null
           frequency: string
@@ -227,9 +825,16 @@ export type Database = {
             referencedRelation: "intern_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "intern_checklist_instances_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      intern_checklist_items: {
+      team_checklist_items: {
         Row: {
           category: string
           completed_at: string | null
@@ -272,15 +877,29 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "intern_checklist_items_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "team_checklist_instances"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "intern_checklist_items_template_id_fkey"
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "intern_checklist_templates"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "intern_checklist_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "team_checklist_templates"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      intern_checklist_templates: {
+      team_checklist_templates: {
         Row: {
           category: string
           created_at: string | null
@@ -310,7 +929,7 @@ export type Database = {
         }
         Relationships: []
       }
-      intern_daily_notes: {
+      team_daily_notes: {
         Row: {
           content: string
           created_at: string | null
@@ -352,9 +971,16 @@ export type Database = {
             referencedRelation: "intern_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "intern_daily_notes_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      intern_lead_activities: {
+      team_lead_activities: {
         Row: {
           activity_type: string
           created_at: string | null
@@ -388,15 +1014,29 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "intern_lead_activities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "intern_lead_activities_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "intern_leads"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "intern_lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "team_leads"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      intern_leads: {
+      team_leads: {
         Row: {
           amount: number | null
           company: string | null
@@ -475,15 +1115,92 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "intern_leads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "intern_leads_intern_id_fkey"
             columns: ["intern_id"]
             isOneToOne: false
             referencedRelation: "intern_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "intern_leads_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      intern_performance_reviews: {
+      team_members: {
+        Row: {
+          created_at: string | null
+          department: string | null
+          display_name: string
+          email: string | null
+          end_date: string | null
+          id: string
+          managed_by: string | null
+          phone: string | null
+          position: string | null
+          role: string
+          start_date: string | null
+          status: string | null
+          team_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          department?: string | null
+          display_name: string
+          email?: string | null
+          end_date?: string | null
+          id: string
+          managed_by?: string | null
+          phone?: string | null
+          position?: string | null
+          role: string
+          start_date?: string | null
+          status?: string | null
+          team_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          department?: string | null
+          display_name?: string
+          email?: string | null
+          end_date?: string | null
+          id?: string
+          managed_by?: string | null
+          phone?: string | null
+          position?: string | null
+          role?: string
+          start_date?: string | null
+          status?: string | null
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intern_users_managed_by_fkey"
+            columns: ["managed_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_users_managed_by_fkey"
+            columns: ["managed_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_performance_reviews: {
         Row: {
           created_at: string | null
           id: string
@@ -529,15 +1246,29 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "intern_performance_reviews_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "intern_performance_reviews_reviewer_id_fkey"
             columns: ["reviewer_id"]
             isOneToOne: false
             referencedRelation: "intern_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "intern_performance_reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      intern_performance_scores: {
+      team_performance_scores: {
         Row: {
           category: string
           id: string
@@ -567,9 +1298,43 @@ export type Database = {
             referencedRelation: "intern_performance_reviews"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "intern_performance_scores_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "team_performance_reviews"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      intern_schedule_templates: {
+      team_positions: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          display_name: string
+          icon: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          display_name: string
+          icon?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          display_name?: string
+          icon?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      team_schedule_templates: {
         Row: {
           day_of_week: number
           focus_areas: string[]
@@ -605,514 +1370,14 @@ export type Database = {
             referencedRelation: "intern_users"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      intern_users: {
-        Row: {
-          created_at: string | null
-          display_name: string
-          email: string | null
-          id: string
-          managed_by: string | null
-          phone: string | null
-          position: string | null
-          role: string
-          start_date: string | null
-          status: string | null
-          team_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          display_name: string
-          email?: string | null
-          id: string
-          managed_by?: string | null
-          phone?: string | null
-          position?: string | null
-          role: string
-          start_date?: string | null
-          status?: string | null
-          team_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          display_name?: string
-          email?: string | null
-          id?: string
-          managed_by?: string | null
-          phone?: string | null
-          position?: string | null
-          role?: string
-          start_date?: string | null
-          status?: string | null
-          team_id?: string | null
-        }
-        Relationships: [
           {
-            foreignKeyName: "intern_users_managed_by_fkey"
-            columns: ["managed_by"]
-            isOneToOne: false
-            referencedRelation: "intern_users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      member_kpi_entries: {
-        Row: {
-          created_at: string | null
-          entered_by: string | null
-          entry_date: string
-          id: string
-          kpi_id: string
-          notes: string | null
-          team_id: string | null
-          value: number
-        }
-        Insert: {
-          created_at?: string | null
-          entered_by?: string | null
-          entry_date: string
-          id?: string
-          kpi_id: string
-          notes?: string | null
-          team_id?: string | null
-          value: number
-        }
-        Update: {
-          created_at?: string | null
-          entered_by?: string | null
-          entry_date?: string
-          id?: string
-          kpi_id?: string
-          notes?: string | null
-          team_id?: string | null
-          value?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "member_kpi_entries_entered_by_fkey"
-            columns: ["entered_by"]
-            isOneToOne: false
-            referencedRelation: "intern_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_kpi_entries_kpi_id_fkey"
-            columns: ["kpi_id"]
-            isOneToOne: false
-            referencedRelation: "member_kpis"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      member_kpis: {
-        Row: {
-          created_at: string | null
-          created_by: string | null
-          flywheel_stage: string
-          id: string
-          intern_id: string
-          name: string
-          target_direction: string | null
-          target_value: number | null
-          team_id: string | null
-          unit: string
-        }
-        Insert: {
-          created_at?: string | null
-          created_by?: string | null
-          flywheel_stage: string
-          id?: string
-          intern_id: string
-          name: string
-          target_direction?: string | null
-          target_value?: number | null
-          team_id?: string | null
-          unit?: string
-        }
-        Update: {
-          created_at?: string | null
-          created_by?: string | null
-          flywheel_stage?: string
-          id?: string
-          intern_id?: string
-          name?: string
-          target_direction?: string | null
-          target_value?: number | null
-          team_id?: string | null
-          unit?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "member_kpis_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "intern_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_kpis_intern_id_fkey"
+            foreignKeyName: "intern_schedule_templates_intern_id_fkey"
             columns: ["intern_id"]
             isOneToOne: false
-            referencedRelation: "intern_users"
+            referencedRelation: "team_members"
             referencedColumns: ["id"]
           },
         ]
-      }
-      platform_metrics: {
-        Row: {
-          created_at: string | null
-          entered_by: string | null
-          follower_count: number
-          id: string
-          metric_date: string
-          platform: string
-          team_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          entered_by?: string | null
-          follower_count: number
-          id?: string
-          metric_date: string
-          platform: string
-          team_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          entered_by?: string | null
-          follower_count?: number
-          id?: string
-          metric_date?: string
-          platform?: string
-          team_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "platform_metrics_entered_by_fkey"
-            columns: ["entered_by"]
-            isOneToOne: false
-            referencedRelation: "intern_users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      projects: {
-        Row: {
-          assigned_to: string | null
-          client_name: string | null
-          created_at: string | null
-          due_date: string | null
-          id: string
-          name: string
-          notes: string | null
-          project_type: string
-          status: string
-          team_id: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          assigned_to?: string | null
-          client_name?: string | null
-          created_at?: string | null
-          due_date?: string | null
-          id?: string
-          name: string
-          notes?: string | null
-          project_type: string
-          status?: string
-          team_id?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          assigned_to?: string | null
-          client_name?: string | null
-          created_at?: string | null
-          due_date?: string | null
-          id?: string
-          name?: string
-          notes?: string | null
-          project_type?: string
-          status?: string
-          team_id?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "projects_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "intern_users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      report_templates: {
-        Row: {
-          created_at: string | null
-          fields: Json
-          id: string
-          is_default: boolean | null
-          name: string
-          position: string | null
-          team_id: string | null
-          type: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          fields?: Json
-          id?: string
-          is_default?: boolean | null
-          name: string
-          position?: string | null
-          team_id?: string | null
-          type: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          fields?: Json
-          id?: string
-          is_default?: boolean | null
-          name?: string
-          position?: string | null
-          team_id?: string | null
-          type?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      sessions: {
-        Row: {
-          client_name: string | null
-          created_at: string | null
-          created_by: string | null
-          end_time: string
-          id: string
-          notes: string | null
-          project_id: string | null
-          room: string | null
-          session_date: string
-          session_type: string
-          start_time: string
-          status: string
-          team_id: string | null
-        }
-        Insert: {
-          client_name?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          end_time: string
-          id?: string
-          notes?: string | null
-          project_id?: string | null
-          room?: string | null
-          session_date: string
-          session_type: string
-          start_time: string
-          status?: string
-          team_id?: string | null
-        }
-        Update: {
-          client_name?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          end_time?: string
-          id?: string
-          notes?: string | null
-          project_id?: string | null
-          room?: string | null
-          session_date?: string
-          session_type?: string
-          start_time?: string
-          status?: string
-          team_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sessions_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "intern_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sessions_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      task_assignments: {
-        Row: {
-          assigned_by: string | null
-          created_at: string | null
-          id: string
-          intern_id: string | null
-          is_active: boolean | null
-          position: string | null
-          team_id: string | null
-          template_id: string
-        }
-        Insert: {
-          assigned_by?: string | null
-          created_at?: string | null
-          id?: string
-          intern_id?: string | null
-          is_active?: boolean | null
-          position?: string | null
-          team_id?: string | null
-          template_id: string
-        }
-        Update: {
-          assigned_by?: string | null
-          created_at?: string | null
-          id?: string
-          intern_id?: string | null
-          is_active?: boolean | null
-          position?: string | null
-          team_id?: string | null
-          template_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "task_assignments_assigned_by_fkey"
-            columns: ["assigned_by"]
-            isOneToOne: false
-            referencedRelation: "intern_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_assignments_intern_id_fkey"
-            columns: ["intern_id"]
-            isOneToOne: false
-            referencedRelation: "intern_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_assignments_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "report_templates"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      task_edit_requests: {
-        Row: {
-          apply_to_template: boolean
-          change_type: Database["public"]["Enums"]["task_edit_change_type"]
-          created_at: string
-          id: string
-          instance_id: string
-          item_id: string | null
-          previous_text: string | null
-          proposed_category: string | null
-          proposed_text: string | null
-          reject_reason: string | null
-          requested_at: string
-          requested_by: string
-          reviewed_at: string | null
-          reviewer_id: string | null
-          status: Database["public"]["Enums"]["task_edit_status"]
-          team_id: string | null
-        }
-        Insert: {
-          apply_to_template?: boolean
-          change_type: Database["public"]["Enums"]["task_edit_change_type"]
-          created_at?: string
-          id?: string
-          instance_id: string
-          item_id?: string | null
-          previous_text?: string | null
-          proposed_category?: string | null
-          proposed_text?: string | null
-          reject_reason?: string | null
-          requested_at?: string
-          requested_by: string
-          reviewed_at?: string | null
-          reviewer_id?: string | null
-          status?: Database["public"]["Enums"]["task_edit_status"]
-          team_id?: string | null
-        }
-        Update: {
-          apply_to_template?: boolean
-          change_type?: Database["public"]["Enums"]["task_edit_change_type"]
-          created_at?: string
-          id?: string
-          instance_id?: string
-          item_id?: string | null
-          previous_text?: string | null
-          proposed_category?: string | null
-          proposed_text?: string | null
-          reject_reason?: string | null
-          requested_at?: string
-          requested_by?: string
-          reviewed_at?: string | null
-          reviewer_id?: string | null
-          status?: Database["public"]["Enums"]["task_edit_status"]
-          team_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "task_edit_requests_instance_id_fkey"
-            columns: ["instance_id"]
-            isOneToOne: false
-            referencedRelation: "intern_checklist_instances"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_edit_requests_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "intern_checklist_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_edit_requests_requested_by_fkey"
-            columns: ["requested_by"]
-            isOneToOne: false
-            referencedRelation: "intern_users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_edit_requests_reviewer_id_fkey"
-            columns: ["reviewer_id"]
-            isOneToOne: false
-            referencedRelation: "intern_users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      team_positions: {
-        Row: {
-          color: string | null
-          created_at: string | null
-          display_name: string
-          icon: string | null
-          id: string
-          name: string
-        }
-        Insert: {
-          color?: string | null
-          created_at?: string | null
-          display_name: string
-          icon?: string | null
-          id?: string
-          name: string
-        }
-        Update: {
-          color?: string | null
-          created_at?: string | null
-          display_name?: string
-          icon?: string | null
-          id?: string
-          name?: string
-        }
-        Relationships: []
       }
       teams: {
         Row: {
@@ -1184,31 +1449,595 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "weekly_admin_reviews_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "weekly_admin_reviews_reviewer_id_fkey"
             columns: ["reviewer_id"]
             isOneToOne: false
             referencedRelation: "intern_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "weekly_admin_reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      intern_checklist_instances: {
+        Row: {
+          created_at: string | null
+          frequency: string | null
+          id: string | null
+          intern_id: string | null
+          period_date: string | null
+          team_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          frequency?: string | null
+          id?: string | null
+          intern_id?: string | null
+          period_date?: string | null
+          team_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          frequency?: string | null
+          id?: string | null
+          intern_id?: string | null
+          period_date?: string | null
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intern_checklist_instances_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_checklist_instances_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intern_checklist_items: {
+        Row: {
+          category: string | null
+          completed_at: string | null
+          id: string | null
+          instance_id: string | null
+          is_completed: boolean | null
+          item_text: string | null
+          sort_order: number | null
+          team_id: string | null
+          template_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          completed_at?: string | null
+          id?: string | null
+          instance_id?: string | null
+          is_completed?: boolean | null
+          item_text?: string | null
+          sort_order?: number | null
+          team_id?: string | null
+          template_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          completed_at?: string | null
+          id?: string | null
+          instance_id?: string | null
+          is_completed?: boolean | null
+          item_text?: string | null
+          sort_order?: number | null
+          team_id?: string | null
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intern_checklist_items_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "intern_checklist_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_checklist_items_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "team_checklist_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_checklist_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "intern_checklist_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_checklist_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "team_checklist_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intern_checklist_templates: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          frequency: string | null
+          id: string | null
+          is_active: boolean | null
+          item_text: string | null
+          sort_order: number | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          frequency?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          item_text?: string | null
+          sort_order?: number | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          frequency?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          item_text?: string | null
+          sort_order?: number | null
+        }
+        Relationships: []
+      }
+      intern_daily_notes: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          id: string | null
+          intern_id: string | null
+          manager_reply: string | null
+          note_date: string | null
+          replied_at: string | null
+          submitted_at: string | null
+          team_id: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          id?: string | null
+          intern_id?: string | null
+          manager_reply?: string | null
+          note_date?: string | null
+          replied_at?: string | null
+          submitted_at?: string | null
+          team_id?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          id?: string | null
+          intern_id?: string | null
+          manager_reply?: string | null
+          note_date?: string | null
+          replied_at?: string | null
+          submitted_at?: string | null
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intern_daily_notes_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_daily_notes_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intern_lead_activities: {
+        Row: {
+          activity_type: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string | null
+          lead_id: string | null
+        }
+        Insert: {
+          activity_type?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string | null
+          lead_id?: string | null
+        }
+        Update: {
+          activity_type?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string | null
+          lead_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intern_lead_activities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_lead_activities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "intern_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "team_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intern_leads: {
+        Row: {
+          amount: number | null
+          company: string | null
+          contact: string | null
+          contact_info: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          email: string | null
+          follow_up_date: string | null
+          id: string | null
+          intern_id: string | null
+          lead_type: string | null
+          name: string | null
+          needs_follow_up: boolean | null
+          notes: string | null
+          phone: string | null
+          priority: string | null
+          social_links: string | null
+          status: string | null
+          team_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          company?: string | null
+          contact?: string | null
+          contact_info?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          email?: string | null
+          follow_up_date?: string | null
+          id?: string | null
+          intern_id?: string | null
+          lead_type?: string | null
+          name?: string | null
+          needs_follow_up?: boolean | null
+          notes?: string | null
+          phone?: string | null
+          priority?: string | null
+          social_links?: string | null
+          status?: string | null
+          team_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          company?: string | null
+          contact?: string | null
+          contact_info?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          email?: string | null
+          follow_up_date?: string | null
+          id?: string | null
+          intern_id?: string | null
+          lead_type?: string | null
+          name?: string | null
+          needs_follow_up?: boolean | null
+          notes?: string | null
+          phone?: string | null
+          priority?: string | null
+          social_links?: string | null
+          status?: string | null
+          team_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intern_leads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_leads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_leads_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_leads_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intern_performance_reviews: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          intern_id: string | null
+          notes: string | null
+          overall_score: number | null
+          published_at: string | null
+          review_period: string | null
+          reviewer_id: string | null
+          status: string | null
+          team_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          intern_id?: string | null
+          notes?: string | null
+          overall_score?: number | null
+          published_at?: string | null
+          review_period?: string | null
+          reviewer_id?: string | null
+          status?: string | null
+          team_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          intern_id?: string | null
+          notes?: string | null
+          overall_score?: number | null
+          published_at?: string | null
+          review_period?: string | null
+          reviewer_id?: string | null
+          status?: string | null
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intern_performance_reviews_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_performance_reviews_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_performance_reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_performance_reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intern_performance_scores: {
+        Row: {
+          category: string | null
+          id: string | null
+          review_id: string | null
+          score: number | null
+          team_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          id?: string | null
+          review_id?: string | null
+          score?: number | null
+          team_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          id?: string | null
+          review_id?: string | null
+          score?: number | null
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intern_performance_scores_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "intern_performance_reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_performance_scores_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "team_performance_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intern_schedule_templates: {
+        Row: {
+          day_of_week: number | null
+          focus_areas: string[] | null
+          frequency: string | null
+          id: string | null
+          intern_id: string | null
+          team_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          day_of_week?: number | null
+          focus_areas?: string[] | null
+          frequency?: string | null
+          id?: string | null
+          intern_id?: string | null
+          team_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          day_of_week?: number | null
+          focus_areas?: string[] | null
+          frequency?: string | null
+          id?: string | null
+          intern_id?: string | null
+          team_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intern_schedule_templates_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_schedule_templates_intern_id_fkey"
+            columns: ["intern_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intern_users: {
+        Row: {
+          created_at: string | null
+          department: string | null
+          display_name: string | null
+          email: string | null
+          end_date: string | null
+          id: string | null
+          managed_by: string | null
+          phone: string | null
+          position: string | null
+          role: string | null
+          start_date: string | null
+          status: string | null
+          team_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          department?: string | null
+          display_name?: string | null
+          email?: string | null
+          end_date?: string | null
+          id?: string | null
+          managed_by?: string | null
+          phone?: string | null
+          position?: string | null
+          role?: string | null
+          start_date?: string | null
+          status?: string | null
+          team_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          department?: string | null
+          display_name?: string | null
+          email?: string | null
+          end_date?: string | null
+          id?: string | null
+          managed_by?: string | null
+          phone?: string | null
+          position?: string | null
+          role?: string | null
+          start_date?: string | null
+          status?: string | null
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intern_users_managed_by_fkey"
+            columns: ["managed_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intern_users_managed_by_fkey"
+            columns: ["managed_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       approve_task_edit_request: {
         Args: { p_apply_to_template?: boolean; p_request_id: string }
         Returns: undefined
-      }
-      publish_daily_checklist: {
-        Args: {
-          p_target_mode: string
-          p_target_position?: string | null
-          p_target_ids?: string[] | null
-          p_replace?: boolean
-        }
-        Returns: Json
       }
       get_direct_reports: { Args: { manager: string }; Returns: string[] }
       get_my_team_id: { Args: never; Returns: string }
@@ -1218,6 +2047,43 @@ export type Database = {
       }
       intern_get_user_role: { Args: never; Returns: string }
       is_team_admin: { Args: never; Returns: boolean }
+      owner_reset_member_password: {
+        Args: { p_new_password: string; p_user_id: string }
+        Returns: boolean
+      }
+      owner_set_member_role: {
+        Args: { p_new_role: string; p_user_id: string }
+        Returns: {
+          created_at: string | null
+          department: string | null
+          display_name: string
+          email: string | null
+          end_date: string | null
+          id: string
+          managed_by: string | null
+          phone: string | null
+          position: string | null
+          role: string
+          start_date: string | null
+          status: string | null
+          team_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "team_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      publish_daily_checklist: {
+        Args: {
+          p_replace?: boolean
+          p_target_ids?: string[]
+          p_target_mode: string
+          p_target_position?: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       task_edit_change_type: "add" | "rename" | "delete"

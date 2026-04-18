@@ -53,10 +53,10 @@ export async function loadWeekEvents({
       .order('session_date')
       .order('start_time'),
     supabase
-      .from('intern_schedule_templates')
+      .from('team_schedule_templates')
       .select('id, intern_id, day_of_week, focus_areas'),
     supabase
-      .from('intern_users')
+      .from('team_members')
       .select('id, display_name'),
   ])
 

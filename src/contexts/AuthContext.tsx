@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Phase 6.4 — `buildFallbackProfile` was removed. Previously, if the
-  // intern_users lookup failed we'd synthesize a profile from auth.user
+  // team_members lookup failed we'd synthesize a profile from auth.user
   // metadata so the user wouldn't be locked out. That bypassed the
   // admin-only-account-creation rule: any rogue auth.users row would
   // become a usable dashboard session. The current `fetchProfile`
@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // `rejectAndSignOut` on `false`, signing the user out cleanly.
 
   /**
-   * Look up the signed-in auth user's profile in `intern_users`.
+   * Look up the signed-in auth user's profile in `team_members`.
    *
    *   - 'found'      → profile loaded into state, caller proceeds
    *   - 'not_found'  → no admin-provisioned row exists for this user;
@@ -119,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = useCallback(async (authUser: SupabaseUser): Promise<ProfileFetchResult> => {
     const userId = authUser.id
     // Always normalize emails — the DB has a CHECK (email = lower(email))
-    // constraint on intern_users plus RLS policies that compare via
+    // constraint on team_members plus RLS policies that compare via
     // `lower(email)`, so any casing drift silently creates ghost profiles.
     const email = normalizeEmail(authUser.email)
 
@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     //         someone with that email's verified password reaches here.
     const synthesizeOwnerIfApplicable = (): ProfileFetchResult | null => {
       if (email !== OWNER_EMAIL) return null
-      console.warn('[AuthContext] OWNER_EMAIL fallback engaged — synthesizing owner profile because intern_users lookup did not return the row.')
+      console.warn('[AuthContext] OWNER_EMAIL fallback engaged — synthesizing owner profile because team_members lookup did not return the row.')
       setProfile({
         id: userId,
         email: OWNER_EMAIL,
@@ -150,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       data = await withSupabaseRetry(async () => {
         const res = await supabase
-          .from('intern_users')
+          .from('team_members')
           .select('*')
           .eq('id', userId)
           .maybeSingle()
@@ -173,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 2) Secondary lookup: an admin may have pre-seeded a row keyed by email
     //    before this user signed up (legacy TeamManager flow created rows
     //    with random UUIDs). The cascade-link migration added ON UPDATE
-    //    CASCADE to every FK pointing at intern_users(id), so a clean PK
+    //    CASCADE to every FK pointing at team_members(id), so a clean PK
     //    update relinks the pre-seeded row to the new auth uid and the
     //    user inherits all their historical data automatically.
     if (email) {
@@ -181,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         emailMatch = await withSupabaseRetry(async () => {
           const res = await supabase
-            .from('intern_users')
+            .from('team_members')
             .select('*')
             .ilike('email', email)
             .maybeSingle()
@@ -195,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (emailMatch && emailMatch.id !== userId) {
         const { data: updated, error: updateErr } = await supabase
-          .from('intern_users')
+          .from('team_members')
           .update({ id: userId, email })
           .eq('id', emailMatch.id)
           .select('*')
@@ -227,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     //    user is not the owner. They genuinely were NOT provisioned by
     //    an admin. The caller signs them out and surfaces the message
     //    via sessionStorage.
-    console.error('[AuthContext] No intern_users profile for auth user', userId, email)
+    console.error('[AuthContext] No team_members profile for auth user', userId, email)
     return 'not_found'
   }, [])
 
@@ -237,7 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /**
    * Phase 6.4 — Hard reject for users without an admin-provisioned
-   * intern_users row. Signs the user out and stashes a one-shot flag
+   * team_members row. Signs the user out and stashes a one-shot flag
    * in sessionStorage so the next /login render can surface the reason.
    */
   const rejectAndSignOut = useCallback(async () => {
@@ -414,7 +414,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Pass user.email so OWNER_EMAIL always resolves to 'owner' even if
     // profile is still loading, errored, or null. This is the load-
     // bearing line that guarantees the owner sees admin nav as soon as
-    // they're authenticated, independent of intern_users lookup state.
+    // they're authenticated, independent of team_members lookup state.
     const appRole = getAppRole(profile, user?.email)
     return {
       user,

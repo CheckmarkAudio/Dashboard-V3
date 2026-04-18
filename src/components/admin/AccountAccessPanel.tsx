@@ -178,7 +178,7 @@ export default function AccountAccessPanel() {
       // Only real errors (RLS, validation, etc.) propagate to the UI.
       const rows = await withSupabaseRetry(async () => {
         const { data, error: err } = await supabase
-          .from('intern_users')
+          .from('team_members')
           .select('id, email, display_name, role, position, status')
           .order('display_name')
         if (err) throw err

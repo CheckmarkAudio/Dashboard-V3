@@ -14,7 +14,7 @@ export default function Login() {
   const [error, setError] = useState('')
 
   // Phase 6.4 — surface the "not provisioned" message if the user was
-  // rejected by AuthContext because no intern_users row exists.
+  // rejected by AuthContext because no team_members row exists.
   useEffect(() => {
     try {
       const msg = sessionStorage.getItem('auth_no_profile')

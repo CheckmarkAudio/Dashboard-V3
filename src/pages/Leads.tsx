@@ -59,7 +59,7 @@ export default function Leads() {
   const loadLeads = useCallback(async () => {
     if (!profile) { setLoading(false); return }
     try {
-      let query = supabase.from('intern_leads').select('*').order('created_at', { ascending: false })
+      let query = supabase.from('team_leads').select('*').order('created_at', { ascending: false })
       if (!isAdmin) query = query.eq('intern_id', profile.id)
       const { data } = await query
       if (data) setLeads(data as Lead[])
@@ -81,7 +81,7 @@ export default function Leads() {
     }
 
     if (editingLead) {
-      const { error } = await supabase.from('intern_leads').update(payload).eq('id', editingLead.id)
+      const { error } = await supabase.from('team_leads').update(payload).eq('id', editingLead.id)
       if (error) {
         console.error('[Leads] Update failed:', error)
         toast(error.message || 'Failed to update lead', 'error')
@@ -89,7 +89,7 @@ export default function Leads() {
         return
       }
     } else {
-      const { error } = await supabase.from('intern_leads').insert(payload)
+      const { error } = await supabase.from('team_leads').insert(payload)
       if (error) {
         console.error('[Leads] Insert failed:', error)
         toast(error.message || 'Failed to add lead', 'error')
@@ -123,7 +123,7 @@ export default function Leads() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this lead?')) return
-    const { error } = await supabase.from('intern_leads').delete().eq('id', id)
+    const { error } = await supabase.from('team_leads').delete().eq('id', id)
     if (error) toast('Failed to delete lead', 'error')
     loadLeads()
   }

@@ -39,7 +39,7 @@ export async function loadAdminOverviewSnapshot(): Promise<AdminOverviewSnapshot
     instancesRes,
   ] = await Promise.all([
     supabase
-      .from('intern_users')
+      .from('team_members')
       .select('id, display_name, position, status')
       .neq('status', 'inactive')
       .order('display_name'),
@@ -57,7 +57,7 @@ export async function loadAdminOverviewSnapshot(): Promise<AdminOverviewSnapshot
       .eq('submission_date', today)
       .is('reviewed_at', null),
     supabase
-      .from('intern_checklist_instances')
+      .from('team_checklist_instances')
       .select('id, intern_id')
       .eq('frequency', 'daily')
       .eq('period_date', today),
@@ -80,7 +80,7 @@ export async function loadAdminOverviewSnapshot(): Promise<AdminOverviewSnapshot
 
   const itemsRes = instanceIds.length > 0
     ? await supabase
-        .from('intern_checklist_items')
+        .from('team_checklist_items')
         .select('instance_id, is_completed')
         .in('instance_id', instanceIds)
     : { data: [], error: null }
@@ -147,8 +147,8 @@ export async function loadPendingApprovalRequests(): Promise<EnrichedApprovalReq
   const instanceIds = Array.from(new Set(requests.map((request) => request.instance_id)))
 
   const [usersRes, instancesRes] = await Promise.all([
-    supabase.from('intern_users').select('id, display_name').in('id', requesterIds),
-    supabase.from('intern_checklist_instances').select('id, period_date, frequency').in('id', instanceIds),
+    supabase.from('team_members').select('id, display_name').in('id', requesterIds),
+    supabase.from('team_checklist_instances').select('id, period_date, frequency').in('id', instanceIds),
   ])
 
   if (usersRes.error) throw usersRes.error

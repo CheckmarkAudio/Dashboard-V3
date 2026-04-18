@@ -25,7 +25,7 @@ function TodayFocus({ profileId, isAdmin }: { profileId?: string; isAdmin?: bool
     ;(async () => {
       try {
         const { data, error } = await supabase
-          .from('intern_users')
+          .from('team_members')
           .select('id, display_name')
           .order('display_name')
         if (cancelled) return
@@ -62,7 +62,7 @@ function TodayFocus({ profileId, isAdmin }: { profileId?: string; isAdmin?: bool
       return
     }
     let query = supabase
-      .from('intern_schedule_templates')
+      .from('team_schedule_templates')
       .select('focus_areas')
       .eq('day_of_week', dayIndex)
     if (targetId) query = query.eq('intern_id', targetId)
@@ -165,7 +165,7 @@ export default function Schedule() {
 
   useEffect(() => {
     if (!isAdmin) return
-    void supabase.from('intern_users').select('id, display_name, position').eq('status', 'active').order('display_name')
+    void supabase.from('team_members').select('id, display_name, position').eq('status', 'active').order('display_name')
       .then(({ data }) => {
         const list = (data ?? []) as TeamMember[]
         setAllMembers(list)
@@ -175,7 +175,7 @@ export default function Schedule() {
   const loadSchedule = useCallback(async () => {
     if (!profile) { setLoading(false); return }
     try {
-      let query = supabase.from('intern_schedule_templates').select('*').order('day_of_week', { ascending: true })
+      let query = supabase.from('team_schedule_templates').select('*').order('day_of_week', { ascending: true })
       if (!isAdmin) query = query.eq('intern_id', profile.id)
       const { data } = await query
       if (data) setSchedules(data as ScheduleTemplate[])
@@ -189,7 +189,7 @@ export default function Schedule() {
     if (!profile || !newAreas.trim()) return
     const targetId = isAdmin && newMemberId ? newMemberId : profile.id
     setSaving(true)
-    const { error } = await supabase.from('intern_schedule_templates').insert({
+    const { error } = await supabase.from('team_schedule_templates').insert({
       intern_id: targetId,
       day_of_week: newDay,
       focus_areas: newAreas.split(',').map(s => s.trim()).filter(Boolean),
@@ -207,7 +207,7 @@ export default function Schedule() {
 
   const handleUpdate = async (id: string) => {
     setSaving(true)
-    const { error } = await supabase.from('intern_schedule_templates').update({
+    const { error } = await supabase.from('team_schedule_templates').update({
       focus_areas: editAreas.split(',').map(s => s.trim()).filter(Boolean),
     }).eq('id', id)
     if (error) { toast('Failed to update entry', 'error') }
@@ -218,7 +218,7 @@ export default function Schedule() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this schedule entry?')) return
-    const { error } = await supabase.from('intern_schedule_templates').delete().eq('id', id)
+    const { error } = await supabase.from('team_schedule_templates').delete().eq('id', id)
     if (error) toast('Failed to delete entry', 'error')
     loadSchedule()
   }

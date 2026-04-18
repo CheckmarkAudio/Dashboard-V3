@@ -67,7 +67,7 @@ export default function PublishChecklistModal({
     setLoadingMembers(true)
     ;(async () => {
       const { data, error } = await supabase
-        .from('intern_users')
+        .from('team_members')
         .select('id, display_name, email, position, role, status')
         .eq('status', 'active')
         .order('display_name')

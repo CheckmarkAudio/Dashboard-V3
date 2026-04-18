@@ -81,7 +81,7 @@ export async function loadSessionsWindow(): Promise<SessionListItem[]> {
       .order('start_time', { ascending: true })
       .limit(200),
     supabase
-      .from('intern_users')
+      .from('team_members')
       .select('id, display_name'),
   ])
 
