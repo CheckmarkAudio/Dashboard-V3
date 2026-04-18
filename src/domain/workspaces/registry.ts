@@ -47,8 +47,8 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
   },
   {
     id: 'forum_notifications',
-    title: 'Forum',
-    description: 'Recent messages across channels.',
+    title: 'Notifications',
+    description: 'Unread messages across channels.',
     defaultSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
     scopes: ['member_overview', 'admin_overview'],

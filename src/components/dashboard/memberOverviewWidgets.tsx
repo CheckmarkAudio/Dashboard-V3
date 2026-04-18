@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
 import {
   AlertCircle,
@@ -446,26 +446,37 @@ export function BookingSnapshotWidget() {
 }
 
 /**
- * Forum Notifications widget — Discord-style "what's new in the team chat"
- * preview for Overview. Reads the most recent N chat_messages joined with
- * their channels, sorted newest first.
+ * Notifications widget — Discord-style per-channel unread tracking.
  *
- * NO unread tracking yet (deferred — see PROJECT_STATE.md "Notifications
- * Phase 2"). When the chat_channel_reads table lands, swap this widget's
- * count + per-row "new" badge to use real read state.
+ * Pulls `get_channel_notifications()` RPC (migration
+ * `channel_notifications_rpc`): returns every channel with its latest
+ * message preview + unread count for the calling user (computed against
+ * their row in `chat_channel_reads`). Channels with unread messages sort
+ * first, then most-recently-active, then alphabetical.
  *
- * Realtime subscription auto-refreshes the list when anyone posts a new
- * message in any channel — uses the same supabase client + channel
- * pattern Content.tsx uses for the chat thread itself.
+ * Clicking a row calls `mark_channel_read(channel_id)` (optimistic update
+ * to the react-query cache so the badge clears instantly) and navigates
+ * to /content?channel=slug. Opening the Forum page itself will later
+ * mark channels read too — that wiring lives on `Content.tsx`.
+ *
+ * Realtime: subscribes to INSERT on `chat_messages` across all channels
+ * and refetches on any change. A single project-wide subscription keeps
+ * cost minimal vs. one channel per row.
+ *
+ * Empty state (no messages anywhere) still shows the full channel list
+ * so users understand the widget's structure before activity starts.
  */
-type ForumActivityRow = {
-  id: string
-  content: string
-  sender_name: string
-  sender_initial: string
-  created_at: string
+type ChannelNotification = {
+  channel_id: string
   channel_name: string
   channel_slug: string
+  unread_count: number
+  latest_id: string | null
+  latest_content: string | null
+  latest_sender: string | null
+  latest_initial: string | null
+  latest_created_at: string | null
+  last_read_at: string | null
 }
 
 function relativeTime(iso: string): string {
@@ -483,107 +494,153 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-async function fetchRecentForumActivity(limit = 5): Promise<ForumActivityRow[]> {
-  const { data, error } = await supabase
-    .from('chat_messages')
-    .select('id, content, sender_name, sender_initial, created_at, chat_channels(id, name, slug)')
-    .order('created_at', { ascending: false })
-    .limit(limit)
+async function fetchChannelNotifications(): Promise<ChannelNotification[]> {
+  const { data, error } = await supabase.rpc('get_channel_notifications')
   if (error) throw error
-  type Row = {
-    id: string
-    content: string
-    sender_name: string
-    sender_initial: string
-    created_at: string
-    chat_channels: { id: string; name: string; slug: string } | null
-  }
-  return ((data ?? []) as Row[]).map((row) => ({
-    id: row.id,
-    content: row.content,
-    sender_name: row.sender_name,
-    sender_initial: row.sender_initial,
-    created_at: row.created_at,
-    channel_name: row.chat_channels?.name ?? 'Channel',
-    channel_slug: row.chat_channels?.slug ?? '',
-  }))
+  return (data ?? []) as ChannelNotification[]
+}
+
+async function markChannelRead(channelId: string): Promise<void> {
+  const { error } = await supabase.rpc('mark_channel_read', { p_channel_id: channelId })
+  if (error) throw error
 }
 
 export function ForumNotificationsWidget() {
+  const queryClient = useQueryClient()
   const todayLabel = new Date()
     .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     .toUpperCase()
 
-  const activityQuery = useQuery({
-    queryKey: ['forum-activity-overview'],
-    queryFn: () => fetchRecentForumActivity(5),
-    // Refresh every 60s to keep "Xm ago" labels reasonably current even
-    // without realtime updates kicking in.
+  const notifQuery = useQuery({
+    queryKey: ['overview-notifications'],
+    queryFn: fetchChannelNotifications,
+    // Refresh every 60s to keep "Xm ago" labels + unread counts fresh
+    // without waiting for realtime to kick (covers missed events too).
     refetchInterval: 60_000,
   })
 
-  // Subscribe to new messages — refetch on INSERT in any channel.
-  // Using a single project-wide subscription keeps the cost minimal.
+  // Realtime — any new chat_messages insert anywhere triggers a refetch.
   useEffect(() => {
     const sub = supabase
-      .channel('overview-forum-activity')
+      .channel('overview-notifications')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => {
-        void activityQuery.refetch()
+        void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
       })
       .subscribe()
     return () => {
       void supabase.removeChannel(sub)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [queryClient])
+
+  const channels = notifQuery.data ?? []
+  const totalUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
+
+  // Optimistic mark-read — update cache before RPC returns so the badge
+  // clears on click with no visible delay.
+  const handleChannelClick = (channelId: string) => {
+    queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) => {
+      if (!prev) return prev
+      return prev.map((c) =>
+        c.channel_id === channelId
+          ? { ...c, unread_count: 0, last_read_at: new Date().toISOString() }
+          : c,
+      )
+    })
+    void markChannelRead(channelId).catch(() => {
+      // On error, revert by invalidating so the server-truth returns.
+      void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
+    })
+  }
 
   return (
     <div className="flex flex-col h-full">
-      {/* TODAY eyebrow — matches sibling widgets. */}
-      <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70 mb-2 shrink-0">
-        TODAY · {todayLabel}
-      </p>
+      {/* TODAY eyebrow + total unread pill — matches sibling widgets. */}
+      <div className="flex items-center justify-between mb-2 shrink-0">
+        <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
+          TODAY · {todayLabel}
+        </p>
+        {totalUnread > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 ring-1 ring-rose-500/40 text-rose-300 text-[10px] font-bold tracking-wider uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" aria-hidden="true" />
+            {totalUnread} New
+          </span>
+        )}
+      </div>
 
-      {/* Activity rows — internal scroll keeps the page itself non-scrolling. */}
+      {/* Channel rows — internal scroll keeps the page non-scrolling. */}
       <div className="flex-1 min-h-0 overflow-y-auto -mx-1">
-        {activityQuery.isLoading ? (
+        {notifQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light">
             <Loader2 size={18} className="animate-spin" />
           </div>
-        ) : activityQuery.error ? (
+        ) : notifQuery.error ? (
           <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
             <AlertCircle size={16} className="shrink-0" />
-            <span className="truncate">Could not load activity</span>
+            <span className="truncate">Could not load notifications</span>
           </div>
-        ) : (activityQuery.data ?? []).length === 0 ? (
+        ) : channels.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-4">
             <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
               <MessageSquare size={18} className="text-gold" aria-hidden="true" />
             </div>
-            <p className="text-[14px] font-medium text-text">All quiet</p>
-            <p className="text-[12px] text-text-light mt-0.5">No recent forum messages.</p>
+            <p className="text-[14px] font-medium text-text">No channels yet</p>
+            <p className="text-[12px] text-text-light mt-0.5">Create one in the Forum.</p>
           </div>
         ) : (
-          (activityQuery.data ?? []).map((row) => (
-            <Link
-              key={row.id}
-              to={`${APP_ROUTES.member.content}${row.channel_slug ? `?channel=${row.channel_slug}` : ''}`}
-              className="group flex items-start gap-2.5 px-1.5 py-2 rounded-lg hover:bg-surface-hover/40 transition-colors"
-            >
-              <div className="shrink-0 w-7 h-7 rounded-full bg-surface-alt border border-border-light text-gold flex items-center justify-center text-[12px] font-bold">
-                {row.sender_initial}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] text-text leading-snug">
-                  <span className="font-semibold">{row.sender_name}</span>
-                  <span className="text-text-light"> in </span>
-                  <span className="text-gold/80">#{row.channel_name}</span>
-                </p>
-                <p className="text-[12px] text-text-muted truncate">{row.content}</p>
-                <p className="text-[10px] text-text-light mt-0.5">{relativeTime(row.created_at)}</p>
-              </div>
-            </Link>
-          ))
+          channels.map((c) => {
+            const hasMessage = !!c.latest_id
+            const unread = c.unread_count > 0
+            const initial = c.latest_initial ?? '#'
+            return (
+              <Link
+                key={c.channel_id}
+                to={`${APP_ROUTES.member.content}${c.channel_slug ? `?channel=${c.channel_slug}` : ''}`}
+                onClick={() => handleChannelClick(c.channel_id)}
+                className={`group relative flex items-start gap-2.5 px-1.5 py-2 rounded-lg transition-colors ${
+                  unread ? 'bg-gold/5 hover:bg-gold/10' : 'hover:bg-surface-hover/40'
+                }`}
+              >
+                {/* Avatar — sender initial of latest message, or # if empty. */}
+                <div
+                  className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold transition-colors ${
+                    unread
+                      ? 'bg-gold/20 ring-1 ring-gold/50 text-gold'
+                      : 'bg-surface-alt border border-border-light text-text-muted'
+                  }`}
+                >
+                  {initial}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p
+                      className={`text-[13px] truncate ${
+                        unread ? 'font-bold text-text' : 'font-semibold text-text-muted'
+                      }`}
+                    >
+                      #{c.channel_name}
+                    </p>
+                    {unread && (
+                      <span className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums">
+                        {c.unread_count > 9 ? '9+' : c.unread_count}
+                      </span>
+                    )}
+                  </div>
+                  {hasMessage ? (
+                    <p className={`text-[12px] truncate mt-0.5 ${unread ? 'text-text' : 'text-text-light'}`}>
+                      <span className="font-medium">{c.latest_sender}:</span>{' '}
+                      <span className={unread ? 'text-text' : 'text-text-muted'}>{c.latest_content}</span>
+                    </p>
+                  ) : (
+                    <p className="text-[12px] text-text-light italic mt-0.5">No messages yet</p>
+                  )}
+                  {c.latest_created_at && (
+                    <p className="text-[10px] text-text-light mt-0.5">{relativeTime(c.latest_created_at)}</p>
+                  )}
+                </div>
+              </Link>
+            )
+          })
         )}
       </div>
 
@@ -592,7 +649,13 @@ export function ForumNotificationsWidget() {
         to={APP_ROUTES.member.content}
         className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
       >
-        <span>{(activityQuery.data ?? []).length === 0 ? 'Open forum' : `${(activityQuery.data ?? []).length} recent`}</span>
+        <span>
+          {totalUnread > 0
+            ? `${totalUnread} unread across ${channels.filter((c) => c.unread_count > 0).length} channel${
+                channels.filter((c) => c.unread_count > 0).length === 1 ? '' : 's'
+              }`
+            : 'All caught up'}
+        </span>
         <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
           Open forum <ChevronRight size={12} />
         </span>
