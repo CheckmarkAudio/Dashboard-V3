@@ -113,9 +113,14 @@ export default function WorkspacePanel({
 
       {/* 3-col grid at desktop with mixed widget sizes (still all clean
           rectangles — no L-shapes, no irregular packing). Hero widgets
-          take 2 cols; KPI widgets take 1 col. Fixed row height keeps
-          widgets perfectly aligned. Stacks responsively on smaller widths. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-[340px]">
+          take 2 cols; KPI widgets take 1 col.
+
+          `auto-rows-min` makes each row size to its content (min-content)
+          rather than locking at a fixed pixel height. A `rowSpan: 2`
+          widget spans TWO content-sized rows, so the box hugs its own
+          content instead of forcing empty padding below short widgets.
+          Stacks responsively on smaller widths. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-min">
         {visibleWidgets.map((widget) => {
           const definition = definitionsById.get(widget.id)
           if (!definition) return null
