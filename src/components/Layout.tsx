@@ -194,11 +194,14 @@ export default function Layout() {
   )
 
   return (
-    <div className="flex flex-col h-screen bg-bg">
+    <div
+      className="dashboard-shell flex flex-col"
+      style={{ minHeight: 'calc(100vh - var(--shell-gap) * 2)' }}
+    >
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
       {/* ── Top header (two-row: logo/controls + horizontal nav) ── */}
-      <header className="border-b border-border bg-surface shrink-0 z-40 sticky top-0">
+      <header className="border-b border-border/60 shrink-0 z-40 sticky top-0 backdrop-blur-md bg-surface/70">
         {/* Row 1: logo · (mobile hamburger) · right-aligned controls */}
         <div className="h-14 flex items-center px-4 lg:px-6">
           {/* Mobile hamburger */}

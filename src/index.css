@@ -116,15 +116,29 @@
 }
 
 body {
-  background-color: var(--color-bg);
+  /* Matches the Workspace-UI-Draft mockup — a subtle gold wash top-left
+     fading into deep charcoal. Gold/white/black only on the chrome; the
+     flywheel stage hues stay untouched on in-widget badges.
+     The padding creates the gap around the dashboard-shell. */
+  --shell-gap: clamp(8px, 1.6vw, 20px);
+  padding: var(--shell-gap);
+  background:
+    radial-gradient(circle at top left, rgba(201, 168, 76, 0.10), transparent 30%),
+    linear-gradient(180deg, #111118 0%, #0b0b10 58%);
+  background-attachment: fixed;
   font-family: var(--font-sans);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   color-scheme: dark;
-  transition: background-color 180ms ease, color 180ms ease;
+  min-height: 100vh;
+  transition: color 180ms ease;
+}
+@media (max-width: 480px) {
+  body { --shell-gap: 0; }
 }
 
 :root[data-theme='light'] body {
+  background: var(--color-bg);
   color-scheme: light;
 }
 
@@ -198,6 +212,48 @@ body {
 }
 
 @layer components {
+  /* Dashboard shell — the big rounded card that wraps the entire app.
+     Matches the v1 Workspace-UI-Draft mockup: soft gradient fill,
+     hairline white border, tall shadow, 28px radius. The shell is
+     max-width'd so on wide monitors the app reads as a contained
+     surface rather than edge-to-edge chrome. */
+  .dashboard-shell {
+    max-width: 1440px;
+    margin: 0 auto;
+    background: linear-gradient(180deg, rgba(18, 20, 27, 0.94), rgba(10, 11, 15, 0.94));
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 28px;
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    position: relative;
+  }
+  :root[data-theme='light'] .dashboard-shell {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+  @media (max-width: 640px) {
+    .dashboard-shell {
+      border-radius: 18px;
+    }
+  }
+
+  /* Widget card — per-widget surface used inside DashboardWidgetFrame.
+     Subtle top-to-bottom gradient, 22px radius, 1px hairline border,
+     tiny inner highlight line. Matches the mockup's widget cards. */
+  .widget-card {
+    background: linear-gradient(180deg, rgba(22, 24, 31, 0.95), rgba(16, 17, 23, 0.94));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 22px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+  }
+  :root[data-theme='light'] .widget-card {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
   /* -------- Semantic typography scale --------
      These are thin wrappers that let pages declare intent (`.text-title`)
      instead of scattering size/weight/tracking classes. Sizes match the
