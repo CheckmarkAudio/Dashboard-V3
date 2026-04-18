@@ -49,7 +49,15 @@ function widgetGridStyle(span: WidgetSpan, rowSpan: WidgetRowSpan = 1): CSSPrope
   return {
     gridColumn: `span ${span}`,
     gridRow: rowSpan > 1 ? `span ${rowSpan}` : undefined,
+    // Capped flex-column so auto-rows-min hugs short widgets but long
+    // widgets clip at the ceiling and their inner overflow-y-auto
+    // scroll kicks in. `overflow: hidden` is what actually forces the
+    // clip — `max-height` alone wouldn't stop overflow painting.
     maxHeight: `${rowSpan * ROW_HEIGHT_PX + (rowSpan - 1) * ROW_GAP_PX}px`,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    minHeight: 0,
   }
 }
 

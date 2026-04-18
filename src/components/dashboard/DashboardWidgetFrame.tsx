@@ -50,7 +50,10 @@ export default function DashboardWidgetFrame({
             <button
               type="button"
               aria-label={`Drag to reorder ${title}`}
-              className="shrink-0 -ml-1 mt-0.5 p-0.5 rounded-md text-text-light/50 opacity-0 group-hover/widget:opacity-100 hover:text-gold hover:bg-surface-hover transition-all cursor-grab active:cursor-grabbing touch-none"
+              // Always visible so the user can see there's something
+              // to grab without hunting. Subtle gold by default; brighter
+              // on hover + grab cursor. `touch-none` enables mobile drag.
+              className="shrink-0 -ml-1 mt-0.5 p-1 rounded-md text-gold/40 hover:text-gold hover:bg-gold/10 transition-colors cursor-grab active:cursor-grabbing touch-none"
               {...(dragHandleProps.attributes ?? {})}
               {...(dragHandleProps.listeners ?? {})}
             >
