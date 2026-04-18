@@ -3,9 +3,10 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useQuickKeys } from '../../hooks/useQuickKeys'
 import AccountAccessPanel from '../../components/admin/AccountAccessPanel'
+import WidgetBank from '../../components/admin/WidgetBank'
 import type { LucideProps } from 'lucide-react'
 import {
-  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield,
+  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid,
 } from 'lucide-react'
 
 /**
@@ -15,6 +16,7 @@ import {
  */
 type SectionKey =
   | 'account-access'
+  | 'widgets'
   | 'theme'
   | 'branding'
   | 'quick-keys'
@@ -30,13 +32,14 @@ type Section = {
 }
 
 const SECTIONS: Section[] = [
-  { key: 'account-access', icon: Shield,    title: 'Account Access', subtitle: 'Admin vs employee permissions' },
-  { key: 'theme',          icon: Sun,       title: 'Theme',          subtitle: 'Colors and appearance' },
-  { key: 'branding',       icon: ImageIcon, title: 'Branding',       subtitle: 'Logos and header' },
-  { key: 'quick-keys',     icon: Keyboard,  title: 'Quick Keys',     subtitle: 'Keyboard shortcuts' },
-  { key: 'organization',   icon: Globe,     title: 'Organization',   subtitle: 'Name and branding' },
-  { key: 'notifications',  icon: Bell,      title: 'Notifications',  subtitle: 'Alerts and preferences' },
-  { key: 'database',       icon: Database,  title: 'Database',       subtitle: 'Connection and admin' },
+  { key: 'account-access', icon: Shield,      title: 'Account Access', subtitle: 'Admin vs employee permissions' },
+  { key: 'widgets',        icon: LayoutGrid,  title: 'Widgets',        subtitle: 'Toggle widgets on Overview + Hub' },
+  { key: 'theme',          icon: Sun,         title: 'Theme',          subtitle: 'Colors and appearance' },
+  { key: 'branding',       icon: ImageIcon,   title: 'Branding',       subtitle: 'Logos and header' },
+  { key: 'quick-keys',     icon: Keyboard,    title: 'Quick Keys',     subtitle: 'Keyboard shortcuts' },
+  { key: 'organization',   icon: Globe,       title: 'Organization',   subtitle: 'Name and branding' },
+  { key: 'notifications',  icon: Bell,        title: 'Notifications',  subtitle: 'Alerts and preferences' },
+  { key: 'database',       icon: Database,    title: 'Database',       subtitle: 'Connection and admin' },
 ]
 
 /**
@@ -180,6 +183,7 @@ export default function AdminSettings() {
         {/* ── Right: active section content ── */}
         <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px]">
           {activeSection === 'account-access' && <AccountAccessPanel />}
+          {activeSection === 'widgets' && <WidgetBank />}
 
           {activeSection === 'theme' && (
             <div className="space-y-6">

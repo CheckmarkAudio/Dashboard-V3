@@ -1,34 +1,78 @@
-import { useMemo, type CSSProperties } from 'react'
+import { useMemo, type CSSProperties, type ReactNode } from 'react'
 import { RotateCcw } from 'lucide-react'
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useWorkspaceLayout } from '../../hooks/useWorkspaceLayout'
 import type { AppRole } from '../../domain/permissions'
 import type {
   WorkspaceScope,
   WorkspaceWidgetDefinition,
+  WorkspaceWidgetId,
   WidgetSpan,
   WidgetRowSpan,
 } from '../../domain/workspaces/types'
-import DashboardWidgetFrame from './DashboardWidgetFrame'
+import DashboardWidgetFrame, { type DragHandleProps } from './DashboardWidgetFrame'
 import { Button, Card } from '../ui'
 
 /**
  * Fluid span sizing for a CSS-Grid layout.
  *
  * Columns: `grid-cols-3` on desktop (stacks to 2 then 1 at narrower widths).
- * Rows: `auto-rows-[340px]` — a widget with `rowSpan = 2` occupies two
- * adjacent rows (~680px + gap) and other widgets flow around it. Row
- * spans are what give us the "two big rectangles on the left + three
- * smaller widgets on the right" pattern on the admin Hub.
- *
- * When a widget asks for `span 3` on a grid where only 2 tracks fit,
- * browsers clamp the span to the available tracks, so we can express
- * both spans as simple integers without overflow concerns.
+ * Rows: `auto-rows-min` — each row sizes to its content so a rowSpan:2
+ * widget hugs its content rather than locking to a fixed height.
  */
 function widgetGridStyle(span: WidgetSpan, rowSpan: WidgetRowSpan = 1): CSSProperties {
   return {
     gridColumn: `span ${span}`,
     gridRow: rowSpan > 1 ? `span ${rowSpan}` : undefined,
   }
+}
+
+// Individual sortable widget wrapper. Keeps dnd-kit wiring isolated
+// from the rest of the panel. Applies the sortable transform to the
+// outer cell and exposes a render-prop so the child knows whether it
+// is currently being dragged (for dim/elevation effects).
+function SortableWidget({
+  id,
+  style,
+  children,
+}: {
+  id: WorkspaceWidgetId
+  style: CSSProperties
+  children: (dragHandleProps: DragHandleProps) => ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const combinedStyle: CSSProperties = {
+    ...style,
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    opacity: isDragging ? 0.85 : 1,
+  }
+  return (
+    <div ref={setNodeRef} style={combinedStyle} className={isDragging ? 'ring-2 ring-gold/60 rounded-2xl shadow-2xl' : ''}>
+      {children({
+        attributes: attributes as DragHandleProps['attributes'],
+        listeners: listeners as DragHandleProps['listeners'],
+        isDragging,
+      })}
+    </div>
+  )
 }
 
 interface WorkspacePanelProps {
@@ -59,6 +103,7 @@ export default function WorkspacePanel({
     layout,
     visibleWidgets,
     toggleWidgetVisibility,
+    reorderWidgets,
     resetLayout,
   } = useWorkspaceLayout({
     scope,
@@ -66,6 +111,28 @@ export default function WorkspacePanel({
     userId,
     definitions,
   })
+
+  // dnd-kit sensors. Require a small pointer move before activating so
+  // plain clicks on buttons/links inside the widget still pass through.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const visibleIds = useMemo(
+    () => visibleWidgets.map((w) => w.id as WorkspaceWidgetId),
+    [visibleWidgets],
+  )
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = visibleIds.indexOf(active.id as WorkspaceWidgetId)
+    const newIndex = visibleIds.indexOf(over.id as WorkspaceWidgetId)
+    if (oldIndex === -1 || newIndex === -1) return
+    const nextIds = arrayMove(visibleIds, oldIndex, newIndex)
+    reorderWidgets(nextIds)
+  }
 
   return (
     <div className="space-y-4">
@@ -111,38 +178,41 @@ export default function WorkspacePanel({
         </Card>
       )}
 
-      {/* 3-col grid at desktop with mixed widget sizes (still all clean
-          rectangles — no L-shapes, no irregular packing). Hero widgets
-          take 2 cols; KPI widgets take 1 col.
-
-          `auto-rows-min` makes each row size to its content (min-content)
-          rather than locking at a fixed pixel height. A `rowSpan: 2`
-          widget spans TWO content-sized rows, so the box hugs its own
-          content instead of forcing empty padding below short widgets.
-          Stacks responsively on smaller widths. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-min">
-        {visibleWidgets.map((widget) => {
-          const definition = definitionsById.get(widget.id)
-          if (!definition) return null
-          const WidgetComponent = definition.component
-          return (
-            <div key={widget.id} style={widgetGridStyle(widget.span, widget.rowSpan ?? definition.defaultRowSpan ?? 1)}>
-              <DashboardWidgetFrame
-                title={definition.title}
-                description={definition.description}
-                visible={widget.visible}
-                /*
-                 * Per-widget reorder/hide controls intentionally omitted for
-                 * the cleaner v1.0 design. Drag-and-drop reordering + a small
-                 * gear menu for show/hide are scheduled for the next session.
-                 */
-              >
-                <WidgetComponent />
-              </DashboardWidgetFrame>
-            </div>
-          )
-        })}
-      </div>
+      {/* 3-col grid with auto-rows-min so every widget hugs its content.
+          Wrapped in dnd-kit's DndContext so each widget is draggable
+          via the grip handle in its header. */}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-min">
+            {visibleWidgets.map((widget) => {
+              const definition = definitionsById.get(widget.id)
+              if (!definition) return null
+              const WidgetComponent = definition.component
+              return (
+                <SortableWidget
+                  key={widget.id}
+                  id={widget.id as WorkspaceWidgetId}
+                  style={widgetGridStyle(
+                    widget.span,
+                    widget.rowSpan ?? definition.defaultRowSpan ?? 1,
+                  )}
+                >
+                  {(dragHandleProps) => (
+                    <DashboardWidgetFrame
+                      title={definition.title}
+                      description={definition.description}
+                      visible={widget.visible}
+                      dragHandleProps={dragHandleProps}
+                    >
+                      <WidgetComponent />
+                    </DashboardWidgetFrame>
+                  )}
+                </SortableWidget>
+              )
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
     </div>
   )
 }

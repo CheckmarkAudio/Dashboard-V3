@@ -107,10 +107,30 @@ export function useWorkspaceLayout({
     setLayout(getDefaultWorkspaceLayout(scope))
   }
 
+  // Replace the full widget order with a new id sequence (drag-and-drop
+  // callers hand us the complete, already-reordered list). Ids that
+  // aren't in `orderedIds` get appended so nothing disappears if the
+  // caller passed a stale list.
+  const reorderWidgets = (orderedIds: WorkspaceWidgetState['id'][]) => {
+    setLayout((current) => {
+      const byId = new Map(current.widgets.map((w) => [w.id, w]))
+      const reordered = orderedIds
+        .map((id) => byId.get(id))
+        .filter((w): w is WorkspaceWidgetState => !!w)
+      const leftovers = current.widgets.filter((w) => !orderedIds.includes(w.id))
+      const combined = [...reordered, ...leftovers]
+      return {
+        ...current,
+        widgets: combined.map((w, i) => ({ ...w, order: i })),
+      }
+    })
+  }
+
   return {
     layout,
     visibleWidgets,
     moveWidget,
+    reorderWidgets,
     toggleWidgetVisibility,
     resetLayout,
   }
