@@ -159,11 +159,22 @@ export function AdminAssignWidget() {
   const queryClient = useQueryClient()
   const [flow, setFlow] = useState<AssignFlow>(null)
 
+  // Fetch ~12 recent assignments so the scrollable feed fills the 2×2
+  // widget height without leaving a big empty block. The original 4-item
+  // version left ~60% of the widget blank on a full-height grid row.
   const recentQuery = useQuery({
     queryKey: ['admin-recent-assignments'],
-    queryFn: () => fetchRecentAssignments(4),
+    queryFn: () => fetchRecentAssignments(12),
   })
   const recent = recentQuery.data ?? []
+
+  // Roll up kind counts so the strip above the feed gives admins
+  // something quantitative to anchor on.
+  const counts = {
+    sessions: recent.filter((r) => r.kind === 'session').length,
+    tasks: recent.filter((r) => r.kind === 'task').length,
+    groups: recent.filter((r) => r.kind === 'group').length,
+  }
 
   const handleClose = () => {
     setFlow(null)
@@ -174,20 +185,24 @@ export function AdminAssignWidget() {
     <div className="flex flex-col h-full">
       <TodayAnchor />
 
-      {/* Three big primary CTAs — one per assignable thing. */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
+      {/* Three big primary CTAs — one per assignable thing. Taller
+          (p-4 + bigger icons) so they read as primary actions rather
+          than a pill strip. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 shrink-0">
         <AssignTile
           tone="sky"
           icon={CalendarPlus}
           label="Session"
           hint="Book a studio session"
+          count={counts.sessions}
           onClick={() => setFlow('session')}
         />
         <AssignTile
           tone="emerald"
           icon={Plus}
           label="Task"
-          hint="Add one item to a member's day"
+          hint="Add one to a member's day"
+          count={counts.tasks}
           onClick={() => setFlow('task')}
         />
         <AssignTile
@@ -195,16 +210,23 @@ export function AdminAssignWidget() {
           icon={FolderPlus}
           label="Task Group"
           hint="Apply a checklist template"
+          count={counts.groups}
           onClick={() => setFlow('group')}
         />
       </div>
 
-      {/* Recent assignments strip */}
-      <div className="mt-4 flex-1 min-h-0 flex flex-col">
-        <p className="text-[11px] font-semibold tracking-wider uppercase text-text-light shrink-0">
-          Recently assigned
-        </p>
-        <div className="mt-2 flex-1 min-h-0 overflow-y-auto -mx-1">
+      {/* Recent assignments strip. Denser rows + scroll so a busy week
+          fills the widget; a quiet week shows a centered empty state. */}
+      <div className="mt-3 flex-1 min-h-0 flex flex-col">
+        <div className="flex items-center justify-between mb-1.5 shrink-0">
+          <p className="text-[11px] font-semibold tracking-wider uppercase text-text-light">
+            Recently assigned
+          </p>
+          {recent.length > 0 && (
+            <span className="text-[10px] text-text-light">{recent.length} total</span>
+          )}
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto -mx-1 space-y-0.5">
           {recentQuery.isLoading ? (
             <div className="h-full flex items-center justify-center text-text-light">
               <Loader2 size={18} className="animate-spin" />
@@ -221,20 +243,20 @@ export function AdminAssignWidget() {
             recent.map((r) => (
               <div
                 key={r.id}
-                className="flex items-center gap-3 px-1.5 py-2 rounded-lg hover:bg-surface-hover/40 transition-colors"
+                className="flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-surface-hover/40 transition-colors"
               >
-                <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${
+                <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${
                   r.kind === 'session' ? 'bg-sky-500/15 text-sky-300'
                   : r.kind === 'task'  ? 'bg-emerald-500/15 text-emerald-300'
                   :                      'bg-violet-500/15 text-violet-300'
                 }`}>
-                  {r.kind === 'session' ? <CalendarPlus size={15} />
-                    : r.kind === 'task' ? <Plus size={15} />
-                    : <FolderPlus size={15} />}
+                  {r.kind === 'session' ? <CalendarPlus size={13} />
+                    : r.kind === 'task' ? <Plus size={13} />
+                    : <FolderPlus size={13} />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-text truncate">{r.title}</p>
-                  <p className="text-[11px] text-text-light truncate">
+                  <p className="text-[12.5px] font-medium text-text truncate leading-tight">{r.title}</p>
+                  <p className="text-[10.5px] text-text-light truncate leading-tight">
                     {r.kind === 'session' ? 'Session' : r.kind === 'task' ? 'Task' : 'Task Group'} · {r.assignee}
                   </p>
                 </div>
@@ -247,7 +269,7 @@ export function AdminAssignWidget() {
 
       <Link
         to={APP_ROUTES.admin.templates}
-        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
+        className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
       >
         <span>{recent.length > 0 ? `${recent.length} recent` : 'Tip: groups live in Templates'}</span>
         <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
@@ -268,31 +290,38 @@ function AssignTile({
   icon: Icon,
   label,
   hint,
+  count,
   onClick,
 }: {
   tone: 'sky' | 'emerald' | 'violet'
   icon: React.ComponentType<{ size?: number; className?: string }>
   label: string
   hint: string
+  count?: number
   onClick: () => void
 }) {
   const toneMap = {
-    sky:     { ring: 'ring-sky-500/40',     bg: 'bg-sky-500/10',     text: 'text-sky-300',     hover: 'hover:bg-sky-500/15'     },
-    emerald: { ring: 'ring-emerald-500/40', bg: 'bg-emerald-500/10', text: 'text-emerald-300', hover: 'hover:bg-emerald-500/15' },
-    violet:  { ring: 'ring-violet-500/40',  bg: 'bg-violet-500/10',  text: 'text-violet-300',  hover: 'hover:bg-violet-500/15'  },
+    sky:     { ring: 'ring-sky-500/40',     bg: 'bg-sky-500/10',     text: 'text-sky-300',     hover: 'hover:bg-sky-500/20'     },
+    emerald: { ring: 'ring-emerald-500/40', bg: 'bg-emerald-500/10', text: 'text-emerald-300', hover: 'hover:bg-emerald-500/20' },
+    violet:  { ring: 'ring-violet-500/40',  bg: 'bg-violet-500/10',  text: 'text-violet-300',  hover: 'hover:bg-violet-500/20'  },
   }[tone]
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`group relative text-left p-3 rounded-xl ring-1 ${toneMap.ring} ${toneMap.bg} ${toneMap.hover} transition-colors focus-ring`}
+      className={`group relative text-left p-3.5 rounded-xl ring-1 ${toneMap.ring} ${toneMap.bg} ${toneMap.hover} transition-colors focus-ring`}
     >
-      <div className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${toneMap.text} bg-surface/60`}>
-        <Icon size={17} />
+      <div className="flex items-start justify-between">
+        <div className={`inline-flex items-center justify-center w-9 h-9 rounded-lg ${toneMap.text} bg-surface/70`}>
+          <Icon size={19} />
+        </div>
+        {count !== undefined && count > 0 && (
+          <span className={`text-[11px] font-bold ${toneMap.text} tabular-nums`}>{count}</span>
+        )}
       </div>
-      <p className={`mt-2 text-[14px] font-bold ${toneMap.text}`}>{label}</p>
-      <p className="text-[11px] text-text-light leading-snug">{hint}</p>
+      <p className={`mt-2 text-[15px] font-bold ${toneMap.text} leading-tight`}>{label}</p>
+      <p className="text-[11px] text-text-light leading-snug mt-0.5">{hint}</p>
     </button>
   )
 }
@@ -584,39 +613,77 @@ export function AdminFlywheelWidget() {
     })
   }, [defsQuery.data, entriesQuery.data])
 
+  // Summary figures for the header strip — total KPIs tracked + overall
+  // aggregate % (average of the stages that have data). Gives admins
+  // something quantitative at the top of the widget instead of making
+  // them scan every bar.
+  const totalKpis = stages.reduce((acc, s) => acc + s.kpiCount, 0)
+  const backedStages = stages.filter((s) => s.pct !== null)
+  const overallPct = backedStages.length > 0
+    ? Math.round(backedStages.reduce((acc, s) => acc + (s.pct ?? 0), 0) / backedStages.length)
+    : null
+
   return (
     <div className="flex flex-col h-full">
-      <TodayAnchor />
+      <TodayAnchor
+        right={
+          !loading && !error && overallPct !== null ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gold/15 ring-1 ring-gold/40 text-gold text-[10px] font-bold tracking-wider uppercase">
+              <Target size={9} /> {overallPct}% overall
+            </span>
+          ) : null
+        }
+      />
 
-      <div className="flex-1 min-h-0 flex flex-col justify-center space-y-3">
+      {/* KPI summary strip — shows how many KPIs exist + how many
+          stages currently have data. Without this the widget's header
+          is just a date and feels empty on a 2-row-tall card. */}
+      {!loading && !error && (
+        <div className="grid grid-cols-2 gap-2 mb-3 shrink-0">
+          <div className="rounded-lg bg-surface-alt/60 border border-border/50 px-2.5 py-2">
+            <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold">KPIs Tracked</p>
+            <p className="text-[18px] font-bold text-text tabular-nums leading-tight mt-0.5">{totalKpis}</p>
+          </div>
+          <div className="rounded-lg bg-surface-alt/60 border border-border/50 px-2.5 py-2">
+            <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold">Stages With Data</p>
+            <p className="text-[18px] font-bold text-text tabular-nums leading-tight mt-0.5">
+              {backedStages.length}<span className="text-text-light text-[14px]">/5</span>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Stage bars — each row is bigger so five of them fill the
+          remaining space without needing justify-center spacing. */}
+      <div className="flex-1 min-h-0 space-y-2.5">
         {loading ? (
-          <div className="flex items-center justify-center text-text-light">
+          <div className="h-full flex items-center justify-center text-text-light">
             <Loader2 size={18} className="animate-spin" />
           </div>
         ) : error ? (
-          <div className="flex items-center gap-2 text-sm text-amber-300 px-2">
+          <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
             <AlertCircle size={16} className="shrink-0" />
             <span className="truncate">Could not load KPI data</span>
           </div>
         ) : (
           stages.map((s) => (
-            <div key={s.key} className="group">
-              <div className="flex items-center justify-between mb-1">
-                <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold ${s.style.text}`}>
-                  <span className={`w-2 h-2 rounded-full ${s.style.dot}`} aria-hidden="true" />
+            <div key={s.key} className="rounded-lg bg-surface-alt/40 border border-border/40 px-3 py-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className={`inline-flex items-center gap-2 text-[13px] font-bold ${s.style.text}`}>
+                  <span className={`w-2.5 h-2.5 rounded-full ${s.style.dot}`} aria-hidden="true" />
                   {s.label}
                 </span>
-                <span className="text-[11px] tabular-nums text-text-muted">
-                  {s.pct === null ? <span className="text-text-light italic">no KPI yet</span> : `${s.pct}%`}
+                <span className="text-[12px] tabular-nums text-text font-semibold">
+                  {s.pct === null ? <span className="text-text-light italic font-normal">no KPI yet</span> : `${s.pct}%`}
                 </span>
               </div>
-              <div className="h-1.5 rounded-full bg-surface-alt overflow-hidden">
+              <div className="h-2 rounded-full bg-surface overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${s.pct === null ? '' : s.style.dot}`}
                   style={{ width: `${s.pct ?? 4}%`, opacity: s.pct === null ? 0.25 : 1 }}
                 />
               </div>
-              <p className="text-[10px] text-text-light mt-0.5">
+              <p className="text-[10px] text-text-light mt-1">
                 {s.kpiCount === 0 ? 'Tracking zero KPIs' : `${s.kpiCount} KPI${s.kpiCount === 1 ? '' : 's'} linked`}
               </p>
             </div>
@@ -626,7 +693,7 @@ export function AdminFlywheelWidget() {
 
       <Link
         to={APP_ROUTES.admin.analytics}
-        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
+        className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
       >
         <span className="inline-flex items-center gap-1.5">
           <Target size={12} /> Aggregate KPI progress
@@ -1053,6 +1120,28 @@ export function AdminTeamWidget() {
 // If there are zero, show a friendly all-caught-up state instead of a
 // bare "0" number.
 
+function ApprovalStat({
+  label,
+  count,
+  tone,
+}: {
+  label: string
+  count: number
+  tone: 'emerald' | 'sky' | 'rose'
+}) {
+  const toneMap = {
+    emerald: 'text-emerald-300 bg-emerald-500/10 ring-emerald-500/30',
+    sky: 'text-sky-300 bg-sky-500/10 ring-sky-500/30',
+    rose: 'text-rose-300 bg-rose-500/10 ring-rose-500/30',
+  }[tone]
+  return (
+    <div className={`rounded-lg ring-1 px-2 py-1.5 ${toneMap}`}>
+      <p className="text-[9px] uppercase tracking-wider font-semibold leading-none">{label}</p>
+      <p className="text-[16px] font-bold tabular-nums leading-tight mt-0.5">{count}</p>
+    </div>
+  )
+}
+
 export function AdminApprovalsWidget() {
   const { approvalRequests, loading, error, refetch } = useAdminOverviewContext()
   const { toast } = useToast()
@@ -1089,6 +1178,14 @@ export function AdminApprovalsWidget() {
     await refetch()
   }
 
+  // Split by change type so the summary chips at top convey what's
+  // actually pending at a glance.
+  const byType = {
+    add: requests.filter((r) => r.change_type === 'add').length,
+    rename: requests.filter((r) => r.change_type === 'rename').length,
+    delete: requests.filter((r) => r.change_type === 'delete').length,
+  }
+
   return (
     <div className="flex flex-col h-full">
       <TodayAnchor
@@ -1101,7 +1198,18 @@ export function AdminApprovalsWidget() {
         }
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto -mx-1">
+      {/* Summary chips — adds / renames / deletes. Gives the 1×2 widget
+          something to render above the list so it never looks empty
+          even when the list is short. */}
+      {!loading && !error && requests.length > 0 && (
+        <div className="grid grid-cols-3 gap-1.5 mb-3 shrink-0">
+          <ApprovalStat label="Adds" count={byType.add} tone="emerald" />
+          <ApprovalStat label="Renames" count={byType.rename} tone="sky" />
+          <ApprovalStat label="Deletes" count={byType.delete} tone="rose" />
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-1 space-y-1">
         {loading ? (
           <div className="h-full flex items-center justify-center text-text-light">
             <Loader2 size={18} className="animate-spin" />
@@ -1112,12 +1220,16 @@ export function AdminApprovalsWidget() {
             <span className="truncate">Could not load approvals</span>
           </div>
         ) : requests.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-4">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/30 mb-2">
-              <CheckCircle2 size={18} className="text-emerald-400" aria-hidden="true" />
+          <div className="h-full flex flex-col items-center justify-center text-center px-4 gap-3">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/10 ring-1 ring-emerald-500/30">
+              <CheckCircle2 size={26} className="text-emerald-400" aria-hidden="true" />
             </div>
-            <p className="text-[13px] font-medium text-text">All caught up</p>
-            <p className="text-[11px] text-text-light mt-0.5">No pending requests.</p>
+            <div>
+              <p className="text-[15px] font-bold text-text">All caught up</p>
+              <p className="text-[12px] text-text-light mt-1 leading-relaxed max-w-[220px]">
+                No pending approvals. Task edit requests from the team will show up here with one-click Approve / Reject.
+              </p>
+            </div>
           </div>
         ) : (
           requests.map((req) => {
@@ -1128,7 +1240,7 @@ export function AdminApprovalsWidget() {
             return (
               <div
                 key={req.id}
-                className="px-1.5 py-2 rounded-lg hover:bg-surface-hover/30 transition-colors"
+                className="px-2 py-2 rounded-lg bg-surface-alt/40 border border-border/40 hover:bg-surface-hover/30 transition-colors"
               >
                 <p className="text-[12px] text-text leading-snug">
                   <span className="font-semibold">{req.requester_display_name}</span>
@@ -1138,7 +1250,7 @@ export function AdminApprovalsWidget() {
                 <p className="text-[11px] text-text-muted truncate mt-0.5">
                   {req.proposed_text ?? req.previous_text ?? '(no text)'}
                 </p>
-                <div className="flex gap-1.5 mt-1.5">
+                <div className="flex gap-1.5 mt-2">
                   <button
                     type="button"
                     disabled={busy}
