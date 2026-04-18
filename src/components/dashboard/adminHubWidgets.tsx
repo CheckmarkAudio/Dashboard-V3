@@ -6,7 +6,6 @@ import {
   CalendarPlus,
   Check,
   CheckCircle2,
-  ChevronRight,
   Clock,
   FolderPlus,
   Hash,
@@ -286,16 +285,6 @@ export function AdminAssignWidget() {
           )}
         </div>
       </div>
-
-      <Link
-        to={APP_ROUTES.admin.templates}
-        className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
-      >
-        <span>{recent.length > 0 ? `${recent.length} recent` : 'Tip: groups live in Templates'}</span>
-        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
-          Open templates <ChevronRight size={12} />
-        </span>
-      </Link>
 
       {/* Flow modals */}
       {flow === 'session' && <CreateBookingModal onClose={handleClose} />}
@@ -738,17 +727,6 @@ export function AdminFlywheelWidget() {
         )}
       </div>
 
-      <Link
-        to={APP_ROUTES.admin.analytics}
-        className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
-      >
-        <span className="inline-flex items-center gap-1.5">
-          <Target size={12} /> Aggregate KPI progress
-        </span>
-        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
-          Open analytics <ChevronRight size={12} />
-        </span>
-      </Link>
     </div>
   )
 }
@@ -1156,15 +1134,6 @@ export function AdminTeamWidget() {
         )}
       </div>
 
-      <Link
-        to={APP_ROUTES.admin.team}
-        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
-      >
-        <span>Manage your crew</span>
-        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
-          Team Manager <ChevronRight size={12} />
-        </span>
-      </Link>
     </div>
   )
 }
@@ -1331,15 +1300,6 @@ export function AdminApprovalsWidget() {
         )}
       </div>
 
-      <Link
-        to={APP_ROUTES.admin.hub}
-        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
-      >
-        <span>{requests.length === 0 ? 'Approvals' : `${requests.length} to review`}</span>
-        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
-          Review all <ChevronRight size={12} />
-        </span>
-      </Link>
     </div>
   )
 }

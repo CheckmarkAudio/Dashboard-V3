@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../components/Toast'
 import TemplateAssignModal from '../../components/templates/TemplateAssignModal'
+import FloatingDetailModal from '../../components/FloatingDetailModal'
 import type { ReportTemplate, TemplateField, TeamMember, TaskAssignment } from '../../types'
 import {
   ClipboardList, Plus, X, Save, Loader2, Edit2, Trash2, Copy, GripVertical,
-  FileText, CheckSquare, BarChart3, AlertTriangle, UserPlus, Users,
+  FileText, CheckSquare, BarChart3, AlertTriangle, UserPlus, Search,
 } from 'lucide-react'
 
 const TEMPLATE_TYPES = [
@@ -145,7 +146,7 @@ export default function Templates() {
   const [showPresets, setShowPresets] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<ReportTemplate | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [typeFilter, setTypeFilter] = useState('all')
+  const typeFilter = 'all' // type filter tabs removed; search filter covers it
 
   const [name, setName] = useState('')
   const [type, setType] = useState<ReportTemplate['type']>('daily')
@@ -154,8 +155,10 @@ export default function Templates() {
   const [fields, setFields] = useState<TemplateField[]>([])
 
   const [assignModalTemplate, setAssignModalTemplate] = useState<ReportTemplate | null>(null)
+  const [previewTemplate, setPreviewTemplate] = useState<ReportTemplate | null>(null)
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [assignments, setAssignments] = useState<TaskAssignment[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => { loadTemplates() }, [])
 
@@ -274,9 +277,59 @@ export default function Templates() {
 
   const getTypeInfo = (t: string) => TEMPLATE_TYPES.find(tt => tt.value === t) ?? TEMPLATE_TYPES[0]!
 
-  const getAssignmentCount = (templateId: string) => assignments.filter(a => a.template_id === templateId && a.is_active).length
+  // getAssignmentCount removed — assignee count is derived by getAssignee() now.
 
-  const filtered = typeFilter === 'all' ? templates : templates.filter(t => t.type === typeFilter)
+  // Search filter — matches on name, position, OR any field label so an
+  // admin can find "intern" / "daily" / "follow-up" from one box.
+  const filtered = useMemo(() => {
+    const base = typeFilter === 'all' ? templates : templates.filter(t => t.type === typeFilter)
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return base
+    return base.filter(t => {
+      if (t.name.toLowerCase().includes(q)) return true
+      if (t.position?.toLowerCase().includes(q)) return true
+      if (t.fields.some(f => f.label.toLowerCase().includes(q))) return true
+      return false
+    })
+  }, [templates, typeFilter, searchQuery])
+
+  // Stats for the hero header strip — total, assigned, and unassigned
+  // template counts, matching the Workspace-UI-Draft mockup.
+  const stats = useMemo(() => {
+    const active = templates.length
+    const assignedIds = new Set(
+      assignments.filter(a => a.is_active).map(a => a.template_id),
+    )
+    const assigned = templates.filter(t => assignedIds.has(t.id)).length
+    const unassigned = active - assigned
+    return { active, assigned, unassigned }
+  }, [templates, assignments])
+
+  const memberById = useMemo(() => {
+    const map = new Map<string, TeamMember>()
+    teamMembers.forEach(m => map.set(m.id, m))
+    return map
+  }, [teamMembers])
+
+  // Friendly assignee label: pick the first active assignment; otherwise
+  // "Unassigned" in rose. Matches the mockup's green/rose assign pill.
+  const getAssignee = (templateId: string): { label: string; unassigned: boolean } => {
+    const active = assignments.filter(a => a.template_id === templateId && a.is_active)
+    if (active.length === 0) return { label: 'Unassigned', unassigned: true }
+    const first = active[0]!
+    if (first.intern_id) {
+      const member = memberById.get(first.intern_id)
+      if (member) {
+        const firstName = member.display_name.split(' ')[0] ?? member.display_name
+        if (active.length === 1) return { label: firstName, unassigned: false }
+        return { label: `${firstName} +${active.length - 1}`, unassigned: false }
+      }
+    }
+    if (first.position) {
+      return { label: first.position.replace(/_/g, ' '), unassigned: false }
+    }
+    return { label: 'Team', unassigned: false }
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
@@ -286,23 +339,57 @@ export default function Templates() {
   )
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Templates</h1>
-          <p className="text-text-muted mt-1">Create and manage task templates, then assign them to team members</p>
+    <div className="max-w-[1200px] mx-auto animate-fade-in">
+      {/* ─── Hero header (matches Workspace-UI-Draft assign.html) ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 mb-6">
+        <div className="min-w-0">
+          <h1 className="text-[56px] md:text-[64px] font-bold tracking-[-0.05em] leading-none text-text">Assign</h1>
+          <p className="mt-2 text-[13px] text-text-muted">Templates</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { setShowPresets(!showPresets); setShowForm(false) }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-surface-hover">
-            <ClipboardList size={16} aria-hidden="true" /> Presets
+
+        <div className="justify-self-center px-4 py-2.5 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-md flex items-center gap-5">
+          <StatBox label="Active" value={stats.active} />
+          <StatBox label="Assigned" value={stats.assigned} />
+          <StatBox label="Unassigned" value={stats.unassigned} highlight={stats.unassigned > 0} />
+        </div>
+
+        <div className="flex items-center gap-2 justify-self-end">
+          <button
+            onClick={() => { setShowPresets(!showPresets); setShowForm(false) }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-white/10 bg-white/[0.025] text-[13px] font-bold text-text hover:bg-white/[0.05] transition-colors"
+          >
+            <ClipboardList size={15} aria-hidden="true" /> Presets
           </button>
-          <button onClick={showForm ? () => { setShowForm(false); resetForm() } : openForm}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm">
-            {showForm ? <X size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
+          <button
+            onClick={showForm ? () => { setShowForm(false); resetForm() } : openForm}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold shadow-[0_14px_28px_rgba(214,170,55,0.22)] hover:brightness-105 transition-all"
+          >
+            {showForm ? <X size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}
             {showForm ? 'Cancel' : 'New Template'}
           </button>
         </div>
+      </div>
+
+      {/* ─── Filter search ─── */}
+      <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl border border-white/10 bg-white/[0.025]">
+        <Search size={16} className="text-text-light shrink-0" aria-hidden="true" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Filter templates by role, task, or keyword"
+          className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[14px] text-text placeholder:text-text-light"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="text-text-light hover:text-gold transition-colors"
+            aria-label="Clear search"
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {showPresets && (
@@ -445,88 +532,45 @@ export default function Templates() {
         </form>
       )}
 
-      {/* Filter tabs */}
-      <div className="flex items-center gap-2" role="tablist">
-        <button type="button" role="tab" aria-selected={typeFilter === 'all'} onClick={() => setTypeFilter('all')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${typeFilter === 'all' ? 'bg-gold/10 text-gold' : 'text-text-muted hover:bg-surface-hover'}`}>
-          All
-        </button>
-        {TEMPLATE_TYPES.map(t => (
-          <button type="button" key={t.value} role="tab" aria-selected={typeFilter === t.value} onClick={() => setTypeFilter(t.value)}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${typeFilter === t.value ? t.color : 'text-text-muted hover:bg-surface-hover'}`}>
-            <t.icon size={12} aria-hidden="true" /> {t.label}
-          </button>
-        ))}
-      </div>
-
       {filtered.length === 0 ? (
-        <div className="bg-surface rounded-xl border border-border p-8 text-center text-text-muted">
-          <ClipboardList size={32} className="mx-auto mb-3 opacity-30" aria-hidden="true" />
-          <p>No templates yet. Create one or pick from presets to get started.</p>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-10 text-center">
+          <ClipboardList size={32} className="mx-auto mb-3 text-text-light opacity-60" aria-hidden="true" />
+          <p className="text-text-muted text-sm">
+            {searchQuery
+              ? `No templates match "${searchQuery}".`
+              : 'No templates yet. Tap Presets or New Template to get started.'}
+          </p>
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
           {filtered.map(template => {
-            const info = getTypeInfo(template.type)
-            const assignCount = getAssignmentCount(template.id)
+            const assignee = getAssignee(template.id)
+            const taskCount = template.fields.length
             return (
-              <div key={template.id} className="bg-surface rounded-xl border border-border p-5 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`p-1 rounded ${info.color}`}><info.icon size={14} aria-hidden="true" /></span>
-                      <span className="text-xs font-medium text-text-muted capitalize">{template.type.replace('_', '-')}</span>
-                      {template.is_default && (
-                        <span className="text-[10px] font-medium bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded">Default</span>
-                      )}
-                      {assignCount > 0 && (
-                        <span className="text-[10px] font-medium bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                          <Users size={10} aria-hidden="true" /> {assignCount}
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="font-semibold">{template.name}</h3>
-                  </div>
-                  {template.position && (
-                    <span className="text-xs bg-surface-alt px-2 py-1 rounded-full capitalize">{template.position}</span>
-                  )}
-                </div>
-
-                <div className="space-y-1 mb-4">
-                  {template.fields.slice(0, 4).map(field => (
-                    <div key={field.id} className="flex items-center gap-2 text-xs text-text-muted">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${field.is_critical ? 'bg-red-400' : 'bg-text-light'}`} />
-                      <span className="truncate">{field.label}</span>
-                      <span className="text-text-light ml-auto shrink-0">{field.type}</span>
-                    </div>
-                  ))}
-                  {template.fields.length > 4 && (
-                    <p className="text-xs text-text-light pl-3.5">+{template.fields.length - 4} more fields</p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1.5 border-t border-border pt-3">
-                  <button onClick={() => handleEdit(template)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gold hover:bg-gold/10">
-                    <Edit2 size={12} aria-hidden="true" /> Edit
-                  </button>
-                  <button onClick={() => handleDuplicate(template)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-text-muted hover:bg-surface-hover">
-                    <Copy size={12} aria-hidden="true" /> Duplicate
-                  </button>
-                  <button onClick={() => setAssignModalTemplate(template)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-violet-400 hover:bg-violet-500/10">
-                    <UserPlus size={12} aria-hidden="true" /> Assign Tasks
-                  </button>
-                  <button onClick={() => handleDelete(template.id)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 ml-auto">
-                    <Trash2 size={12} aria-hidden="true" /> Delete
-                  </button>
-                </div>
-              </div>
+              <TemplateCard
+                key={template.id}
+                template={template}
+                taskCount={taskCount}
+                assignee={assignee}
+                onTitleClick={() => setPreviewTemplate(template)}
+                onEdit={() => handleEdit(template)}
+              />
             )
           })}
         </div>
+      )}
+
+      {/* ─── Preview modal (click template title) ─── */}
+      {previewTemplate && (
+        <TemplatePreviewModal
+          template={previewTemplate}
+          assignee={getAssignee(previewTemplate.id)}
+          onClose={() => setPreviewTemplate(null)}
+          onEdit={() => { handleEdit(previewTemplate); setPreviewTemplate(null) }}
+          onAssign={() => { setAssignModalTemplate(previewTemplate); setPreviewTemplate(null) }}
+          onDuplicate={() => { handleDuplicate(previewTemplate); setPreviewTemplate(null) }}
+          onDelete={() => { handleDelete(previewTemplate.id); setPreviewTemplate(null) }}
+        />
       )}
 
       <TemplateAssignModal
@@ -537,5 +581,247 @@ export default function Templates() {
         onChanged={loadTemplates}
       />
     </div>
+  )
+}
+
+// ─── StatBox ─────────────────────────────────────────────────────────
+// One of three figures in the hero header strip (Active/Assigned/Unassigned).
+function StatBox({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
+  return (
+    <div className="text-center min-w-[64px]">
+      <p className="text-[11px] uppercase tracking-[0.12em] text-text-light font-semibold">{label}</p>
+      <p className={`mt-1 text-[22px] leading-none font-bold tabular-nums ${highlight ? 'text-gold' : 'text-text'}`}>{value}</p>
+    </div>
+  )
+}
+
+// ─── TemplateCard ────────────────────────────────────────────────────
+// One bubble in the template grid. Clicking the title opens the full
+// preview modal. Edit button (top-right) short-circuits to the inline
+// edit form. Matches the Workspace-UI-Draft mockup's card shape.
+function TemplateCard({
+  template,
+  taskCount,
+  assignee,
+  onTitleClick,
+  onEdit,
+}: {
+  template: ReportTemplate
+  taskCount: number
+  assignee: { label: string; unassigned: boolean }
+  onTitleClick: () => void
+  onEdit: () => void
+}) {
+  const isUnassigned = assignee.unassigned
+  // Show up to 5 task previews; "..." indicator afterwards.
+  const visibleFields = template.fields.slice(0, 5)
+  const overflowCount = Math.max(0, template.fields.length - visibleFields.length)
+
+  return (
+    <article
+      className={`grid grid-rows-[auto_1fr_auto] min-h-[320px] rounded-3xl border overflow-hidden transition-all ${
+        isUnassigned
+          ? 'border-gold/22 bg-gradient-to-b from-[rgba(22,24,31,0.96)] to-[rgba(15,17,22,0.96)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_36px_rgba(0,0,0,0.16)]'
+          : 'border-white/8 bg-gradient-to-b from-[rgba(22,24,31,0.96)] to-[rgba(15,17,22,0.96)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]'
+      }`}
+    >
+      {isUnassigned && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-gold/8 to-transparent"
+          style={{ position: 'relative' }}
+        />
+      )}
+
+      {/* Top — title, task count, edit button */}
+      <div className="px-4 pt-4 pb-3 border-b border-white/5 grid gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+          <button
+            type="button"
+            onClick={onTitleClick}
+            className="min-w-0 text-left group focus-ring rounded-lg"
+          >
+            <h2 className="text-[17px] font-bold tracking-[-0.02em] text-text group-hover:text-gold transition-colors truncate">
+              {template.name}
+            </h2>
+          </button>
+          <div className="flex items-center gap-2 justify-self-end shrink-0">
+            <span className="text-[11px] font-semibold text-text-light whitespace-nowrap">
+              {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
+            </span>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="px-2.5 py-1.5 rounded-lg border border-white/8 bg-white/[0.03] text-[11px] font-bold text-text-muted hover:text-gold hover:border-gold/30 transition-colors"
+            >
+              Edit
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border whitespace-nowrap ${
+              isUnassigned
+                ? 'border-rose-400/22 bg-rose-400/10 text-rose-300'
+                : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+            }`}
+          >
+            <Plus size={11} aria-hidden="true" />
+            {isUnassigned ? 'Assign' : assignee.label}
+          </span>
+          {template.position && (
+            <span className="text-[10px] text-text-light uppercase tracking-wider">
+              {template.position.replace(/_/g, ' ')}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Task list preview */}
+      <div className="px-4 py-3 grid gap-2 content-start">
+        {visibleFields.map(f => (
+          <div key={f.id} className="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5 items-start text-[13px] leading-snug text-text">
+            <span
+              className={`mt-0.5 shrink-0 w-[14px] h-[14px] rounded-[5px] border ${
+                f.is_critical
+                  ? 'border-rose-400/55 bg-rose-400/8'
+                  : 'border-white/16 bg-white/[0.015]'
+              }`}
+              aria-hidden="true"
+            />
+            <span className="min-w-0 break-words">{f.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom — overflow "..." indicator */}
+      <div className="px-4 pb-3 flex justify-end">
+        {overflowCount > 0 && (
+          <span className="text-text-light text-[14px] tracking-[0.18em] leading-none select-none">···</span>
+        )}
+      </div>
+    </article>
+  )
+}
+
+// ─── TemplatePreviewModal ────────────────────────────────────────────
+// Floating center-of-page preview — uses the shared FloatingDetailModal
+// so the dismiss behavior (Esc, X, backdrop) matches every other modal
+// in the app. Shows the entire template and offers
+// Edit / Assign / Duplicate / Delete actions on the footer.
+function TemplatePreviewModal({
+  template,
+  assignee,
+  onClose,
+  onEdit,
+  onAssign,
+  onDuplicate,
+  onDelete,
+}: {
+  template: ReportTemplate
+  assignee: { label: string; unassigned: boolean }
+  onClose: () => void
+  onEdit: () => void
+  onAssign: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+}) {
+  return (
+    <FloatingDetailModal
+      onClose={onClose}
+      ariaLabel={`${template.name} preview`}
+      maxWidth={560}
+      header={
+        <>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-gold/80 font-bold">
+            {template.type.replace('_', ' ')}
+            {template.position ? ` · ${template.position.replace(/_/g, ' ')}` : ''}
+          </p>
+          <h2 className="mt-1 text-[24px] font-bold tracking-[-0.02em] text-text leading-tight truncate">
+            {template.name}
+          </h2>
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                assignee.unassigned
+                  ? 'border-rose-400/22 bg-rose-400/10 text-rose-300'
+                  : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+              }`}
+            >
+              {assignee.unassigned ? 'Unassigned' : assignee.label}
+            </span>
+            <span className="text-[11px] text-text-light">
+              {template.fields.length} {template.fields.length === 1 ? 'task' : 'tasks'}
+            </span>
+            {template.is_default && (
+              <span className="text-[10px] font-semibold text-gold/80 uppercase tracking-wider">
+                Default
+              </span>
+            )}
+          </div>
+        </>
+      }
+      footer={
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={onDelete}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-rose-300 hover:bg-rose-500/10 transition-colors"
+          >
+            <Trash2 size={13} /> Delete
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onDuplicate}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-text-muted hover:text-text hover:bg-white/[0.05] transition-colors"
+            >
+              <Copy size={13} /> Duplicate
+            </button>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-white/[0.03] text-[12px] font-bold text-text hover:border-gold/30 hover:text-gold transition-colors"
+            >
+              <Edit2 size={13} /> Edit
+            </button>
+            <button
+              type="button"
+              onClick={onAssign}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-b from-gold to-gold-muted text-black text-[12px] font-extrabold hover:brightness-105 transition-all"
+            >
+              <UserPlus size={13} /> Assign
+            </button>
+          </div>
+        </div>
+      }
+    >
+      {template.fields.length === 0 ? (
+        <p className="text-text-muted text-[13px] italic">No tasks defined yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {template.fields.map((f, i) => (
+            <li
+              key={f.id}
+              className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-start px-3 py-2.5 rounded-xl border border-white/5 bg-white/[0.02]"
+            >
+              <span
+                className={`mt-0.5 shrink-0 w-[16px] h-[16px] rounded-[5px] border ${
+                  f.is_critical
+                    ? 'border-rose-400/55 bg-rose-400/8'
+                    : 'border-white/16 bg-white/[0.015]'
+                }`}
+                aria-hidden="true"
+              />
+              <span className="text-[13px] text-text leading-snug">{f.label}</span>
+              <span className="shrink-0 text-[10px] text-text-light uppercase tracking-wider self-center">
+                {f.is_critical ? 'Critical' : `#${i + 1}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </FloatingDetailModal>
   )
 }

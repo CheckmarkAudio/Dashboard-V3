@@ -15,10 +15,8 @@
 // ============================================================================
 
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Check, Loader2, AlertCircle, ChevronRight } from 'lucide-react'
+import { Check, Loader2, AlertCircle } from 'lucide-react'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
-import { APP_ROUTES } from '../../app/routes'
 
 type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
 type FilterValue = 'all' | Stage
@@ -250,16 +248,6 @@ export default function MyTasksSection() {
         })}
       </div>
 
-      {/* Footer link */}
-      <Link
-        to={APP_ROUTES.member.tasks}
-        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
-      >
-        <span>{counts.all} today</span>
-        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
-          Full checklist <ChevronRight size={11} />
-        </span>
-      </Link>
     </div>
   )
 }

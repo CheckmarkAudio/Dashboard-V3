@@ -313,16 +313,6 @@ export function TodayCalendarWidget() {
         )}
       </div>
 
-      {/* Footer link */}
-      <Link
-        to={APP_ROUTES.member.calendar}
-        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
-      >
-        <span>{todaySessions.length === 0 ? 'Nothing today' : `${todaySessions.length} today`}</span>
-        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
-          Open calendar <ChevronRight size={12} />
-        </span>
-      </Link>
     </div>
   )
 }
@@ -429,17 +419,6 @@ export function BookingSnapshotWidget() {
         <Plus size={15} aria-hidden="true" />
         Book a Session
       </button>
-
-      {/* Footer link to /booking page for browsing all sessions. */}
-      <Link
-        to={APP_ROUTES.member.booking}
-        className="mt-2 text-[12px] text-text-light hover:text-gold transition-colors flex items-center justify-between group shrink-0"
-      >
-        <span>See all sessions</span>
-        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
-          Open booking <ChevronRight size={12} />
-        </span>
-      </Link>
 
       {showBooking && (
         <CreateBookingModal
@@ -656,22 +635,6 @@ export function ForumNotificationsWidget() {
         )}
       </div>
 
-      {/* Footer link to Forum. */}
-      <Link
-        to={APP_ROUTES.member.content}
-        className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between text-[12px] text-text-light hover:text-gold transition-colors group shrink-0"
-      >
-        <span>
-          {totalUnread > 0
-            ? `${totalUnread} unread across ${channels.filter((c) => c.unread_count > 0).length} channel${
-                channels.filter((c) => c.unread_count > 0).length === 1 ? '' : 's'
-              }`
-            : 'All caught up'}
-        </span>
-        <span className="flex items-center gap-1.5 font-medium group-hover:text-gold">
-          Open forum <ChevronRight size={12} />
-        </span>
-      </Link>
     </div>
   )
 }

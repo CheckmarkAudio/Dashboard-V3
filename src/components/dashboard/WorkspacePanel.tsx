@@ -27,31 +27,23 @@ import type {
   WidgetRowSpan,
 } from '../../domain/workspaces/types'
 import DashboardWidgetFrame, { type DragHandleProps } from './DashboardWidgetFrame'
+import FloatingDetailModal from '../FloatingDetailModal'
 import { Button, Card } from '../ui'
 
 /**
- * Fluid span sizing for a CSS-Grid layout.
- *
- * Columns: `grid-cols-3` on desktop (stacks to 2 then 1 at narrower widths).
- * Rows: `auto-rows-min` — each row sizes to its content so a short
- * widget doesn't leave vertical padding.
- *
- * `maxHeight` caps a collapsed widget. When the user clicks the bottom
- * chevron ("drop-down" affordance), SortableWidget removes the cap and
- * the widget grows to show all its content — no side-scrollbars.
+ * Grid cell styling. `auto-rows-min` hugs short widgets; max-height
+ * caps a tall widget + overflow-hidden clips neatly. The click-to-
+ * expand now opens a floating modal instead of growing the cell, so
+ * the cell itself doesn't need to change when a widget expands.
  */
 const ROW_HEIGHT_PX = 340
 const ROW_GAP_PX = 16
 
-function widgetGridStyle(
-  span: WidgetSpan,
-  rowSpan: WidgetRowSpan = 1,
-  expanded = false,
-): CSSProperties {
+function widgetGridStyle(span: WidgetSpan, rowSpan: WidgetRowSpan = 1): CSSProperties {
   return {
     gridColumn: `span ${span}`,
     gridRow: rowSpan > 1 ? `span ${rowSpan}` : undefined,
-    maxHeight: expanded ? 'none' : `${rowSpan * ROW_HEIGHT_PX + (rowSpan - 1) * ROW_GAP_PX}px`,
+    maxHeight: `${rowSpan * ROW_HEIGHT_PX + (rowSpan - 1) * ROW_GAP_PX}px`,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -59,10 +51,10 @@ function widgetGridStyle(
   }
 }
 
-// Individual sortable widget wrapper. Owns its local expand state —
-// each widget expands/collapses independently. When expanded, the
-// outer cell's max-height is dropped so the widget grows to fit all
-// of its content rather than clipping or scrolling internally.
+// Individual sortable widget wrapper. Keeps dnd-kit wiring isolated
+// from the rest of the panel. The "expand" interaction now lives in
+// the parent panel as a modal, so this wrapper only manages the
+// sortable handle + visual drag state.
 function SortableWidget({
   id,
   span,
@@ -72,33 +64,22 @@ function SortableWidget({
   id: WorkspaceWidgetId
   span: WidgetSpan
   rowSpan: WidgetRowSpan
-  children: (args: {
-    dragHandleProps: DragHandleProps
-    isExpanded: boolean
-    onToggleExpand: () => void
-  }) => ReactNode
+  children: (dragHandleProps: DragHandleProps) => ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  const [isExpanded, setIsExpanded] = useState(false)
-
   const style: CSSProperties = {
-    ...widgetGridStyle(span, rowSpan, isExpanded),
+    ...widgetGridStyle(span, rowSpan),
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? 10 : undefined,
     opacity: isDragging ? 0.85 : 1,
   }
-
   return (
     <div ref={setNodeRef} style={style} className={isDragging ? 'ring-2 ring-gold/60 rounded-2xl shadow-2xl' : ''}>
       {children({
-        dragHandleProps: {
-          attributes: attributes as DragHandleProps['attributes'],
-          listeners: listeners as DragHandleProps['listeners'],
-          isDragging,
-        },
-        isExpanded,
-        onToggleExpand: () => setIsExpanded((prev) => !prev),
+        attributes: attributes as DragHandleProps['attributes'],
+        listeners: listeners as DragHandleProps['listeners'],
+        isDragging,
       })}
     </div>
   )
@@ -140,6 +121,13 @@ export default function WorkspacePanel({
     userId,
     definitions,
   })
+
+  // Which widget, if any, is currently expanded into the floating
+  // detail modal. Clicking a widget's title sets this id; closing the
+  // modal clears it.
+  const [expandedId, setExpandedId] = useState<WorkspaceWidgetId | null>(null)
+  const expandedDefinition = expandedId ? definitionsById.get(expandedId) : null
+  const ExpandedComponent = expandedDefinition?.component
 
   // dnd-kit sensors. Require a small pointer move before activating so
   // plain clicks on buttons/links inside the widget still pass through.
@@ -207,9 +195,7 @@ export default function WorkspacePanel({
         </Card>
       )}
 
-      {/* 3-col grid with auto-rows-min so every widget hugs its content.
-          Wrapped in dnd-kit's DndContext so each widget is draggable
-          via the grip handle in its header. */}
+      {/* 3-col grid with auto-rows-min so every widget hugs its content. */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-min">
@@ -224,14 +210,13 @@ export default function WorkspacePanel({
                   span={widget.span}
                   rowSpan={widget.rowSpan ?? definition.defaultRowSpan ?? 1}
                 >
-                  {({ dragHandleProps, isExpanded, onToggleExpand }) => (
+                  {(dragHandleProps) => (
                     <DashboardWidgetFrame
                       title={definition.title}
                       description={definition.description}
                       visible={widget.visible}
                       dragHandleProps={dragHandleProps}
-                      isExpanded={isExpanded}
-                      onToggleExpand={onToggleExpand}
+                      onExpand={() => setExpandedId(widget.id as WorkspaceWidgetId)}
                     >
                       <WidgetComponent />
                     </DashboardWidgetFrame>
@@ -242,6 +227,21 @@ export default function WorkspacePanel({
           </div>
         </SortableContext>
       </DndContext>
+
+      {/* Floating detail modal — renders a second instance of the
+          selected widget's component, unconstrained by the grid's cell
+          max-height so all its content is visible. Dismiss with Esc,
+          backdrop click, or the X button in the top-right corner. */}
+      {expandedDefinition && ExpandedComponent && (
+        <FloatingDetailModal
+          title={expandedDefinition.title}
+          eyebrow={expandedDefinition.description}
+          onClose={() => setExpandedId(null)}
+          maxWidth={720}
+        >
+          <ExpandedComponent />
+        </FloatingDetailModal>
+      )}
     </div>
   )
 }
