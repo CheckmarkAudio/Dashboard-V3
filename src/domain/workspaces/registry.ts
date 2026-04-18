@@ -16,27 +16,15 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
   // admin console.
   //
   // Visual order in the 3-col mixed-size grid:
-  //   Row 1: today_calendar (span 2) + booking_snapshot (span 1)
-  //   Row 2: team_tasks      (span 2) + [forum_notifications coming Piece 5]
+  //   Row 1: team_tasks          (span 2) + forum_notifications (span 1)
+  //   Row 2: today_calendar      (span 2) + booking_snapshot    (span 1)
+  //
+  // The registration order IS the default render order; layout version
+  // is bumped whenever this order changes so existing saved layouts
+  // reset to the new default.
   //
   // Component IDs intentionally kept short and stable so saved layouts
   // in localStorage resolve cleanly across renames.
-  {
-    id: 'today_calendar',
-    title: 'Calendar',
-    description: "Today's schedule.",
-    defaultSpan: 2,
-    allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview', 'admin_overview'],
-  },
-  {
-    id: 'booking_snapshot',
-    title: 'Booking',
-    description: 'Upcoming sessions and quick book.',
-    defaultSpan: 1,
-    allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview', 'admin_overview'],
-  },
   {
     id: 'team_tasks',
     title: 'Tasks',
@@ -49,6 +37,22 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     id: 'forum_notifications',
     title: 'Notifications',
     description: 'Unread messages across channels.',
+    defaultSpan: 1,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: ['member_overview', 'admin_overview'],
+  },
+  {
+    id: 'today_calendar',
+    title: 'Calendar',
+    description: "Today's schedule.",
+    defaultSpan: 2,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: ['member_overview', 'admin_overview'],
+  },
+  {
+    id: 'booking_snapshot',
+    title: 'Booking',
+    description: 'Upcoming sessions and quick book.',
     defaultSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
     scopes: ['member_overview', 'admin_overview'],
@@ -142,13 +146,18 @@ export function getWidgetRegistrationsForScope(
   )
 }
 
+// Bump whenever the default widget order / span changes. Saved layouts
+// whose `version` does not match are discarded (see storage.ts) so the
+// new default ordering takes effect for everyone, not just fresh users.
+export const WORKSPACE_LAYOUT_VERSION = 3
+
 export function getDefaultWorkspaceLayout(
   scope: WorkspaceScope,
   role: AppRole,
 ): WorkspaceLayout {
   return {
     scope,
-    version: 2,
+    version: WORKSPACE_LAYOUT_VERSION,
     widgets: buildDefaultWidgetState(getWidgetRegistrationsForScope(scope, role)),
   }
 }
