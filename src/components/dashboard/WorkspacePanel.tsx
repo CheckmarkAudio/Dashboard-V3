@@ -33,13 +33,23 @@ import { Button, Card } from '../ui'
  * Fluid span sizing for a CSS-Grid layout.
  *
  * Columns: `grid-cols-3` on desktop (stacks to 2 then 1 at narrower widths).
- * Rows: `auto-rows-min` — each row sizes to its content so a rowSpan:2
- * widget hugs its content rather than locking to a fixed height.
+ * Rows: `auto-rows-min` — each row sizes to its content so a short
+ * widget doesn't leave vertical padding.
+ *
+ * `maxHeight` is the ceiling. A widget with more content than its cap
+ * clips + scrolls internally (`flex-1 overflow-y-auto` inside each
+ * widget), instead of pushing the whole row taller. Without this cap
+ * a long list (e.g. the Tasks widget with 30+ items) would make
+ * Overview render as one tall scroll of items.
  */
+const ROW_HEIGHT_PX = 340
+const ROW_GAP_PX = 16
+
 function widgetGridStyle(span: WidgetSpan, rowSpan: WidgetRowSpan = 1): CSSProperties {
   return {
     gridColumn: `span ${span}`,
     gridRow: rowSpan > 1 ? `span ${rowSpan}` : undefined,
+    maxHeight: `${rowSpan * ROW_HEIGHT_PX + (rowSpan - 1) * ROW_GAP_PX}px`,
   }
 }
 
