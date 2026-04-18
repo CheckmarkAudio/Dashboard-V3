@@ -11,15 +11,24 @@ import type { WorkspaceScope } from '../domain/workspaces/types'
 import { PageHeader } from '../components/ui'
 
 /**
- * Picks the right data provider for the Overview scope. Member widgets
- * consume `MemberOverviewContext`; admin widgets consume
- * `AdminOverviewContext`. Wrapping unconditionally in both would cause
- * duplicate fetches for admins, so we switch on scope at the provider
- * boundary instead.
+ * Picks the data providers for the Overview scope.
+ *
+ * Member scope: only MemberOverviewProvider (lighter — just member's own data).
+ * Admin scope: BOTH providers nested. The admin Overview now renders both
+ * admin-specific widgets (TeamFocus, ApprovalQueue, AdminShortcuts) AND
+ * the cross-scoped design-system widgets (MyTasks, TodayCalendar, TeamActivity)
+ * that read from MemberOverviewContext for the admin's own daily data.
+ *
+ * Trade-off: admins pay for one extra provider's queries. Acceptable until
+ * the admin Overview gets its own admin-versions of the new widgets.
  */
 function ScopedOverviewProvider({ scope, children }: { scope: WorkspaceScope; children: ReactNode }) {
   if (scope === 'admin_overview') {
-    return <AdminOverviewProvider>{children}</AdminOverviewProvider>
+    return (
+      <AdminOverviewProvider>
+        <MemberOverviewProvider>{children}</MemberOverviewProvider>
+      </AdminOverviewProvider>
+    )
   }
   return <MemberOverviewProvider>{children}</MemberOverviewProvider>
 }
