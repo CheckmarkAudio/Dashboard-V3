@@ -43,12 +43,11 @@ export default function Dashboard() {
           userId={profile?.id ?? 'guest'}
           scope={scope}
           definitions={scopedDefinitions}
-          controlsDescription="Reorder or hide widgets — personalized layouts are an admin-only affordance. Member overview stays fixed to keep daily focus."
-          // Per product direction: members get a focused, non-modular
-          // daily Overview (ADHD-friendly, one-view-fits-all). Admins
-          // keep the modular widget customization affordance since
-          // "modular = admin" per the rebuild vision.
-          showControls={scope === 'admin_overview'}
+          controlsDescription="Reorder or hide widgets."
+          // Big controls box removed per design direction. A tiny gear/menu
+          // affordance for show/hide will land alongside drag-and-drop in a
+          // follow-up. For now the layout is fixed for both scopes.
+          showControls={false}
         />
       </ScopedOverviewProvider>
     </div>

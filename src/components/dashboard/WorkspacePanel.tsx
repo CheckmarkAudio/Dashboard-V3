@@ -46,7 +46,6 @@ export default function WorkspacePanel({
   const {
     layout,
     visibleWidgets,
-    moveWidget,
     toggleWidgetVisibility,
     resetLayout,
   } = useWorkspaceLayout({
@@ -104,7 +103,7 @@ export default function WorkspacePanel({
         className="grid gap-4 items-stretch auto-rows-[minmax(260px,auto)]"
         style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}
       >
-        {visibleWidgets.map((widget, index) => {
+        {visibleWidgets.map((widget) => {
           const definition = definitionsById.get(widget.id)
           if (!definition) return null
           const WidgetComponent = definition.component
@@ -113,12 +112,12 @@ export default function WorkspacePanel({
               <DashboardWidgetFrame
                 title={definition.title}
                 description={definition.description}
-                canMoveUp={index > 0}
-                canMoveDown={index < visibleWidgets.length - 1}
                 visible={widget.visible}
-                onMoveUp={() => moveWidget(widget.id, 'up')}
-                onMoveDown={() => moveWidget(widget.id, 'down')}
-                onToggleVisibility={() => toggleWidgetVisibility(widget.id)}
+                /*
+                 * Per-widget reorder/hide controls intentionally omitted for
+                 * the cleaner v1.0 design. Drag-and-drop reordering + a small
+                 * gear menu for show/hide are scheduled for the next session.
+                 */
               >
                 <WidgetComponent />
               </DashboardWidgetFrame>

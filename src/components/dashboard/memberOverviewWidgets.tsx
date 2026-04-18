@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
@@ -20,6 +19,18 @@ import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
 import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import type { TeamMember } from '../../types'
+import MyTasksSection from './MyTasksSection'
+
+// Stage tokens shared between the activity feed + status pills.
+// Sourced from the v1.0 design system (Deliver/Capture/Share/Attract/Book).
+type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
+const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring: string }> = {
+  deliver: { dot: 'bg-emerald-400', text: 'text-emerald-300', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/30' },
+  capture: { dot: 'bg-sky-400',     text: 'text-sky-300',     bg: 'bg-sky-500/10',     ring: 'ring-sky-500/30' },
+  share:   { dot: 'bg-violet-400',  text: 'text-violet-300',  bg: 'bg-violet-500/10',  ring: 'ring-violet-500/30' },
+  attract: { dot: 'bg-amber-400',   text: 'text-amber-300',   bg: 'bg-amber-500/10',   ring: 'ring-amber-500/30' },
+  book:    { dot: 'bg-rose-400',    text: 'text-rose-300',    bg: 'bg-rose-500/10',    ring: 'ring-rose-500/30' },
+}
 
 function splitClockParts(value: string): [string, string] {
   const [left = '0', right = '0'] = value.split(':')
@@ -133,111 +144,157 @@ export function TeamSnapshotWidget() {
   )
 }
 
+/**
+ * Status pill for sessions — Live (rose pulse) | Wrapped (emerald) | "In 42m" (neutral).
+ * Computes against current wall-clock time, not session metadata, so the pill
+ * stays accurate as the day progresses without a refetch.
+ */
+function computeSessionStatus(start: string, end: string, now: Date): { label: string; tone: 'live' | 'wrapped' | 'upcoming' } {
+  const today = new Date(now)
+  const [sh, sm] = parseClock(start)
+  const [eh, em] = parseClock(end)
+  const startDate = new Date(today); startDate.setHours(sh, sm, 0, 0)
+  const endDate = new Date(today);   endDate.setHours(eh, em, 0, 0)
+  if (now > endDate) return { label: 'Wrapped', tone: 'wrapped' }
+  if (now >= startDate) return { label: 'Live', tone: 'live' }
+  const minsUntil = Math.round((startDate.getTime() - now.getTime()) / 60000)
+  if (minsUntil < 60) return { label: `In ${minsUntil}m`, tone: 'upcoming' }
+  const hrs = Math.floor(minsUntil / 60)
+  const mins = minsUntil % 60
+  return { label: mins > 0 ? `In ${hrs}h ${mins}m` : `In ${hrs}h`, tone: 'upcoming' }
+}
+
+function SessionStatusPill({ status }: { status: ReturnType<typeof computeSessionStatus> }) {
+  const styleMap = {
+    live:     'bg-rose-500/10 text-rose-300 ring-rose-500/30',
+    wrapped:  'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
+    upcoming: 'bg-surface-alt text-text-muted ring-border-light',
+  } as const
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium tracking-tight ring-1 ${styleMap[status.tone]}`}>
+      {status.tone === 'live' && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" aria-hidden="true" />}
+      {status.label}
+    </span>
+  )
+}
+
+/**
+ * Today Schedule — refreshed per v1.0 design system "Today's sessions" card.
+ * Time gutter on left, name+subtitle in middle, status pill on right.
+ */
 export function TodayCalendarWidget() {
   const { todaySessions, loading, error } = useMemberOverviewContext()
   const status = <WidgetStatus error={error} loading={loading} />
   if (loading || error) return status
 
-  const dateLabel = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  if (todaySessions.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
+            <CalendarIcon size={18} className="text-gold" aria-hidden="true" />
+          </div>
+          <p className="text-[14px] font-medium text-text">No sessions today</p>
+          <p className="text-[12px] text-text-light mt-0.5">Your day is open.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const now = new Date()
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-1.5 mb-3">
-        <CalendarIcon size={14} className="text-gold" />
-        <p className="text-[11px] text-text-light">{dateLabel}</p>
-      </div>
-      {todaySessions.length > 0 ? (
-        <div className="space-y-0">
-          {todaySessions.map((session) => (
-            <div key={session.id} className="py-3 border-b border-border/20 last:border-0 first:pt-0">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[14px] font-medium text-text tracking-tight">{session.client_name ?? 'Studio Session'}</p>
-                <span className="text-[10px] font-semibold text-gold bg-gold/10 px-1.5 py-0.5 rounded">
-                  {durationLabel(session.start_time, session.end_time)}
-                </span>
-              </div>
-              <p className="text-[12px] text-text-muted capitalize">{session.session_type.replace(/_/g, ' ')}</p>
-              <p className="text-[12px] text-text-light mt-0.5">
-                {formatTime12(session.start_time)} - {formatTime12(session.end_time)}
-              </p>
-              <div className="flex items-center gap-2 mt-1.5">
-                <span className="text-[10px] font-semibold text-gold/70 bg-gold/5 border border-gold/15 px-1.5 py-0.5 rounded">
-                  {session.status}
-                </span>
-                <span className="text-[10px] text-text-light">{session.room ?? 'Room TBD'}</span>
-              </div>
+    <div className="flex flex-col h-full -mx-1">
+      {todaySessions.map((session) => {
+        const formatted = formatTime12(session.start_time)
+        const [hourMin, ampm] = formatted.split(' ')
+        const sessionStatus = computeSessionStatus(session.start_time, session.end_time, now)
+        const sessionType = session.session_type.replace(/_/g, ' ')
+        const sessionTypeCap = sessionType.charAt(0).toUpperCase() + sessionType.slice(1)
+        return (
+          <div
+            key={session.id}
+            className="flex items-stretch gap-3 px-1 py-3 rounded-lg hover:bg-surface-hover/40 transition-colors"
+          >
+            <div className="shrink-0 w-14 text-right border-r border-border/40 pr-3 flex flex-col justify-center">
+              <p className="text-[15px] font-semibold tracking-tight text-text leading-none">{hourMin}</p>
+              <p className="text-[10px] font-medium text-text-light tracking-wider uppercase mt-0.5">{ampm}</p>
             </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-[13px] text-text-light italic py-6 text-center">No sessions scheduled for today</p>
-      )}
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+              <p className="text-[14px] font-medium text-text truncate">
+                {session.client_name ?? 'Studio Session'} <span className="text-text-light font-normal">— {sessionTypeCap}</span>
+              </p>
+              <p className="text-[11px] text-text-light truncate mt-0.5">
+                {sessionTypeCap} · {session.room ?? 'Room TBD'} · {durationLabel(session.start_time, session.end_time)}
+              </p>
+            </div>
+            <div className="shrink-0 self-center">
+              <SessionStatusPill status={sessionStatus} />
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
 
-export function TeamTasksWidget() {
-  const { daily, loading, error } = useMemberOverviewContext()
-  const [showCompleted, setShowCompleted] = useState(false)
-  const status = <WidgetStatus error={error} loading={loading} />
-  if (loading || error) return status
+/**
+ * Team Activity — placeholder feed showing what the screenshot's "Team
+ * activity" section will look like. Mock data until the flywheel event
+ * ledger ships (Phase 2 of the original blueprint), at which point this
+ * reads from the immutable event table instead.
+ */
+const MOCK_ACTIVITY: { id: string; stage: Stage; actor: string; text: string; timeAgo: string }[] = [
+  { id: '1', stage: 'share',   actor: 'Ava K.',     text: 'published a new BTS reel for Sage Linden',                  timeAgo: '12m ago' },
+  { id: '2', stage: 'deliver', actor: 'Jordan L.',  text: "marked 'Masters — Tiger Beatz' as ready for delivery",      timeAgo: '34m ago' },
+  { id: '3', stage: 'book',    actor: 'Richard B.', text: 'booked a recurring lesson block with Anna P.',              timeAgo: '2h ago' },
+  { id: '4', stage: 'capture', actor: 'System',     text: 'captured 4 new leads from the Beat Leasing landing',        timeAgo: '3h ago' },
+  { id: '5', stage: 'attract', actor: 'Marcus R.',  text: 'added a new invoice for The Artists Café',                  timeAgo: 'Yesterday' },
+]
 
-  const visibleTasks = daily.items
-    .filter((item) => showCompleted || !item.is_completed)
-    .slice(0, 8)
-
+export function TeamActivityWidget() {
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex bg-surface-alt rounded-lg p-0.5 border border-border">
-          {['Open', 'All'].map((option) => (
-            <button
-              key={option}
-              onClick={() => setShowCompleted(option === 'All')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium tracking-tight transition-all ${
-                (showCompleted ? 'All' : 'Open') === option ? 'bg-gold/12 text-gold' : 'text-text-light hover:text-text-muted'
-              }`}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-        <Link to={APP_ROUTES.member.tasks} className="text-xs font-medium text-gold hover:underline">
-          Open checklist
-        </Link>
-      </div>
+    <div className="flex flex-col h-full -mx-1">
       <div className="flex-1 space-y-0">
-        {visibleTasks.map((task) => (
-          <div key={task.id} className={`flex items-center gap-2 py-[11px] border-b border-border/30 last:border-0 ${task.is_completed ? 'opacity-40' : ''}`}>
-            <button onClick={() => void daily.toggleItem(task.id)} className="shrink-0">
-              <div className={`w-[18px] h-[18px] rounded-[5px] border-[1.5px] flex items-center justify-center transition-all ${
-                task.is_completed ? 'bg-gold/30 border-gold/40' : 'border-border-light hover:border-gold/50'
-              }`}>
-                {task.is_completed && <Check size={11} className="text-gold" />}
+        {MOCK_ACTIVITY.map((item) => {
+          const ss = STAGE_STYLES[item.stage]
+          const stageCap = item.stage.charAt(0).toUpperCase() + item.stage.slice(1)
+          return (
+            <div
+              key={item.id}
+              className="flex items-start gap-3 px-1 py-3 rounded-lg hover:bg-surface-hover/30 transition-colors"
+            >
+              <span
+                className={`shrink-0 mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${ss.bg} ${ss.text} ring-1 ${ss.ring}`}
+              >
+                <span className={`w-1 h-1 rounded-full ${ss.dot}`} aria-hidden="true" />
+                {stageCap}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] text-text leading-snug">
+                  <span className="font-medium">{item.actor}</span> {item.text}
+                </p>
+                <p className="text-[10px] text-text-light mt-0.5">{item.timeAgo}</p>
               </div>
-            </button>
-            <span className={`flex-1 text-[14px] font-normal tracking-tight truncate min-w-0 ${task.is_completed ? 'line-through text-text-light' : 'text-text-muted'}`}>
-              {task.item_text}
-            </span>
-            <span className="text-[11px] shrink-0 tabular-nums text-text-light">{task.category}</span>
-          </div>
-        ))}
-        {visibleTasks.length === 0 && (
-          <div className="py-8 text-center text-sm text-text-light italic">
-            {showCompleted ? 'No tasks have been generated for today.' : 'You are caught up for the day.'}
-          </div>
-        )}
+            </div>
+          )
+        })}
       </div>
-      <div className="pt-4 mt-auto text-[11px] text-text-light">
-        Click any task to mark it complete and keep your day moving.
-      </div>
+      <p className="text-[10px] text-text-light italic mt-2 px-1">
+        Activity feed is mock data until the flywheel event ledger ships.
+      </p>
     </div>
   )
+}
+
+/**
+ * TeamTasksWidget — Overview's "My tasks · Across all flywheel stages" surface.
+ * Delegates to MyTasksSection per the v1.0 design system rendering.
+ * Frame title + description come from the widget registry, so the section
+ * starts directly with filter pills.
+ */
+export function TeamTasksWidget() {
+  return <MyTasksSection />
 }
 
 /**

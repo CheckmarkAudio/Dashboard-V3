@@ -20,13 +20,37 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
   // ID is kept in the type union so any saved layouts that still
   // reference it resolve gracefully (WorkspacePanel no-ops missing
   // definitions).
+  // Hero row: Today's sessions (left, wide) + Team activity (right, narrow).
+  // Matches the v1.0 design system Overview rendering. The activity feed
+  // currently runs on mock data — swap to real flywheel-event-ledger reads
+  // once that lands (see Deferred section in docs/PROJECT_STATE.md).
+  //
+  // Cross-scoped to BOTH member_overview and admin_overview so admin users
+  // see the same refreshed design language. Admin-specific widgets
+  // (team_focus, approval_queue, admin_shortcuts) stay separate below.
   {
-    id: 'team_tasks',
-    title: 'Today Tasks',
-    description: 'Your checklist for the day, built from live task data.',
+    id: 'today_calendar',
+    title: 'Today Schedule',
+    description: "Today's sessions across studios with live status pills.",
     defaultSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview'],
+    scopes: ['member_overview', 'admin_overview'],
+  },
+  {
+    id: 'team_activity',
+    title: 'Team activity',
+    description: 'Recent team actions tagged by flywheel stage.',
+    defaultSpan: 1,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: ['member_overview', 'admin_overview'],
+  },
+  {
+    id: 'team_tasks',
+    title: 'My tasks',
+    description: 'Across all flywheel stages.',
+    defaultSpan: 2,
+    allowedRoles: ['member', 'admin', 'owner'],
+    scopes: ['member_overview', 'admin_overview'],
   },
   {
     id: 'team_snapshot',
@@ -34,15 +58,7 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
     description: 'Progress, streak, and must-do status for today at a glance.',
     defaultSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview'],
-  },
-  {
-    id: 'today_calendar',
-    title: 'Today Schedule',
-    description: 'Sessions and time blocks that matter today.',
-    defaultSpan: 1,
-    allowedRoles: ['member', 'admin', 'owner'],
-    scopes: ['member_overview'],
+    scopes: ['member_overview', 'admin_overview'],
   },
   {
     id: 'team_directory',
