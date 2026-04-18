@@ -40,13 +40,65 @@ const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring:
   book:    { dot: 'bg-rose-400',    text: 'text-rose-300',    bg: 'bg-rose-500/10',    ring: 'ring-rose-500/30' },
 }
 
-function mapCategoryToStage(category: string | null | undefined): Stage {
-  const c = (category ?? '').toLowerCase()
+/**
+ * Maps a checklist item to a flywheel stage using a 3-pass heuristic:
+ *
+ *   1. Item-text keywords (most specific signal — overrides category)
+ *   2. Category bucket (broad mapping)
+ *   3. Deterministic id-hash fallback (genuinely ambiguous items spread
+ *      across all 5 stages instead of all defaulting to a single bucket
+ *      and looking fake)
+ *
+ * Permanent fix is a per-item `flywheel_stage` column on team_checklist_items
+ * that admins set in Templates UI — tracked in PROJECT_STATE.md as part of
+ * the flywheel event ledger work.
+ */
+function mapItemToStage(item: { id: string; category: string | null; item_text: string | null }): Stage {
+  const t = (item.item_text ?? '').toLowerCase()
+  const c = (item.category ?? '').toLowerCase()
+
+  // Pass 1: item-text keyword match (highest signal).
+  if (/\b(lead|outreach|research|prospect)/.test(t)) return 'attract'
+  if (/\b(book|schedule|invoice|contract|payment)/.test(t)) return 'book'
+  if (/\b(social|post|reel|story|carousel|content idea|marketing|publish)/.test(t)) return 'share'
+  if (/\b(photo|clip|footage|capture|record|behind[- ]the[- ]scenes)/.test(t)) return 'capture'
+  if (/\b(master|mix|export|deliver|session|client|backup)/.test(t)) return 'deliver'
+
+  // Pass 2: category bucket.
   if (c.includes('marketing') || c.includes('share')) return 'share'
   if (c.includes('content support') || c.includes('artist') || c.includes('capture')) return 'capture'
   if (c.includes('lead') || c.includes('attract') || c.includes('outreach')) return 'attract'
-  if (c.includes('book') || c.includes('schedule')) return 'book'
-  return 'deliver'
+  if (c.includes('admin') || c.includes('organization') || c.includes('book') || c.includes('schedule')) return 'book'
+  if (c.includes('systems') || c.includes('documentation')) return 'share'
+
+  // Pass 3: deterministic hash so vague items spread across all 5 stages.
+  const stages: Stage[] = ['deliver', 'capture', 'share', 'attract', 'book']
+  let hash = 0
+  for (let i = 0; i < item.id.length; i++) hash = ((hash << 5) - hash) + item.id.charCodeAt(i)
+  return stages[Math.abs(hash) % 5] as Stage
+}
+
+/**
+ * Sort tagged items so the "All" tab visually rotates through stages
+ * (Deliver → Capture → Share → Attract → Book → Deliver → ...) rather
+ * than clumping by category. Per-stage tabs sort by completion + sort_order.
+ */
+function rotatingStageOrder<T extends { stage: Stage; is_completed: boolean }>(items: T[]): T[] {
+  const buckets: Record<Stage, T[]> = { deliver: [], capture: [], share: [], attract: [], book: [] }
+  for (const item of items) buckets[item.stage].push(item)
+  const order: Stage[] = ['deliver', 'capture', 'share', 'attract', 'book']
+  const result: T[] = []
+  let idx = 0
+  while (result.length < items.length) {
+    const stage = order[idx % order.length] as Stage
+    const next = buckets[stage].shift()
+    if (next) result.push(next)
+    idx++
+    // Safety: if we iterate too many times without progress, break.
+    if (idx > items.length * order.length) break
+  }
+  // Push completed items to the bottom (active first).
+  return result.sort((a, b) => Number(a.is_completed) - Number(b.is_completed))
 }
 
 export default function MyTasksSection() {
@@ -57,7 +109,7 @@ export default function MyTasksSection() {
     () =>
       daily.items.map((item) => ({
         ...item,
-        stage: mapCategoryToStage(item.category),
+        stage: mapItemToStage(item),
       })),
     [daily.items],
   )
@@ -71,7 +123,15 @@ export default function MyTasksSection() {
     return c
   }, [taggedItems])
 
-  const filtered = filter === 'all' ? taggedItems : taggedItems.filter((t) => t.stage === filter)
+  // "All" tab: rotate through stages so the visible top of the list spans
+  // the flywheel rather than clumping by category. Per-stage tabs keep the
+  // natural sort_order from the checklist instance.
+  const filtered = useMemo(() => {
+    if (filter === 'all') return rotatingStageOrder(taggedItems)
+    return taggedItems
+      .filter((t) => t.stage === filter)
+      .sort((a, b) => Number(a.is_completed) - Number(b.is_completed))
+  }, [filter, taggedItems])
 
   if (loading) {
     return (
