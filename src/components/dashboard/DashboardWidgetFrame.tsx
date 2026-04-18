@@ -1,5 +1,12 @@
-import { useLayoutEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Eye, EyeOff, GripVertical } from 'lucide-react'
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type HTMLAttributes,
+  type MouseEvent,
+  type ReactNode,
+} from 'react'
+import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '../ui'
 
 // Drag-handle props are exactly what @dnd-kit hands out from
@@ -21,12 +28,31 @@ interface DashboardWidgetFrameProps {
   onMoveDown?: () => void
   onToggleVisibility?: () => void
   dragHandleProps?: DragHandleProps
-  // Expand / collapse — when `onToggleExpand` is present, the frame
-  // renders a chevron strip on its bottom border that the user can
-  // click to reveal content hidden by the cell's max-height cap.
+  // Click-to-expand: when present, clicking anywhere on the widget's
+  // body (but NOT on an interactive element inside) toggles the cell's
+  // max-height cap. No chevron strip, no extra chrome — the body
+  // itself is the click target.
   isExpanded?: boolean
   onToggleExpand?: () => void
   children: ReactNode
+}
+
+// Walk up from the click target looking for an element that should
+// absorb the click on its own (button / link / input / etc.). If we
+// find one before reaching the widget body root, the body's own
+// expand-toggle listener should bail out so the child's handler runs
+// alone. Mirrors how CSS `:has` or event delegation would behave.
+function isClickOnInteractiveChild(target: EventTarget | null, root: HTMLElement): boolean {
+  let node = target as HTMLElement | null
+  while (node && node !== root) {
+    const tag = node.tagName
+    if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'LABEL') {
+      return true
+    }
+    if (node.getAttribute?.('role') === 'button') return true
+    node = node.parentElement
+  }
+  return false
 }
 
 export default function DashboardWidgetFrame({
@@ -50,11 +76,9 @@ export default function DashboardWidgetFrame({
     ? { ...(dragHandleProps.attributes ?? {}), ...(dragHandleProps.listeners ?? {}) }
     : undefined
 
-  // Detect real overflow so the expand affordance only renders when
-  // there's actually something hidden below the fold. Compares the
-  // content's full scrollHeight against its rendered clientHeight +
-  // re-checks on resize (ResizeObserver). When the widget fits, the
-  // chevron strip stays off.
+  // Detect real overflow so the click-to-expand affordance is only
+  // interactive when there's actually something hidden below the fold.
+  // When the widget fits, clicking the body does nothing.
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [hasOverflow, setHasOverflow] = useState(false)
   useLayoutEffect(() => {
@@ -66,23 +90,29 @@ export default function DashboardWidgetFrame({
     check()
     const ro = new ResizeObserver(check)
     ro.observe(el)
-    // Also observe children so nested content changes (e.g. data
-    // arriving after loading) re-trigger the check.
     Array.from(el.children).forEach((child) => ro.observe(child))
     return () => ro.disconnect()
   }, [children, isExpanded])
 
-  const showChevron = !!onToggleExpand && (hasOverflow || isExpanded)
+  const canExpand = !!onToggleExpand && (hasOverflow || isExpanded)
+
+  const handleBodyClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (!canExpand || !onToggleExpand) return
+    const root = bodyRef.current
+    if (!root) return
+    if (isClickOnInteractiveChild(event.target, root)) return
+    onToggleExpand()
+  }
 
   return (
     // `widget-card` — mockup-matched gradient + 22px radius + hairline
     // border. `containerType: inline-size` lets widget children use
     // @container queries to adapt to widget width.
     <div
-      className="widget-card h-full flex flex-col overflow-hidden group/widget"
+      className="widget-card h-full flex flex-col overflow-hidden group/widget relative"
       style={{ containerType: 'inline-size' }}
     >
-      {/* ─── Header ─────────────────────────────────────────────── */}
+      {/* ─── Header (draggable) ────────────────────────────────── */}
       <div className="px-4 py-3 border-b border-white/5 flex items-start justify-between gap-3">
         <div
           {...(dragZoneProps ?? {})}
@@ -110,69 +140,76 @@ export default function DashboardWidgetFrame({
             )}
           </div>
         </div>
-        {(onMoveUp || onMoveDown || onToggleVisibility) && (
-          <div className="flex items-center gap-1 shrink-0">
-            {onMoveUp && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onMoveUp}
-                disabled={!canMoveUp}
-                aria-label={`Move ${title} up`}
-                iconLeft={<ArrowUp size={13} />}
-              />
-            )}
-            {onMoveDown && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onMoveDown}
-                disabled={!canMoveDown}
-                aria-label={`Move ${title} down`}
-                iconLeft={<ArrowDown size={13} />}
-              />
-            )}
-            {onToggleVisibility && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onToggleVisibility}
-                aria-label={`${visible ? 'Hide' : 'Show'} ${title}`}
-                iconLeft={visible ? <EyeOff size={13} /> : <Eye size={13} />}
-              />
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ─── Body ───────────────────────────────────────────────── */}
-      <div ref={bodyRef} className="flex-1 min-h-0 px-4 py-4 flex flex-col">
-        {children}
-      </div>
-
-      {/* ─── Drop-down affordance ───────────────────────────────────
-          Only rendered when there's actual overflow or the widget is
-          currently expanded. Click the strip to toggle the cell's
-          max-height cap on SortableWidget. */}
-      {showChevron && (
-        <button
-          type="button"
-          onClick={onToggleExpand}
-          aria-label={isExpanded ? `Collapse ${title}` : `Show more ${title}`}
-          aria-expanded={isExpanded}
-          className="relative shrink-0 h-6 w-full border-t border-white/5 text-gold/50 hover:text-gold hover:bg-gold/5 transition-colors flex items-center justify-center focus-ring"
-        >
-          {/* Gentle fade hint when collapsed — implies more content
-              below the fold without adding any text label. */}
-          {!isExpanded && (
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-b from-transparent to-[rgba(16,17,23,0.95)]"
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Expand / collapse indicator — shown when there's real
+              overflow, OR when the user has manually expanded. Acts as
+              both a state hint and a backup button for users who
+              haven't discovered the click-the-body interaction. */}
+          {canExpand && (
+            <button
+              type="button"
+              onClick={onToggleExpand}
+              aria-label={isExpanded ? `Collapse ${title}` : `Expand ${title}`}
+              aria-expanded={isExpanded}
+              className="p-1.5 rounded-md text-gold/60 hover:text-gold hover:bg-gold/10 transition-colors focus-ring"
+            >
+              {isExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
+          )}
+          {onMoveUp && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+              aria-label={`Move ${title} up`}
+              iconLeft={<ArrowUp size={13} />}
             />
           )}
-          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-      )}
+          {onMoveDown && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+              aria-label={`Move ${title} down`}
+              iconLeft={<ArrowDown size={13} />}
+            />
+          )}
+          {onToggleVisibility && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleVisibility}
+              aria-label={`${visible ? 'Hide' : 'Show'} ${title}`}
+              iconLeft={visible ? <EyeOff size={13} /> : <Eye size={13} />}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* ─── Body (click to expand) ─────────────────────────────── */}
+      <div
+        ref={bodyRef}
+        onClick={handleBodyClick}
+        className={[
+          'flex-1 min-h-0 px-4 py-4 flex flex-col relative',
+          canExpand ? 'cursor-pointer' : '',
+        ].join(' ')}
+      >
+        {children}
+
+        {/* Gentle fade at the bottom of a collapsed widget to imply
+            "there's more below — click to expand." Disappears when
+            expanded. Pointer-events-none so it doesn't intercept
+            clicks meant for the body. */}
+        {canExpand && !isExpanded && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-b from-transparent to-[rgba(16,17,23,0.95)]"
+          />
+        )}
+      </div>
     </div>
   )
 }

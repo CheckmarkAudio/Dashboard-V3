@@ -259,7 +259,7 @@ export function TodayCalendarWidget() {
 
       {/* Today's sessions list — internal scroll if many.
           Loading/error scoped here so the chrome above stays visible. */}
-      <div className="flex-1 min-h-0 -mx-1">
+      <div className="flex-1 min-h-0 overflow-hidden -mx-1">
         {loading ? (
           <div className="h-full flex items-center justify-center text-text-light">
             <Loader2 size={18} className="animate-spin" />
@@ -576,7 +576,7 @@ export function ForumNotificationsWidget() {
       </div>
 
       {/* Channel rows — internal scroll keeps the page non-scrolling. */}
-      <div className="flex-1 min-h-0 -mx-1">
+      <div className="flex-1 min-h-0 overflow-hidden -mx-1">
         {notifQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light">
             <Loader2 size={18} className="animate-spin" />

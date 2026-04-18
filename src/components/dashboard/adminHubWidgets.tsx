@@ -226,7 +226,7 @@ export function AdminAssignWidget() {
             <span className="text-[10px] text-text-light">{recent.length} total</span>
           )}
         </div>
-        <div className="flex-1 min-h-0 -mx-1 space-y-0.5">
+        <div className="flex-1 min-h-0 overflow-hidden -mx-1 space-y-0.5">
           {recentQuery.isLoading ? (
             <div className="flex items-center gap-2 px-2 py-2 text-text-light">
               <Loader2 size={14} className="animate-spin" />
@@ -850,7 +850,7 @@ export function AdminNotificationsWidget() {
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 -mx-1">
+      <div className="flex-1 min-h-0 overflow-hidden -mx-1">
         {notifQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light">
             <Loader2 size={18} className="animate-spin" />
@@ -1266,7 +1266,7 @@ export function AdminApprovalsWidget() {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 -mx-1 space-y-1">
+      <div className="flex-1 min-h-0 overflow-hidden -mx-1 space-y-1">
         {loading ? (
           <div className="h-full flex items-center justify-center text-text-light">
             <Loader2 size={18} className="animate-spin" />
