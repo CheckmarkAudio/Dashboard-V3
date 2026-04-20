@@ -369,15 +369,21 @@ export function BookingSnapshotWidget() {
         TODAY · {todayLabel}
       </p>
 
-      {/* Big number + next-session detail. */}
-      <div className="flex-1 flex flex-col justify-center">
+      {/* Big number + next-session detail.
+          `min-h-0` + `overflow-hidden` lets the flex-1 area shrink when
+          content is tall (big number + next-session block + border).
+          Without them, intrinsic content height would push the Book-
+          a-Session button past the widget's `overflow: hidden` cell and
+          clip its rounded bottom edge. Content flows top-down (no
+          `justify-center`) so the button has consistent bottom clearance. */}
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         <p className="text-[11px] uppercase tracking-wider text-text-light font-medium">
           Upcoming today
         </p>
-        {/* Magazine-cover sized number — thin weight, tight spacing,
-            first thing the eye catches on the Booking widget. Matches
-            the Workspace-UI-Draft mockup. */}
-        <p className="mt-2 text-[56px] leading-none font-light tracking-[-0.04em] text-text tabular-nums">
+        {/* Magazine-cover number — dropped 56 → 44px so a narrow
+            column fits the counter + session detail + CTA button
+            within the card without vertical overflow. */}
+        <p className="mt-2 text-[44px] leading-none font-light tracking-[-0.04em] text-text tabular-nums">
           {loading ? '–' : upcoming.length}
         </p>
         <p className="mt-1 text-[12px] text-text-light">
@@ -386,35 +392,39 @@ export function BookingSnapshotWidget() {
 
         {/* Next-session detail — error state scoped here so chrome stays. */}
         {error ? (
-          <div className="mt-4 pt-3 border-t border-border/40 flex items-center gap-2 text-[12px] text-amber-300">
+          <div className="mt-3 pt-3 border-t border-border/40 flex items-center gap-2 text-[12px] text-amber-300">
             <AlertCircle size={14} className="shrink-0" />
             <span className="truncate">Could not load sessions</span>
           </div>
         ) : next ? (
-          <div className="mt-4 pt-3 border-t border-border/40">
+          <div className="mt-3 pt-3 border-t border-border/40 min-w-0">
             <p className="text-[10px] uppercase tracking-wider text-text-light font-medium">
               Next
             </p>
             <p className="mt-1 text-[13px] font-medium text-text truncate">
               {next.client_name ?? 'Studio Session'}
             </p>
-            <p className="text-[11px] text-gold mt-0.5">
+            <p className="text-[11px] text-gold mt-0.5 truncate">
               {formatTime12(next.start_time)} · {next.room ?? 'Room TBD'}
             </p>
           </div>
         ) : !loading ? (
-          <p className="mt-4 pt-3 border-t border-border/40 text-[12px] text-text-light italic">
+          <p className="mt-3 pt-3 border-t border-border/40 text-[12px] text-text-light italic">
             Nothing else today.
           </p>
         ) : null}
       </div>
 
       {/* "Book a Session" CTA — opens canonical CreateBookingModal.
-          Same gold pill styling as the Sessions page primary action. */}
+          `mt-auto` pins the button to the bottom edge of the flex
+          column. Horizontal padding on the button (`mx-0.5`) pulls
+          the pill in slightly so its rounded corners don't touch the
+          card's 22px radius. Shrunk vertical padding (py-2 vs py-2.5)
+          keeps the chrome tight in a narrow column. */}
       <button
         type="button"
         onClick={() => setShowBooking(true)}
-        className="mt-3 w-full py-2.5 rounded-xl bg-gold hover:bg-gold-muted text-black text-[13px] font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0"
+        className="mt-3 mx-0.5 py-2 rounded-xl bg-gold hover:bg-gold-muted text-black text-[13px] font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0"
       >
         <Plus size={15} aria-hidden="true" />
         Book a Session

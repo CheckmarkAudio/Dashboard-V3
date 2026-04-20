@@ -118,14 +118,18 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             />
           )
         })}
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-1.5 py-2.5 text-[13px] font-semibold text-gold/80 hover:text-gold transition-colors"
-        >
-          <Plus size={13} strokeWidth={2.2} /> Task
-        </button>
-        <div className="pt-1">
+        {/* Footer — `+ Task` on the left, `Show completed` right-
+            justified on the same row. Collapses what was previously
+            two stacked controls into a single row, trimming ~24px
+            of dead space at the bottom of the widget. */}
+        <div className="flex items-center justify-between gap-3 pt-1.5">
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-1.5 py-1.5 text-[13px] font-semibold text-gold/80 hover:text-gold transition-colors"
+          >
+            <Plus size={13} strokeWidth={2.2} /> Task
+          </button>
           <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((s) => !s)} />
         </div>
       </div>

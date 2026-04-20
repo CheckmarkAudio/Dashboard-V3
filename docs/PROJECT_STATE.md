@@ -13,8 +13,8 @@
 | **Live URL** | https://dashboard-v3-dusky.vercel.app |
 | **Hosting** | Vercel (auto-deploys from `main`) |
 | **Database** | Supabase project `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") |
-| **Latest commit** | `5a18d9d` — Admin Hub 5-widget redesign (Assign / Flywheel / Team / Notifications / Approvals) |
-| **Currently active** | Admin Hub landed; next: Assign page (or wherever the user takes us) |
+| **Latest commit** | `df1b0a4` — Overview single-border widgets + balanced columns (layout v8) |
+| **Currently active** | Overview visual polish landed; next: Assign page (or wherever the user takes us) |
 
 ---
 
@@ -138,6 +138,7 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 | 2026-04-18 | `846673b` | **Overview Piece 5A** — Discord-style Notifications widget: per-channel unread badges, optimistic mark-read on click, realtime refresh on new messages |
 | 2026-04-18 | `8347d79` | Overview reorder — Tasks/Notifications on top row, Calendar/Booking on bottom; layout version bumped to 3 so all users pick up the new default |
 | 2026-04-18 | `5a18d9d` | **Admin Hub redesign** — 5 widgets (Assign, Flywheel, Team, Notifications, Approvals) in a 2-big-left + 3-right grid; added rowSpan support; Hub.tsx simplified to PageHeader + WorkspacePanel; admins no longer see member widgets on Hub |
+| 2026-04-20 | `df1b0a4` | **Overview visual polish** — `MyTasksCard.embedded` prop kills the double "My Tasks" title + double `widget-card` border when mounted inside `DashboardWidgetFrame`; Day/Week toggle collapses onto the stage-pill row. Rebalance row spans (team_tasks 3 → 2, forum_notifications 1 → 2) so both Overview columns terminate at the same Y — zero dead space. Layout version bumped 7 → 8 to flush saved layouts. |
 
 ---
 
