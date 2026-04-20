@@ -10,6 +10,7 @@ import {
 import { useAuth } from './AuthContext'
 import { useChecklist } from '../hooks/useChecklist'
 import { supabase, withSupabaseRetry } from '../lib/supabase'
+import { flush as perfFlush, time as perfTime } from '../lib/perfTrace'
 import { localDateKey } from '../lib/dates'
 import { getMustDoConfig } from '../lib/mustDoConfig'
 import type { DailyNote, DeliverableSubmission, MemberKPI, MemberKPIEntry } from '../types'
@@ -65,34 +66,33 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
       // Wrap the whole parallel fetch in the retry helper so a transient
       // auth-lock error on any one query retries the entire batch rather
       // than surfacing the failure to the user.
-      const [noteRes, submissionRes, sessionsRes, kpisRes, instancesRes] = await withSupabaseRetry(() =>
-        Promise.all([
-          supabase.from('team_daily_notes').select('*').eq('intern_id', profile.id).eq('note_date', today).maybeSingle(),
-          supabase
-            .from('deliverable_submissions')
-            .select('*')
-            .eq('intern_id', profile.id)
-            .eq('submission_date', today)
-            .eq('submission_type', mustDoConfig.submissionType)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-          supabase
-            .from('sessions')
-            .select('id, client_name, start_time, end_time, session_type, status, room')
-            .eq('session_date', today)
-            .eq('created_by', profile.id)
-            .order('start_time'),
-          supabase.from('member_kpis').select('*').eq('intern_id', profile.id).limit(1),
-          supabase
-            .from('team_checklist_instances')
-            .select('id, period_date')
-            .eq('frequency', 'daily')
-            .eq('intern_id', profile.id)
-            .order('period_date', { ascending: false })
-            .limit(14),
-        ]),
-      )
+      const runBatch = () => withSupabaseRetry(() => Promise.all([
+        supabase.from('team_daily_notes').select('*').eq('intern_id', profile.id).eq('note_date', today).maybeSingle(),
+        supabase
+          .from('deliverable_submissions')
+          .select('*')
+          .eq('intern_id', profile.id)
+          .eq('submission_date', today)
+          .eq('submission_type', mustDoConfig.submissionType)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('sessions')
+          .select('id, client_name, start_time, end_time, session_type, status, room')
+          .eq('session_date', today)
+          .eq('created_by', profile.id)
+          .order('start_time'),
+        supabase.from('member_kpis').select('*').eq('intern_id', profile.id).limit(1),
+        supabase
+          .from('team_checklist_instances')
+          .select('id, period_date')
+          .eq('frequency', 'daily')
+          .eq('intern_id', profile.id)
+          .order('period_date', { ascending: false })
+          .limit(14),
+      ]))
+      const [noteRes, submissionRes, sessionsRes, kpisRes, instancesRes] = await perfTime('overview:batch', runBatch)
 
       if (noteRes.error) throw noteRes.error
       if (submissionRes.error) throw submissionRes.error
@@ -121,10 +121,11 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
 
       const instances = (instancesRes.data ?? []) as Array<{ id: string }>
       if (instances.length > 0) {
-        const itemsRes = await supabase
+        const itemsRes = await perfTime('overview:streak', () => supabase
           .from('team_checklist_items')
           .select('instance_id, is_completed')
-          .in('instance_id', instances.map((instance) => instance.id))
+          .in('instance_id', instances.map((instance) => instance.id)),
+        )
         if (itemsRes.error) throw itemsRes.error
 
         const byInstance = new Map<string, boolean[]>()
@@ -157,6 +158,16 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refetch()
   }, [refetch])
+
+  // Fire the perfTrace flush once the Overview's above-the-fold data
+  // has fully resolved (context queries + daily checklist both done).
+  // `flush` is idempotent per label, so repeated renders don't re-emit.
+  // No-op in production unless `localStorage.debugPerf = '1'`.
+  useEffect(() => {
+    if (!loading && !daily.loading) {
+      perfFlush('Overview')
+    }
+  }, [loading, daily.loading])
 
   const value = useMemo(
     () => ({

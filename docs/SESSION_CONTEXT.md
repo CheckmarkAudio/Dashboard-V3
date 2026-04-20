@@ -440,10 +440,51 @@ mockups across the three highest-impact surfaces:
 
 ---
 
+## Performance baseline (Phase 1 Step 1 — instrumentation landed)
+
+Opt-in perf tracer at `src/lib/perfTrace.ts` — no-op unless
+`localStorage.debugPerf = '1'`. Enabled it against a dev load of
+Overview on 2026-04-20; first captured waterfall:
+
+```
+⏱ Overview cold start: 21,437ms  (4 checkpoints)
+  @329ms  ▏          19ms   checklist:rpc
+  @329ms  ██████  7,054ms   overview:batch   ← long pole
+```
+
+- **`overview:batch`** (5 parallel Supabase queries in
+  `MemberOverviewContext`) dominates cold start at ~7s. This is
+  exactly the shape the Phase 1.3 snapshot RPC collapses into one
+  round-trip.
+- **`checklist:rpc`** (the `intern_generate_checklist` call that
+  Codex flagged as the client-side daily-generation path) is only
+  ~19ms in dev against a mock user that errors out — its real cost
+  will be visible on a production cold run.
+- Dev bypass path (`DevAuthProvider`) means `auth:getSession` and
+  `auth:fetchProfile` don't fire locally — the full 6-checkpoint
+  waterfall is only visible against a real Supabase session, i.e.
+  on Vercel with `localStorage.debugPerf = '1'`.
+
+Instrumentation points live in: `main.tsx` (`app:bootstrap`),
+`contexts/AuthContext.tsx` (`auth:getSession`, `auth:fetchProfile:byId`,
+`auth:fetchProfile:byEmail`), `contexts/MemberOverviewContext.tsx`
+(`overview:batch`, `overview:streak`, flush on ready),
+`hooks/useChecklist.ts` (`checklist:rpc`, `checklist:items`).
+
+**Next measurement:** hit the Vercel preview URL, flip the flag,
+capture a real cold-start waterfall. Use those numbers to justify
+the snapshot-RPC + scheduled-generation work in Phase 1 Steps 2+3.
+
+---
+
 ## Recent + next
 
 ### Just shipped (most recent first)
 
+- **Phase 1 Step 1 — load-perf instrumentation.** Tiny opt-in
+  `perfTrace` module; wrapped auth, overview batch, streak, and
+  checklist-generation paths. Console emits a single grouped
+  waterfall on Overview ready. No prod overhead.
 - `473f59a` — Assign template cards: cap preview at 4 tasks + "…"
   overflow indicator at bottom-right. Matches Codex mockup.
 - `22d511e` — Template cards match mockup: gold "+ Assign" + pill,

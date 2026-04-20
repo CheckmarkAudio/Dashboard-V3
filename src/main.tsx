@@ -7,8 +7,15 @@ import { TaskProvider } from './contexts/TaskContext'
 import { MyTasksProvider } from './contexts/MyTasksContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ToastProvider } from './components/Toast'
+import { mark as perfMark } from './lib/perfTrace'
 import App from './App'
 import './index.css'
+
+// Earliest possible timestamp — fires before React mounts so the flush
+// report can show every downstream checkpoint as an offset from here.
+// No-op in production unless `localStorage.debugPerf = '1'`. See
+// `src/lib/perfTrace.ts` for the full contract.
+perfMark('app:bootstrap')
 
 // Detect a Supabase password-recovery link BEFORE React mounts and
 // before supabase-js strips the hash from the URL. We persist the

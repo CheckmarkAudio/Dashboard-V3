@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { time as perfTime } from '../lib/perfTrace'
 import { localDateKey } from '../lib/dates'
 
 export interface ChecklistItemRow {
@@ -61,21 +62,28 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
     if (mountedRef.current) setLoading(true)
     try {
       if (isOwn && profile) {
-        // Try the existing RPC first (works if the DB function exists)
-        const { data: instId, error: rpcError } = await supabase.rpc('intern_generate_checklist', {
-          p_intern_id: profile.id,
-          p_frequency: frequency,
-          p_date: dateKey,
-        })
+        // Try the existing RPC first (works if the DB function exists).
+        // `checklist:rpc` is the suspected primary cost of first-load-
+        // of-the-day — this is the call that generates today's
+        // checklist instance on-the-fly when the user arrives. Moving
+        // generation to a scheduled backend job is Phase 1 Step 2.
+        const { data: instId, error: rpcError } = await perfTime('checklist:rpc', () =>
+          supabase.rpc('intern_generate_checklist', {
+            p_intern_id: profile.id,
+            p_frequency: frequency,
+            p_date: dateKey,
+          }),
+        )
         if (!mountedRef.current) return
 
         if (!rpcError && instId) {
           setInstanceId(instId)
-          const { data } = await supabase
+          const { data } = await perfTime('checklist:items', () => supabase
             .from('team_checklist_items')
             .select('*')
             .eq('instance_id', instId)
-            .order('sort_order')
+            .order('sort_order'),
+          )
           if (!mountedRef.current) return
           setItems((data as ChecklistItemRow[]) ?? [])
           setLoading(false)

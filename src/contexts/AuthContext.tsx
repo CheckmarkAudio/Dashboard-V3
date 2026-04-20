@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
 import { supabase, withSupabaseRetry } from '../lib/supabase'
+import { time as perfTime } from '../lib/perfTrace'
 import { normalizeEmail } from '../lib/email'
 import type { TeamMember } from '../types'
 import {
@@ -148,15 +149,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     //    where the UI silently falls back to `member` role.
     let data: TeamMember | null = null
     try {
-      data = await withSupabaseRetry(async () => {
-        const res = await supabase
-          .from('team_members')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle()
-        if (res.error) throw res.error
-        return (res.data ?? null) as TeamMember | null
-      })
+      data = await perfTime('auth:fetchProfile:byId', () =>
+        withSupabaseRetry(async () => {
+          const res = await supabase
+            .from('team_members')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle()
+          if (res.error) throw res.error
+          return (res.data ?? null) as TeamMember | null
+        }),
+      )
     } catch (error) {
       const pgErr = error as { message?: string; code?: string }
       console.error('[AuthContext] Profile lookup failed after retries:', pgErr.message, pgErr.code)
@@ -179,15 +182,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (email) {
       let emailMatch: TeamMember | null = null
       try {
-        emailMatch = await withSupabaseRetry(async () => {
-          const res = await supabase
-            .from('team_members')
-            .select('*')
-            .ilike('email', email)
-            .maybeSingle()
-          if (res.error) throw res.error
-          return (res.data ?? null) as TeamMember | null
-        })
+        emailMatch = await perfTime('auth:fetchProfile:byEmail', () =>
+          withSupabaseRetry(async () => {
+            const res = await supabase
+              .from('team_members')
+              .select('*')
+              .ilike('email', email)
+              .maybeSingle()
+            if (res.error) throw res.error
+            return (res.data ?? null) as TeamMember | null
+          }),
+        )
       } catch (emailErr) {
         const pgErr = emailErr as { message?: string }
         console.error('[AuthContext] Email lookup failed after retries:', pgErr.message)
@@ -281,7 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (mounted) setLoading(false)
     }, 5000)
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    perfTime('auth:getSession', () => supabase.auth.getSession()).then(async ({ data: { session } }) => {
       if (!mounted) return
       sessionInitialized.current = true
       setSession(session)
