@@ -27,11 +27,11 @@ type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
 const STAGES: readonly Stage[] = ['deliver', 'capture', 'share', 'attract', 'book']
 
 const STAGE_STYLE: Record<Stage, { label: string; text: string; dot: string; bg: string; ring: string }> = {
-  deliver: { label: 'Deliver', text: 'text-teal-300',    dot: 'bg-teal-400',    bg: 'bg-teal-500/5',    ring: 'ring-teal-500/15' },
-  capture: { label: 'Capture', text: 'text-sky-300',     dot: 'bg-sky-400',     bg: 'bg-sky-500/5',     ring: 'ring-sky-500/15' },
-  share:   { label: 'Share',   text: 'text-purple-300',  dot: 'bg-purple-400',  bg: 'bg-purple-500/5',  ring: 'ring-purple-500/15' },
-  attract: { label: 'Attract', text: 'text-fuchsia-300', dot: 'bg-fuchsia-400', bg: 'bg-fuchsia-500/5', ring: 'ring-fuchsia-500/15' },
-  book:    { label: 'Book',    text: 'text-indigo-300',  dot: 'bg-indigo-400',  bg: 'bg-indigo-500/5',  ring: 'ring-indigo-500/15' },
+  deliver: { label: 'Deliver', text: 'text-blue-300',   dot: 'bg-blue-400',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15' },
+  capture: { label: 'Capture', text: 'text-purple-300', dot: 'bg-purple-400', bg: 'bg-purple-500/5', ring: 'ring-purple-500/15' },
+  share:   { label: 'Share',   text: 'text-cyan-300',   dot: 'bg-cyan-400',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15' },
+  attract: { label: 'Attract', text: 'text-pink-300',   dot: 'bg-pink-400',   bg: 'bg-pink-500/5',   ring: 'ring-pink-500/15' },
+  book:    { label: 'Book',    text: 'text-orange-300', dot: 'bg-orange-400', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15' },
 }
 
 // ─── Shared row component ────────────────────────────────────────

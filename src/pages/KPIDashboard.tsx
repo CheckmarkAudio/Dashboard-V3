@@ -22,11 +22,11 @@ import {
 // in a future change). Matches the STAGE_STYLES Record used across
 // dashboard widgets.
 const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; color: string; bg: string }[] = [
-  { key: 'deliver', label: 'Deliver', color: 'text-teal-400',    bg: 'bg-teal-500/5' },
-  { key: 'capture', label: 'Capture', color: 'text-sky-400',     bg: 'bg-sky-500/5' },
-  { key: 'share',   label: 'Share',   color: 'text-purple-400',  bg: 'bg-purple-500/5' },
-  { key: 'attract', label: 'Attract', color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/5' },
-  { key: 'book',    label: 'Book',    color: 'text-indigo-400',  bg: 'bg-indigo-500/5' },
+  { key: 'deliver', label: 'Deliver', color: 'text-blue-400',   bg: 'bg-blue-500/5' },
+  { key: 'capture', label: 'Capture', color: 'text-purple-400', bg: 'bg-purple-500/5' },
+  { key: 'share',   label: 'Share',   color: 'text-cyan-400',   bg: 'bg-cyan-500/5' },
+  { key: 'attract', label: 'Attract', color: 'text-pink-400',   bg: 'bg-pink-500/5' },
+  { key: 'book',    label: 'Book',    color: 'text-orange-400', bg: 'bg-orange-500/5' },
 ]
 
 function getTrendColor(trend: KPITrend) {

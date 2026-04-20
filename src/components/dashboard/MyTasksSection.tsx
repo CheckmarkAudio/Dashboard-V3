@@ -35,11 +35,11 @@ const STAGES: { value: FilterValue; label: string }[] = [
 // at very low opacity so the colored TEXT reads first, not a loud
 // pill. See src/index.css for the matching CSS tokens.
 const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring: string }> = {
-  deliver: { dot: 'bg-teal-400',    text: 'text-teal-300',    bg: 'bg-teal-500/5',    ring: 'ring-teal-500/15' },
-  capture: { dot: 'bg-sky-400',     text: 'text-sky-300',     bg: 'bg-sky-500/5',     ring: 'ring-sky-500/15' },
-  share:   { dot: 'bg-purple-400',  text: 'text-purple-300',  bg: 'bg-purple-500/5',  ring: 'ring-purple-500/15' },
-  attract: { dot: 'bg-fuchsia-400', text: 'text-fuchsia-300', bg: 'bg-fuchsia-500/5', ring: 'ring-fuchsia-500/15' },
-  book:    { dot: 'bg-indigo-400',  text: 'text-indigo-300',  bg: 'bg-indigo-500/5',  ring: 'ring-indigo-500/15' },
+  deliver: { dot: 'bg-blue-400',   text: 'text-blue-300',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15' },
+  capture: { dot: 'bg-purple-400', text: 'text-purple-300', bg: 'bg-purple-500/5', ring: 'ring-purple-500/15' },
+  share:   { dot: 'bg-cyan-400',   text: 'text-cyan-300',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15' },
+  attract: { dot: 'bg-pink-400',   text: 'text-pink-300',   bg: 'bg-pink-500/5',   ring: 'ring-pink-500/15' },
+  book:    { dot: 'bg-orange-400', text: 'text-orange-300', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15' },
 }
 
 /**
