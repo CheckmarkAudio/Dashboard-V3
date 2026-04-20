@@ -1,8 +1,18 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
-import CreateTaskModal from '../components/CreateTaskModal'
-import { Check, Plus, Flame, Eye, EyeOff } from 'lucide-react'
+import {
+  Card,
+  CardHeader,
+  CompletedToggle,
+  StagePillRow,
+  SubmitBar,
+  TaskRow,
+  countByStage,
+  type Stage,
+  STAGE_STYLE,
+} from '../components/tasks/shared'
+import MyTasksCard from '../components/tasks/MyTasksCard'
 
 /**
  * Tasks page — matches the Workspace-UI-Draft tasks.html mockup.
@@ -11,242 +21,12 @@ import { Check, Plus, Flame, Eye, EyeOff } from 'lucide-react'
  *   Left (big, full height): Team Tasks — aggregate team-wide tasks
  *     tagged by flywheel stage. Filter pills at top let you slice by
  *     stage.
- *   Top-right: My Tasks — the user's own tasks, Day/Week tabs,
- *     stage filter pills, time-of-day meta, Submit Completed button.
+ *   Top-right: My Tasks — the user's own tasks. Now lives in
+ *     `components/tasks/MyTasksCard.tsx` so the same widget mounts
+ *     on the Overview page (synched via MyTasksContext).
  *   Bottom-right: Studio Tasks — recurring studio maintenance,
  *     Daily + Weekly segments, Submit Completed button.
- *
- * Data is still mock until Phase 2 (personalized user data model)
- * wires this to Supabase. All state is client-only.
  */
-
-// ─── Flywheel stage model ─────────────────────────────────────────
-
-type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
-
-const STAGES: readonly Stage[] = ['deliver', 'capture', 'share', 'attract', 'book']
-
-// Stage tag text — perceptual brightness balanced so all five labels
-// read at roughly the same visual weight despite their different hues.
-// Cyan and orange are notably brighter than blue/violet/pink at the
-// same Tailwind shade (cyan-400 ≈ L*78 vs blue-400 ≈ L*67), so they
-// drop a step to -500 to compensate. All share the same /70 opacity
-// to keep the labels recessive vs the task title + checkbox.
-// Dots stay at full -400 saturation for instant color-coded scanning.
-const STAGE_STYLE: Record<Stage, { label: string; text: string; dot: string; bg: string; ring: string }> = {
-  deliver: { label: 'Deliver', text: 'text-blue-400/70',   dot: 'bg-blue-400',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15' },
-  capture: { label: 'Capture', text: 'text-violet-400/70', dot: 'bg-violet-400', bg: 'bg-violet-500/5', ring: 'ring-violet-500/15' },
-  share:   { label: 'Share',   text: 'text-cyan-500/70',   dot: 'bg-cyan-400',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15' },
-  attract: { label: 'Attract', text: 'text-pink-400/70',   dot: 'bg-pink-400',   bg: 'bg-pink-500/5',   ring: 'ring-pink-500/15' },
-  book:    { label: 'Book',    text: 'text-orange-500/70', dot: 'bg-orange-400', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15' },
-}
-
-// ─── Shared row component ────────────────────────────────────────
-// One task in any list. Optionally renders a stage tag on the right
-// (for Team / My Tasks) OR a plain meta label (for Studio Tasks).
-
-function TaskRow({
-  title,
-  meta,
-  priority,
-  isDone,
-  isPending,
-  onCheck,
-}: {
-  title: string
-  meta?: string
-  priority?: boolean
-  isDone: boolean
-  isPending: boolean
-  onCheck: () => void
-}) {
-  const isChecked = isDone || isPending
-
-  return (
-    <div
-      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-center py-2.5 border-b border-white/5 last:border-0 transition-opacity ${
-        isDone ? 'opacity-30' : ''
-      }`}
-    >
-      <button
-        onClick={onCheck}
-        disabled={isDone}
-        className="shrink-0"
-        aria-label={isChecked ? 'Mark incomplete' : 'Mark complete'}
-      >
-        <div
-          className={`w-[18px] h-[18px] rounded-[5px] border-[1.5px] flex items-center justify-center transition-all ${
-            isDone
-              ? 'bg-gold/30 border-gold/40'
-              : isPending
-                ? 'bg-gold/20 border-gold'
-                : 'border-white/20 hover:border-gold/60'
-          }`}
-        >
-          {isChecked && <Check size={11} className="text-gold" strokeWidth={3} />}
-        </div>
-      </button>
-      <div className="min-w-0 flex items-center gap-2">
-        <span
-          className={`text-[14px] leading-snug truncate ${
-            isDone ? 'line-through text-text-light' : 'text-text'
-          }`}
-        >
-          {title}
-        </span>
-        {priority && <Flame size={12} className="text-gold shrink-0" aria-hidden="true" />}
-      </div>
-      {/* Per-row stage tags removed — slicing happens via the filter
-          pills at the top of each card, which keeps the row to just
-          checkbox + title (+ optional meta like a due time). */}
-      {meta ? (
-        <span className="text-[12px] text-text-light whitespace-nowrap tabular-nums">{meta}</span>
-      ) : null}
-    </div>
-  )
-}
-
-// ─── Stage filter pill strip ──────────────────────────────────────
-// "All 22 / Deliver 6 / Capture 9 / …". Clicking a pill filters the
-// list below. Active pill uses the stage's color; inactive uses the
-// muted gray treatment.
-
-function StagePillRow({
-  counts,
-  active,
-  onChange,
-}: {
-  counts: Record<'all' | Stage, number>
-  active: 'all' | Stage
-  onChange: (next: 'all' | Stage) => void
-}) {
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <StagePill
-        label="All"
-        count={counts.all}
-        tone="gold"
-        isActive={active === 'all'}
-        onClick={() => onChange('all')}
-      />
-      {STAGES.map((s) => (
-        <StagePill
-          key={s}
-          label={STAGE_STYLE[s].label}
-          count={counts[s]}
-          tone={s}
-          isActive={active === s}
-          onClick={() => onChange(s)}
-        />
-      ))}
-    </div>
-  )
-}
-
-function StagePill({
-  label,
-  count,
-  tone,
-  isActive,
-  onClick,
-}: {
-  label: string
-  count: number
-  tone: 'gold' | Stage
-  isActive: boolean
-  onClick: () => void
-}) {
-  const stageStyle = tone === 'gold' ? null : STAGE_STYLE[tone]
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all ring-1 whitespace-nowrap ${
-        isActive
-          ? tone === 'gold'
-            ? 'bg-gold/15 text-gold ring-gold/30'
-            : `${stageStyle!.bg} ${stageStyle!.text} ${stageStyle!.ring}`
-          : 'bg-white/[0.03] text-text-light ring-white/10 hover:text-text'
-      }`}
-    >
-      {stageStyle && (
-        <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot}`} aria-hidden="true" />
-      )}
-      {label}
-      <span className={`tabular-nums ${isActive ? 'opacity-100' : 'opacity-70'}`}>{count}</span>
-    </button>
-  )
-}
-
-// ─── Card chrome (widget-card class) ──────────────────────────────
-
-function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <article className={`widget-card flex flex-col overflow-hidden ${className}`}>{children}</article>
-}
-
-function CardHeader({ children }: { children: ReactNode }) {
-  return <div className="px-5 pt-4 pb-3 border-b border-white/5">{children}</div>
-}
-
-function SubmitBar({
-  count,
-  onClick,
-  disabled,
-}: {
-  count: number
-  onClick: () => void
-  disabled: boolean
-}) {
-  return (
-    <div className="px-5 py-4 border-t border-white/5 mt-auto">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-bold transition-all ${
-          disabled
-            ? 'bg-white/[0.03] text-text-light ring-1 ring-white/5 cursor-not-allowed'
-            : 'bg-gradient-to-b from-gold to-gold-muted text-black hover:brightness-105 shadow-[0_14px_28px_rgba(214,170,55,0.22)]'
-        }`}
-      >
-        <Check size={14} strokeWidth={3} />
-        {disabled ? 'Submit Completed' : `Submit Completed (${count})`}
-      </button>
-    </div>
-  )
-}
-
-function DayWeekToggle({ value, onChange }: { value: 'Day' | 'Week'; onChange: (v: 'Day' | 'Week') => void }) {
-  return (
-    <div className="flex bg-white/[0.03] rounded-lg p-1 ring-1 ring-white/5">
-      {(['Day', 'Week'] as const).map((o) => (
-        <button
-          key={o}
-          type="button"
-          onClick={() => onChange(o)}
-          className={`px-3 py-1 rounded-md text-[11px] font-bold tracking-tight transition-colors ${
-            value === o ? 'bg-gold/16 text-gold' : 'text-text-light hover:text-text'
-          }`}
-        >
-          {o}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function CompletedToggle({ show, onToggle }: { show: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="inline-flex items-center gap-1.5 text-[11px] text-text-light hover:text-text transition-colors py-1"
-    >
-      {show ? <EyeOff size={11} /> : <Eye size={11} />}
-      {show ? 'Hide' : 'Show'} completed
-    </button>
-  )
-}
 
 // ─── Mock data (Phase-1 placeholder until DB snapshot RPC lands) ──
 
@@ -273,30 +53,6 @@ const TEAM_TASKS: StagedTask[] = [
   { id: 't12', title: 'Research new outbound leads',                      stage: 'attract' , done: false },
 ]
 
-type MyTask = {
-  id: string
-  title: string
-  stage: Stage
-  due: string
-  priority?: boolean
-  done: boolean
-}
-
-const MY_TODAY: MyTask[] = [
-  { id: 'm1', title: 'Draft Q2 social media calendar',    stage: 'share',   due: '5:00 PM',  priority: true,  done: false },
-  { id: 'm2', title: 'Schedule newsletter send',          stage: 'share',   due: '3:00 PM',  priority: true,  done: false },
-  { id: 'm3', title: 'Post session highlight reel',       stage: 'share',   due: '6:00 PM',                    done: false },
-  { id: 'm4', title: 'Follow up on three pending inquiries', stage: 'book', due: 'Today',    priority: true,  done: false },
-  { id: 'm5', title: 'Respond to influencer DMs',         stage: 'capture', due: '12:00 PM',                   done: true  },
-]
-
-const MY_WEEK: MyTask[] = [
-  { id: 'w1', title: 'Review Instagram analytics',        stage: 'capture', due: 'Apr 15',                     done: false },
-  { id: 'w2', title: 'Create podcast promo copy',         stage: 'share',   due: 'Apr 16',                     done: false },
-  { id: 'w3', title: 'Plan May content calendar',         stage: 'share',   due: 'Apr 21',                     done: false },
-  { id: 'w4', title: 'Q2 campaign launch prep',           stage: 'attract', due: 'May 1',   priority: true,  done: false },
-]
-
 type RecurringTask = { id: string; title: string; frequency: 'Daily' | 'Weekly'; done: boolean }
 
 const STUDIO_TASKS: RecurringTask[] = [
@@ -309,15 +65,6 @@ const STUDIO_TASKS: RecurringTask[] = [
   { id: 's7',  title: 'Archive completed session folders',        frequency: 'Weekly', done: false },
   { id: 's8',  title: 'Check backup status on shared drives',     frequency: 'Weekly', done: false },
 ]
-
-// ─── Helpers ──────────────────────────────────────────────────────
-
-function countByStage(tasks: { stage: Stage; done: boolean }[], submitted: Set<string> = new Set<string>(), idKey: (t: any) => string = (t) => t.id) {
-  const active = tasks.filter((t) => !t.done && !submitted.has(idKey(t)))
-  const counts: Record<'all' | Stage, number> = { all: active.length, deliver: 0, capture: 0, share: 0, attract: 0, book: 0 }
-  for (const t of active) counts[t.stage]++
-  return counts
-}
 
 // ─── Card 1: Team Tasks ───────────────────────────────────────────
 
@@ -388,7 +135,8 @@ function TeamTasksCard() {
                   !isDone &&
                   setChecked((prev) => {
                     const n = new Set(prev)
-                    n.has(t.id) ? n.delete(t.id) : n.add(t.id)
+                    if (n.has(t.id)) n.delete(t.id)
+                    else n.add(t.id)
                     return n
                   })
                 }
@@ -396,90 +144,6 @@ function TeamTasksCard() {
             )
           })
         )}
-      </div>
-
-      <SubmitBar count={checked.size} onClick={onSubmit} disabled={checked.size === 0} />
-    </Card>
-  )
-}
-
-// ─── Card 2: My Tasks ─────────────────────────────────────────────
-
-function MyTasksCard() {
-  const [timeRange, setTimeRange] = useState<'Day' | 'Week'>('Day')
-  const [stageFilter, setStageFilter] = useState<'all' | Stage>('all')
-  const [checked, setChecked] = useState<Set<string>>(new Set())
-  const [submitted, setSubmitted] = useState<Set<string>>(new Set())
-  const [showCompleted, setShowCompleted] = useState(false)
-  const [showCreate, setShowCreate] = useState(false)
-
-  const items = timeRange === 'Day' ? MY_TODAY : MY_WEEK
-
-  const counts = useMemo(() => countByStage(items, submitted), [items, submitted])
-  const visible = useMemo(() => {
-    return items.filter((t) => {
-      const isDone = t.done || submitted.has(t.id)
-      if (isDone && !showCompleted) return false
-      if (stageFilter !== 'all' && t.stage !== stageFilter) return false
-      return true
-    })
-  }, [items, stageFilter, submitted, showCompleted])
-
-  const onSubmit = () => {
-    setSubmitted((prev) => {
-      const next = new Set(prev)
-      checked.forEach((id) => next.add(id))
-      return next
-    })
-    setChecked(new Set())
-  }
-
-  return (
-    <Card>
-      {showCreate && <CreateTaskModal onClose={() => setShowCreate(false)} />}
-      <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[18px] font-bold tracking-tight text-text">My Tasks</h2>
-          <DayWeekToggle value={timeRange} onChange={setTimeRange} />
-        </div>
-        <div className="mt-3">
-          <StagePillRow counts={counts} active={stageFilter} onChange={setStageFilter} />
-        </div>
-      </CardHeader>
-
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-2">
-        {visible.map((t) => {
-          const isDone = t.done || submitted.has(t.id)
-          const isPending = checked.has(t.id)
-          return (
-            <TaskRow
-              key={t.id}
-              title={t.title}
-              meta={t.due}
-              priority={t.priority}
-              isDone={isDone}
-              isPending={isPending}
-              onCheck={() =>
-                !isDone &&
-                setChecked((prev) => {
-                  const n = new Set(prev)
-                  n.has(t.id) ? n.delete(t.id) : n.add(t.id)
-                  return n
-                })
-              }
-            />
-          )
-        })}
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-1.5 py-2.5 text-[13px] font-semibold text-gold/80 hover:text-gold transition-colors"
-        >
-          <Plus size={13} strokeWidth={2.2} /> Task
-        </button>
-        <div className="pt-1">
-          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((s) => !s)} />
-        </div>
       </div>
 
       <SubmitBar count={checked.size} onClick={onSubmit} disabled={checked.size === 0} />
@@ -544,7 +208,8 @@ function StudioTasksCard() {
                   !isDone &&
                   setChecked((prev) => {
                     const n = new Set(prev)
-                    n.has(t.id) ? n.delete(t.id) : n.add(t.id)
+                    if (n.has(t.id)) n.delete(t.id)
+                    else n.add(t.id)
                     return n
                   })
                 }

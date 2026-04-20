@@ -21,9 +21,12 @@ import type {
 //   Row 2: today_calendar (col 2) + booking_snapshot    (col 1)
 export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
   {
+    // Widget id stays `team_tasks` so saved layouts keep resolving;
+    // the rendered component is now `MyTasksCard` (the same card that
+    // lives on the /daily Tasks page) sharing state via MyTasksContext.
     id: 'team_tasks',
-    title: 'Tasks',
-    description: 'Today by flywheel stage.',
+    title: 'My Tasks',
+    description: 'Personal queue — synched with the Tasks page.',
     defaultSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
   },

@@ -23,7 +23,7 @@ import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/das
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { supabase } from '../../lib/supabase'
 import type { TeamMember } from '../../types'
-import MyTasksSection from './MyTasksSection'
+import MyTasksCard from '../tasks/MyTasksCard'
 import CreateBookingModal from '../CreateBookingModal'
 
 // Stage tokens shared between the activity feed + status pills.
@@ -675,13 +675,15 @@ export function TeamActivityWidget() {
 }
 
 /**
- * TeamTasksWidget — Overview's "My tasks · Across all flywheel stages" surface.
- * Delegates to MyTasksSection per the v1.0 design system rendering.
- * Frame title + description come from the widget registry, so the section
- * starts directly with filter pills.
+ * TeamTasksWidget — Overview's personal task widget. Renders the SAME
+ * MyTasksCard component used on the /daily Tasks page so checking a
+ * task on Overview shows pending on /daily and vice versa (state lives
+ * in MyTasksContext at the app root). Widget id stays `team_tasks` so
+ * existing layout configs keep resolving — registry title/description
+ * was updated to "My Tasks" / "Personal queue."
  */
 export function TeamTasksWidget() {
-  return <MyTasksSection />
+  return <MyTasksCard />
 }
 
 /**
