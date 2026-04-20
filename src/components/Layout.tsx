@@ -9,11 +9,10 @@ import { APP_ROUTES } from '../app/routes'
 import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
-import TeamHubIcon from './icons/TeamHubIcon'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
 import type { LucideProps } from 'lucide-react'
 import {
-  LayoutDashboard, Users, Calendar, Settings,
+  LayoutDashboard, Users, Calendar, Settings, Gauge,
   LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
   BarChart3, Briefcase, MessageSquare, Clock, Sun, Moon,
   Loader2,
@@ -118,7 +117,11 @@ const adminLinks: NavLinkDef[] = [
   // Label renamed from "Hub" → "Dashboard" per product direction.
   // The underlying route (APP_ROUTES.admin.hub = /admin) is unchanged
   // so existing links/bookmarks still work; only the UI label shifts.
-  { to: APP_ROUTES.admin.hub, icon: TeamHubIcon as ComponentType<LucideProps>, label: 'Dashboard' },
+  // Admin Dashboard — Gauge icon reads as "metrics / control view,"
+  // matches what the page actually is (admin widget grid for ops
+  // oversight). Distinct from the Overview icon (LayoutDashboard)
+  // so the two don't look identical in the top nav.
+  { to: APP_ROUTES.admin.hub, icon: Gauge, label: 'Dashboard' },
   { to: APP_ROUTES.admin.templates, icon: ClipboardList, label: 'Assign' },
   { to: APP_ROUTES.admin.members, icon: Users, label: 'Members' },
   { to: APP_ROUTES.admin.analytics, icon: BarChart3, label: 'Analytics' },
