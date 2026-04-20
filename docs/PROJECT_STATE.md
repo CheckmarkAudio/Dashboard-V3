@@ -13,8 +13,8 @@
 | **Live URL** | https://dashboard-v3-dusky.vercel.app |
 | **Hosting** | Vercel (auto-deploys from `main`) |
 | **Database** | Supabase project `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") |
-| **Latest commit** | `a6e0a83` — perf: gate Overview flush on `profile` so the waterfall captures the real query pass |
-| **Currently active** | Phase 1 Step 1 (instrumentation) locked w/ real prod baseline; moving to Step 2A (duplicate Supabase client) |
+| **Latest commit** | `c719ef2` — perf(auth): remove duplicate Supabase client (Phase 1 Step 2A, PR #1) |
+| **Currently active** | Phase 1 Step 2A shipped (998ms cold start on preview, down from 1,289ms baseline, warning gone). Next: consolidate the two remaining parallel `auth:fetchProfile:byId` calls, then Step 2B server-side checklist generation. |
 
 ---
 
@@ -143,18 +143,21 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 | 2026-04-20 | `cf39bb6` | perf: satisfy strict TS in production build (tsconfig happy path). |
 | 2026-04-20 | `a6e0a83` | perf: gate the Overview flush on `profile` so the waterfall captures real queries, not just `auth:getSession`. Fixes early-flush bug where `MemberOverviewContext.refetch()` early-returns when `!profile`, flipping `loading` false before queries run. |
 | 2026-04-20 | — | **Perf baseline locked.** Production cold-start on `dashboard-v3-dusky.vercel.app` is 1,289ms over 8 checkpoints. Longest single span: `overview:batch` 427ms. Three `auth:fetchProfile:byId` fetches — tied to the `"Multiple GoTrueClient instances"` warning. Full waterfall in `docs/SESSION_CONTEXT.md` → Performance baseline. |
+| 2026-04-20 | `c719ef2` (PR #1) | **Phase 1 Step 2A — duplicate Supabase client removed.** Deleted `src/lib/chatSupabase.ts` (second `createClient` with default auth config colliding on the same storage key); consolidated 8 call sites in `Content.tsx` + `adminHubWidgets.tsx` to the main `supabase` client. Preview cold-start drops to 998ms / 7 checkpoints / `overview:batch` collapses 427→185ms. `"Multiple GoTrueClient instances"` warning GONE. One parallel `auth:fetchProfile:byId` remains (was 3×, now 2×). |
 
 ---
 
 ## Active
 
-**Phase 1 — Stabilize the foundation** (in progress): Load-perf work from the Codex 4-phase roadmap. Step 1 done (instrumentation + prod baseline locked on 2026-04-20 — 1,289ms cold start, waterfall in `SESSION_CONTEXT.md`). Step 2 next, in this order:
+**Phase 1 — Stabilize the foundation** (in progress): Load-perf work from the Codex 4-phase roadmap.
 
-- **2A — Duplicate Supabase client fix.** The `"Multiple GoTrueClient instances detected"` prod warning is almost certainly why `auth:fetchProfile:byId` fires 3× on cold start. Cheapest win available; grep for `createClient(`, consolidate to one module-level singleton, re-measure.
-- **2B — Server-side daily checklist generation.** Replace the client-side `checklist:rpc` (399ms on critical path) with a Supabase scheduled job that materialises today's items before anyone logs in.
-- **2C — Snapshot RPC.** Collapse `overview:batch` + `overview:streak` + `checklist:items` into one `member_overview_snapshot(user_id, date)` RPC.
+- ✅ **Step 1 — instrumentation + prod baseline** (2026-04-20). 1,289ms cold start, waterfall in `SESSION_CONTEXT.md`.
+- ✅ **Step 2A — Duplicate Supabase client** (2026-04-20, `c719ef2` / PR #1). Deleted `src/lib/chatSupabase.ts`; consolidated 8 call sites to the main `supabase`. Preview cold-start 998ms (↓22%), `overview:batch` 427→185ms, `"Multiple GoTrueClient instances"` warning GONE.
+- ⏳ **Step 2A′ — Collapse duplicate `auth:fetchProfile:byId`.** Two calls still fire in near-parallel (@8ms, @9ms, ~208ms each). Likely a dual code path in `AuthContext` (initial `getSession` + `onAuthStateChange` both fetching). Fetch is now the longest pole, so this is the next obvious target.
+- ⏳ **Step 2B — Server-side daily checklist generation.** Replace client-side `checklist:rpc` (182ms on critical path) with a Supabase scheduled job materialising today's items before anyone logs in.
+- ⏳ **Step 2C — Snapshot RPC.** Collapse `overview:batch` + `overview:streak` + `checklist:items` into one `member_overview_snapshot(user_id, date)` RPC.
 
-Target: cold start ~500–700ms on current hosting after 2A–2C land. Then migrate hosting Vercel → Cloudflare Pages (free commercial tier) as a separate single-concern PR and re-measure.
+Target: cold start ~500–700ms on current hosting after 2A′–2C land. Then migrate hosting Vercel → Cloudflare Pages (free commercial tier) as a separate single-concern PR and re-measure.
 
 **UI design refresh — scoped pilot** (paused): Apply the v1.0 design system PDF to the live app on three pages first. See `~/.../My Drive/Checkmark Audio — Design System · Print.pdf` for the visual spec.
 

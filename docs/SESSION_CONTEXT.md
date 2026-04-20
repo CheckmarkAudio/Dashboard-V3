@@ -501,6 +501,11 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
+- **Phase 1 Step 2A — DONE (`c719ef2` / PR #1).** Deleted the
+  duplicate `chatSupabase` client. Preview cold-start drops
+  1,289→998ms, `"Multiple GoTrueClient instances"` warning gone,
+  `overview:batch` collapses 427→185ms, `auth:fetchProfile:byId`
+  drops from 3× to 2×.
 - **Phase 1 Step 1 — DONE.** Production cold-start waterfall
   captured + documented. See "Performance baseline" above.
 - `a6e0a83` — perf: gate Overview flush on `profile` so the
