@@ -102,7 +102,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
 
       {headerStrip}
 
-      <div className={`flex-1 min-h-0 overflow-y-auto space-y-1 ${embedded ? 'pb-1' : 'px-3 py-2'}`}>
+      <div className={`flex-1 min-h-0 overflow-y-auto space-y-1 ${embedded ? '' : 'px-3 py-2'}`}>
         {visible.map((t) => {
           const isDone = t.done || submittedIds.has(t.id)
           const isPending = pendingIds.has(t.id)
@@ -118,20 +118,23 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             />
           )
         })}
-        {/* Footer — `+ Task` on the left, `Show completed` right-
-            justified on the same row. Collapses what was previously
-            two stacked controls into a single row, trimming ~24px
-            of dead space at the bottom of the widget. */}
-        <div className="flex items-center justify-between gap-3 pt-1.5">
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-1.5 py-1.5 text-[13px] font-semibold text-gold/80 hover:text-gold transition-colors"
-          >
-            <Plus size={13} strokeWidth={2.2} /> Task
-          </button>
-          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((s) => !s)} />
-        </div>
+      </div>
+
+      {/* Footer — pinned to the bottom of the widget (shrink-0, outside
+          the scroll region) so it always sits flush with the card's
+          bottom edge regardless of how few tasks are showing. Eliminates
+          the dead space that appeared below the old trailing-element
+          footer when the task list was short. `+ Task` left, `Show
+          completed` right-justified. */}
+      <div className={`flex items-center justify-between gap-3 shrink-0 ${embedded ? 'pt-2 mt-1 border-t border-white/5' : 'pt-2 px-3 pb-1'}`}>
+        <button
+          type="button"
+          onClick={() => setShowCreate(true)}
+          className="inline-flex items-center gap-1.5 py-1 text-[13px] font-semibold text-gold/80 hover:text-gold transition-colors"
+        >
+          <Plus size={13} strokeWidth={2.2} /> Task
+        </button>
+        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((s) => !s)} />
       </div>
 
       <SubmitBar count={pendingInVisible} onClick={submitPending} />

@@ -369,13 +369,23 @@ export function BookingSnapshotWidget() {
         TODAY · {todayLabel}
       </p>
 
-      {/* Big number + next-session detail.
-          `min-h-0` + `overflow-hidden` lets the flex-1 area shrink when
-          content is tall (big number + next-session block + border).
-          Without them, intrinsic content height would push the Book-
-          a-Session button past the widget's `overflow: hidden` cell and
-          clip its rounded bottom edge. Content flows top-down (no
-          `justify-center`) so the button has consistent bottom clearance. */}
+      {/* "Book a Session" CTA — placed at the top of the widget so the
+          primary action is the first thing the eye lands on. Opens the
+          canonical CreateBookingModal (same one Sessions.tsx and
+          Calendar.tsx use). Horizontal inset (`mx-0.5`) pulls the pill
+          in from the card edges; the widget chrome then shows the
+          supporting counter + next-session detail below. */}
+      <button
+        type="button"
+        onClick={() => setShowBooking(true)}
+        className="mx-0.5 mb-3 py-2 rounded-xl bg-gold hover:bg-gold-muted text-black text-[13px] font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0"
+      >
+        <Plus size={15} aria-hidden="true" />
+        Book a Session
+      </button>
+
+      {/* Counter + next-session detail. Flows top-down below the CTA;
+          `min-h-0 overflow-hidden` prevents overflow if content grows. */}
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         <p className="text-[11px] uppercase tracking-wider text-text-light font-medium">
           Upcoming today
@@ -414,21 +424,6 @@ export function BookingSnapshotWidget() {
           </p>
         ) : null}
       </div>
-
-      {/* "Book a Session" CTA — opens canonical CreateBookingModal.
-          `mt-auto` pins the button to the bottom edge of the flex
-          column. Horizontal padding on the button (`mx-0.5`) pulls
-          the pill in slightly so its rounded corners don't touch the
-          card's 22px radius. Shrunk vertical padding (py-2 vs py-2.5)
-          keeps the chrome tight in a narrow column. */}
-      <button
-        type="button"
-        onClick={() => setShowBooking(true)}
-        className="mt-3 mx-0.5 py-2 rounded-xl bg-gold hover:bg-gold-muted text-black text-[13px] font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0"
-      >
-        <Plus size={15} aria-hidden="true" />
-        Book a Session
-      </button>
 
       {showBooking && (
         <CreateBookingModal
