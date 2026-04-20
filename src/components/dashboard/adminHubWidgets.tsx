@@ -335,17 +335,22 @@ function FolderTwoChecksIcon({ size = 19, className }: { size?: number; classNam
       className={className}
       aria-hidden="true"
     >
-      {/* Outer rounded box — same rx/stroke as lucide's CheckSquare. */}
-      <rect
-        x="4"
-        y="4"
-        width="16"
-        height="16"
-        rx="3"
+      {/* Rounded box outline with a GAP on the top edge where the
+          upper check punches through — drawn as one path with a
+          mid-path moveTo (M) that lifts the pen across the crossing.
+          Starts at the end of the top-left arc (7, 4), stops short of
+          the crossing, skips, resumes for the tiny sliver before the
+          top-right arc, then walks the remaining three sides + three
+          arcs back to the start. */}
+      <path
+        d="M 7 4 L 14 4 M 17.2 4 L 17 4 A 3 3 0 0 1 20 7 L 20 17 A 3 3 0 0 1 17 20 L 7 20 A 3 3 0 0 1 4 17 L 4 7 A 3 3 0 0 1 7 4"
         stroke="currentColor"
         strokeWidth="1.7"
+        strokeLinecap="round"
+        fill="none"
       />
-      {/* Upper check — starts inside, exits above the top-right corner. */}
+      {/* Upper check — starts inside, exits above the top-right corner
+          through the gap above. */}
       <path
         d="M7 10.8L9.2 13L17 2"
         stroke="currentColor"
