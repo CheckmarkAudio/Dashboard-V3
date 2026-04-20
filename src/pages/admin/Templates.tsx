@@ -626,13 +626,15 @@ function TemplateCard({
   onEdit: () => void
 }) {
   const isUnassigned = assignee.unassigned
-  // Show up to 5 task previews; "..." indicator afterwards.
-  const visibleFields = template.fields.slice(0, 5)
+  // Cap at 4 task previews so the card stays square-ish and text
+  // stays legible. A "···" indicator renders at the bottom-right when
+  // the template has more than 4 tasks — matches the mockup.
+  const visibleFields = template.fields.slice(0, 4)
   const overflowCount = Math.max(0, template.fields.length - visibleFields.length)
 
   return (
     <article
-      className={`relative grid grid-rows-[auto_1fr_auto] h-[380px] rounded-3xl border overflow-hidden transition-all ${
+      className={`relative grid grid-rows-[auto_1fr_auto] h-[290px] rounded-3xl border overflow-hidden transition-all ${
         isUnassigned
           ? 'border-gold/22 bg-gradient-to-b from-[rgba(22,24,31,0.96)] to-[rgba(15,17,22,0.96)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_36px_rgba(0,0,0,0.16)]'
           : 'border-white/8 bg-gradient-to-b from-[rgba(22,24,31,0.96)] to-[rgba(15,17,22,0.96)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]'
@@ -647,9 +649,9 @@ function TemplateCard({
 
       {/* Top — title, task count, edit button. Title wraps to 2 lines
           if it's long ("Artist Development", etc.) so nothing is cut
-          off by truncation. The header area stays a fixed height via
-          min-h so all cards align regardless of title length. */}
-      <div className="relative px-4 pt-4 pb-3 border-b border-white/5 grid gap-2 min-h-[108px]">
+          off by truncation. Fixed min-h keeps cards uniform across
+          one-line and two-line titles. */}
+      <div className="relative px-4 pt-3.5 pb-2.5 border-b border-white/5 grid gap-1.5 min-h-[86px]">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <button
             type="button"
