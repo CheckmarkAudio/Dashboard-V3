@@ -683,7 +683,9 @@ export function TeamActivityWidget() {
  * was updated to "My Tasks" / "Personal queue."
  */
 export function TeamTasksWidget() {
-  return <MyTasksCard />
+  // `embedded` — no outer `widget-card` wrapper + no duplicate "My Tasks"
+  // title. The parent `DashboardWidgetFrame` already renders both.
+  return <MyTasksCard embedded />
 }
 
 /**

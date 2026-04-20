@@ -30,7 +30,18 @@ import {
 
 type Range = 'Day' | 'Week'
 
-export default function MyTasksCard() {
+interface MyTasksCardProps {
+  /**
+   * When true, skip the outer `widget-card` wrapper AND the internal
+   * `<h2>My Tasks</h2>`. Used on the Overview page, where
+   * `DashboardWidgetFrame` already renders the title + description
+   * and the surface chrome. Prevents the double-title + double-border
+   * look when this card is mounted inside another card.
+   */
+  embedded?: boolean
+}
+
+export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {}) {
   const { today, week, pendingIds, submittedIds, togglePending, submitPending } = useMyTasks()
   const [range, setRange] = useState<Range>('Day')
   const [stageFilter, setStageFilter] = useState<'all' | Stage>('all')
@@ -60,21 +71,38 @@ export default function MyTasksCard() {
     [visible, pendingIds],
   )
 
-  return (
-    <Card className="h-full">
+  // ─── Header strip ──────────────────────────────────────────────
+  // Standalone: titled CardHeader + Day/Week next to title, pills below.
+  // Embedded: no title (outer frame owns it), single row → pills left,
+  // Day/Week right. Collapses the duplicate-header whitespace.
+  const headerStrip = embedded ? (
+    <div className="flex items-center justify-between gap-3 pb-2.5 mb-2 border-b border-white/5 shrink-0">
+      <div className="min-w-0 flex-1 overflow-x-auto">
+        <StagePillRow counts={counts} active={stageFilter} onChange={setStageFilter} />
+      </div>
+      <div className="shrink-0">
+        <DayWeekToggle value={range} onChange={setRange} />
+      </div>
+    </div>
+  ) : (
+    <CardHeader>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-[16px] font-bold tracking-tight text-text">My Tasks</h2>
+        <DayWeekToggle value={range} onChange={setRange} />
+      </div>
+      <div className="mt-2.5">
+        <StagePillRow counts={counts} active={stageFilter} onChange={setStageFilter} />
+      </div>
+    </CardHeader>
+  )
+
+  const body = (
+    <>
       {showCreate && <CreateTaskModal onClose={() => setShowCreate(false)} />}
 
-      <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[16px] font-bold tracking-tight text-text">My Tasks</h2>
-          <DayWeekToggle value={range} onChange={setRange} />
-        </div>
-        <div className="mt-2.5">
-          <StagePillRow counts={counts} active={stageFilter} onChange={setStageFilter} />
-        </div>
-      </CardHeader>
+      {headerStrip}
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-1">
+      <div className={`flex-1 min-h-0 overflow-y-auto space-y-1 ${embedded ? 'pb-1' : 'px-3 py-2'}`}>
         {visible.map((t) => {
           const isDone = t.done || submittedIds.has(t.id)
           const isPending = pendingIds.has(t.id)
@@ -103,6 +131,16 @@ export default function MyTasksCard() {
       </div>
 
       <SubmitBar count={pendingInVisible} onClick={submitPending} />
-    </Card>
+    </>
   )
+
+  // Embedded: no outer Card — `DashboardWidgetFrame` already provides
+  // the `widget-card` surface + padding via its body (`px-4 py-4`). We
+  // just need a column flex container so the scroll region + submit
+  // bar lay out correctly.
+  if (embedded) {
+    return <div className="flex flex-col h-full min-h-0">{body}</div>
+  }
+
+  return <Card className="h-full">{body}</Card>
 }

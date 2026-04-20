@@ -24,21 +24,29 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     // Widget id stays `team_tasks` so saved layouts keep resolving;
     // the rendered component is now `MyTasksCard` (the same card that
     // lives on the /daily Tasks page) sharing state via MyTasksContext.
-    // Two row-span tall — the card has a header strip + filter pills +
-    // task list + Submit Completed bar, so a single row leaves room
-    // for only ~2 visible task rows. Doubling the row span gives ~6.
+    // 2 row-span tall — balances the right column (Notifications at
+    // rowSpan 2 + Booking at rowSpan 1 = 3) against the left column
+    // (My Tasks at 2 + Calendar at 1 = 3). Zero empty space on the
+    // Overview grid. The SubmitBar collapses to zero height when
+    // nothing is pending (see tasks/shared.tsx), so 2 rows fits the
+    // filter pills + ~6 task rows + Task/Show-completed buttons with
+    // room to spare.
     id: 'team_tasks',
     title: 'My Tasks',
     description: 'Personal queue — synched with the Tasks page.',
     defaultSpan: 2,
-    defaultRowSpan: 3,
+    defaultRowSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
+    // Notifications spans 2 rows to match My Tasks on the left so
+    // both columns terminate at the same Y — the Overview grid reads
+    // as one coherent block instead of a left column with a tail.
     id: 'forum_notifications',
     title: 'Notifications',
     description: 'Unread messages across channels.',
     defaultSpan: 1,
+    defaultRowSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
@@ -202,11 +210,13 @@ function buildDefaultWidgetState(
 // changes. Saved layouts whose `version` does not match are discarded
 // in storage.ts so the new default ordering takes effect for everyone.
 //
-// v7 (Apr 2026): team_tasks bumped to defaultRowSpan: 3 so the My Tasks
-// widget has room for ~10 task rows above the Submit Completed bar.
-// Bumping the version is the migration — saved v6 layouts get wiped
-// from localStorage on next load and rebuild from the new defaults.
-export const WORKSPACE_LAYOUT_VERSION = 7
+// v8 (Apr 2026): rebalance the Overview grid so both columns end on
+// the same row — team_tasks 3 → 2, forum_notifications 1 → 2. The
+// SubmitBar now collapses to 0 when idle (see tasks/shared.tsx), so
+// 2 rows has plenty of room for the pills + task list. Bumping the
+// version is the migration — saved v7 layouts get wiped from
+// localStorage on next load and rebuild from the new defaults.
+export const WORKSPACE_LAYOUT_VERSION = 8
 
 // Default layouts per scope. The page passes its scope in, picks the
 // matching array, and produces widget state. Scope is used only for
