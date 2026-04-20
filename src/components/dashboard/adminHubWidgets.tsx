@@ -6,6 +6,7 @@ import {
   CalendarPlus,
   Check,
   CheckCircle2,
+  CheckSquare,
   Clock,
   FolderPlus,
   Hash,
@@ -184,12 +185,12 @@ export function AdminAssignWidget() {
     <div className="flex flex-col h-full">
       <TodayAnchor />
 
-      {/* Three big primary CTAs — one per assignable thing. Taller
-          (p-4 + bigger icons) so they read as primary actions rather
-          than a pill strip. */}
+      {/* Three big primary CTAs — all in Checkmark gold. The icon is
+          the only distinguisher: calendar-plus for Session, the
+          Tasks-menu CheckSquare for Task, and a custom folder-with-
+          two-checkmarks glyph for Task Group. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 shrink-0">
         <AssignTile
-          tone="sky"
           icon={CalendarPlus}
           label="Session"
           hint="Book a studio session"
@@ -197,16 +198,14 @@ export function AdminAssignWidget() {
           onClick={() => setFlow('session')}
         />
         <AssignTile
-          tone="emerald"
-          icon={Plus}
+          icon={CheckSquare}
           label="Task"
           hint="Add one to a member's day"
           count={counts.tasks}
           onClick={() => setFlow('task')}
         />
         <AssignTile
-          tone="violet"
-          icon={FolderPlus}
+          icon={FolderTwoChecksIcon}
           label="Task Group"
           hint="Apply a checklist template"
           count={counts.groups}
@@ -270,8 +269,8 @@ export function AdminAssignWidget() {
                   :                      'bg-violet-500/15 text-violet-300'
                 }`}>
                   {r.kind === 'session' ? <CalendarPlus size={13} />
-                    : r.kind === 'task' ? <Plus size={13} />
-                    : <FolderPlus size={13} />}
+                    : r.kind === 'task' ? <CheckSquare size={13} />
+                    : <FolderTwoChecksIcon size={13} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[12.5px] font-medium text-text truncate leading-tight">{r.title}</p>
@@ -321,42 +320,77 @@ function AssignTip({
   )
 }
 
+// Custom glyph: folder with TWO staggered checkmarks inside. Used for
+// the "Task Group" tile so the icon clearly says "a bundle of
+// checklist items" — not a single task, not a plus-add action.
+function FolderTwoChecksIcon({ size = 19, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      aria-hidden="true"
+    >
+      {/* Folder body */}
+      <path
+        d="M3 7C3 5.9 3.9 5 5 5H9.5L11.5 7H19C20.1 7 21 7.9 21 9V17C21 18.1 20.1 19 19 19H5C3.9 19 3 18.1 3 17V7Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      {/* Top checkmark (staggered slightly left + up) */}
+      <path
+        d="M7.5 12L9.2 13.6L12.4 10.4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Bottom checkmark (staggered right + down) */}
+      <path
+        d="M11 15.4L12.6 16.9L16.4 13.1"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+// AssignTile — unified gold treatment. The icon does the work of
+// telling the three CTAs apart; color stays consistent with the
+// brand rather than pulling in flywheel stage hues.
 function AssignTile({
-  tone,
   icon: Icon,
   label,
   hint,
   count,
   onClick,
 }: {
-  tone: 'sky' | 'emerald' | 'violet'
   icon: React.ComponentType<{ size?: number; className?: string }>
   label: string
   hint: string
   count?: number
   onClick: () => void
 }) {
-  const toneMap = {
-    sky:     { ring: 'ring-sky-500/40',     bg: 'bg-sky-500/10',     text: 'text-sky-300',     hover: 'hover:bg-sky-500/20'     },
-    emerald: { ring: 'ring-emerald-500/40', bg: 'bg-emerald-500/10', text: 'text-emerald-300', hover: 'hover:bg-emerald-500/20' },
-    violet:  { ring: 'ring-violet-500/40',  bg: 'bg-violet-500/10',  text: 'text-violet-300',  hover: 'hover:bg-violet-500/20'  },
-  }[tone]
-
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`group relative text-left p-3.5 rounded-xl ring-1 ${toneMap.ring} ${toneMap.bg} ${toneMap.hover} transition-colors focus-ring`}
+      className="group relative text-left p-3.5 rounded-xl ring-1 ring-gold/30 bg-gradient-to-b from-gold/12 to-gold/5 hover:from-gold/18 hover:to-gold/10 transition-colors focus-ring"
     >
       <div className="flex items-start justify-between">
-        <div className={`inline-flex items-center justify-center w-9 h-9 rounded-lg ${toneMap.text} bg-surface/70`}>
-          <Icon size={19} />
+        <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg text-gold bg-surface/70 ring-1 ring-gold/15">
+          <Icon size={22} />
         </div>
         {count !== undefined && count > 0 && (
-          <span className={`text-[11px] font-bold ${toneMap.text} tabular-nums`}>{count}</span>
+          <span className="text-[11px] font-bold text-gold tabular-nums">{count}</span>
         )}
       </div>
-      <p className={`mt-2 text-[15px] font-bold ${toneMap.text} leading-tight`}>{label}</p>
+      <p className="mt-2 text-[15px] font-bold text-gold leading-tight">{label}</p>
       <p className="text-[11px] text-text-light leading-snug mt-0.5">{hint}</p>
     </button>
   )
