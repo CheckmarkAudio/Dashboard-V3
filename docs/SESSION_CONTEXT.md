@@ -440,11 +440,11 @@ mockups across the three highest-impact surfaces:
 
 ---
 
-## Performance baseline (Phase 1 Step 1 — locked 2026-04-20)
+## Performance baseline — Phase 1 Step 2 all landed (2026-04-20)
 
 Opt-in perf tracer at `src/lib/perfTrace.ts` — no-op unless
-`localStorage.debugPerf = '1'`. Captured waterfall on production
-(`dashboard-v3-dusky.vercel.app`) after the `a6e0a83` flush-gate fix:
+`localStorage.debugPerf = '1'`. Initial baseline (morning of
+2026-04-20, before any Phase 1 Step 2 work):
 
 ```
 ⏱ Overview cold start: 1,289ms  (8 checkpoints, longest overview:batch 427ms)
@@ -459,54 +459,82 @@ Opt-in perf tracer at `src/lib/perfTrace.ts` — no-op unless
   @1085ms 203ms    overview:streak
 ```
 
+**End-of-day locked baseline (after PRs #1 + #2 + #3 + #4):**
+
+```
+⏱ Overview cold start: 826ms  (6 checkpoints, longest checklist:items 265ms)
+
+  @7ms     1ms    auth:getSession
+  @8ms   258ms    auth:fetchProfile:byId   ← 1× per PR #2
+  @372ms 181ms    overview:batch           ┐
+  @372ms 187ms    checklist:lookup         │ parallel
+  @553ms 173ms    overview:streak          ┘ next parallel
+  @559ms 265ms    checklist:items
+
+  NO checklist:rpc — backend-prepared state is real (PR #3 cron)
+```
+
+**Full day: 1,289 → 826ms = −36% / −463ms.** Target was 500–700ms —
+we're 125ms above the ceiling, and 2C is the remaining lever.
+
 Dev numbers from the initial probe (21s cold, 7s `overview:batch`)
 were a dev-mode artifact — Vite HMR + source maps + slow dev RPC
 path. Prod reality is ~1.3s, not 21s. Codex's diagnosis still
 points at the right structural issues, just smaller in magnitude.
 
-### What the real waterfall reveals
+### What the day's work shipped
 
-1. **Duplicate Supabase client.** The console logs `"Multiple
-   GoTrueClient instances detected in the same browser context"`
-   immediately before the waterfall. This is almost certainly
-   why `auth:fetchProfile:byId` fires three times (two in
-   near-parallel at @76/@80ms, a third at @666ms). Two of those
-   three fetches are on the critical path — fixing this alone
-   should reclaim ~250–400ms.
-2. **`overview:batch` (427ms)** is the longest single span.
-   Five parallel queries in `MemberOverviewContext`; Phase 1
-   Step 3 collapses them into one snapshot RPC.
-3. **`checklist:rpc` (399ms)** is the client-side daily-generation
-   path. Phase 1 Step 2 moves this to a Supabase scheduled job so
-   it never blocks first paint.
-4. **`overview:streak` (203ms) + `checklist:items` (196ms)** run
-   after the big two; folding `streak` into the snapshot RPC
-   trims another ~200ms from the tail.
+1. **PR #1 — `chatSupabase` duplicate client removed.**
+   `"Multiple GoTrueClient instances"` warning gone. 1 of 3
+   profile fetches eliminated. `overview:batch` 427→185ms
+   (concurrent-token-refresh race also resolved). Delta:
+   1,289 → 998ms.
+2. **PR #2 — `fetchProfile` cold-start race deduped.** `getSession`
+   path and `INITIAL_SESSION` event no longer both fire a fetch.
+   2×→1× profile fetch. Architectural hygiene — fetches were
+   already parallel so latency was ~stable.
+3. **PR #3 — cron-materialize checklist instances.** pg_cron at
+   11:00 UTC (5am MDT / 4am MST) runs `cron_materialize_checklists()`
+   which iterates active members and pre-creates today's rows.
+   Client fast-path (`checklist:lookup`) hits the pre-materialized
+   row and skips the RPC. `checklist:rpc` no longer fires on cold
+   start — backend-prepared state is real. −~170ms.
+4. **PR #4 — tracer fix.** Flush was firing too early on a race
+   between profile arrival and refetch kickoff. `lastLoadedProfileId`
+   ref gates the flush on "real batch completed for this profile."
+   Revealed the true post-2B cold start: 826ms (6 honest checkpoints)
+   where we previously read 870ms with 7.
 
-### Known gap — not a Today Problem
+### Remaining gaps — targets for Phase 1 Step 2C (snapshot RPC)
 
-Even after 2A + 2A' landed, there's a ~190ms unexplained gap
-between `auth:fetchProfile:byId` finishing (@288ms on the PR #2
-preview) and `overview:batch` starting (@479ms). Nothing
-instrumented runs in that window. Working hypothesis: it's the
-React.lazy chunk for the Overview route loading + the
-`MemberOverviewProvider` mounting its useEffect chain.
+- **~100ms gap** from `auth:fetchProfile:byId` end (@266ms) to
+  the parallel batch start (@372ms). React.lazy route chunk +
+  `MemberOverviewProvider` mount. 2C naturally shrinks this
+  because the batch can start earlier when it's one call, not
+  four parallel ones.
+- **`checklist:items` 265ms** is now the longest span — 22 daily
+  rows fetched after the lookup returns the instance id. Folding
+  the row fetch into the snapshot RPC eliminates the round-trip.
+- **`overview:batch` 181ms + `overview:streak` 173ms + `checklist:items`
+  265ms + `checklist:lookup` 187ms = ~806ms of round-trips.** 2C
+  collapses these into one ~200–300ms snapshot call. Predicted
+  savings: ~200–300ms, putting us comfortably inside the
+  500–700ms target.
 
-**Don't chase this directly.** Step 2C (snapshot RPC) will
-naturally shrink it because the batch can start earlier once the
-provider no longer has a 5-query waterfall to orchestrate. Revisit
-only if the gap is still visible after 2C lands.
+### Observability added today
 
-If you DO want to probe it before then: add a `perfTime(
-'overview:provider-mount', ...)` checkpoint in the
-`MemberOverviewProvider` useEffect on line ~158 to confirm the
-gap is context mount, not something else.
+- `public.cron_run_log` — admin-read RLS, logs each pg_cron run
+  with `users_processed`, `users_failed`, `notes`, `duration_ms`.
+  Query: `SELECT * FROM cron_run_log ORDER BY ran_at DESC LIMIT 5;`
+- `cron.job` / `cron.job_run_details` — pg_cron built-ins for
+  verifying schedules and recent runs.
 
-### Target after Phase 1 Step 2 work
+### Target post-Step 2C
 
-If the duplicate-client fix, server-side checklist generation, and
-snapshot RPC all land, critical path should drop from ~1,289ms to
-roughly ~500–700ms on current hosting, before any Cloudflare move.
+500–700ms on current hosting. 826ms today. 2C is projected to
+land us inside the target, after which Cloudflare migration
+becomes the natural next move (timing at Claude's judgment per
+`feedback_cloudflare_migration_timing.md` memory).
 
 Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 `contexts/AuthContext.tsx` (`auth:getSession`, `auth:fetchProfile:byId`,
@@ -518,12 +546,24 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
-### Just shipped (most recent first)
+### Just shipped (most recent first, from 2026-04-20 session)
 
+- **fix(perf-trace) flush-gate race — DONE (`4e666b9` / PR #4).**
+  `lastLoadedProfileId` ref in `MemberOverviewContext.tsx` gates
+  flush on a real batch having completed for the current profile.
+  Revealed true post-2B cold start: 826ms / 6 honest checkpoints.
+  Yesterday's "870ms / 7 checkpoints" reading was an artifact.
+- **Phase 1 Step 2B — DONE (`85b7df7` / PR #3).** 3 Supabase
+  migrations (pg_cron enable + observability log, materializer
+  function, daily schedule at 11:00 UTC) + 1 client change in
+  `useChecklist.ts`. pg_cron pre-creates today's rows for all
+  active members; client fast-path hits them and skips the RPC.
+  `checklist:rpc` no longer fires on cold start — backend-
+  prepared state is real. −~170ms.
 - **Phase 1 Step 2A' — DONE (`341d2d1` / PR #2).** `handledForUserId`
-  ref + `maybeFetchProfile` wrapper in `AuthContext.tsx`. Preview
-  cold-start 998→870ms, 7→6 checkpoints, `auth:fetchProfile:byId`
-  2×→1×. Total day-one win: 1,289→870ms = −32.5%.
+  ref + `maybeFetchProfile` wrapper in `AuthContext.tsx`.
+  `auth:fetchProfile:byId` 2×→1×. Architectural hygiene —
+  fetches were parallel so latency was ~stable.
 - **Phase 1 Step 2A — DONE (`c719ef2` / PR #1).** Deleted the
   duplicate `chatSupabase` client. Preview cold-start drops
   1,289→998ms, `"Multiple GoTrueClient instances"` warning gone,
@@ -569,25 +609,34 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Probably next
 
-- **Phase 1 Step 2A — fix duplicate Supabase client.** The
-  `"Multiple GoTrueClient instances detected"` warning in prod
-  is almost certainly the cause of the 3× `auth:fetchProfile:byId`
-  fetch in the cold-start waterfall. Cheapest + highest-ratio
-  perf win available. Grep for `createClient(`, consolidate to
-  one module-level singleton, re-measure.
-- **Phase 1 Step 2B — move daily checklist generation server-side.**
-  Replace the client-side `checklist:rpc` (399ms on critical path)
-  with a Supabase scheduled job that materialises today's items
-  before anyone logs in.
-- **Phase 1 Step 2C — snapshot RPC.** Collapse `overview:batch` +
-  `overview:streak` + `checklist:items` into one
-  `member_overview_snapshot(user_id, date)` RPC. Biggest structural
-  win but also biggest surface — do it last in Phase 1.
-- **Then:** migrate hosting to Cloudflare Pages for the free
-  commercial tier. Capture a fresh baseline on CF; that becomes
-  the Phase 1 graduation number.
-- After perf lands: Assign page visual pass, then flywheel event
-  ledger / Phase 2.
+- **Phase 1 Step 2C — snapshot RPC.** The remaining structural
+  win in Phase 1. Collapse `overview:batch` + `overview:streak` +
+  `checklist:lookup` + `checklist:items` into one
+  `member_overview_snapshot(user_id, date)` RPC. Projected
+  savings: ~200–300ms. Also naturally shrinks the ~100ms
+  React.lazy / provider-mount gap because the batch can start
+  earlier when it's one call. Lands the app inside the 500–700ms
+  target.
+- **After 2C: migrate hosting Vercel → Cloudflare Pages.**
+  Free commercial tier. Single-concern PR. Replicate the
+  `CDN-Cache-Control: no-store` on `/index.html` exactly (that's
+  the rule that killed "hard refresh after every deploy" when we
+  moved off GH Pages). Timing: Claude's judgment call per
+  `feedback_cloudflare_migration_timing.md` memory — trigger
+  when the site has had 1–2 stable days post-2C.
+- **After hosting migration:** Assign page visual pass, then
+  flywheel event ledger / Phase 2.
+
+### Small stragglers worth knowing about
+
+- **Analytics page empty-state needs a recharts guard.**
+  `BarChart` logs warnings about negative width/height when
+  rendered with zero-dimension data. Observed on `/admin/health`
+  with no chart data. Non-blocking, but the empty state should
+  gate the chart rather than let recharts try to render.
+- **Local prod build has pre-existing `@dnd-kit/*` module
+  resolution errors.** Vercel build environment resolves them
+  fine. On Phase 1's "fix local build reliability" list.
 
 ### Open action items / stashes
 
