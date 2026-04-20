@@ -31,7 +31,7 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     title: 'My Tasks',
     description: 'Personal queue — synched with the Tasks page.',
     defaultSpan: 2,
-    defaultRowSpan: 2,
+    defaultRowSpan: 3,
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
@@ -201,7 +201,12 @@ function buildDefaultWidgetState(
 // Bump whenever the default widget order / span / scope assignment
 // changes. Saved layouts whose `version` does not match are discarded
 // in storage.ts so the new default ordering takes effect for everyone.
-export const WORKSPACE_LAYOUT_VERSION = 6
+//
+// v7 (Apr 2026): team_tasks bumped to defaultRowSpan: 3 so the My Tasks
+// widget has room for ~10 task rows above the Submit Completed bar.
+// Bumping the version is the migration — saved v6 layouts get wiped
+// from localStorage on next load and rebuild from the new defaults.
+export const WORKSPACE_LAYOUT_VERSION = 7
 
 // Default layouts per scope. The page passes its scope in, picks the
 // matching array, and produces widget state. Scope is used only for
