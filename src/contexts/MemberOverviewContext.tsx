@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -51,6 +52,17 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
   const [todaySessions, setTodaySessions] = useState<MemberSessionSummary[]>([])
   const [primaryKpi, setPrimaryKpi] = useState<MemberKPI | null>(null)
   const [kpiEntries, setKpiEntries] = useState<MemberKPIEntry[]>([])
+  // Tracks the profile id whose Overview batch has actually completed.
+  // Used exclusively as the flush-trace gate below. Without this, the
+  // flush effect can fire prematurely: on cold start `refetch` runs
+  // once with `profile = null`, hits its early-return, and sets
+  // `loading = false`. When `profile` arrives a tick later, the flush
+  // effect re-evaluates and sees `profile && !loading && !daily.loading`
+  // = true before the second `refetch` pass (triggered by the new
+  // profile identity) has started setting loading back to true. Gating
+  // on this ref means "a real batch completed for THIS profile" —
+  // mirrors the 2A' dedupe pattern in AuthContext.
+  const lastLoadedProfileId = useRef<string | null>(null)
 
   const refetch = useCallback(async () => {
     if (!profile) {
@@ -147,6 +159,10 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
         setStreak(0)
       }
 
+      // Mark this profile's batch as successfully loaded — this is what
+      // unlocks the perfFlush gate below. Only set on the success path;
+      // errored loads shouldn't emit an incomplete waterfall.
+      lastLoadedProfileId.current = profile.id
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load today workspace')
@@ -160,16 +176,38 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
   }, [refetch])
 
   // Fire the perfTrace flush once the Overview's above-the-fold data
-  // has fully resolved. Gated on `profile` so we don't flush early: on
-  // a cold load, MemberOverviewProvider mounts before AuthContext has
-  // populated `profile`, `refetch` early-returns (`if (!profile)`), and
-  // `loading` flips false immediately with no queries run. Waiting for
-  // `profile` ensures the captured waterfall includes the real batch +
-  // streak + checklist RPC cost, not just the empty pre-auth pass.
+  // has fully resolved.
+  //
+  // The gate must include `lastLoadedProfileId.current === profile.id`
+  // in addition to the loading flags. Without that, a race on cold
+  // start fires the flush prematurely:
+  //
+  //   1. Mount: profile = null, loading = true, daily.loading = true.
+  //   2. refetch runs with profile = null → early-returns, loading → false.
+  //      useChecklist.reload runs with userId = null → daily.loading → false.
+  //   3. Profile arrives from AuthContext. This effect re-evaluates.
+  //      At this instant: profile = truthy, loading = false,
+  //      daily.loading = false. Without the profile-id gate, flush fires
+  //      HERE — before the second `refetch` pass has started setting
+  //      loading back to true and firing real perfTime checkpoints.
+  //   4. refetch re-memoizes with new profile, its useEffect re-runs,
+  //      loading flips back to true, overview:batch fires, etc. —
+  //      but the flush already happened, so the buffer never emits.
+  //
+  // Setting `lastLoadedProfileId.current = profile.id` only inside the
+  // success path of refetch means the gate stays closed until a real
+  // batch has completed for the current profile. Mirrors the
+  // `handledForUserId` dedupe ref in AuthContext (PR #2).
+  //
   // `flush` is idempotent per label so repeated renders don't re-emit.
   // No-op in production unless `localStorage.debugPerf = '1'`.
   useEffect(() => {
-    if (profile && !loading && !daily.loading) {
+    if (
+      profile &&
+      lastLoadedProfileId.current === profile.id &&
+      !loading &&
+      !daily.loading
+    ) {
       perfFlush('Overview')
     }
   }, [profile, loading, daily.loading])
