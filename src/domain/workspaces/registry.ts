@@ -24,10 +24,14 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     // Widget id stays `team_tasks` so saved layouts keep resolving;
     // the rendered component is now `MyTasksCard` (the same card that
     // lives on the /daily Tasks page) sharing state via MyTasksContext.
+    // Two row-span tall — the card has a header strip + filter pills +
+    // task list + Submit Completed bar, so a single row leaves room
+    // for only ~2 visible task rows. Doubling the row span gives ~6.
     id: 'team_tasks',
     title: 'My Tasks',
     description: 'Personal queue — synched with the Tasks page.',
     defaultSpan: 2,
+    defaultRowSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
