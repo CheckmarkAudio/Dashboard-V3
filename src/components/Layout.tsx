@@ -1,4 +1,5 @@
 import { Suspense, useState, useRef, useEffect, useLayoutEffect, useMemo, type ComponentType } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -111,18 +112,40 @@ type TopNavEntry =
 
 function MoreDropdown({ entries }: { entries: TopNavEntry[] }) {
   const [open, setOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
   const links = entries.filter((e): e is Extract<TopNavEntry, { kind: 'link' }> => e.kind === 'link')
 
-  // Close when any of the overflow links becomes active (navigated)
+  // Close when route changes (covers item-click navigation)
   useEffect(() => { setOpen(false) }, [location.pathname])
+
+  // Anchor the dropdown to the button on open + window resize/scroll
+  useLayoutEffect(() => {
+    if (!open) return
+    const place = () => {
+      if (!buttonRef.current) return
+      const r = buttonRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 6, right: window.innerWidth - r.right })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open])
 
   // Close on outside click / Escape
   useEffect(() => {
     if (!open) return
     const onDocClick = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      if (buttonRef.current?.contains(t)) return
+      if (panelRef.current?.contains(t)) return
+      setOpen(false)
     }
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDocClick)
@@ -138,28 +161,37 @@ function MoreDropdown({ entries }: { entries: TopNavEntry[] }) {
     return end ? location.pathname === link.to : location.pathname.startsWith(link.to)
   })
 
+  // Three states with distinct visual weight so More never competes
+  // with the truly-active nav pill:
+  //   • anyActive — overflow link is the current page → full gold pill
+  //   • open      — menu is showing but no active link → muted ring only
+  //   • idle      — same neutral hover style as other TopNavItems
+  const triggerClass = anyActive
+    ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+    : open
+      ? 'text-text bg-white/[0.04] ring-1 ring-white/10'
+      : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
+
   return (
-    <div ref={rootRef} className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={[
-          'inline-flex items-center gap-1.5 h-10 px-3 rounded-[22px] text-[14px] font-semibold transition-all duration-200 focus-ring',
-          anyActive || open
-            ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-            : 'text-text-muted hover:text-text hover:bg-white/[0.03]',
-        ].join(' ')}
+        className={`inline-flex items-center gap-1.5 h-10 px-3 rounded-[22px] text-[14px] font-semibold transition-all duration-200 focus-ring ${triggerClass}`}
       >
         <MoreHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
         More
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
+          ref={panelRef}
           role="menu"
-          className="absolute right-0 mt-1.5 min-w-[180px] rounded-xl border border-border/60 bg-surface/95 backdrop-blur-md shadow-lg py-1 z-50 animate-slide-up"
+          style={{ top: pos.top, right: pos.right }}
+          className="fixed min-w-[200px] rounded-xl border border-border/60 bg-surface/95 backdrop-blur-md shadow-2xl py-1 z-[60] animate-slide-up"
         >
           {links.map(({ link }) => (
             <NavLink
@@ -181,9 +213,10 @@ function MoreDropdown({ entries }: { entries: TopNavEntry[] }) {
               {link.label}
             </NavLink>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   )
 }
 
