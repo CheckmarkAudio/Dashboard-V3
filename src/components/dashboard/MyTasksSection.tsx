@@ -20,6 +20,33 @@ import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
 
 type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
 type FilterValue = 'all' | Stage
+type RangeValue = 'Day' | 'Week'
+
+/**
+ * Synthesize a due-date string for a checklist item until the schema
+ * carries a real `due_date` column. Hash on the item id so the value
+ * is deterministic per item — no flicker on re-render — and split per
+ * view so Day shows a time-of-day and Week shows a calendar date in
+ * the next 7 days. When the schema lands, swap this for `item.due_date`.
+ */
+function synthDue(id: string, view: RangeValue): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash) + id.charCodeAt(i)
+  const abs = Math.abs(hash)
+  if (view === 'Day') {
+    // 9:00 AM → 6:00 PM in 30-minute slots (19 buckets).
+    const totalMin = 9 * 60 + (abs % 19) * 30
+    const h24 = Math.floor(totalMin / 60)
+    const m = totalMin % 60
+    const period = h24 >= 12 ? 'PM' : 'AM'
+    const h12 = h24 > 12 ? h24 - 12 : h24 === 0 ? 12 : h24
+    return `${h12}:${m.toString().padStart(2, '0')} ${period}`
+  }
+  // Week: today + 0..6 days, "Mon DD" format.
+  const d = new Date()
+  d.setDate(d.getDate() + (abs % 7))
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
 
 const STAGES: { value: FilterValue; label: string }[] = [
   { value: 'all',      label: 'All' },
@@ -106,6 +133,7 @@ function rotatingStageOrder<T extends { stage: Stage; is_completed: boolean }>(i
 export default function MyTasksSection() {
   const { daily, loading, error } = useMemberOverviewContext()
   const [filter, setFilter] = useState<FilterValue>('all')
+  const [range, setRange] = useState<RangeValue>('Day')
 
   const taggedItems = useMemo(
     () =>
@@ -159,11 +187,28 @@ export default function MyTasksSection() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* TODAY eyebrow — anchors the widget in time. ADHD-friendly: makes
-          it obvious at a glance that this is "right now, this morning". */}
-      <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70 mb-2 shrink-0">
-        TODAY · {todayLabel}
-      </p>
+      {/* Eyebrow row — TODAY anchor on the left, Day/Week toggle on
+          the right. Matches the My Tasks card on the dedicated /daily
+          page so the widget reads as the same surface in two places. */}
+      <div className="flex items-center justify-between gap-3 mb-2 shrink-0">
+        <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
+          TODAY · {todayLabel}
+        </p>
+        <div className="flex bg-white/[0.03] rounded-lg p-1 ring-1 ring-white/5">
+          {(['Day', 'Week'] as const).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setRange(opt)}
+              className={`px-3 py-1 rounded-md text-[11px] font-bold tracking-tight transition-colors ${
+                range === opt ? 'bg-gold/16 text-gold' : 'text-text-light hover:text-text'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Filter pills — readable at a glance. Active = gold/15 chip. */}
       <div className="flex flex-wrap items-center gap-1.5 mb-3 shrink-0">
@@ -208,12 +253,13 @@ export default function MyTasksSection() {
 
         {filtered.map((task) => {
           // Per-row stage tags removed — slicing happens via the
-          // filter pills above. The slot on the right is reserved for
-          // a due date with the standard `text-[12px] text-text-light
-          // tabular-nums` treatment shared with the Tasks page, so when
-          // due dates land in the schema the rendering is already
-          // wired and uniform across surfaces.
-          const due = (task as { due?: string | null }).due ?? null
+          // filter pills above. The right slot uses the standard
+          // `text-[12px] text-text-light tabular-nums` treatment
+          // shared with the /daily Tasks page so the row reads as
+          // the same shape in both surfaces. Due value is synthesized
+          // from the item id until `due_date` lands in the schema —
+          // see synthDue() comment.
+          const due = (task as { due?: string | null }).due ?? synthDue(task.id, range)
           return (
             <div
               key={task.id}
