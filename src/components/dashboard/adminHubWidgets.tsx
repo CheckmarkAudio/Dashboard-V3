@@ -10,6 +10,7 @@ import {
   Clock,
   FolderPlus,
   Hash,
+  ListChecks,
   Loader2,
   MessageSquare,
   Plus,
@@ -205,7 +206,7 @@ export function AdminAssignWidget() {
           onClick={() => setFlow('task')}
         />
         <AssignTile
-          icon={FolderTwoChecksIcon}
+          icon={ListChecks}
           label="Task Group"
           hint="Apply a checklist template"
           count={counts.groups}
@@ -270,7 +271,7 @@ export function AdminAssignWidget() {
                 }`}>
                   {r.kind === 'session' ? <CalendarPlus size={13} />
                     : r.kind === 'task' ? <CheckSquare size={13} />
-                    : <FolderTwoChecksIcon size={13} />}
+                    : <ListChecks size={13} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[12.5px] font-medium text-text truncate leading-tight">{r.title}</p>
@@ -317,56 +318,6 @@ function AssignTip({
       </div>
       <p className="text-[12px] text-text-muted leading-snug">{text}</p>
     </div>
-  )
-}
-
-// Custom glyph: rounded SQUARE box (matches the Task tile's
-// CheckSquare shape) with TWO staggered checkmarks inside. One
-// check exits through the top edge of the box — the "poking out"
-// feel that the Task icon has — so it reads energetic, not boxed-in.
-// Used for the "Task Group" tile.
-function FolderTwoChecksIcon({ size = 19, className }: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      className={className}
-      aria-hidden="true"
-    >
-      {/* Rounded box outline with a GAP on the top edge where the
-          upper check punches through — drawn as one path with a
-          mid-path moveTo (M) that lifts the pen across the crossing.
-          Starts at the end of the top-left arc (7, 4), stops short of
-          the crossing, skips, resumes for the tiny sliver before the
-          top-right arc, then walks the remaining three sides + three
-          arcs back to the start. */}
-      <path
-        d="M 7 4 L 14 4 M 17.2 4 L 17 4 A 3 3 0 0 1 20 7 L 20 17 A 3 3 0 0 1 17 20 L 7 20 A 3 3 0 0 1 4 17 L 4 7 A 3 3 0 0 1 7 4"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        fill="none"
-      />
-      {/* Upper check — starts inside, exits above the top-right corner
-          through the gap above. */}
-      <path
-        d="M7 10.8L9.2 13L17 2"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Lower check — stays fully inside the box, bottom-right quadrant. */}
-      <path
-        d="M10.2 15.4L12.1 17.3L16 13.2"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   )
 }
 
