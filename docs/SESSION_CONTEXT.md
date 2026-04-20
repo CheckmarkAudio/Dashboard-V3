@@ -440,30 +440,54 @@ mockups across the three highest-impact surfaces:
 
 ---
 
-## Performance baseline (Phase 1 Step 1 — instrumentation landed)
+## Performance baseline (Phase 1 Step 1 — locked 2026-04-20)
 
 Opt-in perf tracer at `src/lib/perfTrace.ts` — no-op unless
-`localStorage.debugPerf = '1'`. Enabled it against a dev load of
-Overview on 2026-04-20; first captured waterfall:
+`localStorage.debugPerf = '1'`. Captured waterfall on production
+(`dashboard-v3-dusky.vercel.app`) after the `a6e0a83` flush-gate fix:
 
 ```
-⏱ Overview cold start: 21,437ms  (4 checkpoints)
-  @329ms  ▏          19ms   checklist:rpc
-  @329ms  ██████  7,054ms   overview:batch   ← long pole
+⏱ Overview cold start: 1,289ms  (8 checkpoints, longest overview:batch 427ms)
+
+  @76ms     0ms    auth:getSession
+  @76ms   270ms    auth:fetchProfile:byId   ┐
+  @80ms   262ms    auth:fetchProfile:byId   │ 3 profile fetches
+  @658ms  399ms    checklist:rpc            │
+  @659ms  427ms    overview:batch           │
+  @666ms  420ms    auth:fetchProfile:byId   ┘
+  @1057ms 196ms    checklist:items
+  @1085ms 203ms    overview:streak
 ```
 
-- **`overview:batch`** (5 parallel Supabase queries in
-  `MemberOverviewContext`) dominates cold start at ~7s. This is
-  exactly the shape the Phase 1.3 snapshot RPC collapses into one
-  round-trip.
-- **`checklist:rpc`** (the `intern_generate_checklist` call that
-  Codex flagged as the client-side daily-generation path) is only
-  ~19ms in dev against a mock user that errors out — its real cost
-  will be visible on a production cold run.
-- Dev bypass path (`DevAuthProvider`) means `auth:getSession` and
-  `auth:fetchProfile` don't fire locally — the full 6-checkpoint
-  waterfall is only visible against a real Supabase session, i.e.
-  on Vercel with `localStorage.debugPerf = '1'`.
+Dev numbers from the initial probe (21s cold, 7s `overview:batch`)
+were a dev-mode artifact — Vite HMR + source maps + slow dev RPC
+path. Prod reality is ~1.3s, not 21s. Codex's diagnosis still
+points at the right structural issues, just smaller in magnitude.
+
+### What the real waterfall reveals
+
+1. **Duplicate Supabase client.** The console logs `"Multiple
+   GoTrueClient instances detected in the same browser context"`
+   immediately before the waterfall. This is almost certainly
+   why `auth:fetchProfile:byId` fires three times (two in
+   near-parallel at @76/@80ms, a third at @666ms). Two of those
+   three fetches are on the critical path — fixing this alone
+   should reclaim ~250–400ms.
+2. **`overview:batch` (427ms)** is the longest single span.
+   Five parallel queries in `MemberOverviewContext`; Phase 1
+   Step 3 collapses them into one snapshot RPC.
+3. **`checklist:rpc` (399ms)** is the client-side daily-generation
+   path. Phase 1 Step 2 moves this to a Supabase scheduled job so
+   it never blocks first paint.
+4. **`overview:streak` (203ms) + `checklist:items` (196ms)** run
+   after the big two; folding `streak` into the snapshot RPC
+   trims another ~200ms from the tail.
+
+### Target after Phase 1 Step 2 work
+
+If the duplicate-client fix, server-side checklist generation, and
+snapshot RPC all land, critical path should drop from ~1,289ms to
+roughly ~500–700ms on current hosting, before any Cloudflare move.
 
 Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 `contexts/AuthContext.tsx` (`auth:getSession`, `auth:fetchProfile:byId`,
@@ -471,20 +495,25 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 (`overview:batch`, `overview:streak`, flush on ready),
 `hooks/useChecklist.ts` (`checklist:rpc`, `checklist:items`).
 
-**Next measurement:** hit the Vercel preview URL, flip the flag,
-capture a real cold-start waterfall. Use those numbers to justify
-the snapshot-RPC + scheduled-generation work in Phase 1 Steps 2+3.
-
 ---
 
 ## Recent + next
 
 ### Just shipped (most recent first)
 
-- **Phase 1 Step 1 — load-perf instrumentation.** Tiny opt-in
-  `perfTrace` module; wrapped auth, overview batch, streak, and
-  checklist-generation paths. Console emits a single grouped
-  waterfall on Overview ready. No prod overhead.
+- **Phase 1 Step 1 — DONE.** Production cold-start waterfall
+  captured + documented. See "Performance baseline" above.
+- `a6e0a83` — perf: gate Overview flush on `profile` so the
+  waterfall captures the real data-query pass, not just the
+  pre-auth noop. First prod trace only saw `auth:getSession`
+  because `MemberOverviewContext.refetch()` early-returns when
+  `!profile` and `loading` flipped false before the real queries
+  ran.
+- `cf39bb6` — perf: satisfy strict TS in production build.
+- `28246f7` — **Phase 1 Step 1 — load-perf instrumentation.**
+  Tiny opt-in `perfTrace` module; wrapped auth, overview batch,
+  streak, and checklist-generation paths. Console emits a single
+  grouped waterfall on Overview ready. No prod overhead.
 - `473f59a` — Assign template cards: cap preview at 4 tasks + "…"
   overflow indicator at bottom-right. Matches Codex mockup.
 - `22d511e` — Template cards match mockup: gold "+ Assign" + pill,
@@ -512,14 +541,25 @@ the snapshot-RPC + scheduled-generation work in Phase 1 Steps 2+3.
 
 ### Probably next
 
-- Individual template editing — user mentioned this right after the
-  mockup seed. Edit modal works; verify the UX on each of the 6
-  seeded templates.
-- Any remaining visual delta between current Assign page and the
-  mockup (user has been iterating tightly here).
-- After Assign lands: either start the flywheel event ledger OR
-  the next page from the Workspace-UI-Draft folder (check if
-  there's more than `index.html` + `assign.html`).
+- **Phase 1 Step 2A — fix duplicate Supabase client.** The
+  `"Multiple GoTrueClient instances detected"` warning in prod
+  is almost certainly the cause of the 3× `auth:fetchProfile:byId`
+  fetch in the cold-start waterfall. Cheapest + highest-ratio
+  perf win available. Grep for `createClient(`, consolidate to
+  one module-level singleton, re-measure.
+- **Phase 1 Step 2B — move daily checklist generation server-side.**
+  Replace the client-side `checklist:rpc` (399ms on critical path)
+  with a Supabase scheduled job that materialises today's items
+  before anyone logs in.
+- **Phase 1 Step 2C — snapshot RPC.** Collapse `overview:batch` +
+  `overview:streak` + `checklist:items` into one
+  `member_overview_snapshot(user_id, date)` RPC. Biggest structural
+  win but also biggest surface — do it last in Phase 1.
+- **Then:** migrate hosting to Cloudflare Pages for the free
+  commercial tier. Capture a fresh baseline on CF; that becomes
+  the Phase 1 graduation number.
+- After perf lands: Assign page visual pass, then flywheel event
+  ledger / Phase 2.
 
 ### Open action items / stashes
 

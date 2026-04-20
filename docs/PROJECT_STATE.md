@@ -13,8 +13,8 @@
 | **Live URL** | https://dashboard-v3-dusky.vercel.app |
 | **Hosting** | Vercel (auto-deploys from `main`) |
 | **Database** | Supabase project `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") |
-| **Latest commit** | `df1b0a4` — Overview single-border widgets + balanced columns (layout v8) |
-| **Currently active** | Overview visual polish landed; next: Assign page (or wherever the user takes us) |
+| **Latest commit** | `a6e0a83` — perf: gate Overview flush on `profile` so the waterfall captures the real query pass |
+| **Currently active** | Phase 1 Step 1 (instrumentation) locked w/ real prod baseline; moving to Step 2A (duplicate Supabase client) |
 
 ---
 
@@ -139,12 +139,24 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 | 2026-04-18 | `8347d79` | Overview reorder — Tasks/Notifications on top row, Calendar/Booking on bottom; layout version bumped to 3 so all users pick up the new default |
 | 2026-04-18 | `5a18d9d` | **Admin Hub redesign** — 5 widgets (Assign, Flywheel, Team, Notifications, Approvals) in a 2-big-left + 3-right grid; added rowSpan support; Hub.tsx simplified to PageHeader + WorkspacePanel; admins no longer see member widgets on Hub |
 | 2026-04-20 | `df1b0a4` | **Overview visual polish** — `MyTasksCard.embedded` prop kills the double "My Tasks" title + double `widget-card` border when mounted inside `DashboardWidgetFrame`; Day/Week toggle collapses onto the stage-pill row. Rebalance row spans (team_tasks 3 → 2, forum_notifications 1 → 2) so both Overview columns terminate at the same Y — zero dead space. Layout version bumped 7 → 8 to flush saved layouts. |
+| 2026-04-20 | `28246f7` | **Phase 1 Step 1 — load-perf instrumentation.** Opt-in `perfTrace` module (`src/lib/perfTrace.ts`); wraps auth / overview batch / streak / checklist paths. Console emits a grouped cold-start waterfall when `localStorage.debugPerf = '1'`. No prod overhead. |
+| 2026-04-20 | `cf39bb6` | perf: satisfy strict TS in production build (tsconfig happy path). |
+| 2026-04-20 | `a6e0a83` | perf: gate the Overview flush on `profile` so the waterfall captures real queries, not just `auth:getSession`. Fixes early-flush bug where `MemberOverviewContext.refetch()` early-returns when `!profile`, flipping `loading` false before queries run. |
+| 2026-04-20 | — | **Perf baseline locked.** Production cold-start on `dashboard-v3-dusky.vercel.app` is 1,289ms over 8 checkpoints. Longest single span: `overview:batch` 427ms. Three `auth:fetchProfile:byId` fetches — tied to the `"Multiple GoTrueClient instances"` warning. Full waterfall in `docs/SESSION_CONTEXT.md` → Performance baseline. |
 
 ---
 
 ## Active
 
-**UI design refresh — scoped pilot** (in progress): Apply the v1.0 design system PDF to the live app on three pages first. See `~/.../My Drive/Checkmark Audio — Design System · Print.pdf` for the visual spec.
+**Phase 1 — Stabilize the foundation** (in progress): Load-perf work from the Codex 4-phase roadmap. Step 1 done (instrumentation + prod baseline locked on 2026-04-20 — 1,289ms cold start, waterfall in `SESSION_CONTEXT.md`). Step 2 next, in this order:
+
+- **2A — Duplicate Supabase client fix.** The `"Multiple GoTrueClient instances detected"` prod warning is almost certainly why `auth:fetchProfile:byId` fires 3× on cold start. Cheapest win available; grep for `createClient(`, consolidate to one module-level singleton, re-measure.
+- **2B — Server-side daily checklist generation.** Replace the client-side `checklist:rpc` (399ms on critical path) with a Supabase scheduled job that materialises today's items before anyone logs in.
+- **2C — Snapshot RPC.** Collapse `overview:batch` + `overview:streak` + `checklist:items` into one `member_overview_snapshot(user_id, date)` RPC.
+
+Target: cold start ~500–700ms on current hosting after 2A–2C land. Then migrate hosting Vercel → Cloudflare Pages (free commercial tier) as a separate single-concern PR and re-measure.
+
+**UI design refresh — scoped pilot** (paused): Apply the v1.0 design system PDF to the live app on three pages first. See `~/.../My Drive/Checkmark Audio — Design System · Print.pdf` for the visual spec.
 
 **Locked constraints:**
 - ✅ Keep top nav (do not refactor to sidebar even though PDF shows sidebar)
