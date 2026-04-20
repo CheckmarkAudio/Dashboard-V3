@@ -88,6 +88,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   })
   const sessionInitialized = useRef(false)
+  // Tracks the auth user id whose profile has already been loaded for
+  // the current session. Both the initial `getSession()` path and the
+  // `onAuthStateChange` INITIAL_SESSION event race to fetch the profile
+  // on cold start; this ref lets whichever one wins claim the work so
+  // the other short-circuits. Cleared on sign-out so the next sign-in
+  // refetches. Released on transient errors so a retry is still
+  // possible. `refreshProfile()` intentionally bypasses this ref by
+  // calling `fetchProfile` directly.
+  const handledForUserId = useRef<string | null>(null)
 
   const clearPasswordRecovery = useCallback(() => {
     setIsPasswordRecovery(false)
@@ -241,6 +250,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, fetchProfile])
 
   /**
+   * Initial-session dedupe wrapper. Returns `null` if the profile for
+   * this user id was already loaded on this session (short-circuit);
+   * otherwise runs `fetchProfile` and records the user id so the
+   * parallel caller short-circuits. Releases the claim on transient
+   * errors so a retry can still occur.
+   *
+   * NOTE: this wrapper is only used by the mount-time init paths
+   * (getSession + INITIAL_SESSION race). `refreshProfile` and any
+   * future explicit re-read should keep calling `fetchProfile` directly
+   * so they can't be blocked by the dedupe ref.
+   */
+  const maybeFetchProfile = useCallback(
+    async (authUser: SupabaseUser): Promise<ProfileFetchResult | null> => {
+      if (handledForUserId.current === authUser.id) return null
+      handledForUserId.current = authUser.id
+      try {
+        const result = await fetchProfile(authUser)
+        if (result === 'error') {
+          // Transient — let a subsequent event retry.
+          handledForUserId.current = null
+        }
+        return result
+      } catch (err) {
+        handledForUserId.current = null
+        throw err
+      }
+    },
+    [fetchProfile],
+  )
+
+  /**
    * Phase 6.4 — Hard reject for users without an admin-provisioned
    * team_members row. Signs the user out and stashes a one-shot flag
    * in sessionStorage so the next /login render can surface the reason.
@@ -253,6 +293,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       )
     } catch { /* sessionStorage may be unavailable in private mode; ignore */ }
     try { await supabase.auth.signOut() } catch { /* swallow */ }
+    handledForUserId.current = null
     setUser(null)
     setSession(null)
     setProfile(null)
@@ -292,10 +333,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        let result: 'found' | 'not_found' | 'error' = 'error'
-        try { result = await fetchProfile(session.user) } catch (err) {
+        let result: ProfileFetchResult | null = 'error'
+        try { result = await maybeFetchProfile(session.user) } catch (err) {
           console.error('Failed to load profile on init:', err)
         }
+        // `null` means the parallel INITIAL_SESSION path already
+        // claimed the fetch; nothing more to do here.
         // Only sign out on a definitive "no row exists" verdict. A
         // transient 'error' leaves the session intact so the next
         // auth-state event or refreshProfile() call can recover.
@@ -339,7 +382,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const authUser = session.user
         setTimeout(() => {
           if (!mounted) return
-          fetchProfile(authUser)
+          // maybeFetchProfile short-circuits (returns null) if the
+          // getSession() path already fetched this user's profile.
+          maybeFetchProfile(authUser)
             .then((result) => {
               if (!mounted) return
               if (result === 'not_found') {
@@ -351,6 +396,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             })
         }, 0)
       } else {
+        // Fully signed out — release the dedupe claim so the next
+        // sign-in refetches cleanly.
+        handledForUserId.current = null
         setProfile(null)
         // Fully signed out — any recovery flow in progress is abandoned.
         setIsPasswordRecovery(false)
@@ -364,7 +412,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(timeout)
       subscription.unsubscribe()
     }
-  }, [fetchProfile, rejectAndSignOut])
+  }, [maybeFetchProfile, rejectAndSignOut])
 
   const signIn = useCallback(async (email: string, password: string) => {
     const normalized = normalizeEmail(email)
@@ -408,6 +456,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // server-side. If this fails, we're still signed out locally.
     void supabase.auth.signOut({ scope: 'global' }).catch(() => {})
 
+    handledForUserId.current = null
     setUser(null)
     setSession(null)
     setProfile(null)
