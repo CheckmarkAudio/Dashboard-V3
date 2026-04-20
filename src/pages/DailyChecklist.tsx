@@ -48,7 +48,6 @@ const STAGE_STYLE: Record<Stage, { label: string; text: string; dot: string; bg:
 function TaskRow({
   title,
   meta,
-  stage,
   priority,
   isDone,
   isPending,
@@ -56,14 +55,12 @@ function TaskRow({
 }: {
   title: string
   meta?: string
-  stage?: Stage
   priority?: boolean
   isDone: boolean
   isPending: boolean
   onCheck: () => void
 }) {
   const isChecked = isDone || isPending
-  const stageStyle = stage ? STAGE_STYLE[stage] : null
 
   return (
     <div
@@ -99,18 +96,10 @@ function TaskRow({
         </span>
         {priority && <Flame size={12} className="text-gold shrink-0" aria-hidden="true" />}
       </div>
-      {stageStyle ? (
-        // Colored-text-only stage label — no pill, no ring. Fixed
-        // width (w-[68px]) so every row reserves the same horizontal
-        // slot for the tag, which keeps dots vertically aligned across
-        // rows even though label text varies (Book vs Capture etc.).
-        <span
-          className={`inline-flex items-center gap-1.5 text-[11px] font-bold whitespace-nowrap w-[68px] ${stageStyle.text}`}
-        >
-          <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot} shrink-0`} aria-hidden="true" />
-          {stageStyle.label}
-        </span>
-      ) : meta ? (
+      {/* Per-row stage tags removed — slicing happens via the filter
+          pills at the top of each card, which keeps the row to just
+          checkbox + title (+ optional meta like a due time). */}
+      {meta ? (
         <span className="text-[12px] text-text-light whitespace-nowrap tabular-nums">{meta}</span>
       ) : null}
     </div>
@@ -392,7 +381,6 @@ function TeamTasksCard() {
               <TaskRow
                 key={t.id}
                 title={t.title}
-                stage={t.stage}
                 priority={t.priority}
                 isDone={isDone}
                 isPending={isPending}
