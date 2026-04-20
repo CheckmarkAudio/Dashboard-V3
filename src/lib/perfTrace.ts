@@ -57,13 +57,15 @@ export function mark(name: string): void {
 }
 
 /**
- * Wrap a promise so its start + end + duration get recorded. Returns
- * the original value unmodified. On `debugPerf !== '1'` this is a
- * zero-overhead pass-through — `fn()` is invoked directly with no
- * timing wrapper at all.
+ * Wrap a thenable so its start + end + duration get recorded. Accepts
+ * `PromiseLike<T>` rather than `Promise<T>` specifically so Supabase
+ * query builders (which are thenable but not full Promises) can be
+ * passed directly without an extra `async ()=> await …` wrapper. On
+ * `debugPerf !== '1'` this is a zero-overhead pass-through — `fn()` is
+ * invoked directly with no timing wrapper at all.
  */
-export async function time<T>(name: string, fn: () => Promise<T>): Promise<T> {
-  if (!enabled()) return fn()
+export async function time<T>(name: string, fn: () => PromiseLike<T> | T): Promise<T> {
+  if (!enabled()) return await fn()
   const startLabel = NAMESPACE + name + ':start'
   const endLabel = NAMESPACE + name + ':end'
   const t0 = performance.now()
@@ -107,7 +109,10 @@ export function flush(label: string, options: { reset?: boolean } = {}): void {
   }
 
   const sorted = [...entries].sort((a, b) => a.startOffset - b.startOffset)
-  const longest = sorted.reduce((max, e) => (e.duration > max.duration ? e : max), sorted[0])
+  // No initial value — `reduce` uses sorted[0] as the seed, so the
+  // return type is `Entry` (not `Entry | undefined`). Safe here
+  // because the `entries.length === 0` guard above already returned.
+  const longest = sorted.reduce((max, e) => (e.duration > max.duration ? e : max))
 
   // eslint-disable-next-line no-console
   console.groupCollapsed(
