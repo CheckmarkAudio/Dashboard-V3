@@ -62,11 +62,46 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
     if (mountedRef.current) setLoading(true)
     try {
       if (isOwn && profile) {
-        // Try the existing RPC first (works if the DB function exists).
-        // `checklist:rpc` is the suspected primary cost of first-load-
-        // of-the-day — this is the call that generates today's
-        // checklist instance on-the-fly when the user arrives. Moving
-        // generation to a scheduled backend job is Phase 1 Step 2.
+        // Phase 1 Step 2B — backend-prepared state.
+        //
+        // pg_cron (materialize-checklists, 11:00 UTC daily) pre-creates
+        // today's instance rows for every active member. On cold start
+        // we hit this fast-path lookup first — a single indexed SELECT
+        // against (intern_id, frequency, period_date). If the cron
+        // already ran, we skip the full RPC round-trip entirely.
+        //
+        // The RPC stays as a safety net for three cases:
+        //   1. First-of-day before cron has fired (pre-5am local)
+        //   2. Members added to the team mid-day (miss that morning's cron)
+        //   3. A failed cron run (observability via cron_run_log surfaces this)
+        const { data: existing } = await perfTime('checklist:lookup', () =>
+          supabase
+            .from('team_checklist_instances')
+            .select('id')
+            .eq('intern_id', profile.id)
+            .eq('frequency', frequency)
+            .eq('period_date', dateKey)
+            .maybeSingle(),
+        )
+        if (!mountedRef.current) return
+
+        if (existing?.id) {
+          setInstanceId(existing.id)
+          const { data } = await perfTime('checklist:items', () => supabase
+            .from('team_checklist_items')
+            .select('*')
+            .eq('instance_id', existing.id)
+            .order('sort_order'),
+          )
+          if (!mountedRef.current) return
+          setItems((data as ChecklistItemRow[]) ?? [])
+          setLoading(false)
+          return
+        }
+
+        // Miss — instance doesn't exist yet. Fall back to the RPC which
+        // creates it inline. This path exists for the edge cases above
+        // and should be rare in steady state.
         const { data: instId, error: rpcError } = await perfTime('checklist:rpc', () =>
           supabase.rpc('intern_generate_checklist', {
             p_intern_id: profile.id,
