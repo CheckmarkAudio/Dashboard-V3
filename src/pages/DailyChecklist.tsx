@@ -97,12 +97,14 @@ function TaskRow({
         {priority && <Flame size={12} className="text-gold shrink-0" aria-hidden="true" />}
       </div>
       {stageStyle ? (
-        // Colored-text-only stage label — no pill, no ring. Keeps the
-        // tiny dot for fast color-coded scanning of the list.
+        // Colored-text-only stage label — no pill, no ring. Fixed
+        // width (w-[68px]) so every row reserves the same horizontal
+        // slot for the tag, which keeps dots vertically aligned across
+        // rows even though label text varies (Book vs Capture etc.).
         <span
-          className={`inline-flex items-center gap-1.5 text-[11px] font-bold whitespace-nowrap ${stageStyle.text}`}
+          className={`inline-flex items-center gap-1.5 text-[11px] font-bold whitespace-nowrap w-[68px] ${stageStyle.text}`}
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot}`} aria-hidden="true" />
+          <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot} shrink-0`} aria-hidden="true" />
           {stageStyle.label}
         </span>
       ) : meta ? (
