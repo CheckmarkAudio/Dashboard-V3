@@ -483,6 +483,25 @@ points at the right structural issues, just smaller in magnitude.
    after the big two; folding `streak` into the snapshot RPC
    trims another ~200ms from the tail.
 
+### Known gap — not a Today Problem
+
+Even after 2A + 2A' landed, there's a ~190ms unexplained gap
+between `auth:fetchProfile:byId` finishing (@288ms on the PR #2
+preview) and `overview:batch` starting (@479ms). Nothing
+instrumented runs in that window. Working hypothesis: it's the
+React.lazy chunk for the Overview route loading + the
+`MemberOverviewProvider` mounting its useEffect chain.
+
+**Don't chase this directly.** Step 2C (snapshot RPC) will
+naturally shrink it because the batch can start earlier once the
+provider no longer has a 5-query waterfall to orchestrate. Revisit
+only if the gap is still visible after 2C lands.
+
+If you DO want to probe it before then: add a `perfTime(
+'overview:provider-mount', ...)` checkpoint in the
+`MemberOverviewProvider` useEffect on line ~158 to confirm the
+gap is context mount, not something else.
+
 ### Target after Phase 1 Step 2 work
 
 If the duplicate-client fix, server-side checklist generation, and
@@ -501,6 +520,10 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
+- **Phase 1 Step 2A' — DONE (`341d2d1` / PR #2).** `handledForUserId`
+  ref + `maybeFetchProfile` wrapper in `AuthContext.tsx`. Preview
+  cold-start 998→870ms, 7→6 checkpoints, `auth:fetchProfile:byId`
+  2×→1×. Total day-one win: 1,289→870ms = −32.5%.
 - **Phase 1 Step 2A — DONE (`c719ef2` / PR #1).** Deleted the
   duplicate `chatSupabase` client. Preview cold-start drops
   1,289→998ms, `"Multiple GoTrueClient instances"` warning gone,

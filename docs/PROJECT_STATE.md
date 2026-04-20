@@ -13,8 +13,8 @@
 | **Live URL** | https://dashboard-v3-dusky.vercel.app |
 | **Hosting** | Vercel (auto-deploys from `main`) |
 | **Database** | Supabase project `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") |
-| **Latest commit** | `c719ef2` — perf(auth): remove duplicate Supabase client (Phase 1 Step 2A, PR #1) |
-| **Currently active** | Phase 1 Step 2A shipped (998ms cold start on preview, down from 1,289ms baseline, warning gone). Next: consolidate the two remaining parallel `auth:fetchProfile:byId` calls, then Step 2B server-side checklist generation. |
+| **Latest commit** | `341d2d1` — perf(auth): dedupe profile fetch on cold start (Phase 1 Step 2A', PR #2) |
+| **Currently active** | Phase 1 Steps 2A + 2A' both shipped. Preview cold start locked at **870ms / 6 checkpoints / 1× profile fetch** (down 32.5% from 1,289ms baseline). Next: Step 2B (server-side checklist generation) or 2C (snapshot RPC). |
 
 ---
 
@@ -144,6 +144,7 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 | 2026-04-20 | `a6e0a83` | perf: gate the Overview flush on `profile` so the waterfall captures real queries, not just `auth:getSession`. Fixes early-flush bug where `MemberOverviewContext.refetch()` early-returns when `!profile`, flipping `loading` false before queries run. |
 | 2026-04-20 | — | **Perf baseline locked.** Production cold-start on `dashboard-v3-dusky.vercel.app` is 1,289ms over 8 checkpoints. Longest single span: `overview:batch` 427ms. Three `auth:fetchProfile:byId` fetches — tied to the `"Multiple GoTrueClient instances"` warning. Full waterfall in `docs/SESSION_CONTEXT.md` → Performance baseline. |
 | 2026-04-20 | `c719ef2` (PR #1) | **Phase 1 Step 2A — duplicate Supabase client removed.** Deleted `src/lib/chatSupabase.ts` (second `createClient` with default auth config colliding on the same storage key); consolidated 8 call sites in `Content.tsx` + `adminHubWidgets.tsx` to the main `supabase` client. Preview cold-start drops to 998ms / 7 checkpoints / `overview:batch` collapses 427→185ms. `"Multiple GoTrueClient instances"` warning GONE. One parallel `auth:fetchProfile:byId` remains (was 3×, now 2×). |
+| 2026-04-20 | `341d2d1` (PR #2) | **Phase 1 Step 2A' — profile-fetch dedupe.** Added `handledForUserId` ref + `maybeFetchProfile` wrapper in `AuthContext.tsx` so the `getSession().then(fetchProfile)` and `onAuthStateChange(INITIAL_SESSION)` paths no longer both fire. Ref releases on transient errors, sign-out, and `rejectAndSignOut` so retries + sign-in cycles still work. Preview cold-start drops 998→870ms / 7→6 checkpoints / 2×→1× profile fetch. `refreshProfile()` intentionally bypasses the dedupe so admin profile edits still re-read. |
 
 ---
 
@@ -153,7 +154,7 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 
 - ✅ **Step 1 — instrumentation + prod baseline** (2026-04-20). 1,289ms cold start, waterfall in `SESSION_CONTEXT.md`.
 - ✅ **Step 2A — Duplicate Supabase client** (2026-04-20, `c719ef2` / PR #1). Deleted `src/lib/chatSupabase.ts`; consolidated 8 call sites to the main `supabase`. Preview cold-start 998ms (↓22%), `overview:batch` 427→185ms, `"Multiple GoTrueClient instances"` warning GONE.
-- ⏳ **Step 2A′ — Collapse duplicate `auth:fetchProfile:byId`.** Two calls still fire in near-parallel (@8ms, @9ms, ~208ms each). Likely a dual code path in `AuthContext` (initial `getSession` + `onAuthStateChange` both fetching). Fetch is now the longest pole, so this is the next obvious target.
+- ✅ **Step 2A' — Profile-fetch dedupe** (2026-04-20, `341d2d1` / PR #2). `handledForUserId` ref + `maybeFetchProfile` wrapper in `AuthContext.tsx`. Preview cold-start 870ms (↓32.5% total from baseline), 2×→1× profile fetch.
 - ⏳ **Step 2B — Server-side daily checklist generation.** Replace client-side `checklist:rpc` (182ms on critical path) with a Supabase scheduled job materialising today's items before anyone logs in.
 - ⏳ **Step 2C — Snapshot RPC.** Collapse `overview:batch` + `overview:streak` + `checklist:items` into one `member_overview_snapshot(user_id, date)` RPC.
 
