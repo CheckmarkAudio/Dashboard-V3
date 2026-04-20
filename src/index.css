@@ -48,22 +48,28 @@
   --color-status-neutral-text: #9ca3af; /* gray-400 */
   --color-status-neutral-bg:   rgba(156, 163, 175, 0.10);
 
-  /* -------- Flywheel stage colors (Deliver → Capture → Share → Attract → Book) --------
-     Sourced from src/pages/KPIDashboard.tsx FLYWHEEL_STAGES. Pipeline.tsx stage
-     colors map onto the same palette. Anywhere a stage gets rendered — KPI
-     chips, pipeline columns, dashboard badges — should consume these tokens
-     so the visual story stays coherent.
+  /* -------- Flywheel stage colors --------
+     Five cool-toned tokens, deliberately OUTSIDE the red/yellow/green
+     family. Those three hues are reserved for a future priority
+     system (urgent / medium / done). Flywheel stages must never clash
+     with priority colors, so this palette lives entirely in the cool
+     half of the wheel.
+     Deliver → teal, Capture → sky, Share → purple, Attract → fuchsia,
+     Book → indigo. Anywhere a stage is rendered (KPI chips, pipeline
+     columns, dashboard badges, flywheel bars) consumes these tokens.
+     Background + ring opacities intentionally low so stage tags read
+     as "font color first, surface barely tinted" — subtle by default.
   */
-  --color-stage-deliver-text: #34d399; /* emerald-400 */
-  --color-stage-deliver-bg:   rgba(16, 185, 129, 0.10);
+  --color-stage-deliver-text: #2dd4bf; /* teal-400 */
+  --color-stage-deliver-bg:   rgba(45, 212, 191, 0.06);
   --color-stage-capture-text: #38bdf8; /* sky-400 */
-  --color-stage-capture-bg:   rgba(14, 165, 233, 0.10);
-  --color-stage-share-text:   #a78bfa; /* violet-400 */
-  --color-stage-share-bg:     rgba(139, 92, 246, 0.10);
-  --color-stage-attract-text: #fbbf24; /* amber-400 */
-  --color-stage-attract-bg:   rgba(245, 158, 11, 0.10);
-  --color-stage-book-text:    #fb7185; /* rose-400 */
-  --color-stage-book-bg:      rgba(244, 63, 94, 0.10);
+  --color-stage-capture-bg:   rgba(56, 189, 248, 0.06);
+  --color-stage-share-text:   #c084fc; /* purple-400 */
+  --color-stage-share-bg:     rgba(192, 132, 252, 0.06);
+  --color-stage-attract-text: #e879f9; /* fuchsia-400 */
+  --color-stage-attract-bg:   rgba(232, 121, 249, 0.06);
+  --color-stage-book-text:    #818cf8; /* indigo-400 */
+  --color-stage-book-bg:      rgba(129, 140, 248, 0.06);
 
   /* -------- Typography (font stack + semantic body font) -------- */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;

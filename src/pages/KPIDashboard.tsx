@@ -17,12 +17,16 @@ import {
   Target, TrendingUp, TrendingDown, Minus, Plus, Save, Loader2,
 } from 'lucide-react'
 
+// Flywheel stage palette — cool-toned, deliberately outside the
+// red/yellow/green family (those are reserved for priority / status
+// in a future change). Matches the STAGE_STYLES Record used across
+// dashboard widgets.
 const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; color: string; bg: string }[] = [
-  { key: 'deliver', label: 'Deliver', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-  { key: 'capture', label: 'Capture', color: 'text-sky-400', bg: 'bg-sky-500/10' },
-  { key: 'share', label: 'Share', color: 'text-violet-400', bg: 'bg-violet-500/10' },
-  { key: 'attract', label: 'Attract', color: 'text-amber-400', bg: 'bg-amber-500/10' },
-  { key: 'book', label: 'Book', color: 'text-rose-400', bg: 'bg-rose-500/10' },
+  { key: 'deliver', label: 'Deliver', color: 'text-teal-400',    bg: 'bg-teal-500/5' },
+  { key: 'capture', label: 'Capture', color: 'text-sky-400',     bg: 'bg-sky-500/5' },
+  { key: 'share',   label: 'Share',   color: 'text-purple-400',  bg: 'bg-purple-500/5' },
+  { key: 'attract', label: 'Attract', color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/5' },
+  { key: 'book',    label: 'Book',    color: 'text-indigo-400',  bg: 'bg-indigo-500/5' },
 ]
 
 function getTrendColor(trend: KPITrend) {

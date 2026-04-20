@@ -30,11 +30,11 @@ import CreateBookingModal from '../CreateBookingModal'
 // Sourced from the v1.0 design system (Deliver/Capture/Share/Attract/Book).
 type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
 const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring: string }> = {
-  deliver: { dot: 'bg-emerald-400', text: 'text-emerald-300', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/30' },
-  capture: { dot: 'bg-sky-400',     text: 'text-sky-300',     bg: 'bg-sky-500/10',     ring: 'ring-sky-500/30' },
-  share:   { dot: 'bg-violet-400',  text: 'text-violet-300',  bg: 'bg-violet-500/10',  ring: 'ring-violet-500/30' },
-  attract: { dot: 'bg-amber-400',   text: 'text-amber-300',   bg: 'bg-amber-500/10',   ring: 'ring-amber-500/30' },
-  book:    { dot: 'bg-rose-400',    text: 'text-rose-300',    bg: 'bg-rose-500/10',    ring: 'ring-rose-500/30' },
+  deliver: { dot: 'bg-teal-400',    text: 'text-teal-300',    bg: 'bg-teal-500/5',    ring: 'ring-teal-500/15' },
+  capture: { dot: 'bg-sky-400',     text: 'text-sky-300',     bg: 'bg-sky-500/5',     ring: 'ring-sky-500/15' },
+  share:   { dot: 'bg-purple-400',  text: 'text-purple-300',  bg: 'bg-purple-500/5',  ring: 'ring-purple-500/15' },
+  attract: { dot: 'bg-fuchsia-400', text: 'text-fuchsia-300', bg: 'bg-fuchsia-500/5', ring: 'ring-fuchsia-500/15' },
+  book:    { dot: 'bg-indigo-400',  text: 'text-indigo-300',  bg: 'bg-indigo-500/5',  ring: 'ring-indigo-500/15' },
 }
 
 function splitClockParts(value: string): [string, string] {
