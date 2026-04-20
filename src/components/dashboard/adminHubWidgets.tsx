@@ -66,7 +66,7 @@ function relativeTime(iso: string): string {
 type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
 const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring: string; label: string }> = {
   deliver: { dot: 'bg-blue-400',   text: 'text-blue-300',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15',   label: 'Deliver' },
-  capture: { dot: 'bg-purple-400', text: 'text-purple-300', bg: 'bg-purple-500/5', ring: 'ring-purple-500/15', label: 'Capture' },
+  capture: { dot: 'bg-violet-400', text: 'text-violet-300', bg: 'bg-violet-500/5', ring: 'ring-violet-500/15', label: 'Capture' },
   share:   { dot: 'bg-cyan-400',   text: 'text-cyan-300',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15',   label: 'Share'   },
   attract: { dot: 'bg-pink-400',   text: 'text-pink-300',   bg: 'bg-pink-500/5',   ring: 'ring-pink-500/15',   label: 'Attract' },
   book:    { dot: 'bg-orange-400', text: 'text-orange-300', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15', label: 'Book'    },

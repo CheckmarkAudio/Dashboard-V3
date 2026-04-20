@@ -23,7 +23,7 @@ import {
 // dashboard widgets.
 const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; color: string; bg: string }[] = [
   { key: 'deliver', label: 'Deliver', color: 'text-blue-400',   bg: 'bg-blue-500/5' },
-  { key: 'capture', label: 'Capture', color: 'text-purple-400', bg: 'bg-purple-500/5' },
+  { key: 'capture', label: 'Capture', color: 'text-violet-400', bg: 'bg-violet-500/5' },
   { key: 'share',   label: 'Share',   color: 'text-cyan-400',   bg: 'bg-cyan-500/5' },
   { key: 'attract', label: 'Attract', color: 'text-pink-400',   bg: 'bg-pink-500/5' },
   { key: 'book',    label: 'Book',    color: 'text-orange-400', bg: 'bg-orange-500/5' },

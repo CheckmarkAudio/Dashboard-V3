@@ -62,8 +62,8 @@
   */
   --color-stage-deliver-text: #60a5fa; /* blue-400  (darker blue) */
   --color-stage-deliver-bg:   rgba(96, 165, 250, 0.06);
-  --color-stage-capture-text: #c084fc; /* purple-400 */
-  --color-stage-capture-bg:   rgba(192, 132, 252, 0.06);
+  --color-stage-capture-text: #a78bfa; /* violet-400 (lavender) */
+  --color-stage-capture-bg:   rgba(167, 139, 250, 0.06);
   --color-stage-share-text:   #22d3ee; /* cyan-400   (light blue) */
   --color-stage-share-bg:     rgba(34, 211, 238, 0.06);
   --color-stage-attract-text: #f472b6; /* pink-400 */
