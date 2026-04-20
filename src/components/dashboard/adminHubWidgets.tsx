@@ -320,12 +320,11 @@ function AssignTip({
   )
 }
 
-// Custom glyph: folder with TWO staggered checkmarks inside. Used for
-// the "Task Group" tile so the icon clearly says "a bundle of
-// checklist items" — not a single task, not a plus-add action.
-// Paths fill a slightly tighter bounding box (2 → 22) so the glyph
-// reads at the same optical weight as the stock lucide icons next to
-// it (CalendarPlus, CheckSquare) — matches their square footprint.
+// Custom glyph: rounded SQUARE box (matches the Task tile's
+// CheckSquare shape) with TWO staggered checkmarks inside. One
+// check exits through the top edge of the box — the "poking out"
+// feel that the Task icon has — so it reads energetic, not boxed-in.
+// Used for the "Task Group" tile.
 function FolderTwoChecksIcon({ size = 19, className }: { size?: number; className?: string }) {
   return (
     <svg
@@ -336,25 +335,27 @@ function FolderTwoChecksIcon({ size = 19, className }: { size?: number; classNam
       className={className}
       aria-hidden="true"
     >
-      {/* Folder body — tab on the left, wider body — fills the square
-          frame similar to lucide's Folder-family icons. */}
-      <path
-        d="M2 6C2 4.9 2.9 4 4 4H9L11.2 6.4H20C21.1 6.4 22 7.3 22 8.4V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6Z"
+      {/* Outer rounded box — same rx/stroke as lucide's CheckSquare. */}
+      <rect
+        x="4"
+        y="4"
+        width="16"
+        height="16"
+        rx="3"
         stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
+        strokeWidth="1.7"
       />
-      {/* Top checkmark (staggered left + up) */}
+      {/* Upper check — starts inside, exits above the top-right corner. */}
       <path
-        d="M6.5 12.2L8.4 14L12 10.2"
+        d="M7 10.8L9.2 13L17 2"
         stroke="currentColor"
         strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {/* Bottom checkmark (staggered right + down) */}
+      {/* Lower check — stays fully inside the box, bottom-right quadrant. */}
       <path
-        d="M10.8 15.8L12.6 17.4L17 13.1"
+        d="M10.2 15.4L12.1 17.3L16 13.2"
         stroke="currentColor"
         strokeWidth="1.9"
         strokeLinecap="round"
