@@ -26,16 +26,19 @@ type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
 
 const STAGES: readonly Stage[] = ['deliver', 'capture', 'share', 'attract', 'book']
 
-// Stage tag text uses the 400/70 token so the dot does the
-// color-coding work while the label recedes — keeps the task title
-// and checkbox as the primary visual anchors. The dots stay at full
-// 400 saturation for instant scanning.
+// Stage tag text — perceptual brightness balanced so all five labels
+// read at roughly the same visual weight despite their different hues.
+// Cyan and orange are notably brighter than blue/violet/pink at the
+// same Tailwind shade (cyan-400 ≈ L*78 vs blue-400 ≈ L*67), so they
+// drop a step to -500 to compensate. All share the same /70 opacity
+// to keep the labels recessive vs the task title + checkbox.
+// Dots stay at full -400 saturation for instant color-coded scanning.
 const STAGE_STYLE: Record<Stage, { label: string; text: string; dot: string; bg: string; ring: string }> = {
   deliver: { label: 'Deliver', text: 'text-blue-400/70',   dot: 'bg-blue-400',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15' },
   capture: { label: 'Capture', text: 'text-violet-400/70', dot: 'bg-violet-400', bg: 'bg-violet-500/5', ring: 'ring-violet-500/15' },
-  share:   { label: 'Share',   text: 'text-cyan-400/70',   dot: 'bg-cyan-400',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15' },
+  share:   { label: 'Share',   text: 'text-cyan-500/70',   dot: 'bg-cyan-400',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15' },
   attract: { label: 'Attract', text: 'text-pink-400/70',   dot: 'bg-pink-400',   bg: 'bg-pink-500/5',   ring: 'ring-pink-500/15' },
-  book:    { label: 'Book',    text: 'text-orange-400/70', dot: 'bg-orange-400', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15' },
+  book:    { label: 'Book',    text: 'text-orange-500/70', dot: 'bg-orange-400', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15' },
 }
 
 // ─── Shared row component ────────────────────────────────────────
