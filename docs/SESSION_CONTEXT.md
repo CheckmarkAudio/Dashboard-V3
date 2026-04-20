@@ -85,24 +85,102 @@ route the feature through the flywheel.
 - **Sessions** — actual studio work completed (closing increments
   Deliver)
 
-### TODO — gaps the user hasn't filled in yet
+### The app is NOT just a dashboard
 
-<!-- Ask about these when naturally relevant; don't batch-interrogate. -->
+This is the **operating system for Checkmark Audio**. That framing
+matters. If the app is where login, task flow, bookings, messaging,
+contracts, analytics, and (eventually) accounting/education all
+live, then "slow to load on Monday morning" is a business-process
+failure, not a UX annoyance. Architecture decisions must reflect
+that.
 
-1. **Success metric**: what does "the app is working" look like in
-   three months? Daily team usage? KPIs rising? Fewer
-   bug-reports-per-week? (User hasn't explicitly defined this.)
-2. **Priority roadmap beyond the UI refresh**: after Overview + Hub
-   + Assign land, what matters most? Real flywheel event ledger?
-   Member onboarding? Analytics depth? DB-backed theme/layout sync?
-3. **Studio pain points this is replacing**: what was the team
-   using before? What would definitely-be-worse if we got this
-   wrong?
-4. **Business vision**: is this app only for Checkmark Audio, or
-   could it become a product sold to other studios? Changes a lot
-   of design decisions around multi-tenancy, auth, and branding.
-5. **Non-negotiable rules the user has said to previous sessions
-   that might not be persisted**. Always worth asking early.
+---
+
+## North Star — the 3-month definition of "working"
+
+Five operational must-haves. The app is "working" when all five
+are true, not before:
+
+1. **Daily reliability** — every team member can log in, land on
+   their own up-to-date workspace, and get through the day without
+   friction.
+2. **Live operational data** — tasks, bookings, sessions, clock-
+   in/out, messages, approvals all update correctly and are stored
+   safely.
+3. **Clear role separation** — admins can manage + analyze;
+   regular users see only what they should.
+4. **Fast-first-load performance** — first load of the day is
+   still fast, not just warm-cache fast.
+5. **Extensible structure** — adding widgets, modules, logs, new
+   business areas does not require fragile rewrites.
+
+### The ten concrete outcomes that get us there
+
+(From the user's written vision.)
+
+1. **Well-functioning user base** — every teammate has a personal
+   account with personalized tasks / sessions / bookings.
+   Onboarding procedures for new hires. Reliable repeat login.
+2. **Client communications** — integrate with EmailJS. Booking
+   confirmations, recurring session reminders, a fluid cancel-
+   one-session workflow (Google-Calendar-style recurrence edits,
+   NOT cancel-the-whole-series), non-annoying 5-star review asks.
+3. **Trackable** — clock in/out logged, live tasks with durable
+   add/edit/delete audit trail, live calendar / bookings /
+   sessions / KPIs, client DB, accounting-ready. Admin can
+   export to spreadsheet.
+4. **Modular / updatable** — widgets + assets are easy to add,
+   move, update. Ableton-style (malleable), not Pro-Tools-style
+   (archaic).
+5. **User communications** — Discord-style clarity. Add / manage
+   #channels with zero SQL. Templates + tasks transfer between
+   accounts without touching code.
+6. **Working modals & links** — anything that looks clickable IS
+   clickable. Every user chip / avatar leads to that user's
+   profile. Snapshot widgets open modals with the full view. Form
+   modals actually persist loggable info.
+7. **Distinctive admin / regular-user separation** — admins see
+   general + admin menus. Regular users see general + every
+   user's profile ONLY. No admin data leakage.
+8. **Progress-forward approach** — visible momentum. Streaks.
+   Graphs that encourage, not just inform. Progress / regression
+   is obvious at a glance.
+9. **Contract ledger** — a bank for blank contracts the team can
+   send to employees and clients for review + signature.
+10. **Security** — client + team data is safe. Role boundaries
+    enforced at the DB (RLS), not just the UI.
+
+---
+
+## Golden product principle
+
+> **If something is important enough to appear on the Overview, it
+> should already exist in the database before the page opens.**
+
+Corollary: the browser should be a fast presentation layer, not a
+business-orchestration engine. Daily checklist generation, weekly
+rollups, KPI calculations, etc. all run on the backend / scheduled
+jobs. The first page load of the day reads prepared data; it does
+not compute it.
+
+---
+
+## Studio pain points we're replacing
+
+These are the things the current manual process gets wrong, and
+that the app exists to eliminate:
+
+- Poor data tracking (nothing aggregated, nothing historical)
+- Unclear task assignment (who owns what today?)
+- Forgetting to book clients, or booking with incomplete info
+- Missing review asks to Google Business
+- Not enough outreach / reminders to bring clients back
+- Employee contracts scattered across drives
+- Data-security gaps
+- Lost files
+
+If we get this wrong, we regress to those problems. Every feature
+should kill at least one of them.
 
 ---
 
@@ -152,6 +230,42 @@ relitigate them unless the user brings them up.**
   is built around hash-based recovery tokens. Flipping to PKCE
   breaks it.
 
+### Performance (added April 2026 based on Codex diagnosis)
+
+- **FAST LOADING IS NON-NEGOTIABLE** for all machines, every time.
+  If it's an internet issue out of our control, fine. If it's
+  anything else, treat it as a P0 bug.
+- **No business orchestration at first render.** Daily checklist
+  generation, weekly aggregates, KPI calculations — all run in
+  Supabase scheduled jobs / Edge Functions. Browser reads prepared
+  data.
+- **Snapshot APIs for landing pages.** Overview and Hub each get
+  ONE RPC / Edge Function that returns their above-the-fold data
+  in a single response. No 8-query startup waterfall.
+- **Every hot query has an index.** Verify before merging any
+  new fetch path.
+
+### Design consistency
+
+- **No mid-page font drift.** Headers, subtext, body, captions,
+  labels — every page uses the same semantic typography tokens
+  (see `src/index.css` `.text-display / .text-title / .text-section
+  / .text-body / .text-caption / .text-label`). If a widget uses a
+  one-off size, it's a bug unless justified inline with a comment.
+- **Every widget has the same chrome shape** (widget-card class,
+  22px radius, hairline border, gradient).
+- **All checklists render the same way** (14px checkbox, 5px
+  radius, rose border for critical, muted border for normal).
+
+### User base must remain clickable
+
+- **Every instance of a username / avatar is a clickable
+  link to that user's profile.** If it breaks silently again,
+  it's a regression — add a test before fixing.
+- **Users are distinct entities.** Personalized overviews,
+  personalized task assignments. No shared "demo user" fallback
+  in production.
+
 ### Process
 
 - **One question at a time** to the user. Do not batch 3+ decisions
@@ -163,6 +277,7 @@ relitigate them unless the user brings them up.**
   it is. Don't try to convince them it's fine.
 - **Update `docs/PROJECT_STATE.md` on meaningful commits.**
   (Timeline + active/deferred/done sections.)
+- **Update this doc's "Recent + next" section before session end.**
 - **Never run destructive git commands** (force-push, reset-hard,
   branch -D) without the user asking for them explicitly.
 
@@ -200,6 +315,95 @@ relitigate them unless the user brings them up.**
 - `src/components/FloatingDetailModal.tsx` — shared modal used by
   BOTH widget click-to-expand and the Assign template preview.
   Dismiss: Esc, X button, backdrop click.
+
+---
+
+## Business ecosystem (long-term)
+
+Checkmark Audio is building a connected set of tools, not a single
+dashboard. Rough plan:
+
+1. **This dashboard** — studio-team operating system (current).
+2. **Checkmark Accountant** — existing HTML page gets folded into
+   this site without feeling grafted-on.
+3. **Checkmark Education Portal** — a branch of the site for the
+   studio's education program (modules, assignments, student
+   progress).
+4. **Optional future**: white-label client-site templates sold to
+   artists / other studios. Not a priority, but design decisions
+   should avoid painting us into a single-tenant corner.
+
+---
+
+## Phased roadmap (from Codex diagnosis, user-agreed)
+
+The UI refresh we've been doing is Phase 0. After it lands, the
+work moves to backend/architecture foundations before more UI.
+
+### Phase 1 — Stabilize the foundation
+
+Everything depends on this layer. Start here.
+
+- **Instrument load performance**. Add timing around auth, profile
+  fetch, overview snapshot load, and checklist generation.
+  Identify the exact startup waterfall.
+- **Remove client-side daily generation.** Move to Supabase
+  scheduled job / Edge Function so daily checklist instances and
+  other "prepare today's data" work happens before the user
+  arrives.
+- **Build snapshot endpoints**: `member_overview_snapshot(user_id,
+  date)` and `admin_hub_snapshot(date)`. One RPC each, returns the
+  whole above-the-fold payload.
+- **Add / verify DB indexes** for every hot query surfaced in the
+  instrumentation.
+- **Fix local build reliability** so the repo always builds
+  cleanly with no transient failures.
+
+### Phase 2 — Lock in the product model
+
+- Formal **user / profile / role** architecture. Personalized
+  overviews per user.
+- Formal **task assignment model**: template assignments + custom
+  direct assignments + approvals + audit log.
+- Formal **sessions / bookings / calendar lifecycle**
+  (create → confirmed → completed / cancelled flows).
+- Add durable **activity / event log** tables so every key action
+  leaves a record (clock in/out, task CRUD, booking changes,
+  session status, forum posts, contract signatures, KPI updates).
+
+### Phase 3 — Make it truly operational
+
+- Clock-in/out logging.
+- Task / action audit trails.
+- Booking + session **reminders** (EmailJS) and cancellation flows
+  (Google-Calendar-style recurring edits: one-off cancel doesn't
+  cancel the series).
+- Admin **spreadsheet exports**.
+- Forum **live updates + read-state tracking** (Discord-style).
+- **Contract / document bank**.
+- **5-star review ask** flow (non-annoying).
+
+### Phase 4 — Polish + scale
+
+- Resolution-proof widget layout (one design, every viewport, no
+  "phone version").
+- Design-token cleanup pass (typography + spacing consistency).
+- Modular widget registry with user-created widgets (minimize the
+  need to code for new ones unless fundamentally different).
+- Theme / color / branding presets (Ableton-style).
+- Accounting integration (fold in existing HTML page).
+- Education portal branch.
+
+### Ranking if time forces a trade-off
+
+1. Performance + architecture stabilization (Phase 1)
+2. Individualized user data model (Phase 2)
+3. Assignment + approval system (Phase 2)
+4. Trackable logs + admin exports (Phase 3)
+5. Messaging / forum reliability (Phase 3)
+6. Analytics / flywheel depth (Phase 3, depends on event ledger)
+7. Contract / document bank (Phase 3)
+8. Accounting + education (Phase 4)
 
 ---
 
