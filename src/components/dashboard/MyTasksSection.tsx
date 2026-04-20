@@ -207,7 +207,13 @@ export default function MyTasksSection() {
         )}
 
         {filtered.map((task) => {
-          const ss = STAGE_STYLES[task.stage]
+          // Per-row stage tags removed — slicing happens via the
+          // filter pills above. The slot on the right is reserved for
+          // a due date with the standard `text-[12px] text-text-light
+          // tabular-nums` treatment shared with the Tasks page, so when
+          // due dates land in the schema the rendering is already
+          // wired and uniform across surfaces.
+          const due = (task as { due?: string | null }).due ?? null
           return (
             <div
               key={task.id}
@@ -241,15 +247,11 @@ export default function MyTasksSection() {
                 {task.item_text}
               </span>
 
-              {/* Colored-text-only stage label — no pill, no ring.
-                  User asked for "just the font colored". Keep the tiny
-                  colored dot for quick visual scan. */}
-              <span
-                className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold tracking-tight ${ss.text}`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${ss.dot}`} aria-hidden="true" />
-                {task.stage.charAt(0).toUpperCase() + task.stage.slice(1)}
-              </span>
+              {due && (
+                <span className="shrink-0 text-[12px] text-text-light whitespace-nowrap tabular-nums">
+                  {due}
+                </span>
+              )}
             </div>
           )
         })}
