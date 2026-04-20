@@ -93,8 +93,10 @@ function TaskRow({
         {priority && <Flame size={12} className="text-gold shrink-0" aria-hidden="true" />}
       </div>
       {stageStyle ? (
+        // Colored-text-only stage label — no pill, no ring. Keeps the
+        // tiny dot for fast color-coded scanning of the list.
         <span
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ring-1 whitespace-nowrap ${stageStyle.text} ${stageStyle.bg} ${stageStyle.ring}`}
+          className={`inline-flex items-center gap-1.5 text-[11px] font-bold whitespace-nowrap ${stageStyle.text}`}
         >
           <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot}`} aria-hidden="true" />
           {stageStyle.label}

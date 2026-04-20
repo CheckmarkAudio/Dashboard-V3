@@ -241,8 +241,11 @@ export default function MyTasksSection() {
                 {task.item_text}
               </span>
 
+              {/* Colored-text-only stage label — no pill, no ring.
+                  User asked for "just the font colored". Keep the tiny
+                  colored dot for quick visual scan. */}
               <span
-                className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium tracking-tight ${ss.bg} ${ss.text} ring-1 ${ss.ring}`}
+                className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold tracking-tight ${ss.text}`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${ss.dot}`} aria-hidden="true" />
                 {task.stage.charAt(0).toUpperCase() + task.stage.slice(1)}
