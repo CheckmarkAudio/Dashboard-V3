@@ -66,15 +66,15 @@ export default function MyTasksCard() {
 
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[18px] font-bold tracking-tight text-text">My Tasks</h2>
+          <h2 className="text-[16px] font-bold tracking-tight text-text">My Tasks</h2>
           <DayWeekToggle value={range} onChange={setRange} />
         </div>
-        <div className="mt-3">
+        <div className="mt-2.5">
           <StagePillRow counts={counts} active={stageFilter} onChange={setStageFilter} />
         </div>
       </CardHeader>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-2">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-1">
         {visible.map((t) => {
           const isDone = t.done || submittedIds.has(t.id)
           const isPending = pendingIds.has(t.id)
@@ -102,7 +102,7 @@ export default function MyTasksCard() {
         </div>
       </div>
 
-      <SubmitBar count={pendingInVisible} onClick={submitPending} disabled={pendingInVisible === 0} />
+      <SubmitBar count={pendingInVisible} onClick={submitPending} />
     </Card>
   )
 }

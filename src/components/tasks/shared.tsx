@@ -31,6 +31,12 @@ export const EM_DASH = '—'
 
 // ─── TaskRow ─────────────────────────────────────────────────────────
 // Single task: checkbox + title (+ flame for priority) + meta slot.
+//
+// Visual style follows the Workspace-UI-Draft mockup: per-row rounded
+// background tint (no bottom-border dividers) with a border that
+// lights up on hover. Compact padding (py-2 px-2.5) keeps a stack of
+// tasks visually dense without feeling cramped.
+//
 // Meta slot ALWAYS renders so columns line up; an em-dash signals
 // "no due date set yet" without leaving the row visually unbalanced.
 
@@ -53,7 +59,7 @@ export function TaskRow({
 
   return (
     <div
-      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-center py-2.5 border-b border-white/5 last:border-0 transition-opacity ${
+      className={`group grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-center px-2.5 py-2 rounded-[14px] border border-transparent bg-white/[0.018] hover:bg-white/[0.03] hover:border-white/[0.08] transition-all ${
         isDone ? 'opacity-30' : ''
       }`}
     >
@@ -69,7 +75,7 @@ export function TaskRow({
               ? 'bg-gold/30 border-gold/40'
               : isPending
                 ? 'bg-gold/20 border-gold'
-                : 'border-white/20 hover:border-gold/60'
+                : 'border-white/20 group-hover:border-gold/60'
           }`}
         >
           {isChecked && <Check size={11} className="text-gold" strokeWidth={3} />}
@@ -183,30 +189,28 @@ export function CardHeader({ children }: { children: ReactNode }) {
 }
 
 // ─── Submit bar (gold gradient, "Submit Completed (n)") ───────────────
+// Only renders when there's at least one pending check — when nothing
+// is queued the bar collapses to zero height, freeing ~70px for more
+// task rows. This matches the Workspace-UI-Draft mockup where the
+// Overview Tasks widget has no submit chrome at all in its idle state.
 
 export function SubmitBar({
   count,
   onClick,
-  disabled,
 }: {
   count: number
   onClick: () => void
-  disabled: boolean
 }) {
+  if (count === 0) return null
   return (
-    <div className="px-5 py-4 border-t border-white/5 mt-auto">
+    <div className="px-4 py-3 border-t border-white/5 mt-auto">
       <button
         type="button"
         onClick={onClick}
-        disabled={disabled}
-        className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-bold transition-all ${
-          disabled
-            ? 'bg-white/[0.03] text-text-light ring-1 ring-white/5 cursor-not-allowed'
-            : 'bg-gradient-to-b from-gold to-gold-muted text-black hover:brightness-105 shadow-[0_14px_28px_rgba(214,170,55,0.22)]'
-        }`}
+        className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-bold tracking-tight transition-all bg-gradient-to-b from-gold to-gold-muted text-black hover:brightness-105 shadow-[0_10px_20px_rgba(214,170,55,0.18)]"
       >
-        <Check size={14} strokeWidth={3} />
-        {disabled ? 'Submit Completed' : `Submit Completed (${count})`}
+        <Check size={12} strokeWidth={3} />
+        Submit ({count})
       </button>
     </div>
   )

@@ -115,7 +115,7 @@ function TeamTasksCard() {
         </div>
       </CardHeader>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-2">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-1">
         {visible.length === 0 ? (
           <p className="py-8 text-center text-[13px] text-text-light italic">
             {stageFilter === 'all' ? 'No open tasks.' : `No ${STAGE_STYLE[stageFilter].label} tasks today.`}
@@ -146,7 +146,7 @@ function TeamTasksCard() {
         )}
       </div>
 
-      <SubmitBar count={checked.size} onClick={onSubmit} disabled={checked.size === 0} />
+      <SubmitBar count={checked.size} onClick={onSubmit} />
     </Card>
   )
 }
@@ -252,7 +252,7 @@ function StudioTasksCard() {
         {activeFreq === 'Daily' ? renderSection('Daily Tasks', dailyTasks) : renderSection('Weekly Tasks', weeklyTasks)}
       </div>
 
-      <SubmitBar count={checked.size} onClick={onSubmit} disabled={checked.size === 0} />
+      <SubmitBar count={checked.size} onClick={onSubmit} />
     </Card>
   )
 }
