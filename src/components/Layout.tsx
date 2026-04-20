@@ -1,4 +1,4 @@
-import { Suspense, useState, useRef, useEffect, type ComponentType } from 'react'
+import { Suspense, useState, useRef, useEffect, useLayoutEffect, useMemo, type ComponentType } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -15,7 +15,7 @@ import {
   LayoutDashboard, Users, Calendar, Settings, Gauge,
   LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
   BarChart3, Briefcase, MessageSquare, Clock, Sun, Moon,
-  Loader2,
+  Loader2, MoreHorizontal,
 } from 'lucide-react'
 
 /**
@@ -94,6 +94,196 @@ function TopNavItem({ link }: { link: NavLinkDef }) {
       <link.icon size={16} strokeWidth={1.8} aria-hidden="true" />
       {link.label}
     </NavLink>
+  )
+}
+
+/**
+ * GitHub-style responsive top nav. Measures each item's natural width
+ * once on mount, then watches the container with ResizeObserver. When
+ * items won't fit, the tail is moved into a "More" overflow dropdown
+ * instead of spawning a horizontal scrollbar. The divider between main
+ * and admin items stays put when both sides have visible items, and
+ * drops out cleanly when the boundary is crossed.
+ */
+type TopNavEntry =
+  | { kind: 'link'; link: NavLinkDef }
+  | { kind: 'divider' }
+
+function MoreDropdown({ entries }: { entries: TopNavEntry[] }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const location = useLocation()
+  const links = entries.filter((e): e is Extract<TopNavEntry, { kind: 'link' }> => e.kind === 'link')
+
+  // Close when any of the overflow links becomes active (navigated)
+  useEffect(() => { setOpen(false) }, [location.pathname])
+
+  // Close on outside click / Escape
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onEsc)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onEsc)
+    }
+  }, [open])
+
+  const anyActive = links.some(({ link }) => {
+    const end = link.to === '/' || link.to === '/admin'
+    return end ? location.pathname === link.to : location.pathname.startsWith(link.to)
+  })
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={[
+          'inline-flex items-center gap-1.5 h-10 px-3 rounded-[22px] text-[14px] font-semibold transition-all duration-200 focus-ring',
+          anyActive || open
+            ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+            : 'text-text-muted hover:text-text hover:bg-white/[0.03]',
+        ].join(' ')}
+      >
+        <MoreHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
+        More
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 mt-1.5 min-w-[180px] rounded-xl border border-border/60 bg-surface/95 backdrop-blur-md shadow-lg py-1 z-50 animate-slide-up"
+        >
+          {links.map(({ link }) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              end={link.to === '/' || link.to === '/admin'}
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className={({ isActive }) =>
+                [
+                  'flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg text-[13px] font-medium transition-colors',
+                  isActive
+                    ? 'text-gold bg-gold/10'
+                    : 'text-text-muted hover:bg-white/[0.04] hover:text-text',
+                ].join(' ')
+              }
+            >
+              <link.icon size={15} strokeWidth={1.8} aria-hidden="true" />
+              {link.label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ResponsiveTopNav({ entries }: { entries: TopNavEntry[] }) {
+  const containerRef = useRef<HTMLElement>(null)
+  const measureRef = useRef<HTMLDivElement>(null)
+  const moreRef = useRef<HTMLDivElement>(null)
+  const [widths, setWidths] = useState<number[]>([])
+  const [moreWidth, setMoreWidth] = useState(0)
+  const [containerWidth, setContainerWidth] = useState(0)
+
+  // Gap between children is gap-1 → 4px
+  const GAP = 4
+
+  // Measure each entry's natural width once (and whenever entries change)
+  useLayoutEffect(() => {
+    if (!measureRef.current) return
+    const nodes = Array.from(measureRef.current.children) as HTMLElement[]
+    setWidths(nodes.map((n) => n.offsetWidth))
+    if (moreRef.current) setMoreWidth(moreRef.current.offsetWidth)
+  }, [entries])
+
+  // Track the container width
+  useEffect(() => {
+    if (!containerRef.current) return
+    const el = containerRef.current
+    setContainerWidth(el.clientWidth)
+    const ro = new ResizeObserver((es) => {
+      for (const e of es) setContainerWidth(e.contentRect.width)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // How many leading entries fit, reserving space for "More" when needed.
+  const visibleCount = useMemo(() => {
+    if (!containerWidth || widths.length !== entries.length) return entries.length
+
+    const sumWith = (count: number) =>
+      widths.slice(0, count).reduce((s, w, i) => s + w + (i > 0 ? GAP : 0), 0)
+
+    // Fits all without any overflow button?
+    if (sumWith(entries.length) <= containerWidth) return entries.length
+
+    // Otherwise reserve the "More" button's width (+ gap before it)
+    const reserve = moreWidth + GAP
+    for (let count = entries.length - 1; count >= 0; count--) {
+      if (sumWith(count) + reserve <= containerWidth) {
+        // Don't leave a trailing divider visible with nothing after it
+        const last = entries[count - 1]
+        if (last && last.kind === 'divider') return count - 1
+        return count
+      }
+    }
+    return 0
+  }, [containerWidth, widths, moreWidth, entries])
+
+  const visible = entries.slice(0, visibleCount)
+  const overflow = entries.slice(visibleCount).filter((e) => e.kind === 'link')
+
+  return (
+    <nav
+      ref={containerRef}
+      className="hidden lg:flex items-center gap-1 px-4 lg:px-6 h-11 border-t border-border/60 relative"
+      aria-label="Primary navigation"
+    >
+      {/* Hidden measurement row — absolute + invisible so it doesn't
+          affect layout, but rendered in the DOM so we can read each
+          item's natural offsetWidth. */}
+      <div
+        ref={measureRef}
+        aria-hidden="true"
+        className="absolute left-0 top-0 invisible pointer-events-none flex items-center gap-1"
+      >
+        {entries.map((entry, i) =>
+          entry.kind === 'divider'
+            ? <span key={`m-div-${i}`} className="mx-2 h-5 w-px bg-border/60" />
+            : <TopNavItem key={`m-${entry.link.to}`} link={entry.link} />
+        )}
+      </div>
+      <div
+        ref={moreRef}
+        aria-hidden="true"
+        className="absolute left-0 top-0 invisible pointer-events-none"
+      >
+        <div className="inline-flex items-center gap-1.5 h-10 px-3 rounded-[22px] text-[14px] font-semibold">
+          <MoreHorizontal size={16} strokeWidth={1.8} />
+          More
+        </div>
+      </div>
+
+      {/* Actual visible items */}
+      {visible.map((entry, i) =>
+        entry.kind === 'divider'
+          ? <span key={`div-${i}`} className="mx-2 h-5 w-px bg-border/60" aria-hidden="true" />
+          : <TopNavItem key={entry.link.to} link={entry.link} />
+      )}
+
+      {overflow.length > 0 && <MoreDropdown entries={overflow} />}
+    </nav>
   )
 }
 
@@ -221,24 +411,24 @@ export default function Layout() {
             <Menu size={20} aria-hidden="true" />
           </button>
 
-          {/* Left: Logo + brand. Matches the Workspace-UI-Draft header
-              mockup — larger mark, bold "Checkmark Audio" on top, gold
-              "Workspace" subtitle identifying the product. The two-line
-              brand reads as "Checkmark Audio's Workspace app." */}
-          <div className="flex items-center gap-3">
+          {/* Left: Logo + brand. The two-line text block hides below md
+              so the logo alone stays visible at narrow widths — matches
+              GitHub's approach of compressing the brand chrome before
+              compressing the nav. */}
+          <div className="flex items-center gap-3 min-w-0 shrink-0">
             <img
               src={checkmarkLogo}
               alt="Checkmark Audio logo"
-              className="w-10 h-10 object-contain"
+              className="w-10 h-10 object-contain shrink-0"
             />
-            <div className="leading-tight">
-              <h1 className="font-bold text-[15px] tracking-[-0.02em] text-text">Checkmark Audio</h1>
-              <p className="text-[12px] text-gold font-semibold">Workspace</p>
+            <div className="leading-tight hidden md:block">
+              <h1 className="font-bold text-[15px] tracking-[-0.02em] text-text whitespace-nowrap">Checkmark Audio</h1>
+              <p className="text-[12px] text-gold font-semibold whitespace-nowrap">Workspace</p>
             </div>
           </div>
 
           {/* Right section: Theme toggle + Clock + Profile */}
-          <div className="ml-auto flex items-center gap-4">
+          <div className="ml-auto flex items-center gap-3 lg:gap-4 min-w-0">
             {/* Theme toggle — light/dark. System preference stays accessible
                 via ThemeContext for anyone who wants a future Settings UI. */}
             <button
@@ -326,24 +516,22 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* Row 2: horizontal top nav (desktop) — all main + admin links inline */}
-        <nav
-          className="hidden lg:flex items-center gap-1 px-4 lg:px-6 h-11 border-t border-border/60 overflow-x-auto"
-          aria-label="Primary navigation"
-        >
-          {mainLinks.map(link => (
-            <TopNavItem key={link.to} link={link} />
-          ))}
-          {canAccessAdmin && (
-            <>
-              <span className="mx-2 h-5 w-px bg-border/60" aria-hidden="true" />
-              {adminLinks.map(link => (
-                <TopNavItem key={link.to} link={link} />
-              ))}
-              <TopNavItem link={settingsLink} />
-            </>
-          )}
-        </nav>
+        {/* Row 2: horizontal top nav (desktop) — responsive with
+            GitHub-style overflow dropdown. Tail items collapse into a
+            "More" menu when they don't fit instead of spawning a
+            horizontal scrollbar. */}
+        <ResponsiveTopNav
+          entries={[
+            ...mainLinks.map<TopNavEntry>((link) => ({ kind: 'link', link })),
+            ...(canAccessAdmin
+              ? [
+                  { kind: 'divider' } as TopNavEntry,
+                  ...adminLinks.map<TopNavEntry>((link) => ({ kind: 'link', link })),
+                  { kind: 'link', link: settingsLink } as TopNavEntry,
+                ]
+              : []),
+          ]}
+        />
       </header>
 
       {/* ── Mobile drawer (unchanged — uses vertical sidebar JSX) ── */}
