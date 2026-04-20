@@ -323,6 +323,9 @@ function AssignTip({
 // Custom glyph: folder with TWO staggered checkmarks inside. Used for
 // the "Task Group" tile so the icon clearly says "a bundle of
 // checklist items" — not a single task, not a plus-add action.
+// Paths fill a slightly tighter bounding box (2 → 22) so the glyph
+// reads at the same optical weight as the stock lucide icons next to
+// it (CalendarPlus, CheckSquare) — matches their square footprint.
 function FolderTwoChecksIcon({ size = 19, className }: { size?: number; className?: string }) {
   return (
     <svg
@@ -333,26 +336,27 @@ function FolderTwoChecksIcon({ size = 19, className }: { size?: number; classNam
       className={className}
       aria-hidden="true"
     >
-      {/* Folder body */}
+      {/* Folder body — tab on the left, wider body — fills the square
+          frame similar to lucide's Folder-family icons. */}
       <path
-        d="M3 7C3 5.9 3.9 5 5 5H9.5L11.5 7H19C20.1 7 21 7.9 21 9V17C21 18.1 20.1 19 19 19H5C3.9 19 3 18.1 3 17V7Z"
+        d="M2 6C2 4.9 2.9 4 4 4H9L11.2 6.4H20C21.1 6.4 22 7.3 22 8.4V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6Z"
         stroke="currentColor"
         strokeWidth="1.6"
         strokeLinejoin="round"
       />
-      {/* Top checkmark (staggered slightly left + up) */}
+      {/* Top checkmark (staggered left + up) */}
       <path
-        d="M7.5 12L9.2 13.6L12.4 10.4"
+        d="M6.5 12.2L8.4 14L12 10.2"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       {/* Bottom checkmark (staggered right + down) */}
       <path
-        d="M11 15.4L12.6 16.9L16.4 13.1"
+        d="M10.8 15.8L12.6 17.4L17 13.1"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
