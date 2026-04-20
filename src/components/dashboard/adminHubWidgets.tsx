@@ -25,7 +25,6 @@ import { APP_ROUTES } from '../../app/routes'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAdminOverviewContext } from '../../contexts/AdminOverviewContext'
 import { supabase } from '../../lib/supabase'
-import { chatSupabase } from '../../lib/chatSupabase'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { fetchKPIDefinitions, fetchKPIEntries, kpiKeys } from '../../lib/queries/kpi'
 import { useToast } from '../Toast'
@@ -909,7 +908,7 @@ function PostToChannelModal({
     setSaving(true)
     try {
       const name = profile?.display_name ?? 'Admin'
-      const { error } = await chatSupabase.from('chat_messages').insert({
+      const { error } = await supabase.from('chat_messages').insert({
         channel_id: channelId,
         sender_name: name,
         sender_id: profile?.id ?? 'admin',
@@ -986,7 +985,7 @@ function CreateChannelModal({ onClose }: { onClose: () => void }) {
     setSaving(true)
     try {
       const slug = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-      const { error } = await chatSupabase.from('chat_channels').insert({
+      const { error } = await supabase.from('chat_channels').insert({
         name: cleaned,
         slug,
         description: description.trim() || null,

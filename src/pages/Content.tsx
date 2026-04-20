@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
-import { chatSupabase } from '../lib/chatSupabase'
+import { supabase } from '../lib/supabase'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import { Send, Hash, Users } from 'lucide-react'
 
@@ -31,7 +31,7 @@ export default function Content() {
 
   // Load channels
   useEffect(() => {
-    chatSupabase.from('chat_channels').select('*').order('created_at').then(({ data }) => {
+    supabase.from('chat_channels').select('*').order('created_at').then(({ data }) => {
       if (data && data.length > 0) {
         setChannels(data)
         setActiveChannel(data[0])
@@ -43,7 +43,7 @@ export default function Content() {
   // Load messages for active channel
   const loadMessages = useCallback(async () => {
     if (!activeChannel) return
-    const { data } = await chatSupabase
+    const { data } = await supabase
       .from('chat_messages')
       .select('*')
       .eq('channel_id', activeChannel.id)
@@ -56,7 +56,7 @@ export default function Content() {
   // Realtime subscription
   useEffect(() => {
     if (!activeChannel) return
-    const sub = chatSupabase
+    const sub = supabase
       .channel(`messages-${activeChannel.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `channel_id=eq.${activeChannel.id}` },
         (payload) => {
@@ -64,7 +64,7 @@ export default function Content() {
         }
       )
       .subscribe()
-    return () => { chatSupabase.removeChannel(sub) }
+    return () => { supabase.removeChannel(sub) }
   }, [activeChannel])
 
   // Auto-scroll
@@ -78,7 +78,7 @@ export default function Content() {
     const name = profile?.display_name ?? 'User'
     const id = profile?.id ?? 'dev-user'
     const initial = name.charAt(0).toUpperCase()
-    await chatSupabase.from('chat_messages').insert({
+    await supabase.from('chat_messages').insert({
       channel_id: activeChannel.id,
       sender_name: name,
       sender_id: id,
