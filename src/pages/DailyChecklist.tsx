@@ -26,12 +26,16 @@ type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
 
 const STAGES: readonly Stage[] = ['deliver', 'capture', 'share', 'attract', 'book']
 
+// Stage tag text uses the 400/70 token so the dot does the
+// color-coding work while the label recedes — keeps the task title
+// and checkbox as the primary visual anchors. The dots stay at full
+// 400 saturation for instant scanning.
 const STAGE_STYLE: Record<Stage, { label: string; text: string; dot: string; bg: string; ring: string }> = {
-  deliver: { label: 'Deliver', text: 'text-blue-300',   dot: 'bg-blue-400',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15' },
-  capture: { label: 'Capture', text: 'text-violet-300', dot: 'bg-violet-400', bg: 'bg-violet-500/5', ring: 'ring-violet-500/15' },
-  share:   { label: 'Share',   text: 'text-cyan-300',   dot: 'bg-cyan-400',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15' },
-  attract: { label: 'Attract', text: 'text-pink-300',   dot: 'bg-pink-400',   bg: 'bg-pink-500/5',   ring: 'ring-pink-500/15' },
-  book:    { label: 'Book',    text: 'text-orange-300', dot: 'bg-orange-400', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15' },
+  deliver: { label: 'Deliver', text: 'text-blue-400/70',   dot: 'bg-blue-400',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15' },
+  capture: { label: 'Capture', text: 'text-violet-400/70', dot: 'bg-violet-400', bg: 'bg-violet-500/5', ring: 'ring-violet-500/15' },
+  share:   { label: 'Share',   text: 'text-cyan-400/70',   dot: 'bg-cyan-400',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15' },
+  attract: { label: 'Attract', text: 'text-pink-400/70',   dot: 'bg-pink-400',   bg: 'bg-pink-500/5',   ring: 'ring-pink-500/15' },
+  book:    { label: 'Book',    text: 'text-orange-400/70', dot: 'bg-orange-400', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15' },
 }
 
 // ─── Shared row component ────────────────────────────────────────
