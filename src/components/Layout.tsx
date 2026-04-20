@@ -191,22 +191,38 @@ function ResponsiveTopNav({ entries }: { entries: TopNavEntry[] }) {
   const containerRef = useRef<HTMLElement>(null)
   const measureRef = useRef<HTMLDivElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
-  const [widths, setWidths] = useState<number[]>([])
-  const [moreWidth, setMoreWidth] = useState(0)
+  const widthsRef = useRef<number[]>([])
+  const moreWidthRef = useRef<number>(0)
   const [containerWidth, setContainerWidth] = useState(0)
+  const [measureTick, setMeasureTick] = useState(0)
 
-  // Gap between children is gap-1 → 4px
+  // Gap between children is gap-1 → 4px. Tiny safety buffer keeps the
+  // last item from flirting with sub-pixel rounding bugs that would
+  // produce the dreaded 1px scrollbar.
   const GAP = 4
+  const SAFETY = 2
 
-  // Measure each entry's natural width once (and whenever entries change)
+  // Stable signature of the entries array — reduces churn so the
+  // measurement effect doesn't fire when the parent passes a fresh
+  // array literal each render with the same content.
+  const entriesKey = useMemo(
+    () => entries.map((e) => (e.kind === 'divider' ? '|' : e.link.to)).join(','),
+    [entries],
+  )
+
+  // Measure each entry's natural width whenever the entries list
+  // changes. Stored in refs so we don't trigger a re-render storm
+  // through useState; we bump `measureTick` once when measurements
+  // are ready so visibleCount can recompute.
   useLayoutEffect(() => {
     if (!measureRef.current) return
     const nodes = Array.from(measureRef.current.children) as HTMLElement[]
-    setWidths(nodes.map((n) => n.offsetWidth))
-    if (moreRef.current) setMoreWidth(moreRef.current.offsetWidth)
-  }, [entries])
+    widthsRef.current = nodes.map((n) => n.offsetWidth)
+    if (moreRef.current) moreWidthRef.current = moreRef.current.offsetWidth
+    setMeasureTick((t) => t + 1)
+  }, [entriesKey])
 
-  // Track the container width
+  // Track the container width via ResizeObserver
   useEffect(() => {
     if (!containerRef.current) return
     const el = containerRef.current
@@ -220,16 +236,18 @@ function ResponsiveTopNav({ entries }: { entries: TopNavEntry[] }) {
 
   // How many leading entries fit, reserving space for "More" when needed.
   const visibleCount = useMemo(() => {
+    const widths = widthsRef.current
+    const moreWidth = moreWidthRef.current
     if (!containerWidth || widths.length !== entries.length) return entries.length
 
     const sumWith = (count: number) =>
       widths.slice(0, count).reduce((s, w, i) => s + w + (i > 0 ? GAP : 0), 0)
 
     // Fits all without any overflow button?
-    if (sumWith(entries.length) <= containerWidth) return entries.length
+    if (sumWith(entries.length) + SAFETY <= containerWidth) return entries.length
 
     // Otherwise reserve the "More" button's width (+ gap before it)
-    const reserve = moreWidth + GAP
+    const reserve = moreWidth + GAP + SAFETY
     for (let count = entries.length - 1; count >= 0; count--) {
       if (sumWith(count) + reserve <= containerWidth) {
         // Don't leave a trailing divider visible with nothing after it
@@ -239,7 +257,7 @@ function ResponsiveTopNav({ entries }: { entries: TopNavEntry[] }) {
       }
     }
     return 0
-  }, [containerWidth, widths, moreWidth, entries])
+  }, [containerWidth, measureTick, entries])
 
   const visible = entries.slice(0, visibleCount)
   const overflow = entries.slice(visibleCount).filter((e) => e.kind === 'link')
@@ -247,12 +265,13 @@ function ResponsiveTopNav({ entries }: { entries: TopNavEntry[] }) {
   return (
     <nav
       ref={containerRef}
-      className="hidden lg:flex items-center gap-1 px-4 lg:px-6 h-11 border-t border-border/60 relative"
+      className="hidden lg:flex items-center gap-1 px-4 lg:px-6 h-11 border-t border-border/60 relative overflow-hidden"
       aria-label="Primary navigation"
     >
       {/* Hidden measurement row — absolute + invisible so it doesn't
           affect layout, but rendered in the DOM so we can read each
-          item's natural offsetWidth. */}
+          item's natural offsetWidth. The parent's `overflow-hidden`
+          clips it so it can't trigger a scrollbar even before measured. */}
       <div
         ref={measureRef}
         aria-hidden="true"
