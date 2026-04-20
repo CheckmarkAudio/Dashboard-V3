@@ -10,7 +10,7 @@ type Channel = { id: string; name: string; slug: string; description: string }
 type Message = { id: string; channel_id: string; sender_name: string; sender_id: string; sender_initial: string; content: string; created_at: string }
 
 export default function Content() {
-  useDocumentTitle('Forum - Checkmark Audio')
+  useDocumentTitle('Forum - Checkmark Workspace')
   const { profile } = useAuth()
   const [channels, setChannels] = useState<Channel[]>([])
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null)

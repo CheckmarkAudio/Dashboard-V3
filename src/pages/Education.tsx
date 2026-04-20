@@ -61,7 +61,7 @@ function StatusBadge({ status }: { status: EducationStudent['status'] }) {
 }
 
 export default function Education() {
-  useDocumentTitle('Education - Checkmark Audio')
+  useDocumentTitle('Education - Checkmark Workspace')
   const { profile } = useAuth()
   const { toast } = useToast()
   const [students, setStudents] = useState<EducationStudent[]>([])

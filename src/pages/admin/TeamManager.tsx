@@ -44,7 +44,7 @@ const EMPTY_MEMBER: MemberForm = {
 }
 
 export default function TeamManager() {
-  useDocumentTitle('Team Manager - Checkmark Audio')
+  useDocumentTitle('Team Manager - Checkmark Workspace')
   const { toast } = useToast()
   const { profile } = useAuth()
   const [members, setMembers] = useState<TeamMember[]>([])

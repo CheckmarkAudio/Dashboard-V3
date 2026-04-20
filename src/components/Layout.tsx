@@ -83,18 +83,16 @@ function TopNavItem({ link }: { link: NavLinkDef }) {
       end={link.to === '/' || link.to === '/admin'}
       className={({ isActive }) =>
         [
-          'flex items-center gap-2 h-9 px-3 rounded-lg text-[13px] font-medium transition-all duration-200 focus-ring whitespace-nowrap',
-          // Active nav link now reads as a gold-filled pill (matches the
-          // Workspace-UI-Draft mockup). Gradient top-light → bottom-dark
-          // with a faint white highlight line inside, so it feels
-          // dimensional rather than flat.
+          // Mockup spec: 22px rounded, 16px vertical padding equivalent
+          // (h-10 reads ~40px), 14px font, gap-2.5 between icon + label.
+          'inline-flex items-center gap-2.5 h-10 px-3.5 rounded-[22px] text-[14px] font-semibold transition-all duration-200 focus-ring whitespace-nowrap',
           isActive
-            ? 'text-gold font-semibold bg-gradient-to-b from-gold/20 to-gold/8 ring-1 ring-gold/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-            : 'text-text-muted hover:text-text hover:bg-white/[0.04]',
+            ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+            : 'text-text-muted hover:text-text hover:bg-white/[0.03]',
         ].join(' ')
       }
     >
-      <link.icon size={15} strokeWidth={2} aria-hidden="true" />
+      <link.icon size={16} strokeWidth={1.8} aria-hidden="true" />
       {link.label}
     </NavLink>
   )
@@ -117,7 +115,10 @@ const mainLinks: NavLinkDef[] = [
    "Flywheel" removed in April 2026; everything merged into Analytics.
    Same chart content now lives under /admin/health. */
 const adminLinks: NavLinkDef[] = [
-  { to: APP_ROUTES.admin.hub, icon: TeamHubIcon as ComponentType<LucideProps>, label: 'Hub' },
+  // Label renamed from "Hub" → "Dashboard" per product direction.
+  // The underlying route (APP_ROUTES.admin.hub = /admin) is unchanged
+  // so existing links/bookmarks still work; only the UI label shifts.
+  { to: APP_ROUTES.admin.hub, icon: TeamHubIcon as ComponentType<LucideProps>, label: 'Dashboard' },
   { to: APP_ROUTES.admin.templates, icon: ClipboardList, label: 'Assign' },
   { to: APP_ROUTES.admin.members, icon: Users, label: 'Members' },
   { to: APP_ROUTES.admin.analytics, icon: BarChart3, label: 'Analytics' },
@@ -217,16 +218,19 @@ export default function Layout() {
             <Menu size={20} aria-hidden="true" />
           </button>
 
-          {/* Left: Logo + title */}
+          {/* Left: Logo + brand. Matches the Workspace-UI-Draft header
+              mockup — larger mark, bold "Checkmark Audio" on top, gold
+              "Workspace" subtitle identifying the product. The two-line
+              brand reads as "Checkmark Audio's Workspace app." */}
           <div className="flex items-center gap-3">
             <img
               src={checkmarkLogo}
               alt="Checkmark Audio logo"
-              className="w-8 h-8 object-contain"
+              className="w-10 h-10 object-contain"
             />
             <div className="leading-tight">
-              <h1 className="font-bold text-sm tracking-tight text-text">Checkmark Audio</h1>
-              <p className="text-[11px] text-gold font-medium">dashboard</p>
+              <h1 className="font-bold text-[15px] tracking-[-0.02em] text-text">Checkmark Audio</h1>
+              <p className="text-[12px] text-gold font-semibold">Workspace</p>
             </div>
           </div>
 
@@ -244,13 +248,14 @@ export default function Layout() {
               {resolvedTheme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
             </button>
 
-            {/* Clock In / Clock Out */}
+            {/* Clock In / Clock Out — gold gradient pill with soft
+                drop shadow, matching the mockup's clock-btn. */}
             {!clockedIn ? (
               <button
                 onClick={() => { setClockedIn(true); setClockInTime(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })) }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold text-black text-[12px] font-bold hover:bg-gold-muted transition-all shadow-sm"
+                className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold hover:brightness-105 transition-all shadow-[0_14px_28px_rgba(214,170,55,0.22)]"
               >
-                <Clock size={13} />
+                <Clock size={14} strokeWidth={2} />
                 Clock In
               </button>
             ) : (
@@ -289,8 +294,9 @@ export default function Layout() {
               disabled={!profile?.id}
               className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer focus-ring rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
+              {/* Avatar — bigger (44px) + thicker ring per mockup. */}
               <div
-                className="w-10 h-10 rounded-full bg-surface-alt border-2 border-border-light text-gold flex items-center justify-center text-[14px] font-bold shrink-0"
+                className="w-11 h-11 rounded-full bg-surface-alt border-[3px] border-white/12 text-gold flex items-center justify-center text-[15px] font-bold shrink-0"
                 title={profile?.email ?? 'Signed in'}
               >
                 {profile?.display_name?.charAt(0)?.toUpperCase() ?? '?'}

@@ -10,7 +10,7 @@ import { ADMIN_ROUTES } from './features/admin/routes'
 
 export default function App() {
   return (
-    <ErrorBoundary label="Checkmark Audio Dashboard">
+    <ErrorBoundary label="Checkmark Workspace">
       {/*
         RecoveryGate intercepts ALL route rendering when the user is
         mid-password-recovery (just clicked the email link). It renders

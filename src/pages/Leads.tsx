@@ -44,7 +44,7 @@ const EMPTY_LEAD: LeadForm = {
 }
 
 export default function Leads() {
-  useDocumentTitle('Leads - Checkmark Audio')
+  useDocumentTitle('Leads - Checkmark Workspace')
   const { profile, isAdmin } = useAuth()
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)

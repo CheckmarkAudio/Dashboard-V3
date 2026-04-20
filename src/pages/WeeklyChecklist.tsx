@@ -31,7 +31,7 @@ function isSameWeek(a: Date, b: Date) {
 }
 
 export default function WeeklyChecklist() {
-  useDocumentTitle('Weekly Tasks - Checkmark Audio')
+  useDocumentTitle('Weekly Tasks - Checkmark Workspace')
   const { isAdmin } = useAuth()
   const { toast } = useToast()
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()))

@@ -25,7 +25,7 @@ export default function Profile() {
   const members: TeamMember[] = teamQuery.data ?? []
   const member = members.find((m) => m.id === memberId)
 
-  useDocumentTitle(member ? `${member.display_name} - Checkmark Audio` : 'Profile - Checkmark Audio')
+  useDocumentTitle(member ? `${member.display_name} - Checkmark Workspace` : 'Profile - Checkmark Workspace')
 
   if (teamQuery.isLoading) {
     return (

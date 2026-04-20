@@ -93,7 +93,7 @@ function durationLabel(start: string, end: string): string {
 }
 
 export default function Calendar() {
-  useDocumentTitle('Calendar - Checkmark Audio')
+  useDocumentTitle('Calendar - Checkmark Workspace')
   const TODAY_KEY = getTodayKey()
   const [weekOffset, setWeekOffset] = useState(0)
   const WEEK = getWeekDays(weekOffset)

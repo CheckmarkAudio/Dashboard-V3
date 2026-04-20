@@ -63,7 +63,7 @@ function notesPreview(notes: string | null, max = 72): string {
 }
 
 export default function Pipeline() {
-  useDocumentTitle('Pipeline - Checkmark Audio')
+  useDocumentTitle('Pipeline - Checkmark Workspace')
   const { profile } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()

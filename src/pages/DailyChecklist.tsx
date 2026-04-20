@@ -598,7 +598,7 @@ function StudioTasksCard() {
 // ─── Page ─────────────────────────────────────────────────────────
 
 export default function DailyChecklist() {
-  useDocumentTitle('Tasks - Checkmark Audio')
+  useDocumentTitle('Tasks - Checkmark Workspace')
   return (
     <div className="max-w-[1280px] mx-auto animate-fade-in">
       <h1 className="text-[44px] font-bold tracking-[-0.04em] leading-none text-text mb-6">

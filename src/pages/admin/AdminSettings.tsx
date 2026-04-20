@@ -113,14 +113,14 @@ function KeyCapInput({
 }
 
 export default function AdminSettings() {
-  useDocumentTitle('Settings - Checkmark Audio')
+  useDocumentTitle('Settings - Checkmark Workspace')
   const { profile } = useAuth()
   const [activeSection, setActiveSection] = useState<SectionKey>('account-access')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
   // Organization + notifications state (existing)
-  const [orgName, setOrgName] = useState('Checkmark Audio')
+  const [orgName, setOrgName] = useState('Checkmark Workspace')
   const [orgTagline, setOrgTagline] = useState('Team Management System')
   const [notifyOnSubmission, setNotifyOnSubmission] = useState(true)
   const [notifyOnLeadUpdate, setNotifyOnLeadUpdate] = useState(true)

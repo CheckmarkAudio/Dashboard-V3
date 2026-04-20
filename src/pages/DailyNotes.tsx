@@ -19,7 +19,7 @@ const DEFAULT_PROMPTS = [
 ]
 
 export default function DailyNotes() {
-  useDocumentTitle('Daily Notes - Checkmark Audio')
+  useDocumentTitle('Daily Notes - Checkmark Workspace')
   const { profile, isAdmin } = useAuth()
   const [notes, setNotes] = useState<DailyNote[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])

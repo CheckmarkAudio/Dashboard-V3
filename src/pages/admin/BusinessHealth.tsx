@@ -109,7 +109,7 @@ function HealthGauge({ pct }: { pct: number }) {
 // ── Page ───────────────────────────────────────────────────────────────
 
 export default function BusinessHealth() {
-  useDocumentTitle('Analytics - Checkmark Audio')
+  useDocumentTitle('Analytics - Checkmark Workspace')
   const { tasks, bookings, pendingIds, togglePending, submitPending, hasPending } = useTasks()
   const [selectedStage, setSelectedStage] = useState<typeof STAGES[number]['name']>('Deliver')
   const [timeFilter, setTimeFilter] = useState<'total' | 'year' | 'month' | 'week' | 'day'>('week')

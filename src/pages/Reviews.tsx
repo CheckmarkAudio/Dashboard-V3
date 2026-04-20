@@ -13,7 +13,7 @@ const CATEGORIES = [
 ]
 
 export default function Reviews() {
-  useDocumentTitle('Performance Reviews - Checkmark Audio')
+  useDocumentTitle('Performance Reviews - Checkmark Workspace')
   const { profile, isAdmin } = useAuth()
   const { toast } = useToast()
   const [reviews, setReviews] = useState<PerformanceReview[]>([])

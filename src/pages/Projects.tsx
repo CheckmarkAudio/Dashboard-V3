@@ -85,7 +85,7 @@ function formatDueDate(iso: string | null) {
 }
 
 export default function Projects() {
-  useDocumentTitle('Projects - Checkmark Audio')
+  useDocumentTitle('Projects - Checkmark Workspace')
   const { profile } = useAuth()
   const { toast } = useToast()
   const [projects, setProjects] = useState<Project[]>([])

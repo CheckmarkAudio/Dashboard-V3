@@ -32,7 +32,7 @@ import { UsersRound, Shield } from 'lucide-react'
 const ADMIN_SCOPE = 'admin_overview' as const
 
 export default function AdminHub() {
-  useDocumentTitle('Team Hub - Checkmark Audio')
+  useDocumentTitle('Dashboard - Checkmark Workspace')
   const { isAdmin, appRole, profile } = useAuth()
 
   if (!isAdmin) {
@@ -50,7 +50,7 @@ export default function AdminHub() {
       <div className="max-w-[1400px] mx-auto space-y-6 animate-fade-in">
         <PageHeader
           icon={UsersRound}
-          title="Team Hub"
+          title="Dashboard"
           subtitle="Assign work, clear approvals, and keep tabs on the studio at a glance."
         />
 

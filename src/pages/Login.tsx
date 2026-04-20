@@ -7,7 +7,7 @@ import { LogIn, Music } from 'lucide-react'
 
 export default function Login() {
   const { user, loading: authLoading, signIn } = useAuth()
-  useDocumentTitle('Sign In - Checkmark Audio')
+  useDocumentTitle('Sign In - Checkmark Workspace')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -104,7 +104,7 @@ export default function Login() {
               <Music size={24} className="text-gold" />
             </div>
             <h1 className="text-2xl font-bold text-text">Checkmark Audio</h1>
-            <p className="text-text-muted mt-1">Command Center</p>
+            <p className="text-gold font-semibold mt-1">Workspace</p>
           </div>
 
           <div className="lg:mb-8 hidden lg:block">

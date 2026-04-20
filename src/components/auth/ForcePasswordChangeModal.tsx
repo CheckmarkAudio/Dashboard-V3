@@ -67,7 +67,7 @@ export default function ForcePasswordChangeModal() {
       return
     }
 
-    toast('Password updated — welcome to Checkmark Audio')
+    toast('Password updated — welcome to Checkmark Workspace')
     setNewPassword('')
     setConfirmPassword('')
     // Drop the recovery flag too — if we got here from clicking a

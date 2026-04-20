@@ -137,7 +137,7 @@ const PRESET_TEMPLATES: Omit<ReportTemplate, 'id' | 'created_at' | 'updated_at'>
 ]
 
 export default function Templates() {
-  useDocumentTitle('Templates - Checkmark Audio')
+  useDocumentTitle('Templates - Checkmark Workspace')
   useAuth()
   const { toast } = useToast()
   const [templates, setTemplates] = useState<ReportTemplate[]>([])

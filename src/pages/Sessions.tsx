@@ -25,7 +25,7 @@ function StatusLabel({ status }: { status: string }) {
 }
 
 export default function Sessions() {
-  useDocumentTitle('Booking Agent - Checkmark Audio')
+  useDocumentTitle('Booking Agent - Checkmark Workspace')
   const [activeCategory, setActiveCategory] = useState<CategoryTab>('All')
   const [showBooking, setShowBooking] = useState(false)
   const [sessions, setSessions] = useState<SessionListItem[]>([])

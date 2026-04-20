@@ -19,7 +19,7 @@ import type { TeamMember } from '../../types'
  * blank space so the table reads as intentional.
  */
 export default function MyTeam() {
-  useDocumentTitle('Members - Checkmark Audio')
+  useDocumentTitle('Members - Checkmark Workspace')
 
   const teamQuery = useQuery({
     queryKey: teamMemberKeys.list(),

@@ -23,7 +23,7 @@ import { PageHeader } from '../components/ui'
 const MEMBER_SCOPE = 'member_overview' as const
 
 export default function Dashboard() {
-  useDocumentTitle('Overview - Checkmark Audio')
+  useDocumentTitle('Overview - Checkmark Workspace')
   const { profile, appRole } = useAuth()
 
   return (

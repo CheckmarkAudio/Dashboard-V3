@@ -43,7 +43,7 @@ const UNIT_LABELS: Record<string, string> = {
 }
 
 export default function KPIDashboard() {
-  useDocumentTitle('My KPIs - Checkmark Audio')
+  useDocumentTitle('My KPIs - Checkmark Workspace')
   const { profile, isAdmin } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()

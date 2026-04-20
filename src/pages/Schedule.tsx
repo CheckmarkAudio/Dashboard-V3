@@ -148,7 +148,7 @@ function TodayFocus({ profileId, isAdmin }: { profileId?: string; isAdmin?: bool
 }
 
 export default function Schedule() {
-  useDocumentTitle('Schedule - Checkmark Audio')
+  useDocumentTitle('Schedule - Checkmark Workspace')
   const { profile, isAdmin } = useAuth()
   const [schedules, setSchedules] = useState<ScheduleTemplate[]>([])
   const [loading, setLoading] = useState(true)
