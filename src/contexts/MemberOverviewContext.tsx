@@ -160,14 +160,19 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
   }, [refetch])
 
   // Fire the perfTrace flush once the Overview's above-the-fold data
-  // has fully resolved (context queries + daily checklist both done).
-  // `flush` is idempotent per label, so repeated renders don't re-emit.
+  // has fully resolved. Gated on `profile` so we don't flush early: on
+  // a cold load, MemberOverviewProvider mounts before AuthContext has
+  // populated `profile`, `refetch` early-returns (`if (!profile)`), and
+  // `loading` flips false immediately with no queries run. Waiting for
+  // `profile` ensures the captured waterfall includes the real batch +
+  // streak + checklist RPC cost, not just the empty pre-auth pass.
+  // `flush` is idempotent per label so repeated renders don't re-emit.
   // No-op in production unless `localStorage.debugPerf = '1'`.
   useEffect(() => {
-    if (!loading && !daily.loading) {
+    if (profile && !loading && !daily.loading) {
       perfFlush('Overview')
     }
-  }, [loading, daily.loading])
+  }, [profile, loading, daily.loading])
 
   const value = useMemo(
     () => ({
