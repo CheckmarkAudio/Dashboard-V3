@@ -9,11 +9,14 @@ import {
   type ReactNode,
 } from 'react'
 import { useAuth } from './AuthContext'
-import { useChecklist } from '../hooks/useChecklist'
+import {
+  useChecklist,
+  type PendingTaskEdit,
+  type PreloadedChecklist,
+} from '../hooks/useChecklist'
 import { supabase, withSupabaseRetry } from '../lib/supabase'
 import { flush as perfFlush, time as perfTime } from '../lib/perfTrace'
 import { localDateKey } from '../lib/dates'
-import { getMustDoConfig } from '../lib/mustDoConfig'
 import type { DailyNote, DeliverableSubmission, MemberKPI, MemberKPIEntry } from '../types'
 
 interface MemberSessionSummary {
@@ -24,6 +27,29 @@ interface MemberSessionSummary {
   session_type: string
   status: string
   room: string | null
+}
+
+/**
+ * Shape returned by the `member_overview_snapshot` Supabase RPC.
+ * Mirrors the `jsonb_build_object(...)` in migration
+ * `member_overview_snapshot_rpc`. Keep in sync when the RPC evolves.
+ */
+interface SnapshotPayload {
+  today_note: DailyNote | null
+  must_do: {
+    submission_type: string
+    submission: DeliverableSubmission | null
+  }
+  today_sessions: MemberSessionSummary[]
+  primary_kpi: MemberKPI | null
+  kpi_entries: MemberKPIEntry[]
+  // The checklist shape mirrors `PreloadedChecklist` exactly so it can
+  // be passed straight into useChecklist's preload slot without any
+  // field renaming. Metadata fields (source/frequency/date_key/
+  // target_user_id) let the hook validate the preload matches its
+  // context before consuming it.
+  checklist: PreloadedChecklist
+  streak: number
 }
 
 interface MemberOverviewContextValue {
@@ -41,27 +67,61 @@ interface MemberOverviewContextValue {
 
 const MemberOverviewContext = createContext<MemberOverviewContextValue | null>(null)
 
+// --- Stub `daily` used before the snapshot RPC resolves. ---------------
+// Consumers guard on `loading` so they render skeletons during this
+// window; the stub exists purely so the context value is type-complete
+// before the inner Loaded provider mounts. All methods are no-ops.
+const STUB_DAILY: ReturnType<typeof useChecklist> = {
+  items: [],
+  grouped: {},
+  loading: true,
+  instanceId: null,
+  toggleItem: async () => {},
+  completedCount: 0,
+  totalCount: 0,
+  percentage: 0,
+  reload: async () => {},
+  proposeAddItem: async () => ({ error: null as string | null }),
+  proposeRenameItem: async () => ({ error: null as string | null }),
+  proposeDeleteItem: async () => ({ error: null as string | null }),
+  addItem: async () => ({ error: null as string | null }),
+  renameItem: async () => ({ error: null as string | null }),
+  deleteItem: async () => ({ error: null as string | null }),
+  pendingRequests: [],
+  pendingByItemId: new Map<string, PendingTaskEdit>(),
+  pendingAdds: [],
+  reloadPendingRequests: async () => {},
+}
+
+/**
+ * Overview state provider — Phase 1 Step 2C architecture.
+ *
+ *   1. Outer provider fires a single `member_overview_snapshot` RPC
+ *      when a profile lands. No other network calls on the cold path.
+ *   2. Before the snapshot arrives, a stub context value is published
+ *      (loading=true, empty fields, stub `daily`). Widgets render
+ *      their normal skeletons — same UX as the pre-2C loading window.
+ *   3. When the snapshot lands, `MemberOverviewLoaded` mounts fresh
+ *      and calls `useChecklist` with a preload derived from the
+ *      snapshot's checklist subset. `useChecklist`'s useState
+ *      initializers consume the preload and the hook skips its first
+ *      reload — zero redundant round-trips on cold start.
+ *   4. Refetch re-runs the RPC. Non-checklist fields (streak, note,
+ *      sessions, kpi, etc.) update via the new snapshot. Note:
+ *      checklist state inside `daily` is not auto-rehydrated on
+ *      refetch — consumers that need a fresh checklist after refetch
+ *      should call `daily.reload()` explicitly. (No current consumer
+ *      does; the only refetch caller is BookingWidget after a new
+ *      session, which doesn't touch the checklist.)
+ */
 export function MemberOverviewProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth()
-  const daily = useChecklist('daily', new Date())
+  const [snapshot, setSnapshot] = useState<SnapshotPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [streak, setStreak] = useState(0)
-  const [todayNote, setTodayNote] = useState<DailyNote | null>(null)
-  const [mustDoSubmission, setMustDoSubmission] = useState<DeliverableSubmission | null>(null)
-  const [todaySessions, setTodaySessions] = useState<MemberSessionSummary[]>([])
-  const [primaryKpi, setPrimaryKpi] = useState<MemberKPI | null>(null)
-  const [kpiEntries, setKpiEntries] = useState<MemberKPIEntry[]>([])
-  // Tracks the profile id whose Overview batch has actually completed.
-  // Used exclusively as the flush-trace gate below. Without this, the
-  // flush effect can fire prematurely: on cold start `refetch` runs
-  // once with `profile = null`, hits its early-return, and sets
-  // `loading = false`. When `profile` arrives a tick later, the flush
-  // effect re-evaluates and sees `profile && !loading && !daily.loading`
-  // = true before the second `refetch` pass (triggered by the new
-  // profile identity) has started setting loading back to true. Gating
-  // on this ref means "a real batch completed for THIS profile" —
-  // mirrors the 2A' dedupe pattern in AuthContext.
+  // Same "real batch completed for this profile" gate introduced in PR #4.
+  // Prevents the perf flush firing before the snapshot actually lands for
+  // the current profile id.
   const lastLoadedProfileId = useRef<string | null>(null)
 
   const refetch = useCallback(async () => {
@@ -71,97 +131,26 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true)
-    const today = localDateKey()
-    const mustDoConfig = getMustDoConfig(profile.position ?? 'intern')
-
     try {
-      // Wrap the whole parallel fetch in the retry helper so a transient
-      // auth-lock error on any one query retries the entire batch rather
-      // than surfacing the failure to the user.
-      const runBatch = () => withSupabaseRetry(() => Promise.all([
-        supabase.from('team_daily_notes').select('*').eq('intern_id', profile.id).eq('note_date', today).maybeSingle(),
-        supabase
-          .from('deliverable_submissions')
-          .select('*')
-          .eq('intern_id', profile.id)
-          .eq('submission_date', today)
-          .eq('submission_type', mustDoConfig.submissionType)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from('sessions')
-          .select('id, client_name, start_time, end_time, session_type, status, room')
-          .eq('session_date', today)
-          .eq('created_by', profile.id)
-          .order('start_time'),
-        supabase.from('member_kpis').select('*').eq('intern_id', profile.id).limit(1),
-        supabase
-          .from('team_checklist_instances')
-          .select('id, period_date')
-          .eq('frequency', 'daily')
-          .eq('intern_id', profile.id)
-          .order('period_date', { ascending: false })
-          .limit(14),
-      ]))
-      const [noteRes, submissionRes, sessionsRes, kpisRes, instancesRes] = await perfTime('overview:batch', runBatch)
-
-      if (noteRes.error) throw noteRes.error
-      if (submissionRes.error) throw submissionRes.error
-      if (sessionsRes.error) throw sessionsRes.error
-      if (kpisRes.error) throw kpisRes.error
-      if (instancesRes.error) throw instancesRes.error
-
-      setTodayNote((noteRes.data as DailyNote | null) ?? null)
-      setMustDoSubmission((submissionRes.data as DeliverableSubmission | null) ?? null)
-      setTodaySessions((sessionsRes.data as MemberSessionSummary[]) ?? [])
-
-      const primary = ((kpisRes.data ?? [])[0] as MemberKPI | undefined) ?? null
-      setPrimaryKpi(primary)
-      if (primary) {
-        const entriesRes = await supabase
-          .from('member_kpi_entries')
-          .select('*')
-          .eq('kpi_id', primary.id)
-          .order('entry_date')
-          .limit(30)
-        if (entriesRes.error) throw entriesRes.error
-        setKpiEntries((entriesRes.data as MemberKPIEntry[]) ?? [])
-      } else {
-        setKpiEntries([])
-      }
-
-      const instances = (instancesRes.data ?? []) as Array<{ id: string }>
-      if (instances.length > 0) {
-        const itemsRes = await perfTime('overview:streak', () => supabase
-          .from('team_checklist_items')
-          .select('instance_id, is_completed')
-          .in('instance_id', instances.map((instance) => instance.id)),
-        )
-        if (itemsRes.error) throw itemsRes.error
-
-        const byInstance = new Map<string, boolean[]>()
-        for (const row of (itemsRes.data ?? []) as Array<{ instance_id: string; is_completed: boolean }>) {
-          const current = byInstance.get(row.instance_id) ?? []
-          current.push(row.is_completed)
-          byInstance.set(row.instance_id, current)
-        }
-
-        let nextStreak = 0
-        for (const instance of instances) {
-          const items = byInstance.get(instance.id) ?? []
-          if (items.length === 0) break
-          if (items.every(Boolean)) nextStreak += 1
-          else break
-        }
-        setStreak(nextStreak)
-      } else {
-        setStreak(0)
-      }
-
-      // Mark this profile's batch as successfully loaded — this is what
-      // unlocks the perfFlush gate below. Only set on the success path;
-      // errored loads shouldn't emit an incomplete waterfall.
+      // Single-round-trip Overview snapshot. Server resolves role-
+      // dependent rules (submission_type from team_members.position),
+      // runs 7 sub-queries in one transaction, returns one JSON blob.
+      // Replaces the pre-2C 4-wave waterfall (overview:batch +
+      // overview:streak + checklist:lookup + checklist:items).
+      // `supabase.rpc(...)` returns a PostgrestFilterBuilder (thenable),
+      // not a real Promise. `withSupabaseRetry<T>()` expects `() => Promise<T>`,
+      // so wrap in an async function to get a true Promise resolution.
+      // Same idiom the old code accidentally handled via `Promise.all([...])`.
+      const res = await perfTime('overview:snapshot', () =>
+        withSupabaseRetry(async () =>
+          supabase.rpc('member_overview_snapshot', {
+            p_user_id: profile.id,
+            p_date: localDateKey(),
+          }),
+        ),
+      )
+      if (res.error) throw res.error
+      setSnapshot(res.data as unknown as SnapshotPayload)
       lastLoadedProfileId.current = profile.id
       setError(null)
     } catch (err) {
@@ -175,60 +164,102 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
     void refetch()
   }, [refetch])
 
-  // Fire the perfTrace flush once the Overview's above-the-fold data
-  // has fully resolved.
-  //
-  // The gate must include `lastLoadedProfileId.current === profile.id`
-  // in addition to the loading flags. Without that, a race on cold
-  // start fires the flush prematurely:
-  //
-  //   1. Mount: profile = null, loading = true, daily.loading = true.
-  //   2. refetch runs with profile = null → early-returns, loading → false.
-  //      useChecklist.reload runs with userId = null → daily.loading → false.
-  //   3. Profile arrives from AuthContext. This effect re-evaluates.
-  //      At this instant: profile = truthy, loading = false,
-  //      daily.loading = false. Without the profile-id gate, flush fires
-  //      HERE — before the second `refetch` pass has started setting
-  //      loading back to true and firing real perfTime checkpoints.
-  //   4. refetch re-memoizes with new profile, its useEffect re-runs,
-  //      loading flips back to true, overview:batch fires, etc. —
-  //      but the flush already happened, so the buffer never emits.
-  //
-  // Setting `lastLoadedProfileId.current = profile.id` only inside the
-  // success path of refetch means the gate stays closed until a real
-  // batch has completed for the current profile. Mirrors the
-  // `handledForUserId` dedupe ref in AuthContext (PR #2).
-  //
-  // `flush` is idempotent per label so repeated renders don't re-emit.
-  // No-op in production unless `localStorage.debugPerf = '1'`.
+  // Fire the perfTrace flush once the snapshot has resolved for the
+  // current profile. Matches the `lastLoadedProfileId` gate pattern
+  // from PR #4 — keeps the waterfall from flushing on a stale state.
   useEffect(() => {
     if (
       profile &&
       lastLoadedProfileId.current === profile.id &&
       !loading &&
-      !daily.loading
+      snapshot
     ) {
       perfFlush('Overview')
     }
-  }, [profile, loading, daily.loading])
+  }, [profile, loading, snapshot])
 
-  const value = useMemo(
+  const stubValue = useMemo<MemberOverviewContextValue>(
     () => ({
-      daily,
-      loading: loading || daily.loading,
+      daily: STUB_DAILY,
+      loading,
       error,
-      streak,
-      todayNote,
-      mustDoSubmission,
-      todaySessions,
-      primaryKpi,
-      kpiEntries,
+      streak: 0,
+      todayNote: null,
+      mustDoSubmission: null,
+      todaySessions: [],
+      primaryKpi: null,
+      kpiEntries: [],
       refetch,
     }),
-    [daily, loading, error, streak, todayNote, mustDoSubmission, todaySessions, primaryKpi, kpiEntries, refetch],
+    [loading, error, refetch],
   )
 
-  return <MemberOverviewContext.Provider value={value}>{children}</MemberOverviewContext.Provider>
+  if (!snapshot) {
+    return (
+      <MemberOverviewContext.Provider value={stubValue}>
+        {children}
+      </MemberOverviewContext.Provider>
+    )
+  }
+
+  return (
+    <MemberOverviewLoaded
+      snapshot={snapshot}
+      outerLoading={loading}
+      error={error}
+      refetch={refetch}
+    >
+      {children}
+    </MemberOverviewLoaded>
+  )
+}
+
+/**
+ * Inner provider that owns the `useChecklist` call. Mounting is gated
+ * on the snapshot being present, so the preload is always defined when
+ * this component mounts — useChecklist's useState initializers consume
+ * it synchronously on first render.
+ */
+function MemberOverviewLoaded({
+  snapshot,
+  outerLoading,
+  error,
+  refetch,
+  children,
+}: {
+  snapshot: SnapshotPayload
+  outerLoading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  children: ReactNode
+}) {
+  // `snapshot.checklist` is already shaped as `PreloadedChecklist` —
+  // the RPC returns the metadata fields (source/frequency/date_key/
+  // target_user_id) that useChecklist validates against its own
+  // (frequency, date, user) context before consuming. Pass through directly.
+  const daily = useChecklist('daily', new Date(), undefined, snapshot.checklist)
+
+  const value = useMemo<MemberOverviewContextValue>(
+    () => ({
+      daily,
+      loading: outerLoading || daily.loading,
+      error,
+      streak: snapshot.streak,
+      todayNote: snapshot.today_note,
+      mustDoSubmission: snapshot.must_do.submission,
+      todaySessions: snapshot.today_sessions,
+      primaryKpi: snapshot.primary_kpi,
+      kpiEntries: snapshot.kpi_entries,
+      refetch,
+    }),
+    [daily, outerLoading, error, snapshot, refetch],
+  )
+
+  return (
+    <MemberOverviewContext.Provider value={value}>
+      {children}
+    </MemberOverviewContext.Provider>
+  )
 }
 
 export function useMemberOverviewContext() {

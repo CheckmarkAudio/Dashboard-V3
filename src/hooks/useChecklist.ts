@@ -35,14 +35,85 @@ export interface PendingTaskEdit {
   requested_by: string
 }
 
-export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUserId?: string) {
+/**
+ * Optional preload payload, supplied by Overview (Step 2C) after the
+ * `member_overview_snapshot` RPC resolves. When present AND the
+ * metadata matches the hook's current (frequency, date, user) context,
+ * the hook seeds its initial state from these values and SKIPS the
+ * first reload() / reloadPendingRequests() round-trips on mount.
+ * Subsequent dep changes still fetch normally through reload.
+ *
+ * Contract (Codex peer-review):
+ *   1. Preload is strictly INITIAL state, not permanent truth.
+ *   2. One-shot — consumed once by useState initializers.
+ *   3. Metadata fields let the hook VALIDATE the preload matches its
+ *      current context. If validation fails (mismatched frequency,
+ *      date, or targetUserId), the preload is IGNORED and the hook
+ *      falls back to its normal reload path. Defense in depth against
+ *      a future consumer accidentally wiring a stale preload.
+ */
+export interface PreloadedChecklist {
+  source: 'member_overview_snapshot'
+  frequency: 'daily' | 'weekly'
+  date_key: string
+  target_user_id: string
+  instance_id: string | null
+  items: ChecklistItemRow[]
+  pending_requests: PendingTaskEdit[]
+}
+
+/**
+ * Validates that a preload payload matches the hook's current
+ * (frequency, date, targetUserId) context. Returns false for a missing
+ * preload, a mismatched one, or any missing metadata field. The hook
+ * MUST pass this check before consuming a preload — see `PreloadedChecklist`.
+ */
+function matchesChecklistPreload(
+  preload: PreloadedChecklist | undefined,
+  expected: { frequency: 'daily' | 'weekly'; dateKey: string; targetUserId: string | undefined },
+): preload is PreloadedChecklist {
+  return (
+    !!preload &&
+    preload.frequency === expected.frequency &&
+    preload.date_key === expected.dateKey &&
+    !!expected.targetUserId &&
+    preload.target_user_id === expected.targetUserId
+  )
+}
+
+export function useChecklist(
+  frequency: 'daily' | 'weekly',
+  date: Date,
+  targetUserId?: string,
+  preloadedChecklist?: PreloadedChecklist,
+) {
   const { profile } = useAuth()
   const userId = targetUserId ?? profile?.id
   const isOwn = !targetUserId || targetUserId === profile?.id
-  const [items, setItems] = useState<ChecklistItemRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [instanceId, setInstanceId] = useState<string | null>(null)
-  const [pendingRequests, setPendingRequests] = useState<PendingTaskEdit[]>([])
+  const dateKey = localDateKey(date)
+
+  // Validate preload against the hook's current context BEFORE consuming
+  // it. A preload for a different user/date/frequency is ignored and the
+  // hook falls back to its normal fetch path. See `PreloadedChecklist`.
+  const preloadMatches = matchesChecklistPreload(preloadedChecklist, {
+    frequency,
+    dateKey,
+    targetUserId: userId,
+  })
+
+  // Seed state only when the preload MATCHES. useState's initializer form
+  // runs only on mount — subsequent renders with a different preload
+  // reference do NOT re-seed (contract: preload is one-shot initial state).
+  const [items, setItems] = useState<ChecklistItemRow[]>(
+    () => (preloadMatches ? preloadedChecklist!.items : []),
+  )
+  const [loading, setLoading] = useState<boolean>(() => !preloadMatches)
+  const [instanceId, setInstanceId] = useState<string | null>(
+    () => (preloadMatches ? preloadedChecklist!.instance_id : null),
+  )
+  const [pendingRequests, setPendingRequests] = useState<PendingTaskEdit[]>(
+    () => (preloadMatches ? preloadedChecklist!.pending_requests : []),
+  )
   // Tracks whether the hook is still mounted so async work doesn't
   // fire setState after unmount (classic React warning + memory leak
   // if rapid navigation cancels a long query sequence).
@@ -51,8 +122,6 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
     mountedRef.current = true
     return () => { mountedRef.current = false }
   }, [])
-
-  const dateKey = localDateKey(date)
 
   const reload = useCallback(async () => {
     if (!userId) {
@@ -260,7 +329,18 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
     if (mountedRef.current) setLoading(false)
   }, [userId, isOwn, profile, frequency, dateKey])
 
-  useEffect(() => { reload() }, [reload])
+  // Skip the FIRST reload() call when preload was provided — state is
+  // already seeded from the snapshot RPC. Any subsequent dep change
+  // (userId/frequency/dateKey/profile) re-memoizes `reload` and fires
+  // normally, so preload is strictly one-shot.
+  const skipNextChecklistReload = useRef(preloadMatches)
+  useEffect(() => {
+    if (skipNextChecklistReload.current) {
+      skipNextChecklistReload.current = false
+      return
+    }
+    reload()
+  }, [reload])
 
   // ─── Pending task_edit_requests for this instance ────────────────────
   // Loaded in a separate effect keyed on instanceId so the badges update
@@ -287,7 +367,17 @@ export function useChecklist(frequency: 'daily' | 'weekly', date: Date, targetUs
     setPendingRequests((data ?? []) as PendingTaskEdit[])
   }, [instanceId, profile?.id])
 
-  useEffect(() => { reloadPendingRequests() }, [reloadPendingRequests])
+  // Same pattern as the reload-skip above. Pending requests are also
+  // seeded from the preload; the initial fetch is suppressed on mount,
+  // but any later instanceId / profile change still refreshes normally.
+  const skipNextPendingReload = useRef(preloadMatches)
+  useEffect(() => {
+    if (skipNextPendingReload.current) {
+      skipNextPendingReload.current = false
+      return
+    }
+    reloadPendingRequests()
+  }, [reloadPendingRequests])
 
   // ─── Instant toggle (works for members and admins) ───────────────────
   const toggleItem = async (id: string) => {
