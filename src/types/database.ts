@@ -71,6 +71,49 @@ export type Database = {
           },
         ]
       }
+      chat_channel_reads: {
+        Row: {
+          channel_id: string
+          last_read_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          last_read_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          last_read_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_channel_reads_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_channel_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_channel_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_channels: {
         Row: {
           created_at: string | null
@@ -135,6 +178,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      cron_run_log: {
+        Row: {
+          duration_ms: number | null
+          frequency: string | null
+          id: string
+          job_name: string
+          notes: string | null
+          ran_at: string
+          users_failed: number
+          users_processed: number
+        }
+        Insert: {
+          duration_ms?: number | null
+          frequency?: string | null
+          id?: string
+          job_name: string
+          notes?: string | null
+          ran_at?: string
+          users_failed?: number
+          users_processed?: number
+        }
+        Update: {
+          duration_ms?: number | null
+          frequency?: string | null
+          id?: string
+          job_name?: string
+          notes?: string | null
+          ran_at?: string
+          users_failed?: number
+          users_processed?: number
+        }
+        Relationships: []
       }
       deliverable_submissions: {
         Row: {
@@ -2039,6 +2115,22 @@ export type Database = {
         Args: { p_apply_to_template?: boolean; p_request_id: string }
         Returns: undefined
       }
+      cron_materialize_checklists: { Args: never; Returns: undefined }
+      get_channel_notifications: {
+        Args: never
+        Returns: {
+          channel_id: string
+          channel_name: string
+          channel_slug: string
+          last_read_at: string
+          latest_content: string
+          latest_created_at: string
+          latest_id: string
+          latest_initial: string
+          latest_sender: string
+          unread_count: number
+        }[]
+      }
       get_direct_reports: { Args: { manager: string }; Returns: string[] }
       get_my_team_id: { Args: never; Returns: string }
       intern_generate_checklist: {
@@ -2047,6 +2139,11 @@ export type Database = {
       }
       intern_get_user_role: { Args: never; Returns: string }
       is_team_admin: { Args: never; Returns: boolean }
+      mark_channel_read: { Args: { p_channel_id: string }; Returns: undefined }
+      member_overview_snapshot: {
+        Args: { p_date: string; p_user_id: string }
+        Returns: Json
+      }
       owner_reset_member_password: {
         Args: { p_new_password: string; p_user_id: string }
         Returns: boolean
@@ -2220,3 +2317,4 @@ export const Constants = {
     },
   },
 } as const
+
