@@ -137,8 +137,12 @@ export function MemberOverviewProvider({ children }: { children: ReactNode }) {
       // runs 7 sub-queries in one transaction, returns one JSON blob.
       // Replaces the pre-2C 4-wave waterfall (overview:batch +
       // overview:streak + checklist:lookup + checklist:items).
+      // `supabase.rpc(...)` returns a PostgrestFilterBuilder (thenable),
+      // not a real Promise. `withSupabaseRetry<T>()` expects `() => Promise<T>`,
+      // so wrap in an async function to get a true Promise resolution.
+      // Same idiom the old code accidentally handled via `Promise.all([...])`.
       const res = await perfTime('overview:snapshot', () =>
-        withSupabaseRetry(() =>
+        withSupabaseRetry(async () =>
           supabase.rpc('member_overview_snapshot', {
             p_user_id: profile.id,
             p_date: localDateKey(),
