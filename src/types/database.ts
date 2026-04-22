@@ -2540,6 +2540,7 @@ export type Database = {
         Returns: Json
       }
       cron_materialize_checklists: { Args: never; Returns: undefined }
+      delete_task_template: { Args: { p_template_id: string }; Returns: Json }
       delete_task_template_item: { Args: { p_item_id: string }; Returns: Json }
       duplicate_task_template: {
         Args: { p_new_name: string; p_template_id: string }

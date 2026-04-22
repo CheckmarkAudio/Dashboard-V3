@@ -548,7 +548,30 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
-- **Assign-page comprehensive redesign — IN REVIEW (PR #9, 2026-04-22).**
+- **Assignment-system polish — IN REVIEW (PR #10, 2026-04-22).**
+  Bundled 3 fixes per user's PR #9 feedback:
+  1. **Modal stacking fixed in `FloatingDetailModal`.** Module-
+     level stack tracks mount order; `z-index = 60 + depth × 10`;
+     Escape closes only the topmost modal (`stack[-1] === id`);
+     backdrop opacity steps down with depth so parent peeks
+     through. Fixes the "modals close automatically" bug — was
+     one keypress firing `onClose` on every open modal.
+  2. **Hard-delete templates.** New `delete_task_template` RPC
+     (admin-guarded, returns items_removed + assignments_preserved).
+     Delete button in Preview modal footer with confirm copy
+     explaining past assignments stay intact. Data safety via the
+     FK `ON DELETE SET NULL` on `assigned_tasks.source_template_*`
+     shipped in PR #8: past rows keep their copied content; only
+     the back-pointers become NULL.
+  3. **Batch cancel UI.** New `RecentAssignmentsSection` on the
+     Assign page (last 10 template batches). Per-row Cancel →
+     `cancel_task_assignment_batch` → cancelled recipients vanish
+     from member widgets via `assigned-tasks` cache invalidation.
+     Cancelled batches stay in the history (muted) so admins can
+     see what they recalled.
+  Built on branch `claude/assignment-polish-pr10`. `tsc` clean,
+  build 2.87s, dev-verified.
+- **Assign-page comprehensive redesign — MERGED (PR #9, `d1c046b`).**
   Full replacement of the legacy `/admin/templates` page (which wrote
   directly to `report_templates`) with a surface built entirely on
   the new `task_templates` system. Card grid + filter bar + four
@@ -686,20 +709,8 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Probably next
 
-- **Merge PR #9** (Assign-page redesign) once visual sign-off on
-  the Vercel preview. Modal instability is known and tracked for
-  PR #10; rolling out #9 gives real-prod signal while #10 iterates.
-- **PR #10 — modal stability + batch cancel UI + hard-delete
-  templates**. Bundled small PR:
-  - Fix stacked-modal click targets (z-[70] on sub-modals, Escape
-    stack tracking, breadcrumb eyebrow)
-  - Wire `cancel_task_assignment_batch` to Hub "Recently assigned"
-    row actions (per-row cancel button) or a small manage panel
-  - New `delete_task_template` RPC + Preview modal "Delete"
-    button. Past assigned_tasks survive via the FK SET NULL tweak
-    from PR #8 (confirmed behavior: deleting a template only
-    removes the blueprint; existing assignments keep their copied
-    title/description/items, just with `source_template_id = NULL`).
+- **Merge PR #10** once Vercel preview confirms modal stacking
+  feels clean + hard-delete + batch cancel round-trips work.
 - **Admin Hub "Task Group" tile redesign**: opens
   `TemplateAssignFlowModal` directly with a template picker step
   prepended. Previously deferred; now ready since the flow modal

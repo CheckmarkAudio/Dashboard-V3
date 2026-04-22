@@ -102,6 +102,36 @@ export async function unarchiveTaskTemplate(templateId: string): Promise<TaskTem
   return updateTaskTemplate(templateId, { is_active: true })
 }
 
+/** Hard-delete a template and all its items. Past `assigned_tasks`
+ *  that referenced it survive thanks to the FK ON DELETE SET NULL
+ *  tweak shipped in PR #8 — members keep seeing their tasks with
+ *  the copied title/description intact; only the `source_template_*`
+ *  back-pointers become NULL. Admin-only. */
+export async function deleteTaskTemplate(
+  templateId: string,
+): Promise<{
+  success: boolean
+  template_id: string
+  template_name: string
+  items_removed: number
+  assignments_preserved: number
+}> {
+  const { data, error } = await supabase.rpc('delete_task_template', {
+    p_template_id: templateId,
+  })
+  if (error) {
+    console.error(`${LOG_PREFIX} deleteTaskTemplate failed:`, error)
+    throw new Error(error.message)
+  }
+  return data as {
+    success: boolean
+    template_id: string
+    template_name: string
+    items_removed: number
+    assignments_preserved: number
+  }
+}
+
 export async function duplicateTaskTemplate(
   templateId: string,
   newName: string,
@@ -238,4 +268,94 @@ export const taskTemplateKeys = {
   library: (roleTag?: string | null, includeInactive?: boolean) =>
     ['task-templates', 'library', roleTag ?? null, includeInactive ?? false] as const,
   detail: (templateId: string) => ['task-templates', 'detail', templateId] as const,
+  recentBatches: (limit: number) => ['task-templates', 'recent-batches', limit] as const,
+}
+
+// ─── Recent template batches (PR #10 — cancel UI) ────────────────────
+//
+// Direct table read on `task_assignment_batches` — admin RLS allows
+// full read, so no RPC needed. Joined with recipient + item counts
+// so the UI can render "N recipients · M tasks" without follow-ups.
+// Filtered to template-derived batches (template_full /
+// template_partial); pure custom-task batches are handled on the Hub
+// Assign widget's "Recently assigned" strip.
+
+export interface RecentAssignmentBatch {
+  id: string
+  assignment_type: 'template_full' | 'template_partial'
+  source_template_id: string
+  title: string
+  description: string | null
+  assigned_by: string
+  created_at: string
+  recipient_count: number
+  cancelled: boolean
+}
+
+export async function fetchRecentTemplateBatches(
+  limit = 10,
+): Promise<RecentAssignmentBatch[]> {
+  const { data, error } = await supabase
+    .from('task_assignment_batches')
+    .select(
+      `
+        id, assignment_type, source_template_id, title, description,
+        assigned_by, created_at,
+        assignment_recipients (id, status)
+      `,
+    )
+    .in('assignment_type', ['template_full', 'template_partial'])
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) {
+    console.error(`${LOG_PREFIX} fetchRecentTemplateBatches failed:`, error)
+    throw new Error(error.message)
+  }
+  type Row = {
+    id: string
+    assignment_type: 'template_full' | 'template_partial'
+    source_template_id: string
+    title: string
+    description: string | null
+    assigned_by: string
+    created_at: string
+    assignment_recipients: { id: string; status: string }[]
+  }
+  return ((data ?? []) as Row[]).map((b) => {
+    const recipients = b.assignment_recipients ?? []
+    const active = recipients.filter((r) => r.status === 'active').length
+    const allCancelled = recipients.length > 0 && active === 0
+    return {
+      id: b.id,
+      assignment_type: b.assignment_type,
+      source_template_id: b.source_template_id,
+      title: b.title,
+      description: b.description,
+      assigned_by: b.assigned_by,
+      created_at: b.created_at,
+      recipient_count: recipients.length,
+      cancelled: allCancelled,
+    }
+  })
+}
+
+/** Cancel an assignment batch. Hides open tasks by default; completed
+ *  tasks stay visible so history/streaks aren't rewritten. */
+export async function cancelAssignmentBatch(
+  batchId: string,
+  hideOpenTasks = true,
+): Promise<{ batch_id: string; cancelled_recipient_count: number; hidden_task_count: number }> {
+  const { data, error } = await supabase.rpc('cancel_task_assignment_batch', {
+    p_batch_id: batchId,
+    p_hide_open_tasks: hideOpenTasks,
+  })
+  if (error) {
+    console.error(`${LOG_PREFIX} cancelAssignmentBatch failed:`, error)
+    throw new Error(error.message)
+  }
+  return data as {
+    batch_id: string
+    cancelled_recipient_count: number
+    hidden_task_count: number
+  }
 }

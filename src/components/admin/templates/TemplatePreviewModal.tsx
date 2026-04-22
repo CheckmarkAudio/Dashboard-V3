@@ -10,10 +10,12 @@ import {
   RotateCcw,
   Send,
   Tag,
+  Trash2,
 } from 'lucide-react'
 import FloatingDetailModal from '../../FloatingDetailModal'
 import {
   archiveTaskTemplate,
+  deleteTaskTemplate,
   fetchTaskTemplateDetail,
   taskTemplateKeys,
   unarchiveTaskTemplate,
@@ -79,6 +81,27 @@ export default function TemplatePreviewModal({
     },
   })
 
+  // Hard delete. Backend PR #10 migration — past assigned_tasks are
+  // preserved via ON DELETE SET NULL on source_template_id / _item_id
+  // (shipped in PR #8). Toast is honest about what was preserved.
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTaskTemplate(templateId),
+    onSuccess: (result) => {
+      const preserved = result.assignments_preserved
+      toast(
+        preserved > 0
+          ? `Deleted "${result.template_name}" — ${preserved} past ${preserved === 1 ? 'assignment' : 'assignments'} preserved`
+          : `Deleted "${result.template_name}"`,
+        'success',
+      )
+      void queryClient.invalidateQueries({ queryKey: taskTemplateKeys.all })
+      onClose()
+    },
+    onError: (err) => {
+      toast(err instanceof Error ? err.message : 'Failed to delete', 'error')
+    },
+  })
+
   const template = detailQuery.data?.template
   const items = detailQuery.data?.items ?? []
 
@@ -95,6 +118,24 @@ export default function TemplatePreviewModal({
         footer={
           template ? (
             <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const msg =
+                    `Permanently delete "${template.name}"?\n\n` +
+                    `The template and its ${items.length} ${items.length === 1 ? 'item' : 'items'} will be removed. ` +
+                    `Past assignments already sent to team members will stay intact — ` +
+                    `they keep the tasks they received.`
+                  if (confirm(msg)) {
+                    deleteMutation.mutate()
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-semibold text-text-light hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-50"
+              >
+                <Trash2 size={14} aria-hidden="true" />
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              </button>
               {isArchived ? (
                 <button
                   type="button"
@@ -114,7 +155,7 @@ export default function TemplatePreviewModal({
                     }
                   }}
                   disabled={archiveMutation.isPending}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-semibold text-text-light hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-semibold text-text-light hover:text-amber-300 hover:bg-amber-500/10 disabled:opacity-50"
                 >
                   <Archive size={14} aria-hidden="true" />
                   Archive

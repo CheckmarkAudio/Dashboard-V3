@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { FolderKanban, Loader2, Plus, Search } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Ban, Check, FolderKanban, Loader2, Plus, Search, X } from 'lucide-react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { PageHeader } from '../../components/ui'
+import { useToast } from '../../components/Toast'
 import {
+  cancelAssignmentBatch,
+  fetchRecentTemplateBatches,
   fetchTaskTemplateLibrary,
   taskTemplateKeys,
 } from '../../lib/queries/taskTemplates'
@@ -12,6 +15,7 @@ import {
   TemplateEditorModal,
   TemplatePreviewModal,
 } from '../../components/admin/templates'
+import type { RecentAssignmentBatch } from '../../lib/queries/taskTemplates'
 
 /**
  * Assign page (`/admin/templates`) — the comprehensive template library.
@@ -204,6 +208,9 @@ export default function Templates() {
         )}
       </section>
 
+      {/* Recent assignments (with cancel) ─────────────────────────── */}
+      <RecentAssignmentsSection />
+
       {/* Modals ──────────────────────────────────────────────────── */}
       {editorOpen && (
         <TemplateEditorModal
@@ -304,5 +311,160 @@ function ToggleChip({
       />
       {label}
     </button>
+  )
+}
+
+// ═══ Recent assignments section (PR #10) ═════════════════════════════
+//
+// Compact list of the last 10 template-derived assignment batches with
+// a per-row Cancel action. Cancelled batches stay in the list (with a
+// muted appearance) so admins can see what they've already recalled
+// without them disappearing from history.
+
+function RecentAssignmentsSection() {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const batchesQuery = useQuery({
+    queryKey: taskTemplateKeys.recentBatches(10),
+    queryFn: () => fetchRecentTemplateBatches(10),
+  })
+
+  const cancelMutation = useMutation({
+    mutationFn: (batchId: string) => cancelAssignmentBatch(batchId, true),
+    onSuccess: (result) => {
+      toast(
+        `Cancelled — ${result.cancelled_recipient_count} ${
+          result.cancelled_recipient_count === 1 ? 'recipient' : 'recipients'
+        }, ${result.hidden_task_count} open ${
+          result.hidden_task_count === 1 ? 'task hidden' : 'tasks hidden'
+        }`,
+        'success',
+      )
+      void queryClient.invalidateQueries({ queryKey: taskTemplateKeys.all })
+      // Also invalidate member-side caches so recipients see the batch
+      // vanish from their widget without a page refresh.
+      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+    },
+    onError: (err) => {
+      toast(err instanceof Error ? err.message : 'Failed to cancel', 'error')
+    },
+  })
+
+  const batches = batchesQuery.data ?? []
+
+  if (batchesQuery.isLoading) {
+    return (
+      <section className="pt-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-text-light mb-2">
+          Recent assignments
+        </h2>
+        <div className="flex items-center gap-2 text-text-light py-4">
+          <Loader2 size={14} className="animate-spin" />
+          <span className="text-[12px]">Loading…</span>
+        </div>
+      </section>
+    )
+  }
+
+  if (batches.length === 0) return null
+
+  return (
+    <section className="pt-2">
+      <div className="flex items-baseline justify-between mb-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-text-light">
+          Recent assignments
+        </h2>
+        <span className="text-[10px] text-text-light">Last 10</span>
+      </div>
+      <div className="rounded-xl border border-border divide-y divide-border bg-surface-alt/40">
+        {batches.map((b) => (
+          <BatchRow
+            key={b.id}
+            batch={b}
+            onCancel={() => {
+              if (
+                confirm(
+                  `Cancel "${b.title}"? Active recipients will be marked cancelled and open tasks hidden from their widgets. Completed tasks stay intact.`,
+                )
+              ) {
+                cancelMutation.mutate(b.id)
+              }
+            }}
+            isCancelling={cancelMutation.isPending && cancelMutation.variables === b.id}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function BatchRow({
+  batch,
+  onCancel,
+  isCancelling,
+}: {
+  batch: RecentAssignmentBatch
+  onCancel: () => void
+  isCancelling: boolean
+}) {
+  const when = new Date(batch.created_at)
+  const whenLabel = when.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+  const partial = batch.assignment_type === 'template_partial'
+
+  return (
+    <div
+      className={`flex items-center gap-3 px-3 py-2.5 ${
+        batch.cancelled ? 'opacity-50' : ''
+      }`}
+    >
+      <div
+        className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${
+          batch.cancelled
+            ? 'bg-white/[0.05] text-text-light'
+            : partial
+              ? 'bg-amber-500/15 text-amber-300'
+              : 'bg-gold/15 text-gold'
+        }`}
+        aria-hidden="true"
+      >
+        {batch.cancelled ? <Ban size={13} /> : <Check size={13} />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-medium text-text truncate">
+          {batch.title}
+          {partial && !batch.cancelled && (
+            <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-300 font-bold">
+              Partial
+            </span>
+          )}
+          {batch.cancelled && (
+            <span className="ml-2 text-[10px] uppercase tracking-wider text-text-light font-bold">
+              Cancelled
+            </span>
+          )}
+        </p>
+        <p className="text-[11px] text-text-light truncate">
+          {batch.recipient_count} {batch.recipient_count === 1 ? 'recipient' : 'recipients'}
+          {' · '}
+          {whenLabel}
+        </p>
+      </div>
+      {!batch.cancelled && (
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isCancelling}
+          className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-text-light hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-50"
+        >
+          <X size={12} aria-hidden="true" />
+          {isCancelling ? 'Cancelling…' : 'Cancel'}
+        </button>
+      )}
+    </div>
   )
 }

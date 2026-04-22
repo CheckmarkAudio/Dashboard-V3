@@ -1,21 +1,34 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 
 /**
  * FloatingDetailModal — shared overlay for "click-to-expand" details.
  *
  * Used by:
- *  - Admin Assign page: click a template title → full template preview
+ *  - Admin Assign page: template preview / editor / duplicate / assign wizard
  *  - Member/Admin widgets: click a widget title → expanded widget content
  *
- * One component, one animation, one set of dismiss affordances so the
- * whole app reads as coherent.
+ * PR #10 — stacked-modal hardening.
+ * Multiple modals open at once (preview → editor, etc.) previously
+ * shared `z-[60]` and both listened for Escape at the document level.
+ * That caused two failure modes:
+ *   1. Click targets ambiguous — clicking what felt like the outer
+ *      modal's backdrop often hit the inner modal's backdrop instead.
+ *   2. A single Escape keypress fired onClose on every open modal.
+ *
+ * Fix: module-level stack tracks mount order. Each modal computes its
+ * z-index from stack depth (60 + depth × 10) so later-opened modals
+ * visually layer on top. Escape closes only the topmost modal.
  *
  * Dismisses via:
- *  - Escape key (captured at document level while mounted)
+ *  - Escape key (ONLY if this modal is topmost)
  *  - X button in the top-right corner
  *  - Clicking the dimmed backdrop outside the panel
  */
+
+// Module-level stack of active modal ids. Mount order preserved; id
+// removed on unmount. No cross-file coordination needed.
+const modalStack: string[] = []
 
 interface FloatingDetailModalProps {
   onClose: () => void
@@ -42,27 +55,46 @@ export default function FloatingDetailModal({
   ariaLabel,
   children,
 }: FloatingDetailModalProps) {
-  // Close on Escape — captured at document level so it works even if the
-  // modal doesn't currently have keyboard focus (e.g. user pressed Esc
-  // while hovering the backdrop).
+  const id = useId()
+  // Track this modal's depth in the stack. `depth` re-reads the stack
+  // after mount so z-index + backdrop opacity match reality.
+  const [depth, setDepth] = useState(0)
+
+  // Push on mount, pop on unmount. Set initial depth for render.
+  useEffect(() => {
+    modalStack.push(id)
+    setDepth(modalStack.length - 1)
+    return () => {
+      const idx = modalStack.lastIndexOf(id)
+      if (idx >= 0) modalStack.splice(idx, 1)
+    }
+  }, [id])
+
+  // Close on Escape — but ONLY if this modal is at the top of the stack.
+  // Otherwise a single keystroke collapses the whole tower.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose()
-      }
+      if (e.key !== 'Escape') return
+      if (modalStack[modalStack.length - 1] !== id) return
+      e.stopPropagation()
+      onClose()
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [onClose, id])
 
-  // Lock body scroll while the modal is open so the background doesn't
-  // drift when the user scrolls inside the modal.
+  // Lock body scroll while the modal is open. Safe with nested modals —
+  // each push/pop on the stack toggles independently, but the body
+  // stays hidden as long as any modal is open.
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
-      document.body.style.overflow = prev
+      // Only restore once the stack is empty. Otherwise a sub-modal
+      // closing would let the body scroll behind the still-open parent.
+      if (modalStack.length === 0) {
+        document.body.style.overflow = prev
+      }
     }
   }, [])
 
@@ -72,9 +104,18 @@ export default function FloatingDetailModal({
     panelRef.current?.focus()
   }, [])
 
+  // Derived stacking + chrome for nested modals:
+  //   depth 0 (topmost root) = z-[60], full backdrop opacity
+  //   depth 1 (first child)  = z-[70], lighter backdrop so parent peeks
+  //   depth 2+               = z-[80]+, even lighter
+  const zIndex = 60 + depth * 10
+  const backdropOpacity =
+    depth === 0 ? 'bg-black/60' : depth === 1 ? 'bg-black/40' : 'bg-black/30'
+
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+      className={`fixed inset-0 flex items-center justify-center p-4 ${backdropOpacity} backdrop-blur-sm animate-fade-in`}
+      style={{ zIndex }}
       onClick={onClose}
       role="dialog"
       aria-modal="true"
