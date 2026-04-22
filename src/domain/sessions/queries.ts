@@ -267,6 +267,56 @@ export async function assignSession(
   return data as AssignSessionResult
 }
 
+// ─── Engineer conflict check (PR #15) ────────────────────────────────
+//
+// Different from `findSessionConflict` (which checks room-overlap for
+// booking creation). This one checks whether a specific engineer is
+// already running another session at the same date + time window —
+// used by SessionAssignModal to warn before a reassignment creates a
+// schedule conflict for that person.
+//
+// Non-blocking: returns the conflicting session (or null) so the UI
+// can surface a warning; the admin can still proceed if they know
+// what they're doing (e.g. the other session will be cancelled).
+
+export interface EngineerSessionConflict {
+  id: string
+  client_name: string | null
+  session_date: string
+  start_time: string
+  end_time: string
+  room: string | null
+}
+
+export async function findEngineerConflict(input: {
+  assigneeId: string
+  sessionDate: string
+  startTime: string
+  endTime: string
+  /** Exclude the session being (re)assigned — we're OK with that overlap. */
+  excludeSessionId?: string | null
+}): Promise<EngineerSessionConflict | null> {
+  const startHM = input.startTime.length === 5 ? `${input.startTime}:00` : input.startTime
+  const endHM = input.endTime.length === 5 ? `${input.endTime}:00` : input.endTime
+
+  let q = supabase
+    .from('sessions')
+    .select('id, client_name, session_date, start_time, end_time, room')
+    .eq('assigned_to', input.assigneeId)
+    .eq('session_date', input.sessionDate)
+    .neq('status', 'cancelled')
+    .lt('start_time', endHM)
+    .gt('end_time', startHM)
+    .limit(1)
+
+  if (input.excludeSessionId) q = q.neq('id', input.excludeSessionId)
+
+  const { data, error } = await q
+  if (error) throw error
+  const row = data?.[0]
+  return row ? (row as EngineerSessionConflict) : null
+}
+
 export async function findSessionConflict(input: {
   sessionDate: string
   startTime: string

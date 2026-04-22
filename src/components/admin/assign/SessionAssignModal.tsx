@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Calendar, Check, Clock, Loader2, UserCircle2 } from 'lucide-react'
+import { AlertTriangle, Calendar, Check, Clock, Loader2, UserCircle2 } from 'lucide-react'
 import FloatingDetailModal from '../../FloatingDetailModal'
 import { useToast } from '../../Toast'
 import {
   assignSession,
   fetchAssignableSessions,
+  findEngineerConflict,
   type AssignableSession,
+  type EngineerSessionConflict,
 } from '../../../domain/sessions/queries'
 import { fetchTeamMembers, teamMemberKeys } from '../../../lib/queries/teamMembers'
 
@@ -59,6 +61,36 @@ export default function SessionAssignModal({ onClose }: { onClose: () => void })
     setSelectedSessionId(sessionId)
     setSelectedEngineerId(row?.assignedTo ?? null)
   }
+
+  // ─── Engineer conflict detection (PR #15) ──────────────────────────
+  // Warn (don't block) when the selected engineer already has another
+  // session overlapping the target slot. Runs whenever the engineer
+  // or session selection changes. If admin still wants to proceed,
+  // the Confirm button stays enabled — studios sometimes legitimately
+  // double-book as a deliberate scheduling move.
+  const conflictQuery = useQuery<EngineerSessionConflict | null>({
+    queryKey: [
+      'engineer-conflict',
+      selectedSessionId,
+      selectedEngineerId,
+    ] as const,
+    queryFn: () => {
+      if (!selectedSession || !selectedEngineerId) return Promise.resolve(null)
+      // Same-engineer "conflict" with the session itself is excluded.
+      if (selectedSession.assignedTo === selectedEngineerId) return Promise.resolve(null)
+      return findEngineerConflict({
+        assigneeId: selectedEngineerId,
+        sessionDate: selectedSession.sessionDate,
+        startTime: selectedSession.startTime,
+        endTime: selectedSession.endTime,
+        excludeSessionId: selectedSession.id,
+      })
+    },
+    enabled: Boolean(selectedSession && selectedEngineerId),
+    // Conflict state doesn't change between clicks — no auto-refetch.
+    staleTime: 60_000,
+  })
+  const conflict = conflictQuery.data ?? null
 
   const assignMutation = useMutation({
     mutationFn: async () => {
@@ -230,6 +262,31 @@ export default function SessionAssignModal({ onClose }: { onClose: () => void })
                 })
               )}
             </div>
+
+            {/* Conflict warning — surfaces when the selected engineer
+                already has an overlapping session. Non-blocking: admin
+                can still Confirm (rare but sometimes intentional). */}
+            {conflict && (
+              <div
+                role="alert"
+                className="mt-3 flex items-start gap-2.5 rounded-lg bg-amber-500/10 ring-1 ring-amber-500/40 px-3 py-2.5"
+              >
+                <AlertTriangle size={14} className="text-amber-300 shrink-0 mt-0.5" aria-hidden="true" />
+                <div className="text-[12px] leading-snug">
+                  <p className="text-amber-200 font-semibold">
+                    Schedule conflict
+                  </p>
+                  <p className="text-amber-100/90 mt-0.5">
+                    This engineer already has "{conflict.client_name ?? 'a session'}" at{' '}
+                    {formatTime(conflict.start_time)}–{formatTime(conflict.end_time)}
+                    {conflict.room ? ` in ${conflict.room}` : ''}. You can still proceed.
+                  </p>
+                </div>
+              </div>
+            )}
+            {conflictQuery.isFetching && selectedEngineerId && (
+              <p className="mt-2 text-[11px] text-text-light">Checking engineer schedule…</p>
+            )}
           </section>
         )}
       </div>
