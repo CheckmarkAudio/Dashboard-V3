@@ -247,3 +247,105 @@ export async function setArtistAssignee(
     throw new Error(error.message)
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// PR #7 — Task-assignment MVP (Phase 1 feature set shipped in PR #6).
+//
+// These wrap the new SECURITY DEFINER RPCs. All errors throw. Conventions
+// match the rest of this module: `[queries/assignments]` log prefix, no
+// `{ data, error }` leakage out.
+// ═══════════════════════════════════════════════════════════════════════
+
+import type {
+  AssignedTask,
+  AssignmentBatchSummary,
+  AssignmentNotification,
+  CustomTaskAssignmentPayload,
+} from '../../types/assignments'
+
+/** Fetch the signed-in member's active assigned tasks. Server-side
+ * auth.uid() guard; admin can read any user's tasks. */
+export async function fetchMemberAssignedTasks(
+  userId: string,
+  opts: { includeCompleted?: boolean; onlyOverview?: boolean } = {},
+): Promise<AssignedTask[]> {
+  const { data, error } = await supabase.rpc('get_member_assigned_tasks', {
+    p_user_id: userId,
+    p_include_completed: opts.includeCompleted ?? false,
+    p_only_overview: opts.onlyOverview ?? false,
+  })
+  if (error) {
+    console.error('[queries/assignments] fetchMemberAssignedTasks failed:', error)
+    throw new Error(error.message)
+  }
+  return (data as AssignedTask[] | null) ?? []
+}
+
+/** Toggle completion on an assigned task. Owner or admin only. */
+export async function completeAssignedTask(
+  taskId: string,
+  isCompleted: boolean,
+): Promise<AssignedTask> {
+  const { data, error } = await supabase.rpc('complete_assigned_task', {
+    p_assigned_task_id: taskId,
+    p_is_completed: isCompleted,
+  })
+  if (error) {
+    console.error('[queries/assignments] completeAssignedTask failed:', error)
+    throw new Error(error.message)
+  }
+  return data as AssignedTask
+}
+
+/** Fetch assignment notifications for the signed-in member. */
+export async function fetchAssignmentNotifications(
+  userId: string,
+  opts: { unreadOnly?: boolean; limit?: number } = {},
+): Promise<AssignmentNotification[]> {
+  const { data, error } = await supabase.rpc('get_assignment_notifications', {
+    p_user_id: userId,
+    p_unread_only: opts.unreadOnly ?? false,
+    p_limit: opts.limit ?? 20,
+  })
+  if (error) {
+    console.error('[queries/assignments] fetchAssignmentNotifications failed:', error)
+    throw new Error(error.message)
+  }
+  return (data as AssignmentNotification[] | null) ?? []
+}
+
+/** Mark a single assignment notification as read. Owner only. */
+export async function markAssignmentNotificationRead(
+  notificationId: string,
+): Promise<{ success: boolean; notification_id: string; is_read: boolean; read_at: string | null }> {
+  const { data, error } = await supabase.rpc('mark_assignment_notification_read', {
+    p_notification_id: notificationId,
+  })
+  if (error) {
+    console.error('[queries/assignments] markAssignmentNotificationRead failed:', error)
+    throw new Error(error.message)
+  }
+  return data as { success: boolean; notification_id: string; is_read: boolean; read_at: string | null }
+}
+
+/** Admin assigns a custom task to one or more members. Atomic (batch +
+ *  recipients + tasks + notifications in one transaction). */
+export async function assignCustomTaskToMembers(
+  memberIds: string[],
+  payload: CustomTaskAssignmentPayload,
+): Promise<AssignmentBatchSummary> {
+  const { data, error } = await supabase.rpc('assign_custom_task_to_members', {
+    p_member_ids: memberIds,
+    p_title: payload.title,
+    p_description: payload.description ?? null,
+    p_category: payload.category ?? null,
+    p_due_date: payload.due_date ?? null,
+    p_is_required: payload.is_required ?? false,
+    p_show_on_overview: payload.show_on_overview ?? true,
+  })
+  if (error) {
+    console.error('[queries/assignments] assignCustomTaskToMembers failed:', error)
+    throw new Error(error.message)
+  }
+  return data as AssignmentBatchSummary
+}

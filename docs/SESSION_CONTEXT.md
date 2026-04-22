@@ -546,9 +546,30 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
-### Just shipped (most recent first, from 2026-04-21 session)
+### Just shipped (most recent first)
 
-- **Task-assignment Phase 1 backend — SHIPPED (`27ce5ce` / PR #6, pending merge).**
+- **Task-assignment MVP frontend — IN REVIEW (PR #7, 2026-04-22).**
+  Ships the minimum testable assignment slice per
+  `docs/assignment-mvp-handoff.md`. Admin Hub Assign widget gains a
+  4th "Custom Task" tile → new `AssignCustomTaskModal` → calls
+  `assign_custom_task_to_members` RPC (atomic batch + recipients +
+  tasks + notifications). New `AssignedTasksWidget` on both member
+  Overview AND the restructured Tasks page (validates multi-page
+  placement end-to-end). Notifications widget extended with an
+  "ASSIGNMENTS" section below channels — both member + admin
+  variants, optimistic mark-read, parallel `postgres_changes`
+  realtime subscription on `assignment_notifications` filtered by
+  `recipient_id`. Widget-visibility model formalized in
+  TypeScript: `accessVisibility` + `dataScope` added to
+  `WorkspaceWidgetRegistration`; disjoint `MemberScope` /
+  `AdminScope` preserve the admin/member invariant while
+  `defaultPlacements` enables same-widget cross-page placement
+  within a side. `/daily` restructured from a 3-card hand-composed
+  layout into a widget grid (`member_tasks` scope). Mock
+  `TeamTasksCard` + `StudioTasksCard` retired (neither was
+  DB-backed). `WORKSPACE_LAYOUT_VERSION` bumped 8 → 9. `tsc` clean,
+  build clean (3.22s), live verified on dev server.
+- **Task-assignment Phase 1 backend — MERGED (`951be5c` / PR #6).**
   2 migrations on live Supabase: (1) 6 tables + 5 enums + 7 indexes + RLS
   via `is_team_admin()`; (2) 11 SECURITY DEFINER RPCs covering template
   library, 3 atomic assign actions (custom / full / partial), member
@@ -632,14 +653,16 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Probably next
 
-- **Merge PR #6** (Phase 1 assignment backend). Gated on human
-  review; everything verified DB-side + build-side. Base is `main`,
-  state is MERGEABLE.
-- **Codex frontend handoff PR** for the assignment system:
-  admin Templates library UI, Assign modal (custom / full / partial),
-  `Assigned To You` member Overview widget, assignment section in
-  the Notifications widget. This is the PR that makes the Phase 1
-  backend user-facing. Codex is preparing the handoff.
+- **Merge PR #7** (assignment frontend MVP) once reviewed on the
+  Vercel preview. Assign as admin to Gavin / Matthan, verify their
+  widget + notifications light up, toggle a task complete, confirm
+  realtime fires within ~1s.
+- **Phase 2 assignment polish** (separate PR or PR series):
+  update/delete/duplicate template ops, cancel batch, assignment
+  history, `mark_all_read`, template library admin UI, full +
+  partial template assign surfaces, fold assigned-tasks summary
+  into `member_overview_snapshot` (saves one round-trip on
+  Overview cold start).
 - **After frontend lands + 1–2 stable days on prod: Cloudflare
   migration.** Vercel → Cloudflare Pages, free commercial tier,
   single-concern PR. Replicate the `CDN-Cache-Control: no-store`

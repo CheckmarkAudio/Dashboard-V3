@@ -5,8 +5,7 @@ import type { AppRole } from '../permissions'
 // Member vs Admin widget separation — architectural lockdown.
 //
 // Every widget id lives in exactly ONE of two string-literal unions.
-// A widget CANNOT appear in both the member Overview (`/`) and the
-// admin Hub (`/admin`) because:
+// A widget CANNOT appear on both member pages AND admin pages because:
 //
 //   1. `MemberWidgetId` and `AdminWidgetId` are disjoint string unions.
 //   2. Registration arrays are typed to accept only their own union
@@ -21,26 +20,68 @@ import type { AppRole } from '../permissions'
 //      not filter a shared list by "scope," so there is no role lookup
 //      or scope string that can point a page at the wrong widgets.
 //
-// If you want a widget to appear on both pages, you build it TWICE as
-// two distinct widgets with different ids (a member version and an
-// admin version). That is intentional — the admin surface should not
-// inherit member layouts by accident.
+// PR #7 added MULTI-PAGE PLACEMENT *within* a side. A member widget
+// can now render on both member pages (Overview + Tasks) via its
+// `defaultPlacements` array. It still cannot cross into the admin
+// side — `MemberScope` and `AdminScope` are disjoint and a member
+// widget's `defaultPlacements` is typed to only accept `MemberScope`.
+//
+// The invariant: the admin surface never inherits a member widget's
+// placement by accident, and vice versa.
 // ═════════════════════════════════════════════════════════════════════
 
-export type WorkspaceScope = 'member_overview' | 'admin_overview'
+// Member-side pages. A member widget's placement must target one of these.
+export type MemberScope = 'member_overview' | 'member_tasks'
+
+// Admin-side pages. An admin widget's placement must target one of these.
+export type AdminScope = 'admin_overview'
+
+// Full union of every workspace scope. Used for localStorage key
+// differentiation + the `WorkspacePanel` scope prop.
+export type WorkspaceScope = MemberScope | AdminScope
 
 export type WidgetSpan = 1 | 2 | 3
 export type WidgetRowSpan = 1 | 2 | 3
 
-// Widgets that appear ONLY on the member Overview page ("/").
-// NEVER add an admin-specific widget here. If it says "admin" in the
-// name or function, it belongs in AdminWidgetId.
+// ── Widget visibility model (PR #7) ──────────────────────────────────
+// Two orthogonal axes per widget:
+//   - accessVisibility: WHO can see the widget at all
+//   - dataScope:        WHAT data it loads (self, team, etc.)
+// Both fields are METADATA today — they document intent and give future
+// widget builders / code reviewers a consistent vocabulary. Actual
+// admin/member filtering continues to happen via the disjoint
+// MemberWidgetId / AdminWidgetId type system above.
+
+export type AccessVisibility =
+  | 'personal'     // only the signed-in user sees the widget in their workspace
+  | 'shared'       // any authenticated member can see the widget
+  | 'admin'        // only admins / owners
+  | 'role_scoped'  // reserved for future role-specific gating; no runtime logic yet
+
+export type DataScope =
+  | 'self'         // current user's data only
+  | 'team'         // whole team's data
+  | 'target_user'  // a specified user's data (admin context)
+  | 'global'       // shared / app-wide data
+
+// Where a widget renders by default. A widget may list multiple placements
+// within its side (e.g. on both member_overview and member_tasks).
+export interface WidgetPlacement<Scope extends WorkspaceScope = WorkspaceScope> {
+  scope: Scope
+  span: WidgetSpan
+  rowSpan?: WidgetRowSpan
+}
+
+// Widgets that appear ONLY on member pages. NEVER add an admin-specific
+// widget here. If it says "admin" in the name or function, it belongs
+// in AdminWidgetId.
 export type MemberWidgetId =
   | 'team_tasks'
   | 'forum_notifications'
   | 'today_calendar'
   | 'booking_snapshot'
-  // Member-side widget bank — registered but not on the page yet.
+  | 'assigned_tasks'           // PR #7 — admin-assigned tasks (personal + self)
+  // Member-side widget bank — registered but not on any page yet.
   | 'team_snapshot'
   | 'team_directory'
   | 'team_activity'
@@ -60,28 +101,36 @@ export type AdminWidgetId =
   | 'admin_schedule'
   | 'admin_shortcuts'
 
-// Union of every widget id in the system. The TypeScript compiler
-// treats this as `MemberWidgetId | AdminWidgetId`, so each id has a
-// deterministic "side" and no id can straddle the two.
+// Union of every widget id in the system.
 export type WorkspaceWidgetId = MemberWidgetId | AdminWidgetId
 
-// Base registration shape — unchanged across the split. The id is
-// generic here; the specialized `MemberWidgetRegistration` /
-// `AdminWidgetRegistration` types below narrow it.
-export interface WorkspaceWidgetRegistration<Id extends WorkspaceWidgetId = WorkspaceWidgetId> {
+// Base registration shape. The id and placement-scope parameters narrow
+// in the specialized Member / Admin sub-types below.
+export interface WorkspaceWidgetRegistration<
+  Id extends WorkspaceWidgetId = WorkspaceWidgetId,
+  Scope extends WorkspaceScope = WorkspaceScope,
+> {
   id: Id
   title: string
   description: string
-  defaultSpan: WidgetSpan
-  defaultRowSpan?: WidgetRowSpan
+  defaultPlacements: WidgetPlacement<Scope>[]
+  accessVisibility: AccessVisibility
+  dataScope: DataScope
   allowedRoles: AppRole[]
 }
 
-export type MemberWidgetRegistration = WorkspaceWidgetRegistration<MemberWidgetId>
-export type AdminWidgetRegistration = WorkspaceWidgetRegistration<AdminWidgetId>
+// Member widget: id must be a MemberWidgetId AND placements must target
+// member scopes only. TypeScript rejects any placement targeting admin.
+export type MemberWidgetRegistration = WorkspaceWidgetRegistration<MemberWidgetId, MemberScope>
 
-export interface WorkspaceWidgetDefinition<Id extends WorkspaceWidgetId = WorkspaceWidgetId>
-  extends WorkspaceWidgetRegistration<Id> {
+// Admin widget: id must be an AdminWidgetId AND placements must target
+// admin scopes only.
+export type AdminWidgetRegistration = WorkspaceWidgetRegistration<AdminWidgetId, AdminScope>
+
+export interface WorkspaceWidgetDefinition<
+  Id extends WorkspaceWidgetId = WorkspaceWidgetId,
+  Scope extends WorkspaceScope = WorkspaceScope,
+> extends WorkspaceWidgetRegistration<Id, Scope> {
   component: ComponentType
 }
 

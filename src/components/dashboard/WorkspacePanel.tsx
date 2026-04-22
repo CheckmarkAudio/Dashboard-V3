@@ -208,7 +208,7 @@ export default function WorkspacePanel({
                   key={widget.id}
                   id={widget.id as WorkspaceWidgetId}
                   span={widget.span}
-                  rowSpan={widget.rowSpan ?? definition.defaultRowSpan ?? 1}
+                  rowSpan={widget.rowSpan ?? 1}
                 >
                   {(dragHandleProps) => (
                     <DashboardWidgetFrame

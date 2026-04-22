@@ -1,6 +1,8 @@
 import type {
   AdminWidgetRegistration,
+  MemberScope,
   MemberWidgetRegistration,
+  WidgetPlacement,
   WorkspaceLayout,
   WorkspaceScope,
   WorkspaceWidgetRegistration,
@@ -8,145 +10,168 @@ import type {
 } from './types'
 
 // ═════════════════════════════════════════════════════════════════════
-// MEMBER — widgets on the member Overview page ("/").
+// MEMBER — widgets available to members.
 //
-// The array type (`MemberWidgetRegistration[]`) makes TypeScript refuse
-// any entry whose `id` is not a `MemberWidgetId`. If you try to add
-// 'admin_assign' here you will get a compile error — the admin Hub is
-// an entirely different list below.
+// A member widget can appear on one or more MEMBER pages via its
+// `defaultPlacements` array. Each placement specifies which page and
+// how big (span × rowSpan). Crossing into an admin scope is a compile
+// error — `MemberWidgetRegistration` narrows the placement Scope to
+// `MemberScope` only.
 // ═════════════════════════════════════════════════════════════════════
-//
-// Render order top to bottom:
-//   Row 1: team_tasks (col 2)     + forum_notifications (col 1)
-//   Row 2: today_calendar (col 2) + booking_snapshot    (col 1)
 export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
   {
-    // Widget id stays `team_tasks` so saved layouts keep resolving;
-    // the rendered component is now `MyTasksCard` (the same card that
-    // lives on the /daily Tasks page) sharing state via MyTasksContext.
-    // 2 row-span tall — balances the right column (Notifications at
-    // rowSpan 2 + Booking at rowSpan 1 = 3) against the left column
-    // (My Tasks at 2 + Calendar at 1 = 3). Zero empty space on the
-    // Overview grid. The SubmitBar collapses to zero height when
-    // nothing is pending (see tasks/shared.tsx), so 2 rows fits the
-    // filter pills + ~6 task rows + Task/Show-completed buttons with
-    // room to spare.
+    // Widget id stays `team_tasks` so saved layouts keep resolving; the
+    // rendered component is `MyTasksCard` (shared between Overview and
+    // the Tasks page via MyTasksContext). Appears on BOTH member pages
+    // after PR #7 — Overview default AND the new Tasks widget grid.
     id: 'team_tasks',
     title: 'My Tasks',
     description: 'Personal queue — synched with the Tasks page.',
-    defaultSpan: 2,
-    defaultRowSpan: 2,
+    defaultPlacements: [
+      { scope: 'member_overview', span: 2, rowSpan: 2 },
+      { scope: 'member_tasks', span: 2, rowSpan: 2 },
+    ],
+    accessVisibility: 'personal',
+    dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
     // Notifications spans 2 rows to match My Tasks on the left so
-    // both columns terminate at the same Y — the Overview grid reads
-    // as one coherent block instead of a left column with a tail.
+    // both columns terminate at the same Y.
     id: 'forum_notifications',
     title: 'Notifications',
-    description: 'Unread messages across channels.',
-    defaultSpan: 1,
-    defaultRowSpan: 2,
+    description: 'Unread messages across channels and new assignments.',
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 2 }],
+    // `shared` access (anyone authenticated sees the widget) but `self`
+    // data (each viewer sees their own unread state + assignments).
+    accessVisibility: 'shared',
+    dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
     id: 'today_calendar',
     title: 'Calendar',
     description: "Today's schedule.",
-    defaultSpan: 2,
+    defaultPlacements: [{ scope: 'member_overview', span: 2 }],
+    accessVisibility: 'personal',
+    dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
     id: 'booking_snapshot',
     title: 'Booking',
     description: 'Upcoming sessions and quick book.',
-    defaultSpan: 1,
+    defaultPlacements: [{ scope: 'member_overview', span: 1 }],
+    accessVisibility: 'personal',
+    dataScope: 'self',
+    allowedRoles: ['member', 'admin', 'owner'],
+  },
+  {
+    // PR #7 — NEW widget for admin-assigned tasks.
+    // Renders on BOTH Overview (validating multi-page placement end-to-
+    // end) and the new Tasks widget grid.
+    id: 'assigned_tasks',
+    title: 'Assigned To You',
+    description: 'Tasks admin assigned directly to you.',
+    defaultPlacements: [
+      { scope: 'member_overview', span: 1, rowSpan: 2 },
+      { scope: 'member_tasks', span: 1, rowSpan: 2 },
+    ],
+    accessVisibility: 'personal',
+    dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
 ]
 
-// Member-side widget bank — registered but NOT on the Overview grid.
-// Kept so saved layouts from earlier versions still resolve to valid
-// component refs. Move one into MEMBER_WIDGET_REGISTRATIONS to show it.
+// Member-side widget bank — registered but NOT on any member page today.
 export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
   {
     id: 'team_snapshot',
     title: 'Daily Snapshot',
     description: 'Progress, streak, and must-do.',
-    defaultSpan: 1,
+    defaultPlacements: [],
+    accessVisibility: 'personal',
+    dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
     id: 'team_directory',
     title: 'Team',
     description: 'Quick-reference row of teammates.',
-    defaultSpan: 2,
+    defaultPlacements: [],
+    accessVisibility: 'shared',
+    dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
     id: 'team_activity',
     title: 'Team activity',
     description: 'Recent team actions tagged by flywheel stage.',
-    defaultSpan: 1,
+    defaultPlacements: [],
+    accessVisibility: 'shared',
+    dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
     id: 'flywheel_summary',
     title: 'Flywheel Summary',
     description: 'Five-stage snapshot on the member surface.',
-    defaultSpan: 2,
+    defaultPlacements: [],
+    accessVisibility: 'shared',
+    dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
   },
 ]
 
 // ═════════════════════════════════════════════════════════════════════
 // ADMIN — widgets on the admin Hub page ("/admin").
-//
-// Never mix with MEMBER above. TypeScript enforces it via the array's
-// type (`AdminWidgetRegistration[]` only accepts `AdminWidgetId`).
+// Admin widgets' placements must target `admin_overview` only — the
+// type system enforces it via `AdminWidgetRegistration`.
 // ═════════════════════════════════════════════════════════════════════
-//
-// Render order — matches the member Overview rhythm so both pages
-// feel uniform. Every widget is one row tall (~340px) like the
-// member side; no more tall hero widgets.
-//
-//   Row 1: admin_assign    (col 2) + admin_notifications (col 1)
-//   Row 2: admin_flywheel  (col 2) + admin_team          (col 1)
-//   Row 3: admin_approvals (col 3 — full width)
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
     id: 'admin_assign',
     title: 'Assign',
-    description: 'Send out sessions, tasks, or task groups.',
-    defaultSpan: 2,
+    description: 'Send out sessions, tasks, task groups, or custom tasks.',
+    defaultPlacements: [{ scope: 'admin_overview', span: 2 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
     id: 'admin_notifications',
     title: 'Notifications',
-    description: 'Unread channels + quick post as admin.',
-    defaultSpan: 1,
+    description: 'Unread channels, new assignments, and quick post as admin.',
+    defaultPlacements: [{ scope: 'admin_overview', span: 1 }],
+    accessVisibility: 'admin',
+    dataScope: 'self',
     allowedRoles: ['admin', 'owner'],
   },
   {
     id: 'admin_flywheel',
     title: 'Flywheel',
     description: 'KPIs across the five flywheel stages.',
-    defaultSpan: 2,
+    defaultPlacements: [{ scope: 'admin_overview', span: 2 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
     id: 'admin_team',
     title: 'Team',
     description: 'Your crew at a glance.',
-    defaultSpan: 1,
+    defaultPlacements: [{ scope: 'admin_overview', span: 1 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
     id: 'admin_approvals',
     title: 'Approvals',
     description: 'Pending requests from the team.',
-    defaultSpan: 3,
+    defaultPlacements: [{ scope: 'admin_overview', span: 3 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
 ]
@@ -157,36 +182,44 @@ export const ADMIN_BANK_REGISTRATIONS: AdminWidgetRegistration[] = [
     id: 'team_focus',
     title: 'Team Focus',
     description: 'Live team completion, submissions, and member momentum.',
-    defaultSpan: 2,
+    defaultPlacements: [],
+    accessVisibility: 'admin',
+    dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
     id: 'approval_queue',
     title: 'Approval Queue',
     description: 'Pending edits and submissions that need admin attention.',
-    defaultSpan: 1,
+    defaultPlacements: [],
+    accessVisibility: 'admin',
+    dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
     id: 'admin_schedule',
     title: 'Today Schedule',
     description: 'The studio schedule for today across the team.',
-    defaultSpan: 2,
+    defaultPlacements: [],
+    accessVisibility: 'admin',
+    dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
     id: 'admin_shortcuts',
     title: 'Admin Shortcuts',
     description: 'Jump directly into the key admin workspaces.',
-    defaultSpan: 1,
+    defaultPlacements: [],
+    accessVisibility: 'admin',
+    dataScope: 'global',
     allowedRoles: ['admin', 'owner'],
   },
 ]
 
 // Convenience aggregation — every registered widget on either side.
-// Useful for layout sanitization (e.g. "is this id still valid?") and
-// for the component-map lookup in widgetRegistry.tsx. Do NOT iterate
-// this for rendering — iterate the page-specific array above.
+// Used for layout sanitization ("is this id still valid?") and for
+// component-map lookups. Do NOT iterate this for rendering — iterate
+// the page-specific scoped helper below instead.
 export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
   ...MEMBER_WIDGET_REGISTRATIONS,
   ...MEMBER_BANK_REGISTRATIONS,
@@ -194,40 +227,59 @@ export const WORKSPACE_WIDGET_REGISTRATIONS: WorkspaceWidgetRegistration[] = [
   ...ADMIN_BANK_REGISTRATIONS,
 ]
 
-function buildDefaultWidgetState(
-  defs: Pick<WorkspaceWidgetRegistration, 'id' | 'defaultSpan' | 'defaultRowSpan'>[],
+// Build default widget state for a given scope by filtering registrations
+// whose `defaultPlacements` include that scope, then projecting each
+// placement into widget state. Scope-matched placements decide span +
+// rowSpan so a widget can be 2×2 on Overview and 1×1 on Tasks if needed.
+function buildDefaultWidgetStateForScope(
+  registrations: WorkspaceWidgetRegistration[],
+  scope: WorkspaceScope,
 ): WorkspaceWidgetState[] {
-  return defs.map((widget, index) => ({
-    id: widget.id,
-    order: index,
-    visible: true,
-    span: widget.defaultSpan,
-    rowSpan: widget.defaultRowSpan ?? 1,
-  }))
+  const result: WorkspaceWidgetState[] = []
+  let order = 0
+  for (const widget of registrations) {
+    const placement = widget.defaultPlacements.find(p => p.scope === scope)
+    if (!placement) continue
+    result.push({
+      id: widget.id,
+      order: order++,
+      visible: true,
+      span: placement.span,
+      rowSpan: placement.rowSpan ?? 1,
+    })
+  }
+  return result
 }
 
 // Bump whenever the default widget order / span / scope assignment
 // changes. Saved layouts whose `version` does not match are discarded
 // in storage.ts so the new default ordering takes effect for everyone.
 //
-// v8 (Apr 2026): rebalance the Overview grid so both columns end on
-// the same row — team_tasks 3 → 2, forum_notifications 1 → 2. The
-// SubmitBar now collapses to 0 when idle (see tasks/shared.tsx), so
-// 2 rows has plenty of room for the pills + task list. Bumping the
-// version is the migration — saved v7 layouts get wiped from
-// localStorage on next load and rebuild from the new defaults.
-export const WORKSPACE_LAYOUT_VERSION = 8
+// v8 (2026-04-20): rebalance Overview grid so both columns terminate at
+// the same row — team_tasks 3→2, forum_notifications 1→2.
+// v9 (2026-04-22, PR #7): widget visibility model formalized; multi-page
+// placement introduced; new `assigned_tasks` widget defaults onto
+// Overview + Tasks; Tasks page becomes a widget grid scope
+// ('member_tasks') instead of a hand-composed page. Saved v8 layouts
+// get wiped and rebuild from the new defaults.
+export const WORKSPACE_LAYOUT_VERSION = 9
 
-// Default layouts per scope. The page passes its scope in, picks the
-// matching array, and produces widget state. Scope is used only for
-// localStorage key differentiation — it never determines which
-// widgets render (the page already imported its own array for that).
+// Default layouts per scope. Each scope picks its widgets from the
+// relevant side's registrations (all + bank) and uses only those whose
+// `defaultPlacements` target that scope.
 export function getDefaultWorkspaceLayout(scope: WorkspaceScope): WorkspaceLayout {
-  const registrations =
-    scope === 'admin_overview' ? ADMIN_WIDGET_REGISTRATIONS : MEMBER_WIDGET_REGISTRATIONS
+  const memberScopes: MemberScope[] = ['member_overview', 'member_tasks']
+  const isMemberScope = (memberScopes as WorkspaceScope[]).includes(scope)
+  const pool = isMemberScope
+    ? [...MEMBER_WIDGET_REGISTRATIONS, ...MEMBER_BANK_REGISTRATIONS]
+    : [...ADMIN_WIDGET_REGISTRATIONS, ...ADMIN_BANK_REGISTRATIONS]
   return {
     scope,
     version: WORKSPACE_LAYOUT_VERSION,
-    widgets: buildDefaultWidgetState(registrations),
+    widgets: buildDefaultWidgetStateForScope(pool, scope),
   }
 }
+
+// Re-export WidgetPlacement for consumers that want to type placements
+// inline without reaching into the types module.
+export type { WidgetPlacement }
