@@ -2507,6 +2507,10 @@ export type Database = {
         }
         Returns: Json
       }
+      assign_template_preview: {
+        Args: { p_template_id: string; p_template_item_ids?: string[] }
+        Returns: Json
+      }
       assign_template_to_members: {
         Args: {
           p_description_override?: string
@@ -2516,6 +2520,10 @@ export type Database = {
           p_template_id: string
           p_title_override?: string
         }
+        Returns: Json
+      }
+      cancel_task_assignment_batch: {
+        Args: { p_batch_id: string; p_hide_open_tasks?: boolean }
         Returns: Json
       }
       complete_assigned_task: {
@@ -2532,6 +2540,11 @@ export type Database = {
         Returns: Json
       }
       cron_materialize_checklists: { Args: never; Returns: undefined }
+      delete_task_template_item: { Args: { p_item_id: string }; Returns: Json }
+      duplicate_task_template: {
+        Args: { p_new_name: string; p_template_id: string }
+        Returns: Json
+      }
       get_assignment_notifications: {
         Args: { p_limit?: number; p_unread_only?: boolean; p_user_id: string }
         Returns: Json
@@ -2618,6 +2631,29 @@ export type Database = {
           p_target_ids?: string[]
           p_target_mode: string
           p_target_position?: string
+        }
+        Returns: Json
+      }
+      update_task_template: {
+        Args: {
+          p_description?: string
+          p_is_active?: boolean
+          p_is_onboarding?: boolean
+          p_name?: string
+          p_role_tag?: string
+          p_template_id: string
+        }
+        Returns: Json
+      }
+      update_task_template_item: {
+        Args: {
+          p_category?: string
+          p_default_due_offset_days?: number
+          p_description?: string
+          p_is_required?: boolean
+          p_item_id: string
+          p_sort_order?: number
+          p_title?: string
         }
         Returns: Json
       }
