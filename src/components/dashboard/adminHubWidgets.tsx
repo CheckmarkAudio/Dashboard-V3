@@ -920,6 +920,14 @@ export function AdminNotificationsWidget() {
     void markAssignmentNotificationRead(n.id).catch(() => {
       void queryClient.invalidateQueries({ queryKey: cacheKey })
     })
+    // PR #13 — route by notification subject.
+    if (n.session_id) {
+      window.dispatchEvent(
+        new CustomEvent('highlight-session', { detail: { sessionId: n.session_id } }),
+      )
+      window.location.href = '/sessions'
+      return
+    }
     // PR #11 — highlight the task from this batch in MyTasksCard.
     window.dispatchEvent(
       new CustomEvent('highlight-task', { detail: { batchId: n.batch_id } }),

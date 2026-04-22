@@ -152,6 +152,121 @@ export interface SessionConflict {
   room: string | null
 }
 
+// ─── Assign-page surface (PR #13) ────────────────────────────────────
+//
+// Simpler session rows tuned for the "Assign a session" modal: just
+// enough data to render an upcoming-sessions list + pick an engineer.
+// Distinct from SessionListItem (which is shaped for the Sessions page
+// columns) so the two surfaces can diverge without churn.
+
+export interface AssignableSession {
+  id: string
+  clientName: string | null
+  sessionDate: string       // 'YYYY-MM-DD'
+  startTime: string         // 'HH:MM:SS'
+  endTime: string           // 'HH:MM:SS'
+  sessionType: string
+  status: string
+  room: string | null
+  assignedTo: string | null // member id
+  assignedToName: string | null
+}
+
+/**
+ * Load sessions relevant to the admin "Assign a session" modal.
+ * Default window: today → +30 days. Pass `includePast: true` to widen
+ * to -30 days so admins can fix historical assignments. Status filter
+ * excludes `cancelled` — you can't reassign a cancelled session.
+ */
+export async function fetchAssignableSessions(
+  opts: { includePast?: boolean } = {},
+): Promise<AssignableSession[]> {
+  const today = localDateKey()
+  const windowEnd = new Date()
+  windowEnd.setDate(windowEnd.getDate() + 30)
+  const windowEndYMD = localDateKey(windowEnd)
+
+  const windowStart = new Date()
+  windowStart.setDate(windowStart.getDate() - (opts.includePast ? 30 : 0))
+  const windowStartYMD = opts.includePast ? localDateKey(windowStart) : today
+
+  const [sessionsRes, membersRes] = await Promise.all([
+    supabase
+      .from('sessions')
+      .select('id, client_name, session_date, start_time, end_time, session_type, status, room, assigned_to')
+      .gte('session_date', windowStartYMD)
+      .lte('session_date', windowEndYMD)
+      .neq('status', 'cancelled')
+      .order('session_date', { ascending: true })
+      .order('start_time', { ascending: true })
+      .limit(200),
+    supabase
+      .from('team_members')
+      .select('id, display_name'),
+  ])
+
+  if (sessionsRes.error) throw sessionsRes.error
+
+  const nameById = new Map<string, string>()
+  for (const m of (membersRes.data ?? []) as Array<{ id: string; display_name: string }>) {
+    nameById.set(m.id, m.display_name)
+  }
+
+  const rows = (sessionsRes.data ?? []) as Array<{
+    id: string
+    client_name: string | null
+    session_date: string
+    start_time: string
+    end_time: string
+    session_type: string
+    status: string
+    room: string | null
+    assigned_to: string | null
+  }>
+
+  return rows.map((row) => ({
+    id: row.id,
+    clientName: row.client_name,
+    sessionDate: row.session_date,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    sessionType: row.session_type,
+    status: row.status,
+    room: row.room,
+    assignedTo: row.assigned_to,
+    assignedToName: row.assigned_to ? (nameById.get(row.assigned_to) ?? null) : null,
+  }))
+}
+
+export interface AssignSessionResult {
+  session_id: string
+  assigned_to: string
+  changed: boolean
+  is_reassign?: boolean
+  notification_id: string | null
+}
+
+/**
+ * Assign (or reassign) a session to a team member. Calls the
+ * `assign_session` RPC which atomically updates `sessions.assigned_to`
+ * AND inserts an `assignment_notifications` row for the new assignee.
+ * Admin-only on the server side.
+ */
+export async function assignSession(
+  sessionId: string,
+  assigneeId: string,
+): Promise<AssignSessionResult> {
+  const { data, error } = await supabase.rpc('assign_session', {
+    p_session_id: sessionId,
+    p_assignee_id: assigneeId,
+  })
+  if (error) {
+    console.error('[queries/sessions] assignSession failed:', error)
+    throw new Error(error.message)
+  }
+  return data as AssignSessionResult
+}
+
 export async function findSessionConflict(input: {
   sessionDate: string
   startTime: string
