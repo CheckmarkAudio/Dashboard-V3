@@ -13,8 +13,8 @@
 | **Live URL** | https://dashboard-v3-dusky.vercel.app |
 | **Hosting** | Vercel (auto-deploys from `main`) |
 | **Database** | Supabase project `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") |
-| **Latest commit** | `4e666b9` — fix(perf-trace): gate Overview flush on completed-batch-for-profile-id (PR #4) |
-| **Currently active** | Phase 1 Steps 2A / 2A' / 2B all shipped + tracer corrected. True post-2B cold start: **826ms / 6 checkpoints / NO `checklist:rpc` on cold load** (backend-prepared state is real). Down 36% from morning baseline. Next: Step 2C (snapshot RPC) or Cloudflare migration — Claude picks timing. |
+| **Latest commit (main)** | `357562c` — perf(overview): snapshot RPC (Phase 1 Step 2C) (#5) |
+| **Currently active** | Phase 1 Step 2 **COMPLETE** — 2C landed 470ms cold-start on Vercel preview (−64% from 1,289ms morning baseline). Phase 1 assignment-system backend (tables + 11 RPCs) shipped on PR #6, pending merge. Next: merge PR #6 → Codex's frontend handoff → Cloudflare migration. |
 
 ---
 
@@ -148,6 +148,8 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 | 2026-04-20 | `85b7df7` (PR #3) | **Phase 1 Step 2B — cron-materialize checklist instances + client fast-path.** 3 Supabase migrations (`enable_pg_cron_and_cron_run_log`, `cron_materialize_checklists_function`, `schedule_materialize_checklists_cron`) + 1 client change in `useChecklist.ts`. pg_cron runs daily at 11:00 UTC (5am MDT / 4am MST) calling `cron_materialize_checklists()` which iterates active members and calls the existing RPC — results logged to `cron_run_log`. Client hits `team_checklist_instances` directly before falling back to the RPC. On cold start the RPC never fires. −~170ms on critical path. |
 | 2026-04-20 | `4e666b9` (PR #4) | **fix(perf-trace): gate Overview flush on completed-batch-for-profile-id.** Surfaced the TRUE post-2B waterfall — previous "870ms / 7 checkpoint" reading on PR #2 was an artifact: the flush fired early when `profile` arrived, before the second `refetch` pass started. Added `lastLoadedProfileId` ref set only inside `refetch`'s success path; tightened flush gate to `profile && lastLoadedProfileId.current === profile.id && !loading && !daily.loading`. Mirrors the `handledForUserId` pattern from PR #2. No user-facing behavior change — pure measurement correctness. |
 | 2026-04-20 | — | **True cold-start locked: 826ms on PR #4 preview.** 6 clean checkpoints, `checklist:rpc` absent (backend-prepared state holds). Longest single span: `checklist:items` 265ms (items fetch for the 22 daily rows). Remaining ~100ms gap between profile-fetch end (@266ms) and parallel batch start (@372ms) is the React.lazy / provider-mount gap that 2C will naturally shrink. Full day net: **1,289ms → 826ms = −36% / −463ms**. |
+| 2026-04-21 | `357562c` (PR #5) | **Phase 1 Step 2C — snapshot RPC.** One `member_overview_snapshot(p_user_id, p_date)` SECURITY DEFINER function replaces four parallel client waves (`overview:batch` + `overview:streak` + `checklist:lookup` + `checklist:items`). Server derives `submission_type` from `team_members.position` (authoritative read path per Codex peer-review); `mustDoConfig.ts` still owns the write path. Indexes added on `deliverable_submissions`, `sessions`, `member_kpis`. `MemberOverviewContext` split into outer provider + inner `MemberOverviewLoaded` that mounts fresh when snapshot arrives; `useChecklist` accepts validated `PreloadedChecklist` with metadata-match check. Preserves pre-2C `kpi_entries` ordering bit-for-bit (flagged latent bug for separate PR). Preview cold-start locked: **470ms with 3 checkpoints** — ONLY `auth:getSession`, `auth:fetchProfile:byId`, `overview:snapshot`. Server-side RPC execution 7.3ms per EXPLAIN ANALYZE. Full Phase 1 Step 2 arc: 1,289ms → 470ms = **−64% / −819ms**. |
+| 2026-04-21 | `27ce5ce` (PR #6, pending) | **Task-assignment Phase 1 backend.** 2 migrations: (1) 5 enums + 6 tables (`task_templates`, `task_template_items`, `task_assignment_batches`, `assignment_recipients`, `assigned_tasks`, `assignment_notifications`) + 7 hot-path indexes + RLS via existing `is_team_admin()`; (2) 11 SECURITY DEFINER RPCs covering template library CRUD + 3 atomic assignment actions (custom / full / partial) + member read+complete + notifications. Additive — zero changes to `report_templates`, `task_assignments`, or `team_checklist_*`; 2C cold-path untouched. Server-side `get_member_assigned_tasks`: 3.2ms. Seed data from smoke tests kept (see Known seed data). Frontend UI pending Codex handoff PR. |
 
 ---
 
@@ -160,9 +162,15 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 - ✅ **Step 2A' — Profile-fetch dedupe** (2026-04-20, `341d2d1` / PR #2). `handledForUserId` ref + `maybeFetchProfile` wrapper in `AuthContext.tsx`. 2×→1× profile fetch.
 - ✅ **Step 2B — cron-materialize + client fast-path** (2026-04-20, `85b7df7` / PR #3). pg_cron at 11:00 UTC, `cron_materialize_checklists()`, `cron_run_log`. Client short-circuits the RPC when instance exists. `checklist:rpc` no longer fires on cold start. −~170ms.
 - ✅ **fix(perf-trace) flush-gate race** (2026-04-20, `4e666b9` / PR #4). `lastLoadedProfileId` ref; flush now fires only after a real batch completes for the current profile. True cold start revealed: **826ms with 6 honest checkpoints**, longest `checklist:items` 265ms.
-- ⏳ **Step 2C — Snapshot RPC** (next). Collapse `overview:batch` + `overview:streak` + `checklist:items` + `checklist:lookup` into one `member_overview_snapshot(user_id, date)` RPC. Biggest remaining structural win (~200–300ms estimated). Also naturally shrinks the ~100ms React.lazy / `MemberOverviewProvider` mount gap between `auth:fetchProfile:byId` end and the batch start.
+- ✅ **Step 2C — Snapshot RPC** (2026-04-21, `357562c` / PR #5). `member_overview_snapshot(p_user_id, p_date)` — one RPC replaces the four-wave waterfall. Codex peer-review refinements incorporated (server-derived `submission_type`, `PreloadedChecklist` metadata match-check, atomic sub-queries in one transaction). **Preview cold-start locked: 470ms / 3 checkpoints / 7.3ms server-side.** Full Phase 1 Step 2 arc: **1,289ms → 470ms = −64%**, landed well inside the 500–700ms target with margin.
 
-Target: cold start ~500–700ms on current hosting after 2C lands. Currently 826ms — within ~125ms of the target. After 2C, migrate hosting Vercel → Cloudflare Pages (free commercial tier) as a separate single-concern PR — timing at Claude's judgment per `feedback_cloudflare_migration_timing.md` memory.
+**Phase 1 Step 2 CLOSED.** Next structural lever is hosting (Cloudflare migration) once the site has 1–2 stable days on prod post-2C. Timing remains Claude's judgment call per `feedback_cloudflare_migration_timing.md`.
+
+**Phase 1 — Assignment System** (in progress): First-class admin workflow for assigning custom tasks / full templates / partial templates to one or many members, with notifications.
+
+- ✅ **Phase 1 backend — schema + RPCs** (2026-04-21, `27ce5ce` / PR #6, pending merge). 6 tables + 5 enums + 7 indexes + RLS via `is_team_admin()`; 11 SECURITY DEFINER RPCs (4 library CRUD, 3 atomic assign actions, 2 member read+complete, 2 notifications). Codex peer-review refinements incorporated (`assignment_recipients` rename to avoid collision, `PreloadedChecklist`-style metadata validation surface, single-transaction atomicity, enums over text). Additive — does NOT touch `report_templates`, `task_assignments`, or `team_checklist_*`. 2C cold-path untouched.
+- ⏳ **Frontend UI** (next, via Codex handoff PR). Admin Templates library surface, Assign modal (custom / full / partial), "Assigned To You" member Overview widget, assignment section in Notifications widget.
+- **Phase 2 (deferred)**: update/delete/duplicate template ops, cancel batch, assignment history, `mark_all_read`, fold assigned-tasks summary into `member_overview_snapshot`, unify `report_templates` into `task_templates`.
 
 **UI design refresh — scoped pilot** (paused): Apply the v1.0 design system PDF to the live app on three pages first. See `~/.../My Drive/Checkmark Audio — Design System · Print.pdf` for the visual spec.
 
@@ -178,6 +186,26 @@ Target: cold start ~500–700ms on current hosting after 2C lands. Currently 826
 - ⏳ **Assign (admin)** — user called this out as the worst-looking page; redesign when ready.
 
 **Out of scope for now:** all other pages. User wants to validate the design language on the highest-impact surfaces first.
+
+---
+
+## Known state / seed data on prod
+
+Rows created by smoke-tests that live on prod Supabase and will be visible to users when the assignment-system UI ships:
+
+- **Template**: `Marketing Onboarding` (4 items, onboarding=true, role_tag='marketing')
+  - Items: Set up profile photo / Read brand guide / Connect to content calendar / Shadow two client sessions
+- **Assignments**:
+  - Full `Marketing Onboarding` → Gavin Hammond (4 tasks)
+  - Custom task `Call vendor re: Q2 campaign` → Gavin + Matthan Bow (2 tasks total)
+  - Partial `Marketing Onboarding` (items 1+2) → Matthan Bow (2 tasks)
+- **State**: Gavin completed "Set up profile photo" + marked one notification read; all else unread/incomplete.
+
+**Why kept**: useful seed data for Codex's frontend PR to render against.
+
+**How to recover if wiped**: `docs/seed_data/task_assignment_phase_1_seed.sql` — run as admin via Supabase SQL editor. Recreates equivalent rows (fresh UUIDs).
+
+**How to clean when ready**: admin UI will gain a "Cancel batch" / "Delete template" surface in Phase 2. Until then, direct SQL: `DELETE FROM task_assignment_batches WHERE title IN ('Marketing Onboarding', 'Marketing Onboarding (selected)', 'Call vendor re: Q2 campaign')` — cascades to recipients + tasks + notifications.
 
 ---
 

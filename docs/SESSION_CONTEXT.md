@@ -546,8 +546,31 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
-### Just shipped (most recent first, from 2026-04-20 session)
+### Just shipped (most recent first, from 2026-04-21 session)
 
+- **Task-assignment Phase 1 backend — SHIPPED (`27ce5ce` / PR #6, pending merge).**
+  2 migrations on live Supabase: (1) 6 tables + 5 enums + 7 indexes + RLS
+  via `is_team_admin()`; (2) 11 SECURITY DEFINER RPCs covering template
+  library, 3 atomic assign actions (custom / full / partial), member
+  read+complete, and notifications. Codex peer-review refinements
+  incorporated (`assignment_recipients` renamed to avoid collision with
+  existing `task_assignments`; `PreloadedChecklist`-style metadata
+  validation for future consumer safety; all writes atomic in a single
+  transaction; enums over text fields). Additive — does NOT touch
+  `report_templates`, `task_assignments`, or `team_checklist_*`; 2C
+  cold-path untouched. Frontend UI deferred to Codex handoff PR. Seed
+  data kept on prod for frontend testing (see Known state section in
+  `PROJECT_STATE.md`).
+- **Phase 1 Step 2C — SHIPPED (`357562c` / PR #5, MERGED).** One
+  `member_overview_snapshot(p_user_id, p_date)` RPC replaces the
+  four-wave Overview cold-start waterfall. Server derives
+  `submission_type` from `team_members.position` (authoritative read
+  path per Codex peer-review); client `mustDoConfig.ts` still owns the
+  write path. New `PreloadedChecklist` type with metadata validation
+  (frequency + date_key + target_user_id) so useChecklist rejects
+  mis-wired preloads. **Preview cold-start locked: 470ms / 3
+  checkpoints / 7.3ms server-side.** Full Phase 1 Step 2 arc:
+  **1,289ms → 470ms = −64% / −819ms** from morning baseline.
 - **fix(perf-trace) flush-gate race — DONE (`4e666b9` / PR #4).**
   `lastLoadedProfileId` ref in `MemberOverviewContext.tsx` gates
   flush on a real batch having completed for the current profile.
@@ -609,23 +632,25 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Probably next
 
-- **Phase 1 Step 2C — snapshot RPC.** The remaining structural
-  win in Phase 1. Collapse `overview:batch` + `overview:streak` +
-  `checklist:lookup` + `checklist:items` into one
-  `member_overview_snapshot(user_id, date)` RPC. Projected
-  savings: ~200–300ms. Also naturally shrinks the ~100ms
-  React.lazy / provider-mount gap because the batch can start
-  earlier when it's one call. Lands the app inside the 500–700ms
-  target.
-- **After 2C: migrate hosting Vercel → Cloudflare Pages.**
-  Free commercial tier. Single-concern PR. Replicate the
-  `CDN-Cache-Control: no-store` on `/index.html` exactly (that's
-  the rule that killed "hard refresh after every deploy" when we
-  moved off GH Pages). Timing: Claude's judgment call per
-  `feedback_cloudflare_migration_timing.md` memory — trigger
-  when the site has had 1–2 stable days post-2C.
-- **After hosting migration:** Assign page visual pass, then
-  flywheel event ledger / Phase 2.
+- **Merge PR #6** (Phase 1 assignment backend). Gated on human
+  review; everything verified DB-side + build-side. Base is `main`,
+  state is MERGEABLE.
+- **Codex frontend handoff PR** for the assignment system:
+  admin Templates library UI, Assign modal (custom / full / partial),
+  `Assigned To You` member Overview widget, assignment section in
+  the Notifications widget. This is the PR that makes the Phase 1
+  backend user-facing. Codex is preparing the handoff.
+- **After frontend lands + 1–2 stable days on prod: Cloudflare
+  migration.** Vercel → Cloudflare Pages, free commercial tier,
+  single-concern PR. Replicate the `CDN-Cache-Control: no-store`
+  on `/index.html` exactly. Timing: Claude's judgment call per
+  `feedback_cloudflare_migration_timing.md`.
+- **After hosting migration:** Phase 2 assignment polish
+  (update/delete template ops, cancel batch, assignment history,
+  `mark_all_read`, fold assigned-tasks summary into
+  `member_overview_snapshot`, unify `report_templates` into the
+  new model). Then Assign-page visual pass, then flywheel event
+  ledger (original Phase 2 of Codex's 4-phase roadmap).
 
 ### Small stragglers worth knowing about
 
