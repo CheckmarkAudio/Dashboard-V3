@@ -387,6 +387,16 @@ export async function markAssignmentNotificationRead(
   return data as { success: boolean; notification_id: string; is_read: boolean; read_at: string | null }
 }
 
+/**
+ * Admin assigns a custom task. Atomic (batch + recipients + tasks +
+ * notifications in one transaction).
+ *
+ * PR #14 adds scope support:
+ *   - scope='member' (default): one task row per memberId, each with
+ *     its own notification (existing behavior).
+ *   - scope='studio': single shared task row, no assignee, no
+ *     notifications. memberIds is ignored server-side.
+ */
 export async function assignCustomTaskToMembers(
   memberIds: string[],
   payload: CustomTaskAssignmentPayload,
@@ -399,6 +409,7 @@ export async function assignCustomTaskToMembers(
     p_due_date: payload.due_date ?? null,
     p_is_required: payload.is_required ?? false,
     p_show_on_overview: payload.show_on_overview ?? true,
+    p_scope: payload.scope ?? 'member',
   })
   if (error) {
     console.error('[queries/assignments] assignCustomTaskToMembers failed:', error)
