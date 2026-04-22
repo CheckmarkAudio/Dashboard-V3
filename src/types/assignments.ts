@@ -9,7 +9,15 @@
 
 export type AssignmentType = 'custom_task' | 'template_full' | 'template_partial'
 
-export type AssignedSourceType = 'custom' | 'template_full' | 'template_partial'
+// `daily_checklist` is reserved for the forthcoming checklist fold-in
+// (see docs/assignment-task-model.md §"Daily checklists"). The UI
+// already branches on it so once the migration writes the source tag,
+// rows render with the correct origin label without another deploy.
+export type AssignedSourceType =
+  | 'custom'
+  | 'template_full'
+  | 'template_partial'
+  | 'daily_checklist'
 
 export type AssignmentNotificationType =
   | 'task_assigned'
@@ -32,6 +40,11 @@ export interface AssignmentBatchRef {
   created_at: string
 }
 
+// Scope tag introduced by the 20260422 scope-foundation migration.
+//   member  → one assignee; only that assignee (or admin) can complete it
+//   studio  → shared studio task (no assignee); any team member can complete
+export type AssignedTaskScope = 'member' | 'studio'
+
 export interface AssignedTask {
   id: string
   title: string
@@ -48,7 +61,20 @@ export interface AssignedTask {
   source_template_item_id: string | null
   created_at: string
   updated_at: string
-  batch: AssignmentBatchRef
+  // Scope-foundation fields (nullable until the migration is applied on the
+  // target DB — the query-layer normalizer fills in safe defaults).
+  // `assigned_to` mirrors the underlying column name on `assigned_tasks`
+  // rather than inventing an `_member_id` alias.
+  scope: AssignedTaskScope
+  assigned_to: string | null
+  assigned_to_name: string | null
+  // Server-computed permission flag returned by get_*_assigned_tasks —
+  // true when the current viewer may toggle completion for this task.
+  can_complete: boolean
+  // Team Tasks + Studio Tasks may surface rows that don't belong to a
+  // specific assignment batch (e.g. future daily-checklist fold-in), so
+  // the UI has to tolerate a null batch gracefully.
+  batch: AssignmentBatchRef | null
 }
 
 // Embedded session summary on session-assign notifications.

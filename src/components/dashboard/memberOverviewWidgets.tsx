@@ -836,10 +836,9 @@ export function TeamActivityWidget() {
 /**
  * TeamTasksWidget — Overview's personal task widget. Renders the SAME
  * MyTasksCard component used on the /daily Tasks page so checking a
- * task on Overview shows pending on /daily and vice versa (state lives
- * in MyTasksContext at the app root). Widget id stays `team_tasks` so
- * existing layout configs keep resolving — registry title/description
- * was updated to "My Tasks" / "Personal queue."
+ * task surface on Overview and /daily stays in sync. Widget id stays
+ * `team_tasks` so existing layout configs keep resolving — registry
+ * title/description was updated to "My Tasks" / "Personal queue."
  */
 export function TeamTasksWidget() {
   // `embedded` — no outer `widget-card` wrapper + no duplicate "My Tasks"
