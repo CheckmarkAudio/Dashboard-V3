@@ -548,7 +548,16 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
-- **Member task-surface unification — IN REVIEW (PR #11, 2026-04-22).**
+- **Monday-style task system completed — 6 PRs, 2026-04-22 session.** PRs #11–#16 all merged to main this session, taking the assignment system from MVP to near-complete.
+  - **PR #11 `ec8d3b7`** — Unified MyTasks (retired `AssignedTasksWidget`, MyTasksCard reads real data + click-to-highlight).
+  - **PR #12 `0b09313`** — Scope foundation: `assigned_tasks.scope` column + member/studio CHECK + two new RPCs (`get_team_assigned_tasks`, `get_studio_assigned_tasks`). `/daily` rebuilt around three columns (My · Studio · Team).
+  - **PR #13 `9cf9bf5`** — Assign page redesign: Quick Assign inline compose + Assign-a-Session tile + Templates grid. Session-assign RPC (`assign_session`) + notifications table extended with `session_id` (XOR with `batch_id`). Notification click routes by subject. **Also shipped preview auto-login**: `Login.tsx` checks `VITE_PREVIEW_LOGIN_*` env vars + hostname pattern; production alias hardcoded excluded. Env vars live in Vercel Preview scope only. No more re-login per PR.
+  - **PR #14 `aa53c79`** — Studio scope write-path. `assign_custom_task_to_members` gains `p_scope`; studio mode writes single shared row, no recipients, no notifications. `complete_assigned_task` scope-aware (studio = any team member). Members/Studio toggle in Quick Assign header. `completed_by` recorded.
+  - **PR #15 `eef4ff3`** — Session polish: `/sessions` listens for `highlight-session` event (scroll + flash). Amber conflict banner in SessionAssignModal when engineer has overlapping booking (non-blocking).
+  - **PR #16 `c0e6a47`** — Self-serve task requests. New `task_requests` table + 5 RPCs + 3 new notification types. "+ Task" button in MyTasksCard header with expandable pending-requests strip. `PendingTaskRequestsWidget` on admin Hub with inline Approve/Decline (optional note on decline). Approval atomically materializes an `assigned_tasks` row. `WORKSPACE_LAYOUT_VERSION` 10→11.
+  - **DB delta**: 1 new table (`task_requests`), 4 columns added, 5 enum values, ~12 new RPCs, 2 existing RPCs extended. All migrations applied to staging `ncljfjdcyswoeitsooty`.
+  - **Docs-drift discipline was violated** — none of the 6 PRs updated PROJECT_STATE or this file in-PR. Caught up post-session as a docs-only commit to main (per `feedback_pr_flow_threshold.md`: docs-only goes direct).
+- **Member task-surface unification — MERGED (PR #11, 2026-04-22).**
   Three bundled fixes surfaced while exercising PR #10 preview:
   1. **AssignGroupModal rewired** to the new RPC pipeline
      (`assign_template_to_members` + `task_templates` + MemberMultiSelect).
@@ -733,40 +742,23 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Probably next
 
-- **Merge PR #11** once preview confirms: (1) Hub Task Group submit
-  fires notification + appears in recipient's My Tasks; (2) custom
-  Task flow still works; (3) My Tasks on Overview + Tasks shows
-  assigned_tasks from real DB; (4) clicking an assignment
-  notification scrolls + flashes the task in My Tasks.
-- **personal_tasks table** (Phase 3) — when members need to
-  create/manage their own tasks outside admin assignment. Brings
-  back the filter semantics (Stage pills + Assigned pill on
-  MyTasksCard) that are currently structural placeholders.
-- **Cloudflare migration** queued — timing at Claude's judgment
-  per `feedback_cloudflare_migration_timing.md`. Site has been
-  stable on Vercel through multiple assignment-system PRs.
-- **Admin Hub "Task Group" tile redesign**: opens
-  `TemplateAssignFlowModal` directly with a template picker step
-  prepended. Previously deferred; now ready since the flow modal
-  exists.
-- **Drag-to-reorder template items** in `TemplateEditorModal` —
-  DnD-kit already installed; small quality-of-life pass.
-- **After #10 + 1–2 stable prod days: Cloudflare migration.**
-  Timing at Claude's judgment per
+- **Polish pass — notification click routing for the 3 task-request types.**
+  Currently `task_request_approved` falls through to the existing highlight-task
+  handler (harmless but not useful — `batch_id` is null). Target: approved →
+  highlight the newly-materialized task via `approved_task_id`; admin's
+  `task_request_submitted` click → jump to Hub approval widget. Small PR.
+- **Template RPCs accept `p_scope`** — studio templates. Deferred until a concrete
+  use case surfaces; Quick Assign covers the member-level studio flow today.
+- **Admin Hub `AssignCustomTaskModal` parity** — the legacy Hub modal is still
+  member-scope-only. Canonical scope-toggle surface is Quick Assign on the
+  Assign page, so this is cosmetic cleanup.
+- **Cloudflare migration** queued — this six-PR session settles for a day or
+  two, then Vercel → Cloudflare Pages as a single-concern PR per
   `feedback_cloudflare_migration_timing.md`.
-- **Phase 3**: assignment history UI, `mark_all_read`, fold
-  assigned-tasks into `member_overview_snapshot`, unify
-  `report_templates` into `task_templates`, wire real Team Tasks /
-  Studio Tasks widgets back onto the Tasks page. Vercel → Cloudflare Pages, free commercial tier,
-  single-concern PR. Replicate the `CDN-Cache-Control: no-store`
-  on `/index.html` exactly. Timing: Claude's judgment call per
-  `feedback_cloudflare_migration_timing.md`.
-- **After hosting migration:** Phase 2 assignment polish
-  (update/delete template ops, cancel batch, assignment history,
-  `mark_all_read`, fold assigned-tasks summary into
-  `member_overview_snapshot`, unify `report_templates` into the
-  new model). Then Assign-page visual pass, then flywheel event
-  ledger (original Phase 2 of Codex's 4-phase roadmap).
+- **Phase 3**: assignment history UI, `mark_all_read`, fold assigned-tasks into
+  `member_overview_snapshot`, daily-checklist fold-in (`source_type='daily_checklist'`
+  is already reserved in the enum — cron writes that shape), unify
+  `report_templates` into `task_templates`, then the flywheel event ledger.
 
 ### Small stragglers worth knowing about
 
