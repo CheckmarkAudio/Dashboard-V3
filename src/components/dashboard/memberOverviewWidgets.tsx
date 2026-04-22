@@ -600,6 +600,10 @@ export function ForumNotificationsWidget() {
   // MyTasksCard (wherever it's mounted) scrolls the matching row
   // into view and flashes a gold ring. Click the notification →
   // "here's where your new task is."
+  //
+  // PR #13 — session notifications (`session_id` set) route to the
+  // Sessions page instead of firing highlight-task. A future polish
+  // pass can wire a `highlight-session` event there too.
   const handleAssignmentClick = (n: AssignmentNotification) => {
     if (!profile?.id) return
     const cacheKey = ['overview-assignment-notifications', profile.id] as const
@@ -613,8 +617,20 @@ export function ForumNotificationsWidget() {
       void queryClient.invalidateQueries({ queryKey: cacheKey })
     })
 
-    // Highlight the task(s) from this batch in MyTasksCard. The card
-    // finds the first task whose `batch.id` matches and flashes it.
+    if (n.session_id) {
+      // Session-assign notification — jump to the Sessions page and
+      // let it surface the row. The Sessions page can later listen
+      // for a highlight-session event if we want ring-flash parity.
+      window.dispatchEvent(
+        new CustomEvent('highlight-session', { detail: { sessionId: n.session_id } }),
+      )
+      window.location.href = '/sessions'
+      return
+    }
+
+    // Task-assign notification — highlight the task(s) from this
+    // batch in MyTasksCard. The card finds the first task whose
+    // `batch.id` matches and flashes it.
     window.dispatchEvent(
       new CustomEvent('highlight-task', { detail: { batchId: n.batch_id } }),
     )

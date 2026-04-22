@@ -1,6 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Ban, Check, FolderKanban, Loader2, Plus, Search, X } from 'lucide-react'
+import {
+  Ban,
+  Calendar,
+  Check,
+  ChevronRight,
+  FolderKanban,
+  Loader2,
+  Plus,
+  Search,
+  X,
+} from 'lucide-react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { PageHeader } from '../../components/ui'
 import { useToast } from '../../components/Toast'
@@ -15,22 +25,32 @@ import {
   TemplateEditorModal,
   TemplatePreviewModal,
 } from '../../components/admin/templates'
+import QuickAssignWidget from '../../components/admin/assign/QuickAssignWidget'
+import SessionAssignModal from '../../components/admin/assign/SessionAssignModal'
 import type { RecentAssignmentBatch } from '../../lib/queries/taskTemplates'
 
 /**
- * Assign page (`/admin/templates`) — the comprehensive template library.
+ * Assign page (`/admin/templates`) — the admin's command center for
+ * sending work to the team.
  *
- * Shipped in PR #9 as a full replacement of the legacy Templates.tsx
- * which targeted the `report_templates` table. This page targets the
- * new `task_templates` system (admin blueprints for one-off assignments)
- * and calls only the PR #6 + PR #8 RPCs — zero direct table writes.
+ * Layout (PR #13, monday-style):
+ *   1. Quick Assign widget       — inline compose; type a task, pick
+ *                                  recipients, send. No template needed.
+ *   2. Assign a Session tile     — opens SessionAssignModal where an
+ *                                  admin can (re)assign a booked
+ *                                  session to an engineer. Writes
+ *                                  `sessions.assigned_to` + fires a
+ *                                  notification via assign_session RPC.
+ *   3. Templates library         — existing card grid (unchanged).
+ *                                  Full template library for reusable
+ *                                  checklists + onboarding blueprints.
+ *   4. Recent assignments        — last 10 batches with cancel control.
  *
- * Hero header + filter bar + card grid + "New Template" CTA. Clicking
- * a card opens TemplatePreviewModal, which branches into edit /
- * duplicate / assign / archive flows.
+ * PR #9 replaced the legacy `report_templates` CRUD surface. PR #13
+ * rebuilds the page around the three-section flow but keeps the
+ * templates grid and recent-assignments section intact.
  *
- * Legacy `report_templates` direct-CRUD surface is intentionally gone.
- * Admins still manage daily-checklist templates via the existing
+ * Legacy daily-checklist templates are still managed via the existing
  * `PublishChecklistModal`. Phase 3 will unify the two template concepts.
  */
 
@@ -44,6 +64,7 @@ export default function Templates() {
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null)
+  const [sessionAssignOpen, setSessionAssignOpen] = useState(false)
 
   const libraryQuery = useQuery({
     queryKey: taskTemplateKeys.library(roleFilter, includeInactive),
@@ -94,24 +115,38 @@ export default function Templates() {
       <PageHeader
         icon={FolderKanban}
         title="Assign"
-        subtitle="Build reusable templates for onboarding, role-specific work, and anything you'll send out more than once. Click a card to preview, edit, duplicate, or assign."
+        subtitle="Send work to the team — quick one-off tasks, session bookings, or reusable templates for onboarding + repeat work."
       />
 
-      {/* Top row: stats + New Template ─────────────────────────────── */}
-      <section className="flex items-center justify-between gap-4">
-        <div className="flex gap-6">
+      {/* 1. Quick Assign (inline) ──────────────────────────────────── */}
+      <QuickAssignWidget />
+
+      {/* 2. Assign a Session (tile opens modal) ─────────────────────── */}
+      <AssignSessionTile onClick={() => setSessionAssignOpen(true)} />
+
+      {/* 3. Templates section header ──────────────────────────────── */}
+      <section className="pt-2">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-[18px] font-bold text-text tracking-tight">Templates</h2>
+            <p className="text-[12px] text-text-light mt-0.5">
+              Reusable blueprints for onboarding, role-specific work, or anything you'll send more than once.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditorOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold text-black text-sm font-bold hover:bg-gold-muted focus-ring"
+          >
+            <Plus size={16} aria-hidden="true" />
+            New Template
+          </button>
+        </div>
+        <div className="flex gap-6 mb-4">
           <Stat label="Templates" value={activeCount} muted={libraryQuery.isLoading} />
           <Stat label="Onboarding" value={onboardingCount} muted={libraryQuery.isLoading} />
           <Stat label="Items" value={itemCount} muted={libraryQuery.isLoading} />
         </div>
-        <button
-          type="button"
-          onClick={() => setEditorOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold text-black text-sm font-bold hover:bg-gold-muted focus-ring"
-        >
-          <Plus size={16} aria-hidden="true" />
-          New Template
-        </button>
       </section>
 
       {/* Filter bar ─────────────────────────────────────────────────── */}
@@ -228,7 +263,42 @@ export default function Templates() {
           onClose={() => setPreviewTemplateId(null)}
         />
       )}
+      {sessionAssignOpen && (
+        <SessionAssignModal onClose={() => setSessionAssignOpen(false)} />
+      )}
     </div>
+  )
+}
+
+// ─── Assign-a-Session tile ───────────────────────────────────────────
+//
+// Intentionally distinct visually from the Quick Assign card above so
+// admins register it as a separate concept ("send work to people" vs
+// "route a booked session to an engineer"). The blue accent vs the
+// gold Quick Assign header keeps the two actions at-a-glance
+// discriminable.
+
+function AssignSessionTile({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left rounded-2xl border border-border bg-surface-alt/40 p-4 hover:bg-surface-hover transition-colors focus-ring"
+      aria-label="Assign a booked session to an engineer"
+    >
+      <div className="flex items-center gap-3">
+        <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-cyan-500/15 ring-1 ring-cyan-500/30 text-cyan-300 shrink-0">
+          <Calendar size={18} aria-hidden="true" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[15px] font-bold text-text">Assign a session</h3>
+          <p className="text-[12px] text-text-light truncate">
+            Route an upcoming booking to an engineer · updates the Sessions page + notifies them.
+          </p>
+        </div>
+        <ChevronRight size={16} className="text-text-light shrink-0" aria-hidden="true" />
+      </div>
+    </button>
   )
 }
 

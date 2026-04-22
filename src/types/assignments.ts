@@ -15,6 +15,10 @@ export type AssignmentNotificationType =
   | 'task_assigned'
   | 'template_assigned'
   | 'partial_template_assigned'
+  // PR #13 — session-assign notifications flow through the same
+  // notifications table; `batch` is null, `session` is populated.
+  | 'session_assigned'
+  | 'session_reassigned'
 
 // Embedded batch summary that every assigned-task / notification row
 // carries so the UI can render `Assigned by X on Y` without a join.
@@ -47,16 +51,32 @@ export interface AssignedTask {
   batch: AssignmentBatchRef
 }
 
+// Embedded session summary on session-assign notifications.
+// Mirrors the CASE-built payload in get_assignment_notifications.
+export interface SessionNotificationRef {
+  id: string
+  client_name: string | null
+  session_date: string  // 'YYYY-MM-DD'
+  start_time: string    // 'HH:MM:SS'
+  end_time: string      // 'HH:MM:SS'
+  room: string | null
+  status: string
+}
+
 export interface AssignmentNotification {
   id: string
-  batch_id: string
+  // Either batch_id OR session_id is non-null (DB-enforced XOR). The
+  // notification_type tells you which shape `batch` / `session` carries.
+  batch_id: string | null
+  session_id: string | null
   notification_type: AssignmentNotificationType
   title: string
   body: string | null
   is_read: boolean
   read_at: string | null
   created_at: string
-  batch: AssignmentBatchRef
+  batch: AssignmentBatchRef | null
+  session: SessionNotificationRef | null
 }
 
 // Structured response from every assign_* RPC.
