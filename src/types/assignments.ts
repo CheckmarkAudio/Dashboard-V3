@@ -27,6 +27,11 @@ export type AssignmentNotificationType =
   // notifications table; `batch` is null, `session` is populated.
   | 'session_assigned'
   | 'session_reassigned'
+  // PR #16 — task-request pipeline. `batch` + `session` both null,
+  // `task_request_id` is populated.
+  | 'task_request_submitted'
+  | 'task_request_approved'
+  | 'task_request_rejected'
 
 // Embedded batch summary that every assigned-task / notification row
 // carries so the UI can render `Assigned by X on Y` without a join.
@@ -91,10 +96,12 @@ export interface SessionNotificationRef {
 
 export interface AssignmentNotification {
   id: string
-  // Either batch_id OR session_id is non-null (DB-enforced XOR). The
-  // notification_type tells you which shape `batch` / `session` carries.
+  // Exactly one of batch_id / session_id / task_request_id is non-null
+  // (DB-enforced CHECK). The notification_type tells you which of
+  // `batch` / `session` / `task_request` shape carries the subject.
   batch_id: string | null
   session_id: string | null
+  task_request_id: string | null
   notification_type: AssignmentNotificationType
   title: string
   body: string | null

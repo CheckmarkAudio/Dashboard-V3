@@ -98,6 +98,10 @@ export type AdminWidgetId =
   | 'admin_team'
   | 'admin_flywheel'
   | 'admin_approvals'
+  // PR #16 — approval queue for user-submitted task requests. Distinct
+  // from `admin_approvals` (which handles task_edit_requests for daily
+  // checklists).
+  | 'admin_task_requests'
   // Admin-side widget bank — registered but not on the page yet.
   | 'team_focus'
   | 'approval_queue'

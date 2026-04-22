@@ -162,6 +162,18 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
+  {
+    // PR #16 — user-submitted task requests awaiting admin review.
+    // Approve materializes an assigned_tasks row for the requester;
+    // reject stores an optional note and notifies them.
+    id: 'admin_task_requests',
+    title: 'Task Requests',
+    description: 'Members asking for tasks to be added to their queue.',
+    defaultPlacements: [{ scope: 'admin_overview', span: 2 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
 ]
 
 // Admin-side widget bank — registered but NOT on the Hub grid today.
@@ -253,7 +265,10 @@ function buildDefaultWidgetStateForScope(
 // directly). Saved v9 layouts that referenced `assigned_tasks` get
 // sanitized away; the rebuilt default keeps `team_tasks` on both
 // Overview and Tasks pages, giving users one unified "My Tasks" view.
-export const WORKSPACE_LAYOUT_VERSION = 10
+// v11 (2026-04-22, PR #16): new `admin_task_requests` widget joins
+// the admin Hub overview so admins see the user-submitted approval
+// queue inline alongside existing approvals.
+export const WORKSPACE_LAYOUT_VERSION = 11
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
