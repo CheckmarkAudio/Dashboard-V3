@@ -122,6 +122,9 @@ export interface CustomTaskAssignmentPayload {
   due_date?: string | null
   is_required?: boolean
   show_on_overview?: boolean
+  // PR #14 — 'studio' writes a single row with no assignee (scope='studio').
+  // When 'studio', the member_ids array is ignored by the RPC.
+  scope?: AssignedTaskScope
 }
 
 // ── Template types (PR #9 Assign-page surface) ────────────────────────

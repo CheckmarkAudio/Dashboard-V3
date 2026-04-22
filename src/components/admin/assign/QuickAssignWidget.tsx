@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronUp, Plus, Send, Sparkles } from 'lucide-react'
+import { Building2, ChevronDown, ChevronUp, Plus, Send, Sparkles, Users } from 'lucide-react'
 import { useToast } from '../../Toast'
 import MemberMultiSelect from '../../members/MemberMultiSelect'
 import { assignCustomTaskToMembers } from '../../../lib/queries/assignments'
+import type { AssignedTaskScope } from '../../../types/assignments'
 
 /**
  * QuickAssignWidget — monday-style inline compose box at the top of
@@ -20,9 +21,10 @@ import { assignCustomTaskToMembers } from '../../../lib/queries/assignments'
  * Options reveal (description / required / show-on-overview) is
  * behind a "More options ⌄" toggle to keep the default state minimal.
  *
- * Scope is implicit `member` for now. When PR #14 threads `p_scope`
- * through the assign RPCs, this widget will gain a Members / Studio
- * target toggle.
+ * PR #14 — scope target toggle. Members (default) routes to specific
+ * people. Studio writes a single shared task with no assignee that
+ * anyone on the team can complete (like "restock cables" or "clean
+ * live room"). Studio mode hides the recipient picker.
  */
 
 const QUICK_KEY = ['admin-quick-assign'] as const
@@ -39,26 +41,35 @@ export default function QuickAssignWidget() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [moreOpen, setMoreOpen] = useState(false)
   const [lastSent, setLastSent] = useState<string | null>(null)
+  const [scope, setScope] = useState<AssignedTaskScope>('member')
 
   const assignMutation = useMutation({
     mutationFn: async () => {
-      return assignCustomTaskToMembers(Array.from(selectedIds), {
-        title: title.trim(),
-        description: description.trim() || null,
-        due_date: dueDate || null,
-        is_required: isRequired,
-        show_on_overview: showOnOverview,
-      })
+      return assignCustomTaskToMembers(
+        scope === 'studio' ? [] : Array.from(selectedIds),
+        {
+          title: title.trim(),
+          description: description.trim() || null,
+          due_date: dueDate || null,
+          is_required: isRequired,
+          show_on_overview: showOnOverview,
+          scope,
+        },
+      )
     },
     onSuccess: (summary) => {
-      toast(
-        `Assigned to ${summary.recipient_count} ${
-          summary.recipient_count === 1 ? 'member' : 'members'
-        } · ${summary.task_count} ${summary.task_count === 1 ? 'task' : 'tasks'}`,
-        'success',
-      )
+      if (scope === 'studio') {
+        toast('Studio task posted · visible to the whole team', 'success')
+      } else {
+        toast(
+          `Assigned to ${summary.recipient_count} ${
+            summary.recipient_count === 1 ? 'member' : 'members'
+          } · ${summary.task_count} ${summary.task_count === 1 ? 'task' : 'tasks'}`,
+          'success',
+        )
+      }
       setLastSent(title.trim())
-      // Keep recipients selected for fast batch entry — only reset the
+      // Keep recipients + scope for fast batch entry; clear only the
       // task-specific fields. Matches monday's "add another" flow.
       setTitle('')
       setDescription('')
@@ -67,6 +78,8 @@ export default function QuickAssignWidget() {
       // Invalidate downstream caches so recipients see the task land
       // without a refresh.
       void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
       void queryClient.invalidateQueries({ queryKey: ['admin-recent-assignments'] })
       void queryClient.invalidateQueries({ queryKey: QUICK_KEY })
     },
@@ -78,9 +91,11 @@ export default function QuickAssignWidget() {
   const canSubmit = useMemo(() => {
     if (assignMutation.isPending) return false
     if (title.trim().length === 0) return false
-    if (selectedIds.size === 0) return false
+    // Studio: no recipients needed — the task goes to the studio pool.
+    // Member: must pick at least one.
+    if (scope === 'member' && selectedIds.size === 0) return false
     return true
-  }, [assignMutation.isPending, title, selectedIds.size])
+  }, [assignMutation.isPending, title, selectedIds.size, scope])
 
   function toggleRecipient(id: string) {
     setSelectedIds((prev) => {
@@ -102,17 +117,56 @@ export default function QuickAssignWidget() {
       className="rounded-2xl border border-border bg-surface-alt/40 p-4 space-y-3"
       aria-labelledby="quick-assign-heading"
     >
-      <header className="flex items-center gap-2">
-        <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gold/15 ring-1 ring-gold/30 text-gold">
-          <Sparkles size={16} aria-hidden="true" />
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gold/15 ring-1 ring-gold/30 text-gold shrink-0">
+            <Sparkles size={16} aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h2 id="quick-assign-heading" className="text-[15px] font-bold text-text">
+              Quick Assign
+            </h2>
+            <p className="text-[11px] text-text-light truncate">
+              {scope === 'studio'
+                ? 'Posting to the studio pool · any team member can complete'
+                : 'Type a task, pick recipients, send'}
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 id="quick-assign-heading" className="text-[15px] font-bold text-text">
-            Quick Assign
-          </h2>
-          <p className="text-[11px] text-text-light">
-            Type a task, pick recipients, send. No template needed.
-          </p>
+        {/* Target toggle — Members vs Studio */}
+        <div
+          role="radiogroup"
+          aria-label="Assign target"
+          className="inline-flex rounded-lg bg-surface-alt ring-1 ring-border p-1 shrink-0"
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={scope === 'member'}
+            onClick={() => setScope('member')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
+              scope === 'member'
+                ? 'bg-gold text-black'
+                : 'text-text-muted hover:text-text'
+            }`}
+          >
+            <Users size={13} aria-hidden="true" />
+            Members
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={scope === 'studio'}
+            onClick={() => setScope('studio')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
+              scope === 'studio'
+                ? 'bg-cyan-500 text-black'
+                : 'text-text-muted hover:text-text'
+            }`}
+          >
+            <Building2 size={13} aria-hidden="true" />
+            Studio
+          </button>
         </div>
       </header>
 
@@ -146,13 +200,23 @@ export default function QuickAssignWidget() {
           </button>
         </div>
 
-        {/* Row 2: Recipients */}
-        <MemberMultiSelect
-          selectedIds={selectedIds}
-          onToggle={toggleRecipient}
-          label="Recipients"
-          maxHeightClass="max-h-40"
-        />
+        {/* Row 2: Recipients (Member scope) OR studio note (Studio scope) */}
+        {scope === 'member' ? (
+          <MemberMultiSelect
+            selectedIds={selectedIds}
+            onToggle={toggleRecipient}
+            label="Recipients"
+            maxHeightClass="max-h-40"
+          />
+        ) : (
+          <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-3 py-2.5 flex items-start gap-2">
+            <Building2 size={14} className="text-cyan-300 shrink-0 mt-0.5" aria-hidden="true" />
+            <div className="text-[12px] text-text-muted leading-snug">
+              <span className="text-cyan-300 font-semibold">Studio task.</span>{' '}
+              No specific assignee — any team member can complete it. Lands in the Studio Tasks widget on the Tasks page, visible to everyone.
+            </div>
+          </div>
+        )}
 
         {/* Row 3: More options toggle + collapsible */}
         <div>
