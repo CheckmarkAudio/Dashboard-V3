@@ -9,12 +9,12 @@ export default function DailyChecklist() {
     <div className="max-w-[1280px] mx-auto animate-fade-in">
       <h1 className="text-[44px] font-bold tracking-[-0.04em] leading-none text-text mb-6">Tasks</h1>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
+      {/* Three equal columns, left-to-right: My Tasks · Studio Tasks · Team Tasks.
+          On narrow viewports they stack into a single column. */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <MyTasksCard />
+        <StudioAssignedTasksCard />
         <TeamAssignedTasksCard />
-        <div className="flex flex-col gap-4 min-w-0">
-          <MyTasksCard />
-          <StudioAssignedTasksCard />
-        </div>
       </div>
     </div>
   )
