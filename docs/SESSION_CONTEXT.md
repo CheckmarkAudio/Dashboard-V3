@@ -548,7 +548,25 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
-- **Task-assignment MVP frontend — IN REVIEW (PR #7, 2026-04-22).**
+- **Task-assignment Phase 2 backend prep — IN REVIEW (PR #8, 2026-04-22).**
+  6 new admin-only SECURITY DEFINER RPCs: `update_task_template`,
+  `update_task_template_item`, `delete_task_template_item`,
+  `duplicate_task_template`, `cancel_task_assignment_batch`,
+  `assign_template_preview`. All follow PR #6 conventions
+  (is_team_admin guard, structured jsonb returns, search_path
+  locked). Companion FK tweak on `assigned_tasks`:
+  `source_template_id` + `source_template_item_id` → `ON DELETE
+  SET NULL` so template edits can't blow up historical assignments.
+  `get_member_assigned_tasks` adds `ar.status = 'active'` filter so
+  cancelled batches disappear from member view immediately.
+  Verified: each RPC smoke-tested against existing seed data;
+  RLS confirmed — 4 Phase 2 RPCs reject non-admin with SQLSTATE
+  42501; cross-template injection on preview rejected with 22023;
+  FK SET NULL confirmed by deleting a template item that had 2
+  assigned tasks referencing it, verifying those rows survive with
+  `source_template_item_id = NULL`. Types regenerated, build 2.53s.
+  Frontend impl deferred to the Assign-page redesign PR.
+- **Task-assignment MVP frontend — MERGED (PR #7, `8821785`).**
   Ships the minimum testable assignment slice per
   `docs/assignment-mvp-handoff.md`. Admin Hub Assign widget gains a
   4th "Custom Task" tile → new `AssignCustomTaskModal` → calls
@@ -653,18 +671,18 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Probably next
 
-- **Merge PR #7** (assignment frontend MVP) once reviewed on the
-  Vercel preview. Assign as admin to Gavin / Matthan, verify their
-  widget + notifications light up, toggle a task complete, confirm
-  realtime fires within ~1s.
-- **Phase 2 assignment polish** (separate PR or PR series):
-  update/delete/duplicate template ops, cancel batch, assignment
-  history, `mark_all_read`, template library admin UI, full +
-  partial template assign surfaces, fold assigned-tasks summary
-  into `member_overview_snapshot` (saves one round-trip on
-  Overview cold start).
-- **After frontend lands + 1–2 stable days on prod: Cloudflare
-  migration.** Vercel → Cloudflare Pages, free commercial tier,
+- **Merge PR #8** (Phase 2 backend prep) once the preview check
+  passes. Backend-only, nothing user-visible changes.
+- **Comprehensive Assign page (`/admin/templates`) redesign** —
+  the "Task Group" modal on the Hub Assign widget deliberately
+  stayed untouched for now; the user wants the deep Assign page
+  designed first, then we circle back to the Hub widget to pick
+  the snapshot. Full template-library UI (list + quick filter +
+  preview pane + per-template task CRUD + multi-mode assign:
+  full / partial / custom) using the Phase 2 RPCs.
+- **After Assign page + 1–2 stable days on prod: Cloudflare
+  migration.** Timing at Claude's judgment per
+  `feedback_cloudflare_migration_timing.md`. Vercel → Cloudflare Pages, free commercial tier,
   single-concern PR. Replicate the `CDN-Cache-Control: no-store`
   on `/index.html` exactly. Timing: Claude's judgment call per
   `feedback_cloudflare_migration_timing.md`.
