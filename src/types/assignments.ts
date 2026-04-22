@@ -77,3 +77,100 @@ export interface CustomTaskAssignmentPayload {
   is_required?: boolean
   show_on_overview?: boolean
 }
+
+// ── Template types (PR #9 Assign-page surface) ────────────────────────
+//
+// Mirrors `task_templates` + `task_template_items` rows + the shapes
+// returned by get_task_template_library / get_task_template_detail.
+
+export type TemplateKind = 'admin_blueprint' | 'recurring_checklist'
+
+export interface TaskTemplate {
+  id: string
+  name: string
+  description: string | null
+  role_tag: string | null
+  template_kind: TemplateKind
+  is_onboarding: boolean
+  is_active: boolean
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TaskTemplateItem {
+  id: string
+  template_id: string
+  title: string
+  description: string | null
+  category: string | null
+  sort_order: number
+  is_required: boolean
+  default_due_offset_days: number | null
+  created_at: string
+  updated_at: string
+}
+
+// Summary returned by get_task_template_library — extends the row with
+// an item_count rollup so the library list can render density at a glance.
+export interface TaskTemplateLibraryEntry extends TaskTemplate {
+  item_count: number
+}
+
+// Detail returned by get_task_template_detail — template + all items.
+export interface TaskTemplateDetail {
+  template: TaskTemplate
+  items: TaskTemplateItem[]
+}
+
+// Payload for create_task_template RPC.
+export interface CreateTemplateInput {
+  name: string
+  description?: string | null
+  role_tag?: string | null
+  is_onboarding?: boolean
+}
+
+// Payload for update_task_template — all fields optional (partial update).
+export interface UpdateTemplateInput {
+  name?: string | null
+  description?: string | null
+  role_tag?: string | null
+  is_onboarding?: boolean | null
+  is_active?: boolean | null
+}
+
+// Payload for add_task_template_item RPC.
+export interface AddTemplateItemInput {
+  title: string
+  description?: string | null
+  category?: string | null
+  sort_order?: number
+  is_required?: boolean
+  default_due_offset_days?: number | null
+}
+
+// Payload for update_task_template_item — all fields optional.
+export interface UpdateTemplateItemInput {
+  title?: string | null
+  description?: string | null
+  category?: string | null
+  sort_order?: number | null
+  is_required?: boolean | null
+  default_due_offset_days?: number | null
+}
+
+// Return shape of assign_template_preview RPC.
+export interface AssignTemplatePreview {
+  template: TaskTemplate
+  items: TaskTemplateItem[]
+  item_count: number
+}
+
+// Common overrides accepted by assign_template(_items)_to_members.
+export interface TemplateAssignOverrides {
+  due_date?: string | null
+  title_override?: string | null
+  description_override?: string | null
+  show_on_overview?: boolean
+}
