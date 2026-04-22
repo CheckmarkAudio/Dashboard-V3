@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Assignment Widget Mockup</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel-2: #1e2430;
+      --border: #2b3240;
+      --text: #f5f7fb;
+      --muted: #9aa4b2;
+      --gold: #d6b25e;
+      --green: #45b97a;
+      --blue: #69a8ff;
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      background: linear-gradient(180deg, #0d1015, #141923);
+      color: var(--text);
+      padding: 24px;
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto 56px;
+    }
+
+    .page-title {
+      font-size: 30px;
+      font-weight: 700;
+      margin: 0 0 8px;
+    }
+
+    .page-subtitle {
+      color: var(--muted);
+      margin: 0 0 24px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+    }
+
+    .widget {
+      background: rgba(23, 26, 33, 0.92);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-12 { grid-column: span 12; }
+
+    .widget-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .widget-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .widget-note {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .task-list,
+    .notif-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .task-card,
+    .notif {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      background: var(--panel-2);
+    }
+
+    .task-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .task-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .task-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 5px 9px;
+      border: 1px solid var(--border);
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.03);
+      white-space: nowrap;
+    }
+
+    .badge.new { color: var(--gold); border-color: rgba(214, 178, 94, 0.35); }
+    .badge.due { color: var(--blue); border-color: rgba(105, 168, 255, 0.35); }
+    .badge.done { color: var(--green); border-color: rgba(69, 185, 122, 0.35); }
+
+    .task-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .check {
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #11151d;
+      flex: 0 0 auto;
+    }
+
+    .check.done {
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .notif.unread {
+      border-color: rgba(214, 178, 94, 0.35);
+    }
+
+    .modal-demo {
+      max-width: 680px;
+      margin: 0 auto;
+      background: rgba(23, 26, 33, 0.96);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #11151d;
+      color: var(--text);
+      padding: 12px;
+      font: inherit;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 16px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-secondary {
+      background: #202735;
+      color: var(--text);
+    }
+
+    .btn-primary {
+      background: var(--gold);
+      color: #17130a;
+    }
+
+    @media (max-width: 960px) {
+      .span-4, .span-5, .span-6, .span-7 {
+        grid-column: span 12;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .widget-header {
+        align-items: start;
+        flex-direction: column;
+      }
+
+      .widget-note {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <section class="page">
+    <h1 class="page-title">Member Overview</h1>
+    <p class="page-subtitle">Mixed widget model: personal and shared widgets on the same page.</p>
+
+    <div class="grid">
+      <article class="widget span-6">
+        <div class="widget-header">
+          <h2 class="widget-title">Assigned To You</h2>
+          <span class="widget-note">Personal widget • self-scoped data</span>
+        </div>
+
+        <div class="task-list">
+          <div class="task-card">
+            <div class="task-top">
+              <div>
+                <p class="task-title">Follow up with 3 warm leads</p>
+                <div class="task-meta">
+                  <span>Assigned by Gavin</span>
+                  <span>Category: Outreach</span>
+                  <span>Due today</span>
+                </div>
+              </div>
+              <span class="badge new">New</span>
+            </div>
+            <div class="task-row">
+              <div class="check"></div>
+              <span>Mark complete</span>
+            </div>
+          </div>
+
+          <div class="task-card">
+            <div class="task-top">
+              <div>
+                <p class="task-title">Review onboarding message flow</p>
+                <div class="task-meta">
+                  <span>Assigned by Admin</span>
+                  <span>Category: Marketing</span>
+                  <span>Due in 2 days</span>
+                </div>
+              </div>
+              <span class="badge due">Due Soon</span>
+            </div>
+            <div class="task-row">
+              <div class="check"></div>
+              <span>Mark complete</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="widget span-6">
+        <div class="widget-header">
+          <h2 class="widget-title">Notifications</h2>
+          <span class="widget-note">Shared widget shell • self-scoped feed</span>
+        </div>
+
+        <div class="notif-list">
+          <div class="notif unread">
+            <strong>New task assigned:</strong> Follow up with 3 warm leads
+          </div>
+          <div class="notif">
+            <strong>#marketing:</strong> Content review moved to Thursday
+          </div>
+        </div>
+      </article>
+
+      <article class="widget span-7">
+        <div class="widget-header">
+          <h2 class="widget-title">My Checklist</h2>
+          <span class="widget-note">Personal widget</span>
+        </div>
+        <div class="task-list">
+          <div class="task-card"><p class="task-title">Daily studio reset</p></div>
+          <div class="task-card"><p class="task-title">Submit KPI update</p></div>
+        </div>
+      </article>
+
+      <article class="widget span-5">
+        <div class="widget-header">
+          <h2 class="widget-title">Team Announcements</h2>
+          <span class="widget-note">Shared widget • global data</span>
+        </div>
+        <div class="notif-list">
+          <div class="notif">Friday meeting starts at 10:30 AM.</div>
+          <div class="notif">Please review the new booking confirmation flow.</div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="page">
+    <h1 class="page-title">Tasks Page</h1>
+    <p class="page-subtitle">Same personal assigned-task widget can coexist with shared/team widgets.</p>
+
+    <div class="grid">
+      <article class="widget span-5">
+        <div class="widget-header">
+          <h2 class="widget-title">Assigned To You</h2>
+          <span class="widget-note">Personal widget</span>
+        </div>
+
+        <div class="task-list">
+          <div class="task-card">
+            <div class="task-top">
+              <div>
+                <p class="task-title">Follow up with 3 warm leads</p>
+                <div class="task-meta">
+                  <span>Assigned by Gavin</span>
+                  <span>Outreach</span>
+                </div>
+              </div>
+              <span class="badge new">New</span>
+            </div>
+          </div>
+
+          <div class="task-card">
+            <div class="task-top">
+              <div>
+                <p class="task-title">Review onboarding message flow</p>
+                <div class="task-meta">
+                  <span>Marketing</span>
+                  <span>Due in 2 days</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="widget span-7">
+        <div class="widget-header">
+          <h2 class="widget-title">General Team Tasks</h2>
+          <span class="widget-note">Shared widget • team-scoped data</span>
+        </div>
+
+        <div class="task-list">
+          <div class="task-card">
+            <p class="task-title">Studio cleanup checklist refresh</p>
+            <div class="task-meta"><span>Visible to all team members</span></div>
+          </div>
+          <div class="task-card">
+            <p class="task-title">Friday content review queue</p>
+            <div class="task-meta"><span>Visible to all team members</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="widget span-12">
+        <div class="widget-header">
+          <h2 class="widget-title">Completed</h2>
+          <span class="widget-note">Can be personal or mixed later</span>
+        </div>
+
+        <div class="task-card">
+          <div class="task-row">
+            <div class="check done"></div>
+            <span>Client callback completed</span>
+            <span class="badge done">Done</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="page">
+    <h1 class="page-title">Admin Assign Task Modal</h1>
+    <p class="page-subtitle">Fast custom task assignment MVP.</p>
+
+    <div class="modal-demo">
+      <div class="widget-header">
+        <h2 class="widget-title">Assign Task</h2>
+        <span class="widget-note">Admin-only action</span>
+      </div>
+
+      <div class="form-grid">
+        <div class="field full">
+          <label>Recipients</label>
+          <select>
+            <option>Matthan</option>
+            <option>Gavin</option>
+            <option>Marketing Team</option>
+          </select>
+        </div>
+
+        <div class="field full">
+          <label>Task Title</label>
+          <input value="Follow up with 3 warm leads" />
+        </div>
+
+        <div class="field full">
+          <label>Description</label>
+          <textarea rows="4">Review lead notes, send follow-up messages, and log responses.</textarea>
+        </div>
+
+        <div class="field">
+          <label>Category</label>
+          <input value="Outreach" />
+        </div>
+
+        <div class="field">
+          <label>Due Date</label>
+          <input value="2026-04-24" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn-secondary">Cancel</button>
+        <button class="btn-primary">Assign Task</button>
+      </div>
+    </div>
+  </section>
+</body>
+</html>
