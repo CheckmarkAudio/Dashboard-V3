@@ -548,7 +548,31 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
-- **Assignment-system polish — IN REVIEW (PR #10, 2026-04-22).**
+- **Member task-surface unification — IN REVIEW (PR #11, 2026-04-22).**
+  Three bundled fixes surfaced while exercising PR #10 preview:
+  1. **AssignGroupModal rewired** to the new RPC pipeline
+     (`assign_template_to_members` + `task_templates` + MemberMultiSelect).
+     Previously it wrote to legacy `task_assignments` which didn't
+     trigger notifications — "Task Group" submissions went into the
+     void. Now atomic: batch + recipients + assigned_tasks +
+     notifications all fire.
+  2. **MyTasksCard rewritten** to read `assigned_tasks` directly.
+     Mock arrays (MY_TODAY_SEED / MY_WEEK_SEED), `MyTasksContext`,
+     and `CreateTaskModal` deleted — never DB-backed. "My Tasks" is
+     now an honest, realtime-subscribed surface.
+  3. **`AssignedTasksWidget` retired** from the member widget
+     registry — content folded into `team_tasks` (MyTasksCard).
+     Members now have ONE place for all tasks. `WORKSPACE_LAYOUT_VERSION`
+     9→10 so saved layouts referencing `assigned_tasks` get sanitized.
+  4. **Click-to-highlight** wired end-to-end: Notifications widget's
+     assignment rows dispatch `highlight-task` CustomEvent with
+     `batchId`; MyTasksCard listens, scrolls the first matching task
+     into view, flashes a gold ring for ~1.6s. Same wiring on
+     AdminNotificationsWidget for symmetry.
+  `tsc` clean, build 2.79s, dev-verified (Overview + Tasks pages
+  render cleanly, `AssignedTasksWidget` gone, `highlight-task` event
+  dispatches without error).
+- **Assignment-system polish — MERGED (PR #10, `09ec6fc`).**
   Bundled 3 fixes per user's PR #9 feedback:
   1. **Modal stacking fixed in `FloatingDetailModal`.** Module-
      level stack tracks mount order; `z-index = 60 + depth × 10`;
@@ -709,8 +733,18 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Probably next
 
-- **Merge PR #10** once Vercel preview confirms modal stacking
-  feels clean + hard-delete + batch cancel round-trips work.
+- **Merge PR #11** once preview confirms: (1) Hub Task Group submit
+  fires notification + appears in recipient's My Tasks; (2) custom
+  Task flow still works; (3) My Tasks on Overview + Tasks shows
+  assigned_tasks from real DB; (4) clicking an assignment
+  notification scrolls + flashes the task in My Tasks.
+- **personal_tasks table** (Phase 3) — when members need to
+  create/manage their own tasks outside admin assignment. Brings
+  back the filter semantics (Stage pills + Assigned pill on
+  MyTasksCard) that are currently structural placeholders.
+- **Cloudflare migration** queued — timing at Claude's judgment
+  per `feedback_cloudflare_migration_timing.md`. Site has been
+  stable on Vercel through multiple assignment-system PRs.
 - **Admin Hub "Task Group" tile redesign**: opens
   `TemplateAssignFlowModal` directly with a template picker step
   prepended. Previously deferred; now ready since the flow modal

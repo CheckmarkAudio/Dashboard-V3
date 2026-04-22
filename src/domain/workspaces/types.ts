@@ -80,7 +80,10 @@ export type MemberWidgetId =
   | 'forum_notifications'
   | 'today_calendar'
   | 'booking_snapshot'
-  | 'assigned_tasks'           // PR #7 — admin-assigned tasks (personal + self)
+  // NOTE: `assigned_tasks` was retired in PR #11 — its content folded
+  // into `team_tasks` (MyTasksCard). Keeping the id out of the union
+  // so saved layouts referencing it get sanitized cleanly via the
+  // layout-version bump (v10).
   // Member-side widget bank — registered but not on any page yet.
   | 'team_snapshot'
   | 'team_directory'

@@ -66,21 +66,9 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
-  {
-    // PR #7 — NEW widget for admin-assigned tasks.
-    // Renders on BOTH Overview (validating multi-page placement end-to-
-    // end) and the new Tasks widget grid.
-    id: 'assigned_tasks',
-    title: 'Assigned To You',
-    description: 'Tasks admin assigned directly to you.',
-    defaultPlacements: [
-      { scope: 'member_overview', span: 1, rowSpan: 2 },
-      { scope: 'member_tasks', span: 1, rowSpan: 2 },
-    ],
-    accessVisibility: 'personal',
-    dataScope: 'self',
-    allowedRoles: ['member', 'admin', 'owner'],
-  },
+  // PR #11 — `assigned_tasks` widget retired. Its content lives in
+  // `team_tasks` (MyTasksCard) now. Members see all their tasks
+  // (admin-assigned + future personal tasks) in one unified place.
 ]
 
 // Member-side widget bank — registered but NOT on any member page today.
@@ -259,10 +247,13 @@ function buildDefaultWidgetStateForScope(
 // the same row — team_tasks 3→2, forum_notifications 1→2.
 // v9 (2026-04-22, PR #7): widget visibility model formalized; multi-page
 // placement introduced; new `assigned_tasks` widget defaults onto
-// Overview + Tasks; Tasks page becomes a widget grid scope
-// ('member_tasks') instead of a hand-composed page. Saved v8 layouts
-// get wiped and rebuild from the new defaults.
-export const WORKSPACE_LAYOUT_VERSION = 9
+// Overview + Tasks; Tasks page becomes a widget grid scope.
+// v10 (2026-04-22, PR #11): `assigned_tasks` widget retired — its
+// content folded into `team_tasks` (MyTasksCard reads assigned_tasks
+// directly). Saved v9 layouts that referenced `assigned_tasks` get
+// sanitized away; the rebuilt default keeps `team_tasks` on both
+// Overview and Tasks pages, giving users one unified "My Tasks" view.
+export const WORKSPACE_LAYOUT_VERSION = 10
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
