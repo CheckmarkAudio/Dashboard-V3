@@ -36,6 +36,7 @@ import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { fetchKPIDefinitions, fetchKPIEntries, kpiKeys } from '../../lib/queries/kpi'
 import { useToast } from '../Toast'
 import CreateBookingModal from '../CreateBookingModal'
+import MemberMultiSelect from '../members/MemberMultiSelect'
 import type { TeamMember } from '../../types'
 import type { AssignmentNotification } from '../../types/assignments'
 import type { EnrichedApprovalRequest } from '../../domain/dashboard/adminOverview'
@@ -488,12 +489,6 @@ function AssignTaskModal({ onClose }: { onClose: () => void }) {
   const [isRequired, setIsRequired] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const teamQuery = useQuery({
-    queryKey: teamMemberKeys.list(),
-    queryFn: fetchTeamMembers,
-  })
-  const members = (teamQuery.data ?? []).filter((m) => m.status?.toLowerCase() !== 'inactive')
-
   const toggleMember = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -546,50 +541,7 @@ function AssignTaskModal({ onClose }: { onClose: () => void }) {
           Creates a one-off task for each selected member. Appears on their Overview + Tasks pages.
         </p>
 
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-light mb-2">
-            Recipients
-            {selectedIds.size > 0 && (
-              <span className="ml-2 text-gold">· {selectedIds.size} selected</span>
-            )}
-          </p>
-          <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-surface-alt divide-y divide-border">
-            {members.length === 0 ? (
-              <p className="px-3 py-4 text-[12px] text-text-light italic">Loading team…</p>
-            ) : (
-              members.map((m) => {
-                const active = selectedIds.has(m.id)
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => toggleMember(m.id)}
-                    className={`w-full px-3 py-2 flex items-center gap-3 text-left text-sm transition-colors ${
-                      active ? 'bg-gold/10 text-text' : 'text-text-muted hover:bg-surface-hover'
-                    }`}
-                  >
-                    <span
-                      className={`shrink-0 w-[18px] h-[18px] rounded-md flex items-center justify-center ${
-                        active
-                          ? 'bg-gold border border-gold text-black'
-                          : 'bg-surface border border-border-light'
-                      }`}
-                      aria-hidden="true"
-                    >
-                      {active && <Check size={12} strokeWidth={3} />}
-                    </span>
-                    <span className="flex-1">{m.display_name}</span>
-                    {m.position && (
-                      <span className="text-[10px] uppercase tracking-wider text-text-light">
-                        {m.position}
-                      </span>
-                    )}
-                  </button>
-                )
-              })
-            )}
-          </div>
-        </div>
+        <MemberMultiSelect selectedIds={selectedIds} onToggle={toggleMember} />
 
         <label className="block">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Task title</span>
