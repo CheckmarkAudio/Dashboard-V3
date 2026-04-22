@@ -548,7 +548,22 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
-- **Task-assignment Phase 2 backend prep — IN REVIEW (PR #8, 2026-04-22).**
+- **Assign-page comprehensive redesign — IN REVIEW (PR #9, 2026-04-22).**
+  Full replacement of the legacy `/admin/templates` page (which wrote
+  directly to `report_templates`) with a surface built entirely on
+  the new `task_templates` system. Card grid + filter bar + four
+  modals (Preview / Editor / Duplicate / 3-step Assign wizard) + a
+  shared `<MemberMultiSelect />` extracted from the Hub's
+  AssignTaskModal so both assign surfaces behave identically.
+  1069 → 360 lines on the page itself; 8 new component/query files;
+  PRESET_TEMPLATES hardcoded list dropped. User's architectural
+  call: REPLACE entirely. `tsc` clean, build 2.55s, dev-verified.
+  **Known issue flagged by user:** nested modals share `z-[60]` so
+  stacked preview + sub-modal backdrops have overlapping click
+  targets — modals can feel "unstable." Fix queued for PR #10
+  (elevate sub-modals to `z-[70]`, scope Escape to the topmost
+  modal, add breadcrumb eyebrow).
+- **Task-assignment Phase 2 backend — MERGED (PR #8, `3a4ade7`).**
   6 new admin-only SECURITY DEFINER RPCs: `update_task_template`,
   `update_task_template_item`, `delete_task_template_item`,
   `duplicate_task_template`, `cancel_task_assignment_batch`,
@@ -671,18 +686,33 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Probably next
 
-- **Merge PR #8** (Phase 2 backend prep) once the preview check
-  passes. Backend-only, nothing user-visible changes.
-- **Comprehensive Assign page (`/admin/templates`) redesign** —
-  the "Task Group" modal on the Hub Assign widget deliberately
-  stayed untouched for now; the user wants the deep Assign page
-  designed first, then we circle back to the Hub widget to pick
-  the snapshot. Full template-library UI (list + quick filter +
-  preview pane + per-template task CRUD + multi-mode assign:
-  full / partial / custom) using the Phase 2 RPCs.
-- **After Assign page + 1–2 stable days on prod: Cloudflare
-  migration.** Timing at Claude's judgment per
-  `feedback_cloudflare_migration_timing.md`. Vercel → Cloudflare Pages, free commercial tier,
+- **Merge PR #9** (Assign-page redesign) once visual sign-off on
+  the Vercel preview. Modal instability is known and tracked for
+  PR #10; rolling out #9 gives real-prod signal while #10 iterates.
+- **PR #10 — modal stability + batch cancel UI + hard-delete
+  templates**. Bundled small PR:
+  - Fix stacked-modal click targets (z-[70] on sub-modals, Escape
+    stack tracking, breadcrumb eyebrow)
+  - Wire `cancel_task_assignment_batch` to Hub "Recently assigned"
+    row actions (per-row cancel button) or a small manage panel
+  - New `delete_task_template` RPC + Preview modal "Delete"
+    button. Past assigned_tasks survive via the FK SET NULL tweak
+    from PR #8 (confirmed behavior: deleting a template only
+    removes the blueprint; existing assignments keep their copied
+    title/description/items, just with `source_template_id = NULL`).
+- **Admin Hub "Task Group" tile redesign**: opens
+  `TemplateAssignFlowModal` directly with a template picker step
+  prepended. Previously deferred; now ready since the flow modal
+  exists.
+- **Drag-to-reorder template items** in `TemplateEditorModal` —
+  DnD-kit already installed; small quality-of-life pass.
+- **After #10 + 1–2 stable prod days: Cloudflare migration.**
+  Timing at Claude's judgment per
+  `feedback_cloudflare_migration_timing.md`.
+- **Phase 3**: assignment history UI, `mark_all_read`, fold
+  assigned-tasks into `member_overview_snapshot`, unify
+  `report_templates` into `task_templates`, wire real Team Tasks /
+  Studio Tasks widgets back onto the Tasks page. Vercel → Cloudflare Pages, free commercial tier,
   single-concern PR. Replicate the `CDN-Cache-Control: no-store`
   on `/index.html` exactly. Timing: Claude's judgment call per
   `feedback_cloudflare_migration_timing.md`.
