@@ -4,11 +4,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
 import {
   AlertCircle,
+  Bell,
   Calendar as CalendarIcon,
   Check,
+  CheckCircle2,
   ChevronRight,
   FileText,
   Flame,
+  Inbox,
   Loader2,
   MessageSquare,
   Plus,
@@ -18,11 +21,19 @@ import {
   Users,
 } from 'lucide-react'
 import { APP_ROUTES } from '../../app/routes'
+import { useAuth } from '../../contexts/AuthContext'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
 import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
+import {
+  completeAssignedTask,
+  fetchAssignmentNotifications,
+  fetchMemberAssignedTasks,
+  markAssignmentNotificationRead,
+} from '../../lib/queries/assignments'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { supabase } from '../../lib/supabase'
 import type { TeamMember } from '../../types'
+import type { AssignedTask, AssignmentNotification } from '../../types/assignments'
 import MyTasksCard from '../tasks/MyTasksCard'
 import CreateBookingModal from '../CreateBookingModal'
 
@@ -499,6 +510,7 @@ async function markChannelRead(channelId: string): Promise<void> {
 
 export function ForumNotificationsWidget() {
   const queryClient = useQueryClient()
+  const { profile } = useAuth()
   const todayLabel = new Date()
     .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     .toUpperCase()
@@ -511,21 +523,61 @@ export function ForumNotificationsWidget() {
     refetchInterval: 60_000,
   })
 
-  // Realtime — any new chat_messages insert anywhere triggers a refetch.
+  // PR #7 — parallel fetch for assignment notifications. Only enabled
+  // when we have a profile id; server-side guard enforces caller ==
+  // p_user_id so we never fire it as an unauthed request.
+  const assignmentsQuery = useQuery({
+    queryKey: ['overview-assignment-notifications', profile?.id],
+    queryFn: () => fetchAssignmentNotifications(profile!.id, { unreadOnly: false, limit: 20 }),
+    enabled: Boolean(profile?.id),
+    refetchInterval: 60_000,
+  })
+
+  // Realtime — any new chat_messages insert anywhere triggers a refetch
+  // of channel unread counts. See PR #7 for the parallel subscription
+  // on assignment_notifications below.
   useEffect(() => {
-    const sub = supabase
+    const chatSub = supabase
       .channel('overview-notifications')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => {
         void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
       })
       .subscribe()
     return () => {
-      void supabase.removeChannel(sub)
+      void supabase.removeChannel(chatSub)
     }
   }, [queryClient])
 
+  // Realtime — new assignment_notifications for THIS user (filter on
+  // recipient_id) trigger a refetch of the assignments list. Cleanup
+  // mirrors the chat subscription.
+  useEffect(() => {
+    if (!profile?.id) return
+    const sub = supabase
+      .channel(`overview-assignment-notifications:${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'assignment_notifications',
+          filter: `recipient_id=eq.${profile.id}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['overview-assignment-notifications', profile.id] })
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(sub)
+    }
+  }, [queryClient, profile?.id])
+
   const channels = notifQuery.data ?? []
-  const totalUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
+  const channelUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
+  const assignments = assignmentsQuery.data ?? []
+  const assignmentUnread = assignments.filter((n) => !n.is_read).length
+  const totalUnread = channelUnread + assignmentUnread
 
   // Optimistic mark-read — update cache before RPC returns so the badge
   // clears on click with no visible delay.
@@ -541,6 +593,24 @@ export function ForumNotificationsWidget() {
     void markChannelRead(channelId).catch(() => {
       // On error, revert by invalidating so the server-truth returns.
       void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
+    })
+  }
+
+  // PR #7 — optimistic mark-read for assignment notifications. Same
+  // cache-first pattern as channels.
+  const handleAssignmentClick = (notificationId: string) => {
+    if (!profile?.id) return
+    const cacheKey = ['overview-assignment-notifications', profile.id] as const
+    queryClient.setQueryData<AssignmentNotification[]>([...cacheKey], (prev) => {
+      if (!prev) return prev
+      return prev.map((n) =>
+        n.id === notificationId
+          ? { ...n, is_read: true, read_at: new Date().toISOString() }
+          : n,
+      )
+    })
+    void markAssignmentNotificationRead(notificationId).catch(() => {
+      void queryClient.invalidateQueries({ queryKey: cacheKey })
     })
   }
 
@@ -560,7 +630,7 @@ export function ForumNotificationsWidget() {
       </div>
 
       {/* Channel rows — internal scroll keeps the page non-scrolling. */}
-      <div className="flex-1 min-h-0 overflow-hidden -mx-1">
+      <div className="flex-1 min-h-0 overflow-auto -mx-1">
         {notifQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light">
             <Loader2 size={18} className="animate-spin" />
@@ -638,9 +708,271 @@ export function ForumNotificationsWidget() {
             )
           })
         )}
+
+        {/* PR #7 — Assignments section. Renders below channels when the
+            current user has any assignment notifications. Same widget
+            shell, two data sources, one unified unread pill above. */}
+        {assignments.length > 0 && (
+          <>
+            <div className="mx-2 mt-4 mb-2 flex items-center gap-2">
+              <Bell size={11} className="text-gold/70" aria-hidden="true" />
+              <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
+                ASSIGNMENTS
+              </p>
+              <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
+            </div>
+            {assignments.map((n) => {
+              const unread = !n.is_read
+              return (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => handleAssignmentClick(n.id)}
+                  className={`w-full group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left ${
+                    unread
+                      ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
+                      : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
+                  }`}
+                >
+                  <div
+                    className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                      unread
+                        ? 'bg-gold/20 ring-1 ring-gold/50 text-gold'
+                        : 'bg-surface-alt border border-border-light text-text-muted'
+                    }`}
+                  >
+                    <Inbox size={14} aria-hidden="true" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={`text-[13px] truncate ${
+                          unread ? 'font-bold text-text' : 'font-semibold text-text-muted'
+                        }`}
+                      >
+                        {n.title}
+                      </p>
+                      {unread && (
+                        <span className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums">
+                          NEW
+                        </span>
+                      )}
+                    </div>
+                    {n.body && (
+                      <p className={`text-[12px] truncate mt-0.5 ${unread ? 'text-text' : 'text-text-light'}`}>
+                        {n.body}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-text-light mt-0.5">{relativeTime(n.created_at)}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </>
+        )}
       </div>
 
     </div>
+  )
+}
+
+// ══ PR #7 — AssignedTasksWidget ═══════════════════════════════════════
+//
+// Personal widget (accessVisibility='personal', dataScope='self') that
+// renders on both member Overview and member Tasks pages. Calls
+// `get_member_assigned_tasks` RPC; optimistic toggle via
+// `complete_assigned_task`; realtime on `assigned_tasks` INSERT/UPDATE
+// for the current user.
+export function AssignedTasksWidget() {
+  const queryClient = useQueryClient()
+  const { profile } = useAuth()
+  const todayLabel = new Date()
+    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    .toUpperCase()
+
+  const tasksQuery = useQuery({
+    queryKey: ['assigned-tasks', profile?.id],
+    queryFn: () => fetchMemberAssignedTasks(profile!.id, { onlyOverview: true, includeCompleted: true }),
+    enabled: Boolean(profile?.id),
+    refetchInterval: 60_000,
+  })
+
+  // Realtime — any INSERT/UPDATE on this user's assigned_tasks triggers
+  // a refetch. Filter on `assigned_to` (denormalized in PR #6 schema).
+  useEffect(() => {
+    if (!profile?.id) return
+    const sub = supabase
+      .channel(`overview-assigned-tasks:${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'assigned_tasks',
+          filter: `assigned_to=eq.${profile.id}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['assigned-tasks', profile.id] })
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(sub)
+    }
+  }, [queryClient, profile?.id])
+
+  const tasks = tasksQuery.data ?? []
+  const openTasks = tasks.filter((t) => !t.is_completed)
+  const doneTasks = tasks.filter((t) => t.is_completed)
+
+  // Optimistic toggle. Cache update flips is_completed + completed_at
+  // instantly; server RPC confirms; on error we invalidate to resync.
+  const handleToggle = (task: AssignedTask) => {
+    if (!profile?.id) return
+    const next = !task.is_completed
+    const cacheKey = ['assigned-tasks', profile.id] as const
+    queryClient.setQueryData<AssignedTask[]>([...cacheKey], (prev) => {
+      if (!prev) return prev
+      return prev.map((t) =>
+        t.id === task.id
+          ? { ...t, is_completed: next, completed_at: next ? new Date().toISOString() : null }
+          : t,
+      )
+    })
+    void completeAssignedTask(task.id, next).catch(() => {
+      void queryClient.invalidateQueries({ queryKey: cacheKey })
+    })
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-2 shrink-0">
+        <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
+          TODAY · {todayLabel}
+        </p>
+        {openTasks.length > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gold/15 ring-1 ring-gold/40 text-gold text-[10px] font-bold tracking-wider uppercase">
+            {openTasks.length} Open
+          </span>
+        )}
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-auto -mx-1">
+        {tasksQuery.isLoading ? (
+          <div className="h-full flex items-center justify-center text-text-light">
+            <Loader2 size={18} className="animate-spin" />
+          </div>
+        ) : tasksQuery.error ? (
+          <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
+            <AlertCircle size={16} className="shrink-0" />
+            <span className="truncate">Could not load assignments</span>
+          </div>
+        ) : tasks.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center px-4">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
+              <Inbox size={18} className="text-gold" aria-hidden="true" />
+            </div>
+            <p className="text-[14px] font-medium text-text">Nothing assigned to you</p>
+            <p className="text-[12px] text-text-light mt-0.5">New tasks from admin land here.</p>
+          </div>
+        ) : (
+          <>
+            {openTasks.map((task) => (
+              <AssignedTaskRow key={task.id} task={task} onToggle={handleToggle} />
+            ))}
+            {doneTasks.length > 0 && (
+              <>
+                <div className="mx-2 mt-4 mb-2 flex items-center gap-2">
+                  <CheckCircle2 size={11} className="text-emerald-400/70" aria-hidden="true" />
+                  <p className="text-[11px] font-semibold tracking-[0.06em] text-emerald-400/70">
+                    COMPLETED
+                  </p>
+                  <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
+                </div>
+                {doneTasks.map((task) => (
+                  <AssignedTaskRow key={task.id} task={task} onToggle={handleToggle} />
+                ))}
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Single row inside the AssignedTasksWidget. Click anywhere on the row
+// to toggle completion; optimistic update happens in the parent.
+function AssignedTaskRow({
+  task,
+  onToggle,
+}: {
+  task: AssignedTask
+  onToggle: (task: AssignedTask) => void
+}) {
+  const done = task.is_completed
+  const due = task.due_date ? new Date(task.due_date) : null
+  const dueLabel = due
+    ? due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : null
+  const isNew = !done && !task.completed_at && task.batch?.created_at
+    ? Date.now() - new Date(task.batch.created_at).getTime() < 24 * 60 * 60 * 1000
+    : false
+
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(task)}
+      className={`w-full group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left ${
+        done
+          ? 'bg-white/[0.018] opacity-60 hover:opacity-80'
+          : isNew
+            ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
+            : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
+      }`}
+    >
+      <span
+        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md flex items-center justify-center transition-colors ${
+          done
+            ? 'bg-emerald-500/80 border border-emerald-500/80 text-white'
+            : 'bg-surface-alt border border-border-light hover:border-gold/50'
+        }`}
+        aria-hidden="true"
+      >
+        {done && <Check size={12} strokeWidth={3} />}
+      </span>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p
+            className={`text-[13px] truncate ${
+              done
+                ? 'line-through text-text-muted'
+                : 'font-semibold text-text'
+            }`}
+          >
+            {task.title}
+          </p>
+          {isNew && (
+            <span className="shrink-0 inline-flex items-center justify-center px-1.5 h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none uppercase tracking-wide">
+              New
+            </span>
+          )}
+        </div>
+        {task.description && (
+          <p className={`text-[12px] mt-0.5 truncate ${done ? 'text-text-light' : 'text-text-muted'}`}>
+            {task.description}
+          </p>
+        )}
+        <div className="flex items-center gap-2 mt-1 text-[10px] text-text-light">
+          {task.category && <span>{task.category}</span>}
+          {task.category && dueLabel && <span aria-hidden="true">·</span>}
+          {dueLabel && <span>Due {dueLabel}</span>}
+          {(task.category || dueLabel) && task.is_required && <span aria-hidden="true">·</span>}
+          {task.is_required && <span className="text-rose-400">Required</span>}
+        </div>
+      </div>
+    </button>
   )
 }
 

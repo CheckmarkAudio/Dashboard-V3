@@ -13,6 +13,7 @@ import {
   MEMBER_WIDGET_REGISTRATIONS,
 } from '../../domain/workspaces/registry'
 import {
+  AssignedTasksWidget,
   BookingSnapshotWidget,
   FlywheelSummaryWidget,
   ForumNotificationsWidget,
@@ -50,6 +51,7 @@ const memberWidgetComponents: Record<MemberWidgetId, ComponentType> = {
   forum_notifications: ForumNotificationsWidget,
   today_calendar: TodayCalendarWidget,
   booking_snapshot: BookingSnapshotWidget,
+  assigned_tasks: AssignedTasksWidget,
   team_snapshot: TeamSnapshotWidget,
   team_directory: TeamDirectoryWidget,
   team_activity: TeamActivityWidget,
@@ -81,26 +83,50 @@ function resolveAdmin(
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// Exported definitions, segregated.
+// Exported definitions, segregated per page.
 //
-// Dashboard.tsx (/) imports MEMBER_WIDGET_DEFINITIONS.
-// Hub.tsx (/admin) imports ADMIN_WIDGET_DEFINITIONS.
-// Neither page imports the other — if they did, TypeScript would
-// catch it because the two definition arrays are separately typed.
+// Dashboard.tsx (/)        imports MEMBER_WIDGET_DEFINITIONS.
+// Hub.tsx (/admin)         imports ADMIN_WIDGET_DEFINITIONS.
+// Tasks.tsx (/daily) (PR #7) imports TASKS_WIDGET_DEFINITIONS.
+//
+// All three draw from the same pool of typed components but filter
+// by `defaultPlacements` so each page only renders widgets that
+// declared a placement there. Admin never leaks to member pages.
 // ═════════════════════════════════════════════════════════════════════
 
-export const MEMBER_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition<MemberWidgetId>[] =
-  MEMBER_WIDGET_REGISTRATIONS.map(resolveMember)
-
-export const ADMIN_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition<AdminWidgetId>[] =
-  ADMIN_WIDGET_REGISTRATIONS.map(resolveAdmin)
-
-// Exposed for layout sanitization (e.g. "is this saved widget id still
-// a real widget?"). Do NOT iterate this for rendering — the page-
-// specific arrays above are the render source of truth.
-export const ALL_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition[] = [
-  ...MEMBER_WIDGET_DEFINITIONS,
+// All member widgets — resolved once; each page filters by placement.
+const ALL_MEMBER_DEFINITIONS: WorkspaceWidgetDefinition<MemberWidgetId>[] = [
+  ...MEMBER_WIDGET_REGISTRATIONS.map(resolveMember),
   ...MEMBER_BANK_REGISTRATIONS.map(resolveMember),
-  ...ADMIN_WIDGET_DEFINITIONS,
+]
+
+// Overview page — widgets whose defaultPlacements target 'member_overview'.
+export const MEMBER_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition<MemberWidgetId>[] =
+  ALL_MEMBER_DEFINITIONS.filter(
+    (widget) => widget.defaultPlacements.some((p) => p.scope === 'member_overview'),
+  )
+
+// Tasks page — widgets whose defaultPlacements target 'member_tasks'.
+// After PR #7 this is `team_tasks` (My Tasks/Checklist) + `assigned_tasks`.
+export const TASKS_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition<MemberWidgetId>[] =
+  ALL_MEMBER_DEFINITIONS.filter(
+    (widget) => widget.defaultPlacements.some((p) => p.scope === 'member_tasks'),
+  )
+
+// Admin Hub — widgets whose defaultPlacements target 'admin_overview'.
+export const ADMIN_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition<AdminWidgetId>[] =
+  [
+    ...ADMIN_WIDGET_REGISTRATIONS.map(resolveAdmin),
+    ...ADMIN_BANK_REGISTRATIONS.map(resolveAdmin),
+  ].filter(
+    (widget) => widget.defaultPlacements.some((p) => p.scope === 'admin_overview'),
+  )
+
+// Exposed for layout sanitization ("is this saved widget id still a
+// real widget?"). Do NOT iterate this for rendering — the page-specific
+// arrays above are the render source of truth.
+export const ALL_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition[] = [
+  ...ALL_MEMBER_DEFINITIONS,
+  ...ADMIN_WIDGET_REGISTRATIONS.map(resolveAdmin),
   ...ADMIN_BANK_REGISTRATIONS.map(resolveAdmin),
 ]
