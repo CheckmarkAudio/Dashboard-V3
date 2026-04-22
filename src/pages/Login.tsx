@@ -1,9 +1,32 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { Button, Input } from '../components/ui'
 import { LogIn, Music } from 'lucide-react'
+
+/**
+ * Returns true when the current page is served from a Vercel
+ * branch-preview URL (and NOT the production alias). We use this to
+ * gate the preview auto-login: production must always require the
+ * login form.
+ *
+ * Vercel branch URLs follow the pattern
+ *   dashboard-v3-git-<branch>-<team>.vercel.app
+ * while the production alias is
+ *   dashboard-v3-dusky.vercel.app
+ * Local dev (localhost) is intentionally excluded too — we only want
+ * auto-login on previews.
+ */
+function isVercelBranchPreview(): boolean {
+  if (typeof window === 'undefined') return false
+  const host = window.location.hostname
+  if (!host.endsWith('.vercel.app')) return false
+  // Production alias — never auto-login here.
+  if (host.startsWith('dashboard-v3-dusky')) return false
+  // Branch previews always contain '-git-' in the hostname.
+  return host.includes('-git-')
+}
 
 export default function Login() {
   const { user, loading: authLoading, signIn } = useAuth()
@@ -12,6 +35,23 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Preview auto-login: if we're on a branch-preview URL AND the
+  // VITE_PREVIEW_LOGIN_* env vars were baked into this build, sign
+  // in silently on mount so the user doesn't have to re-enter creds
+  // for every PR. See feedback_preview_no_login_required.md in the
+  // user's MEMORY — this is a recurring preference.
+  //
+  // Trust model: the env vars live in Vercel's Preview scope only,
+  // so production builds don't ship them. They ARE visible in the
+  // preview JS bundle to anyone who can reach the preview URL —
+  // acceptable because preview URLs are obscure.
+  const previewEmail = import.meta.env.VITE_PREVIEW_LOGIN_EMAIL as string | undefined
+  const previewPassword = import.meta.env.VITE_PREVIEW_LOGIN_PASSWORD as string | undefined
+  const previewReady =
+    Boolean(previewEmail) && Boolean(previewPassword) && isVercelBranchPreview()
+  const [previewRunning, setPreviewRunning] = useState(previewReady)
+  const previewFiredRef = useRef(false)
 
   // Phase 6.4 — surface the "not provisioned" message if the user was
   // rejected by AuthContext because no team_members row exists.
@@ -25,10 +65,39 @@ export default function Login() {
     } catch { /* sessionStorage unavailable */ }
   }, [])
 
-  if (authLoading) {
+  useEffect(() => {
+    if (!previewReady) return
+    if (previewFiredRef.current) return
+    if (authLoading) return
+    if (user) return
+    // Fire exactly once per mount. `signIn` is stable from AuthContext.
+    previewFiredRef.current = true
+    void (async () => {
+      try {
+        const { error } = await signIn(previewEmail!, previewPassword!)
+        if (error) {
+          // Auto-login failed — fall back to the normal form so the
+          // user can correct anything. Pre-fill the email to make
+          // retry quick.
+          setEmail(previewEmail!)
+          setError(`Preview auto-login failed: ${error.message}`)
+        }
+      } catch (err) {
+        setEmail(previewEmail!)
+        setError(err instanceof Error ? err.message : 'Preview auto-login threw')
+      } finally {
+        setPreviewRunning(false)
+      }
+    })()
+  }, [authLoading, previewReady, previewEmail, previewPassword, signIn, user])
+
+  if (authLoading || previewRunning) {
     return (
-      <div className="flex items-center justify-center h-screen bg-bg" role="status" aria-live="polite">
+      <div className="flex flex-col items-center justify-center h-screen bg-bg gap-3" role="status" aria-live="polite">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold/20 border-t-gold" aria-hidden="true" />
+        {previewRunning && (
+          <p className="text-xs text-text-light">Preview auto-login…</p>
+        )}
         <span className="sr-only">Loading…</span>
       </div>
     )
