@@ -20,7 +20,6 @@ import {
   Shield,
   Sparkles,
   Target,
-  UserPlus,
   Users,
   X,
 } from 'lucide-react'
@@ -162,7 +161,7 @@ async function fetchRecentAssignments(limit = 4): Promise<RecentAssignment[]> {
     .slice(0, limit)
 }
 
-type AssignFlow = 'session' | 'task' | 'group' | 'custom' | null
+type AssignFlow = 'session' | 'task' | 'group' | null
 
 export function AdminAssignWidget() {
   const queryClient = useQueryClient()
@@ -198,7 +197,7 @@ export function AdminAssignWidget() {
           the only distinguisher: calendar-plus for Session, the
           Tasks-menu CheckSquare for Task, and a custom folder-with-
           two-checkmarks glyph for Task Group. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 shrink-0">
         <AssignTile
           icon={CalendarPlus}
           label="Session"
@@ -209,7 +208,7 @@ export function AdminAssignWidget() {
         <AssignTile
           icon={CheckSquare}
           label="Task"
-          hint="Add one to a member's day"
+          hint="One-off task to one or many"
           count={counts.tasks}
           onClick={() => setFlow('task')}
         />
@@ -219,12 +218,6 @@ export function AdminAssignWidget() {
           hint="Apply a checklist template"
           count={counts.groups}
           onClick={() => setFlow('group')}
-        />
-        <AssignTile
-          icon={UserPlus}
-          label="Custom Task"
-          hint="One-off task to one or many"
-          onClick={() => setFlow('custom')}
         />
       </div>
 
@@ -304,7 +297,6 @@ export function AdminAssignWidget() {
       {flow === 'session' && <CreateBookingModal onClose={handleClose} />}
       {flow === 'task' && <AssignTaskModal onClose={handleClose} />}
       {flow === 'group' && <AssignGroupModal onClose={handleClose} />}
-      {flow === 'custom' && <AssignCustomTaskModal onClose={handleClose} />}
     </div>
   )
 }
@@ -369,135 +361,6 @@ function AssignTile({
       <p className="mt-2 text-[15px] font-bold text-gold leading-tight">{label}</p>
       <p className="text-[11px] text-text-light leading-snug mt-0.5">{hint}</p>
     </button>
-  )
-}
-
-// ─── AssignTaskModal — adds ONE item to a member's daily checklist ──
-
-function AssignTaskModal({ onClose }: { onClose: () => void }) {
-  const { toast } = useToast()
-  const [memberId, setMemberId] = useState('')
-  const [text, setText] = useState('')
-  const [category, setCategory] = useState('Ad-hoc')
-  const [saving, setSaving] = useState(false)
-
-  const teamQuery = useQuery({
-    queryKey: teamMemberKeys.list(),
-    queryFn: fetchTeamMembers,
-  })
-  const members = (teamQuery.data ?? []).filter((m) => m.status?.toLowerCase() !== 'inactive')
-
-  const submit = async () => {
-    if (!memberId || !text.trim()) return
-    setSaving(true)
-    try {
-      // Find today's daily instance for that member, create it if missing.
-      const today = new Date().toISOString().slice(0, 10)
-      const { data: existing } = await supabase
-        .from('team_checklist_instances')
-        .select('id')
-        .eq('intern_id', memberId)
-        .eq('frequency', 'daily')
-        .eq('period_date', today)
-        .maybeSingle()
-      let instanceId = existing?.id
-      if (!instanceId) {
-        const { data: created, error: createErr } = await supabase
-          .from('team_checklist_instances')
-          .insert({ intern_id: memberId, frequency: 'daily', period_date: today })
-          .select('id')
-          .single()
-        if (createErr) throw createErr
-        instanceId = created!.id
-      }
-      const { error: itemErr } = await supabase
-        .from('team_checklist_items')
-        .insert({
-          instance_id: instanceId,
-          category,
-          item_text: text.trim(),
-          sort_order: Date.now() % 100000,
-        })
-      if (itemErr) throw itemErr
-      toast('Task assigned', 'success')
-      onClose()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to assign task', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div
-        className="bg-surface rounded-2xl border border-border w-full max-w-md p-5 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-[16px] font-bold text-text">Assign a Task</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-surface-hover" aria-label="Close">
-            <X size={16} className="text-text-light" />
-          </button>
-        </div>
-        <p className="text-[12px] text-text-light">
-          Adds one item to today's daily checklist for the chosen member.
-        </p>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Member</span>
-          <select
-            value={memberId}
-            onChange={(e) => setMemberId(e.target.value)}
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          >
-            <option value="">Pick a teammate…</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>{m.display_name}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Task</span>
-          <input
-            type="text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="e.g. Edit the Thursday BTS reel"
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Category</span>
-          <input
-            type="text"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          />
-        </label>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm text-text-light hover:text-text"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!memberId || !text.trim() || saving}
-            className="px-4 py-2 rounded-lg bg-gold text-black text-sm font-bold disabled:opacity-50 hover:bg-gold-muted"
-          >
-            {saving ? 'Assigning…' : 'Assign'}
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -606,15 +469,15 @@ function AssignGroupModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-// ─── AssignCustomTaskModal — PR #7 ──────────────────────────────────
+// ─── AssignTaskModal — PR #7 (replaces the legacy direct-write flow) ─
 //
-// One-off custom task to one or more members. Calls
+// One-off task assignment to one or more members. Calls
 // `assign_custom_task_to_members` RPC (atomic: batch + recipients +
-// tasks + notifications). Unlike the older `AssignTaskModal` above
-// which writes directly to `team_checklist_items`, this flow creates
-// a true `assigned_tasks` row per recipient via the new PR #6 backend.
+// tasks + notifications). The earlier direct-write `AssignTaskModal`
+// that inserted straight into `team_checklist_items` was deleted here
+// — the new backend is authoritative.
 
-function AssignCustomTaskModal({ onClose }: { onClose: () => void }) {
+function AssignTaskModal({ onClose }: { onClose: () => void }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -674,7 +537,7 @@ function AssignCustomTaskModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-[16px] font-bold text-text">Assign Custom Task</h3>
+          <h3 className="text-[16px] font-bold text-text">Assign Task</h3>
           <button onClick={onClose} className="p-1 rounded hover:bg-surface-hover" aria-label="Close">
             <X size={16} className="text-text-light" />
           </button>
