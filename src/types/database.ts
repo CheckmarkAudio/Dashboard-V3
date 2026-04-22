@@ -71,6 +71,206 @@ export type Database = {
           },
         ]
       }
+      assigned_tasks: {
+        Row: {
+          assigned_to: string
+          category: string | null
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          is_completed: boolean
+          is_required: boolean
+          recipient_assignment_id: string
+          sort_order: number
+          source_template_id: string | null
+          source_template_item_id: string | null
+          source_type: Database["public"]["Enums"]["assigned_source_type"]
+          title: string
+          updated_at: string
+          visible_on_overview: boolean
+        }
+        Insert: {
+          assigned_to: string
+          category?: string | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_completed?: boolean
+          is_required?: boolean
+          recipient_assignment_id: string
+          sort_order?: number
+          source_template_id?: string | null
+          source_template_item_id?: string | null
+          source_type: Database["public"]["Enums"]["assigned_source_type"]
+          title: string
+          updated_at?: string
+          visible_on_overview?: boolean
+        }
+        Update: {
+          assigned_to?: string
+          category?: string | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_completed?: boolean
+          is_required?: boolean
+          recipient_assignment_id?: string
+          sort_order?: number
+          source_template_id?: string | null
+          source_template_item_id?: string | null
+          source_type?: Database["public"]["Enums"]["assigned_source_type"]
+          title?: string
+          updated_at?: string
+          visible_on_overview?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assigned_tasks_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assigned_tasks_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assigned_tasks_recipient_assignment_id_fkey"
+            columns: ["recipient_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignment_recipients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assigned_tasks_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "task_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assigned_tasks_source_template_item_id_fkey"
+            columns: ["source_template_item_id"]
+            isOneToOne: false
+            referencedRelation: "task_template_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assignment_notifications: {
+        Row: {
+          batch_id: string
+          body: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          notification_type: Database["public"]["Enums"]["assignment_notification_type"]
+          read_at: string | null
+          recipient_id: string
+          title: string
+        }
+        Insert: {
+          batch_id: string
+          body?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          notification_type: Database["public"]["Enums"]["assignment_notification_type"]
+          read_at?: string | null
+          recipient_id: string
+          title: string
+        }
+        Update: {
+          batch_id?: string
+          body?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          notification_type?: Database["public"]["Enums"]["assignment_notification_type"]
+          read_at?: string | null
+          recipient_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_notifications_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "task_assignment_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_notifications_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_notifications_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assignment_recipients: {
+        Row: {
+          batch_id: string
+          created_at: string
+          id: string
+          recipient_id: string
+          status: Database["public"]["Enums"]["recipient_status"]
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          id?: string
+          recipient_id: string
+          status?: Database["public"]["Enums"]["recipient_status"]
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          id?: string
+          recipient_id?: string
+          status?: Database["public"]["Enums"]["recipient_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_recipients_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "task_assignment_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_recipients_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_recipients_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_channel_reads: {
         Row: {
           channel_id: string
@@ -685,6 +885,61 @@ export type Database = {
           },
         ]
       }
+      task_assignment_batches: {
+        Row: {
+          assigned_by: string
+          assignment_type: Database["public"]["Enums"]["assignment_type"]
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          source_template_id: string | null
+          title: string
+        }
+        Insert: {
+          assigned_by: string
+          assignment_type: Database["public"]["Enums"]["assignment_type"]
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          source_template_id?: string | null
+          title: string
+        }
+        Update: {
+          assigned_by?: string
+          assignment_type?: Database["public"]["Enums"]["assignment_type"]
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          source_template_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_assignment_batches_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignment_batches_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignment_batches_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "task_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_assignments: {
         Row: {
           assigned_by: string | null
@@ -862,6 +1117,107 @@ export type Database = {
           {
             foreignKeyName: "task_edit_requests_reviewer_id_fkey"
             columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_template_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          default_due_offset_days: number | null
+          description: string | null
+          id: string
+          is_required: boolean
+          sort_order: number
+          template_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          default_due_offset_days?: number | null
+          description?: string | null
+          id?: string
+          is_required?: boolean
+          sort_order?: number
+          template_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          default_due_offset_days?: number | null
+          description?: string | null
+          id?: string
+          is_required?: boolean
+          sort_order?: number
+          template_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_template_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "task_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_templates: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          is_active: boolean
+          is_onboarding: boolean
+          name: string
+          role_tag: string | null
+          template_kind: Database["public"]["Enums"]["template_kind"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_onboarding?: boolean
+          name: string
+          role_tag?: string | null
+          template_kind?: Database["public"]["Enums"]["template_kind"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_onboarding?: boolean
+          name?: string
+          role_tag?: string | null
+          template_kind?: Database["public"]["Enums"]["template_kind"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_templates_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "team_members"
             referencedColumns: ["id"]
@@ -2111,11 +2467,75 @@ export type Database = {
       }
     }
     Functions: {
+      add_task_template_item: {
+        Args: {
+          p_category?: string
+          p_default_due_offset_days?: number
+          p_description?: string
+          p_is_required?: boolean
+          p_sort_order?: number
+          p_template_id: string
+          p_title: string
+        }
+        Returns: Json
+      }
       approve_task_edit_request: {
         Args: { p_apply_to_template?: boolean; p_request_id: string }
         Returns: undefined
       }
+      assign_custom_task_to_members: {
+        Args: {
+          p_category?: string
+          p_description?: string
+          p_due_date?: string
+          p_is_required?: boolean
+          p_member_ids: string[]
+          p_show_on_overview?: boolean
+          p_title: string
+        }
+        Returns: Json
+      }
+      assign_template_items_to_members: {
+        Args: {
+          p_description_override?: string
+          p_due_date?: string
+          p_member_ids: string[]
+          p_show_on_overview?: boolean
+          p_template_id: string
+          p_template_item_ids: string[]
+          p_title_override?: string
+        }
+        Returns: Json
+      }
+      assign_template_to_members: {
+        Args: {
+          p_description_override?: string
+          p_due_date?: string
+          p_member_ids: string[]
+          p_show_on_overview?: boolean
+          p_template_id: string
+          p_title_override?: string
+        }
+        Returns: Json
+      }
+      complete_assigned_task: {
+        Args: { p_assigned_task_id: string; p_is_completed: boolean }
+        Returns: Json
+      }
+      create_task_template: {
+        Args: {
+          p_description?: string
+          p_is_onboarding?: boolean
+          p_name: string
+          p_role_tag?: string
+        }
+        Returns: Json
+      }
       cron_materialize_checklists: { Args: never; Returns: undefined }
+      get_assignment_notifications: {
+        Args: { p_limit?: number; p_unread_only?: boolean; p_user_id: string }
+        Returns: Json
+      }
       get_channel_notifications: {
         Args: never
         Returns: {
@@ -2132,13 +2552,33 @@ export type Database = {
         }[]
       }
       get_direct_reports: { Args: { manager: string }; Returns: string[] }
+      get_member_assigned_tasks: {
+        Args: {
+          p_include_completed?: boolean
+          p_only_overview?: boolean
+          p_user_id: string
+        }
+        Returns: Json
+      }
       get_my_team_id: { Args: never; Returns: string }
+      get_task_template_detail: {
+        Args: { p_template_id: string }
+        Returns: Json
+      }
+      get_task_template_library: {
+        Args: { p_include_inactive?: boolean; p_role_tag?: string }
+        Returns: Json
+      }
       intern_generate_checklist: {
         Args: { p_date: string; p_frequency: string; p_intern_id: string }
         Returns: string
       }
       intern_get_user_role: { Args: never; Returns: string }
       is_team_admin: { Args: never; Returns: boolean }
+      mark_assignment_notification_read: {
+        Args: { p_notification_id: string }
+        Returns: Json
+      }
       mark_channel_read: { Args: { p_channel_id: string }; Returns: undefined }
       member_overview_snapshot: {
         Args: { p_date: string; p_user_id: string }
@@ -2183,8 +2623,16 @@ export type Database = {
       }
     }
     Enums: {
+      assigned_source_type: "custom" | "template_full" | "template_partial"
+      assignment_notification_type:
+        | "task_assigned"
+        | "template_assigned"
+        | "partial_template_assigned"
+      assignment_type: "custom_task" | "template_full" | "template_partial"
+      recipient_status: "active" | "completed" | "archived" | "cancelled"
       task_edit_change_type: "add" | "rename" | "delete"
       task_edit_status: "pending" | "approved" | "rejected"
+      template_kind: "admin_blueprint" | "recurring_checklist"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2312,8 +2760,17 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      assigned_source_type: ["custom", "template_full", "template_partial"],
+      assignment_notification_type: [
+        "task_assigned",
+        "template_assigned",
+        "partial_template_assigned",
+      ],
+      assignment_type: ["custom_task", "template_full", "template_partial"],
+      recipient_status: ["active", "completed", "archived", "cancelled"],
       task_edit_change_type: ["add", "rename", "delete"],
       task_edit_status: ["pending", "approved", "rejected"],
+      template_kind: ["admin_blueprint", "recurring_checklist"],
     },
   },
 } as const
