@@ -13,7 +13,6 @@ import {
   MEMBER_WIDGET_REGISTRATIONS,
 } from '../../domain/workspaces/registry'
 import {
-  AssignedTasksWidget,
   BookingSnapshotWidget,
   FlywheelSummaryWidget,
   ForumNotificationsWidget,
@@ -51,7 +50,6 @@ const memberWidgetComponents: Record<MemberWidgetId, ComponentType> = {
   forum_notifications: ForumNotificationsWidget,
   today_calendar: TodayCalendarWidget,
   booking_snapshot: BookingSnapshotWidget,
-  assigned_tasks: AssignedTasksWidget,
   team_snapshot: TeamSnapshotWidget,
   team_directory: TeamDirectoryWidget,
   team_activity: TeamActivityWidget,

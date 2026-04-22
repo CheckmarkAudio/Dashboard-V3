@@ -32,6 +32,11 @@ import {
   fetchAssignmentNotifications,
   markAssignmentNotificationRead,
 } from '../../lib/queries/assignments'
+import {
+  assignTemplateToMembers,
+  fetchTaskTemplateLibrary,
+  taskTemplateKeys,
+} from '../../lib/queries/taskTemplates'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { fetchKPIDefinitions, fetchKPIEntries, kpiKeys } from '../../lib/queries/kpi'
 import { useToast } from '../Toast'
@@ -365,104 +370,148 @@ function AssignTile({
   )
 }
 
-// ─── AssignGroupModal — wires a template to a member ────────────────
-
-type TemplateRow = { id: string; name: string; type: string; position: string | null }
+// ─── AssignGroupModal — PR #11 rewire ───────────────────────────────
+//
+// Historical: wrote directly to legacy `task_assignments` (template→
+// position binding for daily cron). That didn't trigger assignment
+// notifications OR materialize real assigned_tasks rows, so the
+// recipient never saw anything on their widgets — the bug the user
+// surfaced after PR #10 preview.
+//
+// Rewired to: pick a `task_templates` row → multi-recipient →
+// calls `assignTemplateToMembers` RPC (atomic batch + recipients +
+// assigned_tasks + notifications in one transaction). Uses the same
+// MemberMultiSelect as AssignTaskModal so the two Hub flows feel
+// identical. For partial-item selection, admins use the full Assign
+// wizard on `/admin/templates`; this tile is the quick "send the
+// whole template" path.
 
 function AssignGroupModal({ onClose }: { onClose: () => void }) {
   const { toast } = useToast()
-  const { profile } = useAuth()
-  const [memberId, setMemberId] = useState('')
+  const queryClient = useQueryClient()
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [templateId, setTemplateId] = useState('')
-  const [templates, setTemplates] = useState<TemplateRow[]>([])
+  const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const teamQuery = useQuery({
-    queryKey: teamMemberKeys.list(),
-    queryFn: fetchTeamMembers,
+  const templatesQuery = useQuery({
+    queryKey: taskTemplateKeys.library(null, false),
+    queryFn: () => fetchTaskTemplateLibrary({ roleTag: null, includeInactive: false }),
   })
-  const members = (teamQuery.data ?? []).filter((m) => m.status?.toLowerCase() !== 'inactive')
+  const templates = templatesQuery.data ?? []
 
-  useEffect(() => {
-    supabase
-      .from('report_templates')
-      .select('id, name, type, position')
-      .order('name')
-      .then(({ data }) => setTemplates((data ?? []) as TemplateRow[]))
-  }, [])
+  const toggleMember = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const submit = async () => {
-    if (!memberId || !templateId) return
+    if (selectedIds.size === 0 || !templateId) return
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('task_assignments')
-        .insert({
-          template_id: templateId,
-          intern_id: memberId,
-          is_active: true,
-          assigned_by: profile?.id ?? null,
-        })
-      if (error) throw error
-      toast('Task group assigned', 'success')
+      const summary = await assignTemplateToMembers(
+        templateId,
+        Array.from(selectedIds),
+        { due_date: dueDate || null },
+      )
+      toast(
+        `Assigned to ${summary.recipient_count} ${summary.recipient_count === 1 ? 'member' : 'members'} · ${summary.task_count} tasks`,
+        'success',
+      )
+      void queryClient.invalidateQueries({ queryKey: ['admin-recent-assignments'] })
+      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: taskTemplateKeys.all })
       onClose()
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to assign group', 'error')
+      toast(err instanceof Error ? err.message : 'Failed to assign template', 'error')
     } finally {
       setSaving(false)
     }
   }
 
+  const disabled = selectedIds.size === 0 || !templateId || saving
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="bg-surface rounded-2xl border border-border w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="bg-surface rounded-2xl border border-border w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between">
-          <h3 className="text-[16px] font-bold text-text">Assign a Task Group</h3>
+          <h3 className="text-[16px] font-bold text-text">Assign Task Group</h3>
           <button onClick={onClose} className="p-1 rounded hover:bg-surface-hover" aria-label="Close">
             <X size={16} className="text-text-light" />
           </button>
         </div>
-        <p className="text-[12px] text-text-light">Applies a checklist template to the chosen member.</p>
+        <p className="text-[12px] text-text-light">
+          Sends an entire template as a batch of tasks. Recipients see each
+          item on their My Tasks widget + a "new assignment" notification.
+          For partial-item selection, use the full flow on the Assign page.
+        </p>
 
         <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Member</span>
-          <select
-            value={memberId}
-            onChange={(e) => setMemberId(e.target.value)}
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          >
-            <option value="">Pick a teammate…</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>{m.display_name}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Template</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">
+            Template
+          </span>
           <select
             value={templateId}
             onChange={(e) => setTemplateId(e.target.value)}
             className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
           >
-            <option value="">Pick a template…</option>
+            <option value="">
+              {templatesQuery.isLoading ? 'Loading templates…' : 'Pick a template…'}
+            </option>
             {templates.map((t) => (
-              <option key={t.id} value={t.id}>{t.name} ({t.type})</option>
+              <option key={t.id} value={t.id}>
+                {t.name} · {t.item_count} {t.item_count === 1 ? 'task' : 'tasks'}
+                {t.role_tag ? ` · ${t.role_tag}` : ''}
+              </option>
             ))}
           </select>
+          {!templatesQuery.isLoading && templates.length === 0 && (
+            <p className="mt-1.5 text-[11px] text-text-light italic">
+              No templates yet. Head to the Assign page to create one.
+            </p>
+          )}
+        </label>
+
+        <MemberMultiSelect selectedIds={selectedIds} onToggle={toggleMember} />
+
+        <label className="block">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">
+            Due date <span className="normal-case text-text-light">(optional, applies to all tasks)</span>
+          </span>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
+          />
         </label>
 
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-text-light hover:text-text">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm text-text-light hover:text-text"
+          >
             Cancel
           </button>
           <button
             type="button"
             onClick={submit}
-            disabled={!memberId || !templateId || saving}
+            disabled={disabled}
             className="px-4 py-2 rounded-lg bg-gold text-black text-sm font-bold disabled:opacity-50 hover:bg-gold-muted"
           >
-            {saving ? 'Assigning…' : 'Assign'}
+            {saving
+              ? 'Assigning…'
+              : selectedIds.size === 0
+                ? 'Assign'
+                : `Assign to ${selectedIds.size}`}
           </button>
         </div>
       </div>
@@ -862,15 +911,19 @@ export function AdminNotificationsWidget() {
     })
   }
 
-  const handleAssignmentClick = (notificationId: string) => {
+  const handleAssignmentClick = (n: AssignmentNotification) => {
     if (!profile?.id) return
     const cacheKey = ['overview-assignment-notifications', profile.id] as const
     queryClient.setQueryData<AssignmentNotification[]>([...cacheKey], (prev) =>
-      prev?.map((n) => (n.id === notificationId ? { ...n, is_read: true, read_at: new Date().toISOString() } : n)) ?? prev,
+      prev?.map((row) => (row.id === n.id ? { ...row, is_read: true, read_at: new Date().toISOString() } : row)) ?? prev,
     )
-    void markAssignmentNotificationRead(notificationId).catch(() => {
+    void markAssignmentNotificationRead(n.id).catch(() => {
       void queryClient.invalidateQueries({ queryKey: cacheKey })
     })
+    // PR #11 — highlight the task from this batch in MyTasksCard.
+    window.dispatchEvent(
+      new CustomEvent('highlight-task', { detail: { batchId: n.batch_id } }),
+    )
   }
 
   return (
@@ -980,7 +1033,7 @@ export function AdminNotificationsWidget() {
                     <button
                       key={n.id}
                       type="button"
-                      onClick={() => handleAssignmentClick(n.id)}
+                      onClick={() => handleAssignmentClick(n)}
                       className={`w-full group flex items-start gap-2 px-1.5 py-1.5 rounded-lg transition-colors text-left ${
                         unread ? 'bg-gold/5 hover:bg-gold/10' : 'hover:bg-surface-hover/40'
                       }`}

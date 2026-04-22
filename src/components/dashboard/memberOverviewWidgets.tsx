@@ -7,7 +7,6 @@ import {
   Bell,
   Calendar as CalendarIcon,
   Check,
-  CheckCircle2,
   ChevronRight,
   FileText,
   Flame,
@@ -25,15 +24,13 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
 import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
 import {
-  completeAssignedTask,
   fetchAssignmentNotifications,
-  fetchMemberAssignedTasks,
   markAssignmentNotificationRead,
 } from '../../lib/queries/assignments'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { supabase } from '../../lib/supabase'
 import type { TeamMember } from '../../types'
-import type { AssignedTask, AssignmentNotification } from '../../types/assignments'
+import type { AssignmentNotification } from '../../types/assignments'
 import MyTasksCard from '../tasks/MyTasksCard'
 import CreateBookingModal from '../CreateBookingModal'
 
@@ -598,20 +595,29 @@ export function ForumNotificationsWidget() {
 
   // PR #7 — optimistic mark-read for assignment notifications. Same
   // cache-first pattern as channels.
-  const handleAssignmentClick = (notificationId: string) => {
+  //
+  // PR #11 — ALSO dispatches a `highlight-task` CustomEvent so that
+  // MyTasksCard (wherever it's mounted) scrolls the matching row
+  // into view and flashes a gold ring. Click the notification →
+  // "here's where your new task is."
+  const handleAssignmentClick = (n: AssignmentNotification) => {
     if (!profile?.id) return
     const cacheKey = ['overview-assignment-notifications', profile.id] as const
     queryClient.setQueryData<AssignmentNotification[]>([...cacheKey], (prev) => {
       if (!prev) return prev
-      return prev.map((n) =>
-        n.id === notificationId
-          ? { ...n, is_read: true, read_at: new Date().toISOString() }
-          : n,
+      return prev.map((row) =>
+        row.id === n.id ? { ...row, is_read: true, read_at: new Date().toISOString() } : row,
       )
     })
-    void markAssignmentNotificationRead(notificationId).catch(() => {
+    void markAssignmentNotificationRead(n.id).catch(() => {
       void queryClient.invalidateQueries({ queryKey: cacheKey })
     })
+
+    // Highlight the task(s) from this batch in MyTasksCard. The card
+    // finds the first task whose `batch.id` matches and flashes it.
+    window.dispatchEvent(
+      new CustomEvent('highlight-task', { detail: { batchId: n.batch_id } }),
+    )
   }
 
   return (
@@ -727,7 +733,7 @@ export function ForumNotificationsWidget() {
                 <button
                   key={n.id}
                   type="button"
-                  onClick={() => handleAssignmentClick(n.id)}
+                  onClick={() => handleAssignmentClick(n)}
                   className={`w-full group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left ${
                     unread
                       ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
@@ -773,206 +779,6 @@ export function ForumNotificationsWidget() {
       </div>
 
     </div>
-  )
-}
-
-// ══ PR #7 — AssignedTasksWidget ═══════════════════════════════════════
-//
-// Personal widget (accessVisibility='personal', dataScope='self') that
-// renders on both member Overview and member Tasks pages. Calls
-// `get_member_assigned_tasks` RPC; optimistic toggle via
-// `complete_assigned_task`; realtime on `assigned_tasks` INSERT/UPDATE
-// for the current user.
-export function AssignedTasksWidget() {
-  const queryClient = useQueryClient()
-  const { profile } = useAuth()
-  const todayLabel = new Date()
-    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    .toUpperCase()
-
-  const tasksQuery = useQuery({
-    queryKey: ['assigned-tasks', profile?.id],
-    queryFn: () => fetchMemberAssignedTasks(profile!.id, { onlyOverview: true, includeCompleted: true }),
-    enabled: Boolean(profile?.id),
-    refetchInterval: 60_000,
-  })
-
-  // Realtime — any INSERT/UPDATE on this user's assigned_tasks triggers
-  // a refetch. Filter on `assigned_to` (denormalized in PR #6 schema).
-  useEffect(() => {
-    if (!profile?.id) return
-    const sub = supabase
-      .channel(`overview-assigned-tasks:${profile.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'assigned_tasks',
-          filter: `assigned_to=eq.${profile.id}`,
-        },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: ['assigned-tasks', profile.id] })
-        },
-      )
-      .subscribe()
-    return () => {
-      void supabase.removeChannel(sub)
-    }
-  }, [queryClient, profile?.id])
-
-  const tasks = tasksQuery.data ?? []
-  const openTasks = tasks.filter((t) => !t.is_completed)
-  const doneTasks = tasks.filter((t) => t.is_completed)
-
-  // Optimistic toggle. Cache update flips is_completed + completed_at
-  // instantly; server RPC confirms; on error we invalidate to resync.
-  const handleToggle = (task: AssignedTask) => {
-    if (!profile?.id) return
-    const next = !task.is_completed
-    const cacheKey = ['assigned-tasks', profile.id] as const
-    queryClient.setQueryData<AssignedTask[]>([...cacheKey], (prev) => {
-      if (!prev) return prev
-      return prev.map((t) =>
-        t.id === task.id
-          ? { ...t, is_completed: next, completed_at: next ? new Date().toISOString() : null }
-          : t,
-      )
-    })
-    void completeAssignedTask(task.id, next).catch(() => {
-      void queryClient.invalidateQueries({ queryKey: cacheKey })
-    })
-  }
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-2 shrink-0">
-        <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
-          TODAY · {todayLabel}
-        </p>
-        {openTasks.length > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gold/15 ring-1 ring-gold/40 text-gold text-[10px] font-bold tracking-wider uppercase">
-            {openTasks.length} Open
-          </span>
-        )}
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-auto -mx-1">
-        {tasksQuery.isLoading ? (
-          <div className="h-full flex items-center justify-center text-text-light">
-            <Loader2 size={18} className="animate-spin" />
-          </div>
-        ) : tasksQuery.error ? (
-          <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
-            <AlertCircle size={16} className="shrink-0" />
-            <span className="truncate">Could not load assignments</span>
-          </div>
-        ) : tasks.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-4">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
-              <Inbox size={18} className="text-gold" aria-hidden="true" />
-            </div>
-            <p className="text-[14px] font-medium text-text">Nothing assigned to you</p>
-            <p className="text-[12px] text-text-light mt-0.5">New tasks from admin land here.</p>
-          </div>
-        ) : (
-          <>
-            {openTasks.map((task) => (
-              <AssignedTaskRow key={task.id} task={task} onToggle={handleToggle} />
-            ))}
-            {doneTasks.length > 0 && (
-              <>
-                <div className="mx-2 mt-4 mb-2 flex items-center gap-2">
-                  <CheckCircle2 size={11} className="text-emerald-400/70" aria-hidden="true" />
-                  <p className="text-[11px] font-semibold tracking-[0.06em] text-emerald-400/70">
-                    COMPLETED
-                  </p>
-                  <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
-                </div>
-                {doneTasks.map((task) => (
-                  <AssignedTaskRow key={task.id} task={task} onToggle={handleToggle} />
-                ))}
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// Single row inside the AssignedTasksWidget. Click anywhere on the row
-// to toggle completion; optimistic update happens in the parent.
-function AssignedTaskRow({
-  task,
-  onToggle,
-}: {
-  task: AssignedTask
-  onToggle: (task: AssignedTask) => void
-}) {
-  const done = task.is_completed
-  const due = task.due_date ? new Date(task.due_date) : null
-  const dueLabel = due
-    ? due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : null
-  const isNew = !done && !task.completed_at && task.batch?.created_at
-    ? Date.now() - new Date(task.batch.created_at).getTime() < 24 * 60 * 60 * 1000
-    : false
-
-  return (
-    <button
-      type="button"
-      onClick={() => onToggle(task)}
-      className={`w-full group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left ${
-        done
-          ? 'bg-white/[0.018] opacity-60 hover:opacity-80'
-          : isNew
-            ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
-            : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
-      }`}
-    >
-      <span
-        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md flex items-center justify-center transition-colors ${
-          done
-            ? 'bg-emerald-500/80 border border-emerald-500/80 text-white'
-            : 'bg-surface-alt border border-border-light hover:border-gold/50'
-        }`}
-        aria-hidden="true"
-      >
-        {done && <Check size={12} strokeWidth={3} />}
-      </span>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p
-            className={`text-[13px] truncate ${
-              done
-                ? 'line-through text-text-muted'
-                : 'font-semibold text-text'
-            }`}
-          >
-            {task.title}
-          </p>
-          {isNew && (
-            <span className="shrink-0 inline-flex items-center justify-center px-1.5 h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none uppercase tracking-wide">
-              New
-            </span>
-          )}
-        </div>
-        {task.description && (
-          <p className={`text-[12px] mt-0.5 truncate ${done ? 'text-text-light' : 'text-text-muted'}`}>
-            {task.description}
-          </p>
-        )}
-        <div className="flex items-center gap-2 mt-1 text-[10px] text-text-light">
-          {task.category && <span>{task.category}</span>}
-          {task.category && dueLabel && <span aria-hidden="true">·</span>}
-          {dueLabel && <span>Due {dueLabel}</span>}
-          {(task.category || dueLabel) && task.is_required && <span aria-hidden="true">·</span>}
-          {task.is_required && <span className="text-rose-400">Required</span>}
-        </div>
-      </div>
-    </button>
   )
 }
 
