@@ -274,7 +274,7 @@ function normalizeAssignedTask(task: Partial<AssignedTask>): AssignedTask {
     created_at: task.created_at ?? new Date(0).toISOString(),
     updated_at: task.updated_at ?? task.created_at ?? new Date(0).toISOString(),
     scope: task.scope ?? 'member',
-    assigned_to_member_id: task.assigned_to_member_id ?? null,
+    assigned_to: task.assigned_to ?? null,
     assigned_to_name: task.assigned_to_name ?? null,
     can_complete: task.can_complete ?? false,
     batch: task.batch ?? null,

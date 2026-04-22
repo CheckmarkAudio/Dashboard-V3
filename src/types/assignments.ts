@@ -59,8 +59,10 @@ export interface AssignedTask {
   updated_at: string
   // Scope-foundation fields (nullable until the migration is applied on the
   // target DB — the query-layer normalizer fills in safe defaults).
+  // `assigned_to` mirrors the underlying column name on `assigned_tasks`
+  // rather than inventing an `_member_id` alias.
   scope: AssignedTaskScope
-  assigned_to_member_id: string | null
+  assigned_to: string | null
   assigned_to_name: string | null
   // Server-computed permission flag returned by get_*_assigned_tasks —
   // true when the current viewer may toggle completion for this task.
