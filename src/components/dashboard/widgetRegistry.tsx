@@ -35,6 +35,7 @@ import {
   AdminNotificationsWidget,
   AdminTeamWidget,
 } from './adminHubWidgets'
+import PendingTaskRequestsWidget from '../admin/assign/PendingTaskRequestsWidget'
 
 // ═════════════════════════════════════════════════════════════════════
 // Component maps — ONE per side.
@@ -62,6 +63,7 @@ const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
   admin_team: AdminTeamWidget,
   admin_flywheel: AdminFlywheelWidget,
   admin_approvals: AdminApprovalsWidget,
+  admin_task_requests: PendingTaskRequestsWidget,
   team_focus: TeamFocusWidget,
   approval_queue: ApprovalQueueWidget,
   admin_schedule: AdminScheduleWidget,

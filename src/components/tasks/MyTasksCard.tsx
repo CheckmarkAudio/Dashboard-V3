@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, Check, CheckCircle2, Inbox, Loader2 } from 'lucide-react'
+import { AlertCircle, Check, CheckCircle2, Hourglass, Inbox, Loader2, Plus, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { completeAssignedTask, fetchMemberAssignedTasks } from '../../lib/queries/assignments'
+import {
+  fetchMyTaskRequests,
+  taskRequestKeys,
+  type MyTaskRequest,
+} from '../../lib/queries/taskRequests'
 import { supabase } from '../../lib/supabase'
 import type { AssignedTask } from '../../types/assignments'
 import { Card, CardHeader, CompletedToggle } from './shared'
+import TaskRequestModal from './requests/TaskRequestModal'
 
 interface MyTasksCardProps {
   embedded?: boolean
@@ -19,7 +25,24 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   const queryClient = useQueryClient()
   const [showCompleted, setShowCompleted] = useState(false)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const [requestModalOpen, setRequestModalOpen] = useState(false)
+  const [requestsExpanded, setRequestsExpanded] = useState(false)
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  // PR #16 — user can ask admin for a task. Fetch any outstanding
+  // requests so we can show a "Pending approval" affordance inline.
+  // Only the pending + recently-resolved window matters here; if the
+  // user has 50 old resolved requests we still only render the recent
+  // ones (RPC limit 20 matches our use case).
+  const myRequestsQuery = useQuery({
+    queryKey: taskRequestKeys.mine(),
+    queryFn: () => fetchMyTaskRequests(20),
+    enabled: Boolean(profile?.id),
+    refetchInterval: 90_000,
+    staleTime: 30_000,
+  })
+  const myRequests = myRequestsQuery.data ?? []
+  const pendingRequests = myRequests.filter((r) => r.status === 'pending')
 
   const cacheKey = ['assigned-tasks', profile?.id ?? 'none'] as const
   const tasksQuery = useQuery({
@@ -113,18 +136,62 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
       <p className="text-[11px] font-semibold tracking-[0.06em] text-text-light">
         {openTasks.length} open
         {doneTasks.length > 0 && <span className="ml-2 text-text-light/70">· {doneTasks.length} done</span>}
+        {pendingRequests.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setRequestsExpanded((v) => !v)}
+            className="ml-2 inline-flex items-center gap-1 text-amber-300 hover:text-amber-200 font-bold"
+            aria-expanded={requestsExpanded}
+          >
+            <Hourglass size={10} aria-hidden="true" />
+            {pendingRequests.length} pending
+          </button>
+        )}
       </p>
-      <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setRequestModalOpen(true)}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gold/15 ring-1 ring-gold/30 text-gold hover:bg-gold/25 text-[10px] font-bold"
+          aria-label="Request a new task"
+        >
+          <Plus size={10} aria-hidden="true" />
+          Task
+        </button>
+        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+      </div>
     </div>
   ) : (
     <CardHeader>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[16px] font-bold tracking-tight text-text">My Tasks</h2>
-        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRequestModalOpen(true)}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gold/15 ring-1 ring-gold/30 text-gold hover:bg-gold/25 text-[11px] font-bold"
+            aria-label="Request a new task"
+          >
+            <Plus size={12} aria-hidden="true" />
+            Task
+          </button>
+          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+        </div>
       </div>
       <p className="mt-1 text-[11px] font-semibold tracking-[0.06em] text-text-light">
         {openTasks.length} open
         {doneTasks.length > 0 && <span className="ml-2 text-text-light/70">· {doneTasks.length} done</span>}
+        {pendingRequests.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setRequestsExpanded((v) => !v)}
+            className="ml-2 inline-flex items-center gap-1 text-amber-300 hover:text-amber-200 font-bold"
+            aria-expanded={requestsExpanded}
+          >
+            <Hourglass size={10} aria-hidden="true" />
+            {pendingRequests.length} pending approval
+          </button>
+        )}
       </p>
     </CardHeader>
   )
@@ -132,6 +199,14 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   const body = (
     <>
       {header}
+
+      {/* PR #16 — pending-request strip. Collapsed by default; the
+          "N pending" chip in the header toggles it. Shows title +
+          status per request, plus a way to see admin's rejection
+          note when resolved. */}
+      {requestsExpanded && myRequests.length > 0 && (
+        <PendingRequestsList requests={myRequests} />
+      )}
 
       <div className={`flex-1 min-h-0 overflow-y-auto space-y-1.5 ${embedded ? '' : 'px-3 py-2'}`}>
         {tasksQuery.isLoading ? (
@@ -188,10 +263,73 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   )
 
   if (embedded) {
-    return <div className="flex flex-col h-full min-h-0">{body}</div>
+    return (
+      <>
+        <div className="flex flex-col h-full min-h-0">{body}</div>
+        {requestModalOpen && <TaskRequestModal onClose={() => setRequestModalOpen(false)} />}
+      </>
+    )
   }
 
-  return <Card className="h-full">{body}</Card>
+  return (
+    <>
+      <Card className="h-full">{body}</Card>
+      {requestModalOpen && <TaskRequestModal onClose={() => setRequestModalOpen(false)} />}
+    </>
+  )
+}
+
+/**
+ * PendingRequestsList — compact strip of the user's task requests,
+ * grouped by status. Shown inline in MyTasksCard when the user
+ * toggles the "pending approval" chip.
+ */
+function PendingRequestsList({ requests }: { requests: MyTaskRequest[] }) {
+  const ordered = [...requests].sort((a, b) => {
+    // pending first, then rejected (with note), then approved
+    const weight = (s: MyTaskRequest['status']) =>
+      s === 'pending' ? 0 : s === 'rejected' ? 1 : 2
+    if (weight(a.status) !== weight(b.status)) return weight(a.status) - weight(b.status)
+    return b.created_at.localeCompare(a.created_at)
+  })
+  return (
+    <div className="px-3 pb-2 space-y-1.5">
+      {ordered.slice(0, 6).map((r) => (
+        <RequestRow key={r.id} request={r} />
+      ))}
+    </div>
+  )
+}
+
+function RequestRow({ request }: { request: MyTaskRequest }) {
+  const tone =
+    request.status === 'pending'
+      ? 'bg-amber-500/10 ring-amber-500/30 text-amber-200'
+      : request.status === 'approved'
+        ? 'bg-emerald-500/10 ring-emerald-500/30 text-emerald-200'
+        : 'bg-rose-500/10 ring-rose-500/30 text-rose-200'
+  const icon =
+    request.status === 'pending' ? (
+      <Hourglass size={11} aria-hidden="true" />
+    ) : request.status === 'approved' ? (
+      <Check size={11} aria-hidden="true" />
+    ) : (
+      <X size={11} aria-hidden="true" />
+    )
+  return (
+    <div className={`rounded-lg ring-1 px-2.5 py-1.5 text-[12px] ${tone}`}>
+      <div className="flex items-center gap-1.5 font-semibold">
+        {icon}
+        <span className="truncate">{request.title}</span>
+        <span className="ml-auto text-[10px] uppercase tracking-wider opacity-70">
+          {request.status}
+        </span>
+      </div>
+      {request.status === 'rejected' && request.reviewer_note && (
+        <p className="mt-0.5 text-[11px] opacity-90">{request.reviewer_note}</p>
+      )}
+    </div>
+  )
 }
 
 function AssignedTaskRow({
