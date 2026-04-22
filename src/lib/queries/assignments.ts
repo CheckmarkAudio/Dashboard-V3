@@ -18,6 +18,12 @@ import type {
   EducationStudent,
   ArtistPipelineEntry,
 } from '../../types'
+import type {
+  AssignedTask,
+  AssignmentBatchSummary,
+  AssignmentNotification,
+  CustomTaskAssignmentPayload,
+} from '../../types/assignments'
 
 // ─── Template assignments (task_assignments rows) ────────────────────
 
@@ -248,23 +254,49 @@ export async function setArtistAssignee(
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// PR #7 — Task-assignment MVP (Phase 1 feature set shipped in PR #6).
-//
-// These wrap the new SECURITY DEFINER RPCs. All errors throw. Conventions
-// match the rest of this module: `[queries/assignments]` log prefix, no
-// `{ data, error }` leakage out.
-// ═══════════════════════════════════════════════════════════════════════
+// ─── Assignment-backed task queries ───────────────────────────────────
 
-import type {
-  AssignedTask,
-  AssignmentBatchSummary,
-  AssignmentNotification,
-  CustomTaskAssignmentPayload,
-} from '../../types/assignments'
+function normalizeAssignedTask(task: Partial<AssignedTask>): AssignedTask {
+  return {
+    id: task.id ?? '',
+    title: task.title ?? 'Untitled task',
+    description: task.description ?? null,
+    category: task.category ?? null,
+    sort_order: task.sort_order ?? 0,
+    is_required: task.is_required ?? false,
+    is_completed: task.is_completed ?? false,
+    completed_at: task.completed_at ?? null,
+    due_date: task.due_date ?? null,
+    visible_on_overview: task.visible_on_overview ?? true,
+    source_type: task.source_type ?? 'custom',
+    source_template_id: task.source_template_id ?? null,
+    source_template_item_id: task.source_template_item_id ?? null,
+    created_at: task.created_at ?? new Date(0).toISOString(),
+    updated_at: task.updated_at ?? task.created_at ?? new Date(0).toISOString(),
+    scope: task.scope ?? 'member',
+    assigned_to_member_id: task.assigned_to_member_id ?? null,
+    assigned_to_name: task.assigned_to_name ?? null,
+    can_complete: task.can_complete ?? false,
+    batch: task.batch ?? null,
+  }
+}
 
-/** Fetch the signed-in member's active assigned tasks. Server-side
- * auth.uid() guard; admin can read any user's tasks. */
+function normalizeAssignedTasks(rows: unknown): AssignedTask[] {
+  if (!Array.isArray(rows)) return []
+  return rows.map((row) => normalizeAssignedTask((row ?? {}) as Partial<AssignedTask>))
+}
+
+function remapAssignmentRpcError(error: { message?: string } | null, fallback: string): Error {
+  const message = error?.message ?? fallback
+  if (
+    message.includes('Could not find the function public.get_team_assigned_tasks') ||
+    message.includes('Could not find the function public.get_studio_assigned_tasks')
+  ) {
+    return new Error('This view needs the assigned_tasks scope migration before it can load real data.')
+  }
+  return new Error(message)
+}
+
 export async function fetchMemberAssignedTasks(
   userId: string,
   opts: { includeCompleted?: boolean; onlyOverview?: boolean } = {},
@@ -278,10 +310,39 @@ export async function fetchMemberAssignedTasks(
     console.error('[queries/assignments] fetchMemberAssignedTasks failed:', error)
     throw new Error(error.message)
   }
-  return (data as AssignedTask[] | null) ?? []
+  return normalizeAssignedTasks(data)
 }
 
-/** Toggle completion on an assigned task. Owner or admin only. */
+export async function fetchTeamAssignedTasks(
+  userId: string,
+  opts: { includeCompleted?: boolean } = {},
+): Promise<AssignedTask[]> {
+  const { data, error } = await supabase.rpc('get_team_assigned_tasks', {
+    p_user_id: userId,
+    p_include_completed: opts.includeCompleted ?? false,
+  })
+  if (error) {
+    console.error('[queries/assignments] fetchTeamAssignedTasks failed:', error)
+    throw remapAssignmentRpcError(error, 'Could not load team tasks.')
+  }
+  return normalizeAssignedTasks(data)
+}
+
+export async function fetchStudioAssignedTasks(
+  userId: string,
+  opts: { includeCompleted?: boolean } = {},
+): Promise<AssignedTask[]> {
+  const { data, error } = await supabase.rpc('get_studio_assigned_tasks', {
+    p_user_id: userId,
+    p_include_completed: opts.includeCompleted ?? false,
+  })
+  if (error) {
+    console.error('[queries/assignments] fetchStudioAssignedTasks failed:', error)
+    throw remapAssignmentRpcError(error, 'Could not load studio tasks.')
+  }
+  return normalizeAssignedTasks(data)
+}
+
 export async function completeAssignedTask(
   taskId: string,
   isCompleted: boolean,
@@ -294,10 +355,9 @@ export async function completeAssignedTask(
     console.error('[queries/assignments] completeAssignedTask failed:', error)
     throw new Error(error.message)
   }
-  return data as AssignedTask
+  return normalizeAssignedTask((data ?? {}) as Partial<AssignedTask>)
 }
 
-/** Fetch assignment notifications for the signed-in member. */
 export async function fetchAssignmentNotifications(
   userId: string,
   opts: { unreadOnly?: boolean; limit?: number } = {},
@@ -314,7 +374,6 @@ export async function fetchAssignmentNotifications(
   return (data as AssignmentNotification[] | null) ?? []
 }
 
-/** Mark a single assignment notification as read. Owner only. */
 export async function markAssignmentNotificationRead(
   notificationId: string,
 ): Promise<{ success: boolean; notification_id: string; is_read: boolean; read_at: string | null }> {
@@ -328,8 +387,6 @@ export async function markAssignmentNotificationRead(
   return data as { success: boolean; notification_id: string; is_read: boolean; read_at: string | null }
 }
 
-/** Admin assigns a custom task to one or more members. Atomic (batch +
- *  recipients + tasks + notifications in one transaction). */
 export async function assignCustomTaskToMembers(
   memberIds: string[],
   payload: CustomTaskAssignmentPayload,
