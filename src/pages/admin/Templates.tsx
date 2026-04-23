@@ -26,32 +26,29 @@ import {
   TemplatePreviewModal,
 } from '../../components/admin/templates'
 import SessionAssignModal from '../../components/admin/assign/SessionAssignModal'
+import PendingTaskRequestsWidget from '../../components/admin/assign/PendingTaskRequestsWidget'
 import { AdminAssignWidget } from '../../components/dashboard/adminHubWidgets'
 import type { RecentAssignmentBatch } from '../../lib/queries/taskTemplates'
 
 /**
- * Assign page (`/admin/templates`) — the admin's command center for
- * sending work to the team.
+ * Assign page (`/admin/templates`) — Trello-style 3-column layout.
  *
- * Layout (PR #13, monday-style):
- *   1. Quick Assign widget       — inline compose; type a task, pick
- *                                  recipients, send. No template needed.
- *   2. Assign a Session tile     — opens SessionAssignModal where an
- *                                  admin can (re)assign a booked
- *                                  session to an engineer. Writes
- *                                  `sessions.assigned_to` + fires a
- *                                  notification via assign_session RPC.
- *   3. Templates library         — existing card grid (unchanged).
- *                                  Full template library for reusable
- *                                  checklists + onboarding blueprints.
- *   4. Recent assignments        — last 10 batches with cancel control.
+ * PR #20 reorg:
+ *   Column 1 "Assign"    — AdminAssignWidget (Session / Task / Task
+ *                          Group + Recently Assigned feed) + the
+ *                          Reassign-a-Session tile at the bottom.
+ *   Column 2 "Approve"   — PendingTaskRequestsWidget (task requests
+ *                          awaiting admin approval; inline approve +
+ *                          decline + flywheel-stage step).
+ *   Column 3 "Templates" — Stats + filter bar + template grid + New
+ *                          Template button.
  *
- * PR #9 replaced the legacy `report_templates` CRUD surface. PR #13
- * rebuilds the page around the three-section flow but keeps the
- * templates grid and recent-assignments section intact.
+ * RecentAssignmentsSection (last 10 template batches with cancel)
+ * spans full-width below the grid since it's a history/audit surface
+ * not tied to a single column.
  *
- * Legacy daily-checklist templates are still managed via the existing
- * `PublishChecklistModal`. Phase 3 will unify the two template concepts.
+ * Each column is a subtle card with its own header + independent
+ * scroll so long feeds in one column don't push the page.
  */
 
 export default function Templates() {
@@ -74,10 +71,8 @@ export default function Templates() {
 
   const all = libraryQuery.data ?? []
 
-  // A second unfiltered query so the role-tag pills + stats remain
-  // stable regardless of the current filter selection. React Query
-  // dedupes identical keys so this is a shared cache entry; the call
-  // only actually hits Supabase once per (null, includeInactive) pair.
+  // Second unfiltered query so the role-tag pills + stats stay stable
+  // regardless of current filter. React Query dedupes identical keys.
   const allForPills = useQuery({
     queryKey: taskTemplateKeys.library(null, includeInactive),
     queryFn: () => fetchTaskTemplateLibrary({ roleTag: null, includeInactive }),
@@ -90,7 +85,6 @@ export default function Templates() {
     return Array.from(set).sort()
   }, [allForPills.data])
 
-  // ── Client-side filters (search + onboarding) ────────────────────
   const templates = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return all.filter((t) => {
@@ -104,160 +98,158 @@ export default function Templates() {
     })
   }, [all, search, onboardingOnly])
 
-  // ── Stats for the hero ───────────────────────────────────────────
   const poolForStats = allForPills.data ?? []
   const activeCount = poolForStats.filter((t) => t.is_active).length
   const onboardingCount = poolForStats.filter((t) => t.is_onboarding).length
   const itemCount = poolForStats.reduce((s, t) => s + t.item_count, 0)
 
   return (
-    <div className="max-w-6xl mx-auto animate-fade-in space-y-6">
+    <div className="max-w-[1440px] mx-auto animate-fade-in space-y-6">
       <PageHeader
         icon={FolderKanban}
         title="Assign"
-        subtitle="Send out sessions, tasks, or task groups — and manage the template library you'll reuse for onboarding + repeat work."
+        subtitle="Send out sessions, tasks, and task groups · approve member requests · manage the template library."
       />
 
-      {/* PR #19 — the full 3-tile Assign widget lives here now. Hub
-          keeps a lightweight Quick Assign for fast one-off task
-          compose. Session reassignment still has its own tile below
-          the widget since `AdminAssignWidget`'s "Session" CTA opens
-          the BOOKING modal (create), not the reassign flow. */}
-      <section className="rounded-2xl border border-border bg-surface-alt/30 p-4">
-        <AdminAssignWidget />
-      </section>
-
-      {/* Reassign an existing session ─────────────────────────────── */}
-      <AssignSessionTile onClick={() => setSessionAssignOpen(true)} />
-
-      {/* Templates section header ──────────────────────────────── */}
-      <section className="pt-2">
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <div>
-            <h2 className="text-[18px] font-bold text-text tracking-tight">Templates</h2>
-            <p className="text-[12px] text-text-light mt-0.5">
-              Reusable blueprints for onboarding, role-specific work, or anything you'll send more than once.
-            </p>
+      {/* ═══ Three-column board ═════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        {/* ─── Column 1 · Assign ──────────────────────────────────── */}
+        <Column title="Assign" subtitle="Send work out">
+          <div className="space-y-3">
+            <AdminAssignWidget />
+            <ReassignSessionTile onClick={() => setSessionAssignOpen(true)} />
           </div>
-          <button
-            type="button"
-            onClick={() => setEditorOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold text-black text-sm font-bold hover:bg-gold-muted focus-ring"
-          >
-            <Plus size={16} aria-hidden="true" />
-            New Template
-          </button>
-        </div>
-        <div className="flex gap-6 mb-4">
-          <Stat label="Templates" value={activeCount} muted={libraryQuery.isLoading} />
-          <Stat label="Onboarding" value={onboardingCount} muted={libraryQuery.isLoading} />
-          <Stat label="Items" value={itemCount} muted={libraryQuery.isLoading} />
-        </div>
-      </section>
+        </Column>
 
-      {/* Filter bar ─────────────────────────────────────────────────── */}
-      <section className="space-y-3">
-        {/* Search */}
-        <div className="relative">
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-light pointer-events-none"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter templates by name, description, or tag…"
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-surface-alt border border-border text-sm focus-ring placeholder:text-text-light/70"
-          />
-        </div>
+        {/* ─── Column 2 · Approve ─────────────────────────────────── */}
+        <Column title="Approve" subtitle="Pending task requests from the team">
+          <PendingTaskRequestsWidget />
+        </Column>
 
-        {/* Role tag pills + toggles */}
-        <div className="flex flex-wrap items-center gap-2">
-          <FilterPill
-            label="All roles"
-            active={roleFilter === null}
-            onClick={() => setRoleFilter(null)}
-          />
-          {roleTags.map((tag) => (
-            <FilterPill
-              key={tag}
-              label={tag}
-              active={roleFilter === tag}
-              onClick={() => setRoleFilter(tag)}
-            />
-          ))}
-          <div className="flex-1" />
-          <ToggleChip
-            label="Onboarding only"
-            active={onboardingOnly}
-            onClick={() => setOnboardingOnly((v) => !v)}
-          />
-          <ToggleChip
-            label="Include archived"
-            active={includeInactive}
-            onClick={() => setIncludeInactive((v) => !v)}
-          />
-        </div>
-      </section>
-
-      {/* Grid ──────────────────────────────────────────────────────── */}
-      <section>
-        {libraryQuery.isLoading ? (
-          <div className="py-16 flex items-center justify-center text-text-light">
-            <Loader2 size={22} className="animate-spin" />
-          </div>
-        ) : libraryQuery.error ? (
-          <p className="py-8 text-center text-[13px] text-rose-300">
-            Could not load templates.
-          </p>
-        ) : templates.length === 0 ? (
-          <div className="py-16 flex flex-col items-center justify-center text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gold/10 ring-1 ring-gold/20 mb-3">
-              <FolderKanban size={22} className="text-gold" aria-hidden="true" />
+        {/* ─── Column 3 · Templates ───────────────────────────────── */}
+        <Column
+          title="Templates"
+          subtitle="Reusable blueprints for onboarding + repeat work"
+          action={
+            <button
+              type="button"
+              onClick={() => setEditorOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold text-black text-[12px] font-bold hover:bg-gold-muted focus-ring"
+            >
+              <Plus size={12} aria-hidden="true" />
+              New
+            </button>
+          }
+        >
+          <div className="space-y-3">
+            {/* Stats strip */}
+            <div className="flex gap-3 px-0.5">
+              <Stat label="Active" value={activeCount} muted={libraryQuery.isLoading} />
+              <Stat label="Onboarding" value={onboardingCount} muted={libraryQuery.isLoading} />
+              <Stat label="Items" value={itemCount} muted={libraryQuery.isLoading} />
             </div>
-            <p className="text-[15px] font-bold text-text">
-              {all.length === 0 ? 'No templates yet' : 'No matches'}
-            </p>
-            <p className="text-[12px] text-text-light mt-1 max-w-sm">
-              {all.length === 0
-                ? "Create your first reusable blueprint. Onboarding, weekly priorities, role-specific checklists — anything you'll assign more than once."
-                : 'Try clearing filters or widening your search.'}
-            </p>
-            {all.length === 0 && (
-              <button
-                type="button"
-                onClick={() => setEditorOpen(true)}
-                className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gold text-black text-sm font-bold hover:bg-gold-muted focus-ring"
-              >
-                <Plus size={14} aria-hidden="true" />
-                Create template
-              </button>
+
+            {/* Search */}
+            <div className="relative">
+              <Search
+                size={13}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-light pointer-events-none"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Filter by name, description, or tag…"
+                className="w-full pl-8 pr-3 py-2 rounded-lg bg-surface border border-border text-[13px] focus-ring placeholder:text-text-light/70"
+              />
+            </div>
+
+            {/* Role pills + toggles */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <FilterPill
+                label="All"
+                active={roleFilter === null}
+                onClick={() => setRoleFilter(null)}
+              />
+              {roleTags.map((tag) => (
+                <FilterPill
+                  key={tag}
+                  label={tag}
+                  active={roleFilter === tag}
+                  onClick={() => setRoleFilter(tag)}
+                />
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <ToggleChip
+                label="Onboarding"
+                active={onboardingOnly}
+                onClick={() => setOnboardingOnly((v) => !v)}
+              />
+              <ToggleChip
+                label="Include archived"
+                active={includeInactive}
+                onClick={() => setIncludeInactive((v) => !v)}
+              />
+            </div>
+
+            {/* Card grid — single column inside the narrow Templates column */}
+            {libraryQuery.isLoading ? (
+              <div className="py-10 flex items-center justify-center text-text-light">
+                <Loader2 size={18} className="animate-spin" />
+              </div>
+            ) : libraryQuery.error ? (
+              <p className="py-6 text-center text-[12px] text-rose-300">
+                Could not load templates.
+              </p>
+            ) : templates.length === 0 ? (
+              <div className="py-8 flex flex-col items-center justify-center text-center">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
+                  <FolderKanban size={18} className="text-gold" aria-hidden="true" />
+                </div>
+                <p className="text-[13px] font-bold text-text">
+                  {all.length === 0 ? 'No templates yet' : 'No matches'}
+                </p>
+                <p className="text-[11px] text-text-light mt-0.5 max-w-[24ch]">
+                  {all.length === 0
+                    ? 'Your first reusable blueprint.'
+                    : 'Try clearing filters.'}
+                </p>
+                {all.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setEditorOpen(true)}
+                    className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold text-black text-[12px] font-bold hover:bg-gold-muted focus-ring"
+                  >
+                    <Plus size={12} aria-hidden="true" />
+                    Create
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {templates.map((t) => (
+                  <TemplateCard
+                    key={t.id}
+                    template={t}
+                    onClick={() => setPreviewTemplateId(t.id)}
+                  />
+                ))}
+              </div>
             )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {templates.map((t) => (
-              <TemplateCard
-                key={t.id}
-                template={t}
-                onClick={() => setPreviewTemplateId(t.id)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+        </Column>
+      </div>
 
-      {/* Recent assignments (with cancel) ─────────────────────────── */}
+      {/* ═══ Full-width history strip ═══════════════════════════════ */}
       <RecentAssignmentsSection />
 
-      {/* Modals ──────────────────────────────────────────────────── */}
+      {/* ═══ Modals ═════════════════════════════════════════════════ */}
       {editorOpen && (
         <TemplateEditorModal
           onClose={() => setEditorOpen(false)}
           onSaved={(newId) => {
-            // After create, jump straight to preview so admin can add items.
             setEditorOpen(false)
             setPreviewTemplateId(newId)
           }}
@@ -276,39 +268,71 @@ export default function Templates() {
   )
 }
 
-// ─── Assign-a-Session tile ───────────────────────────────────────────
+// ═══ Column shell ═════════════════════════════════════════════════
 //
-// Intentionally distinct visually from the Quick Assign card above so
-// admins register it as a separate concept ("send work to people" vs
-// "route a booked session to an engineer"). The blue accent vs the
-// gold Quick Assign header keeps the two actions at-a-glance
-// discriminable.
+// Trello-style column card: header with title + subtitle + optional
+// action slot, scrollable interior. `max-h` caps column height on
+// large viewports so each column scrolls independently instead of
+// stretching the page.
 
-function AssignSessionTile({ onClick }: { onClick: () => void }) {
+function Column({
+  title,
+  subtitle,
+  action,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-2xl border border-border bg-surface-alt/30 flex flex-col max-h-[calc(100vh-240px)] min-h-[480px]">
+      <header className="flex items-start justify-between gap-3 px-4 py-3 border-b border-border/60 shrink-0">
+        <div className="min-w-0">
+          <h2 className="text-[14px] font-bold tracking-tight text-text">{title}</h2>
+          {subtitle && (
+            <p className="text-[11px] text-text-light mt-0.5 truncate">{subtitle}</p>
+          )}
+        </div>
+        {action}
+      </header>
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">{children}</div>
+    </section>
+  )
+}
+
+// ═══ Reassign-a-Session tile ══════════════════════════════════════
+//
+// Sits at the bottom of the Assign column. AdminAssignWidget's Session
+// tile creates a NEW booking; this tile reassigns an existing one to a
+// different engineer (distinct RPC + distinct flow).
+
+function ReassignSessionTile({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left rounded-2xl border border-border bg-surface-alt/40 p-4 hover:bg-surface-hover transition-colors focus-ring"
-      aria-label="Assign a booked session to an engineer"
+      className="w-full text-left rounded-xl border border-border bg-surface-alt/60 p-3 hover:bg-surface-hover transition-colors focus-ring"
+      aria-label="Reassign a booked session to a different engineer"
     >
       <div className="flex items-center gap-3">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-cyan-500/15 ring-1 ring-cyan-500/30 text-cyan-300 shrink-0">
-          <Calendar size={18} aria-hidden="true" />
+        <div className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-cyan-500/15 ring-1 ring-cyan-500/30 text-cyan-300 shrink-0">
+          <Calendar size={16} aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-[15px] font-bold text-text">Assign a session</h3>
-          <p className="text-[12px] text-text-light truncate">
-            Route an upcoming booking to an engineer · updates the Sessions page + notifies them.
+          <h3 className="text-[13px] font-bold text-text">Reassign a session</h3>
+          <p className="text-[11px] text-text-light truncate">
+            Route an upcoming booking to a different engineer.
           </p>
         </div>
-        <ChevronRight size={16} className="text-text-light shrink-0" aria-hidden="true" />
+        <ChevronRight size={14} className="text-text-light shrink-0" aria-hidden="true" />
       </div>
     </button>
   )
 }
 
-// ─── Small presentational atoms ──────────────────────────────────────
+// ═══ Small presentational atoms ═══════════════════════════════════
 
 function Stat({
   label,
@@ -321,11 +345,11 @@ function Stat({
 }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-text-light">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-text-light">
         {label}
       </p>
       <p
-        className={`text-[22px] font-bold tracking-tight leading-none ${
+        className={`text-[18px] font-bold tracking-tight leading-none mt-0.5 ${
           muted ? 'text-text-muted' : 'text-text'
         }`}
       >
@@ -348,10 +372,10 @@ function FilterPill({
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-[12px] font-semibold transition-colors ${
+      className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
         active
           ? 'bg-gold/20 text-gold ring-1 ring-gold/40'
-          : 'bg-surface-alt text-text-muted ring-1 ring-border hover:text-text hover:bg-surface-hover'
+          : 'bg-surface text-text-muted ring-1 ring-border hover:text-text hover:bg-surface-hover'
       }`}
     >
       {label}
@@ -373,10 +397,10 @@ function ToggleChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-semibold transition-colors ${
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
         active
           ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/40'
-          : 'bg-surface-alt text-text-muted ring-1 ring-border hover:text-text hover:bg-surface-hover'
+          : 'bg-surface text-text-muted ring-1 ring-border hover:text-text hover:bg-surface-hover'
       }`}
     >
       <span
@@ -390,12 +414,11 @@ function ToggleChip({
   )
 }
 
-// ═══ Recent assignments section (PR #10) ═════════════════════════════
+// ═══ Recent assignments strip (full-width below the columns) ═════
 //
-// Compact list of the last 10 template-derived assignment batches with
-// a per-row Cancel action. Cancelled batches stay in the list (with a
-// muted appearance) so admins can see what they've already recalled
-// without them disappearing from history.
+// Last 10 template-batch assignments with per-row cancel. Lives
+// outside the 3-column grid because it's a history/audit surface
+// that doesn't belong to any single column.
 
 function RecentAssignmentsSection() {
   const { toast } = useToast()
@@ -417,8 +440,6 @@ function RecentAssignmentsSection() {
         'success',
       )
       void queryClient.invalidateQueries({ queryKey: taskTemplateKeys.all })
-      // Also invalidate member-side caches so recipients see the batch
-      // vanish from their widget without a page refresh.
       void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
     },
     onError: (err) => {
@@ -448,7 +469,7 @@ function RecentAssignmentsSection() {
     <section className="pt-2">
       <div className="flex items-baseline justify-between mb-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-text-light">
-          Recent assignments
+          Recent template assignments
         </h2>
         <span className="text-[10px] text-text-light">Last 10</span>
       </div>
