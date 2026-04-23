@@ -131,6 +131,10 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
 
   const visibleTasks = showCompleted ? [...openTasks, ...doneTasks] : openTasks
 
+  // PR #17 — header no longer carries the "+ Task" chip. The button
+  // lives as an inline link at the bottom of the list (monday-style)
+  // so it reads as "the next row you'd add." Header keeps count +
+  // pending chip + completed toggle.
   const header = embedded ? (
     <div className="flex items-center justify-between gap-3 pb-2.5 mb-2 border-b border-white/5 shrink-0">
       <p className="text-[11px] font-semibold tracking-[0.06em] text-text-light">
@@ -148,35 +152,13 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
           </button>
         )}
       </p>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setRequestModalOpen(true)}
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gold/15 ring-1 ring-gold/30 text-gold hover:bg-gold/25 text-[10px] font-bold"
-          aria-label="Request a new task"
-        >
-          <Plus size={10} aria-hidden="true" />
-          Task
-        </button>
-        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-      </div>
+      <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
     </div>
   ) : (
     <CardHeader>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[16px] font-bold tracking-tight text-text">My Tasks</h2>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setRequestModalOpen(true)}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gold/15 ring-1 ring-gold/30 text-gold hover:bg-gold/25 text-[11px] font-bold"
-            aria-label="Request a new task"
-          >
-            <Plus size={12} aria-hidden="true" />
-            Task
-          </button>
-          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-        </div>
+        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
       </div>
       <p className="mt-1 text-[11px] font-semibold tracking-[0.06em] text-text-light">
         {openTasks.length} open
@@ -194,6 +176,22 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         )}
       </p>
     </CardHeader>
+  )
+
+  // Inline "+ Task" row that sits at the bottom of the task list —
+  // monday's "+ Add item" pattern. Reads as the next row you'd add.
+  const addTaskRow = (
+    <button
+      type="button"
+      onClick={() => setRequestModalOpen(true)}
+      className={`w-full inline-flex items-center gap-2 ${
+        embedded ? 'px-2 py-1.5' : 'px-2.5 py-2'
+      } rounded-[14px] text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/5 transition-colors text-left`}
+      aria-label="Request a new task"
+    >
+      <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
+      Task
+    </button>
   )
 
   const body = (
@@ -226,11 +224,14 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             <p className="text-[14px] font-medium text-text">
               {openTasks.length === 0 && doneTasks.length > 0 ? 'All done' : 'No tasks yet'}
             </p>
-            <p className="text-[12px] text-text-light mt-0.5">
+            <p className="text-[12px] text-text-light mt-0.5 mb-3">
               {openTasks.length === 0 && doneTasks.length > 0
                 ? 'Toggle to review completed work.'
                 : 'Assigned work and checklist tasks will land here.'}
             </p>
+            {/* Empty-state also surfaces the add affordance so a
+                brand-new member can request their first task. */}
+            {addTaskRow}
           </div>
         ) : (
           visibleTasks.map((task) => {
@@ -258,6 +259,10 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             )
           })
         )}
+        {/* "+ Task" row sits at the END of the task list — monday's
+            "+ Add item" pattern. Only render after the list (not in
+            the empty state, which already includes it above). */}
+        {visibleTasks.length > 0 && <div className="pt-1">{addTaskRow}</div>}
       </div>
     </>
   )

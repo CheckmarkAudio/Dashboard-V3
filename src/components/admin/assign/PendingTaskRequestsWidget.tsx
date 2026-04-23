@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Clock, Inbox, Loader2, UserCircle2, X } from 'lucide-react'
+import { Check, Clock, Flag, Inbox, Loader2, Repeat, UserCircle2, X } from 'lucide-react'
 import { useToast } from '../../Toast'
 import {
   approveTaskRequest,
@@ -9,6 +9,7 @@ import {
   taskRequestKeys,
   type PendingTaskRequest,
 } from '../../../lib/queries/taskRequests'
+import { FlywheelStagePicker, type FlywheelStage } from '../../tasks/requests/formAtoms'
 
 /**
  * PendingTaskRequestsWidget — admin approval queue for user-submitted
@@ -80,7 +81,14 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [rejectOpen, setRejectOpen] = useState(false)
+  const [approveOpen, setApproveOpen] = useState(false)
   const [note, setNote] = useState('')
+  // PR #17 — admin tags the approved task with a flywheel stage
+  // during review; `null` means inherit whatever the requester set
+  // (or nothing).
+  const [stage, setStage] = useState<FlywheelStage | null>(
+    (request.category as FlywheelStage | null) ?? null,
+  )
 
   const invalidate = () => {
     // Admin-side queue + member-side history + the notifications widget
@@ -91,9 +99,14 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
   }
 
   const approveMutation = useMutation({
-    mutationFn: () => approveTaskRequest(request.id),
+    mutationFn: () => approveTaskRequest(request.id, stage),
     onSuccess: () => {
-      toast(`Approved — "${request.title}" added to ${request.requester_name}'s tasks.`, 'success')
+      const stagePart = stage ? ` · tagged ${stage}` : ''
+      toast(
+        `Approved — "${request.title}" added to ${request.requester_name}'s tasks${stagePart}.`,
+        'success',
+      )
+      setApproveOpen(false)
       invalidate()
     },
     onError: (err) => toast(err instanceof Error ? err.message : 'Approve failed', 'error'),
@@ -143,6 +156,18 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
                 </span>
               </>
             )}
+            {request.is_required && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/15 ring-1 ring-rose-500/30 text-rose-200 font-semibold uppercase tracking-wider text-[10px]">
+                <Flag size={9} aria-hidden="true" />
+                Priority
+              </span>
+            )}
+            {request.recurrence_spec && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gold/15 ring-1 ring-gold/30 text-gold font-semibold uppercase tracking-wider text-[10px]">
+                <Repeat size={9} aria-hidden="true" />
+                {request.recurrence_spec.frequency}
+              </span>
+            )}
           </div>
           {request.description && (
             <p className="text-[12px] text-text-muted mt-1 leading-snug">
@@ -184,6 +209,32 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
             </button>
           </div>
         </div>
+      ) : approveOpen ? (
+        <div className="mt-2 space-y-2 pl-9">
+          <FlywheelStagePicker
+            value={stage}
+            onChange={setStage}
+            label="Tag with flywheel stage (optional)"
+          />
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => setApproveOpen(false)}
+              className="px-2 py-1 rounded-md text-[11px] font-semibold text-text-light hover:text-text"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => approveMutation.mutate()}
+              disabled={approveMutation.isPending}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 text-[11px] font-bold hover:bg-emerald-500/30"
+            >
+              <Check size={11} aria-hidden="true" />
+              {approveMutation.isPending ? 'Approving…' : 'Confirm approve'}
+            </button>
+          </div>
+        </div>
       ) : (
         <div className="mt-2 flex items-center justify-end gap-1.5 pl-9">
           <button
@@ -197,12 +248,12 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
           </button>
           <button
             type="button"
-            onClick={() => approveMutation.mutate()}
+            onClick={() => setApproveOpen(true)}
             disabled={approveMutation.isPending}
             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 text-[11px] font-bold hover:bg-emerald-500/30 disabled:opacity-50"
           >
             <Check size={11} aria-hidden="true" />
-            {approveMutation.isPending ? 'Approving…' : 'Approve'}
+            Approve…
           </button>
         </div>
       )}

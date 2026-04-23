@@ -5,6 +5,7 @@ import { useToast } from '../../Toast'
 import MemberMultiSelect from '../../members/MemberMultiSelect'
 import { assignCustomTaskToMembers } from '../../../lib/queries/assignments'
 import type { AssignedTaskScope } from '../../../types/assignments'
+import { FlywheelStagePicker, type FlywheelStage } from '../../tasks/requests/formAtoms'
 
 /**
  * QuickAssignWidget — monday-style inline compose box at the top of
@@ -42,6 +43,9 @@ export default function QuickAssignWidget() {
   const [moreOpen, setMoreOpen] = useState(false)
   const [lastSent, setLastSent] = useState<string | null>(null)
   const [scope, setScope] = useState<AssignedTaskScope>('member')
+  // PR #17 — admin tags tasks with a flywheel stage at creation time
+  // so KPI counters pick up the task without a post-hoc backfill.
+  const [stage, setStage] = useState<FlywheelStage | null>(null)
 
   const assignMutation = useMutation({
     mutationFn: async () => {
@@ -50,6 +54,7 @@ export default function QuickAssignWidget() {
         {
           title: title.trim(),
           description: description.trim() || null,
+          category: stage,
           due_date: dueDate || null,
           is_required: isRequired,
           show_on_overview: showOnOverview,
@@ -217,6 +222,11 @@ export default function QuickAssignWidget() {
             </div>
           </div>
         )}
+
+        {/* Flywheel stage — admin-only per PR #17 decision.
+            Pre-tags the resulting assigned_tasks.category so KPI
+            counters pick up the task without a backfill. */}
+        <FlywheelStagePicker value={stage} onChange={setStage} />
 
         {/* Row 3: More options toggle + collapsible */}
         <div>
