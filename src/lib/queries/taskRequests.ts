@@ -14,6 +14,12 @@ export const taskRequestKeys = {
 
 export type TaskRequestStatus = 'pending' | 'approved' | 'rejected'
 
+/** Shape of the stored recurrence spec on a task request. `null` = one-shot. */
+export interface RecurrenceSpec {
+  frequency: 'daily' | 'weekly' | 'monthly' | 'custom'
+  interval: number
+}
+
 /** Row shape returned by `get_pending_task_requests` (admin queue). */
 export interface PendingTaskRequest {
   id: string
@@ -24,6 +30,8 @@ export interface PendingTaskRequest {
   category: string | null
   due_date: string | null
   status: TaskRequestStatus
+  is_required: boolean
+  recurrence_spec: RecurrenceSpec | null
   created_at: string
 }
 
@@ -35,10 +43,20 @@ export interface MyTaskRequest {
   category: string | null
   due_date: string | null
   status: TaskRequestStatus
+  is_required: boolean
+  recurrence_spec: RecurrenceSpec | null
   reviewer_note: string | null
   reviewed_at: string | null
   approved_task_id: string | null
   created_at: string
+}
+
+// PR #17 — recurrence is stubbed until the engine ships; UI captures
+// the choice and we persist it as a JSONB spec so saved requests can
+// activate automatically later.
+export interface RecurrenceSpecInput {
+  frequency: 'daily' | 'weekly' | 'monthly' | 'custom'
+  interval: number
 }
 
 export interface SubmitTaskRequestInput {
@@ -46,6 +64,9 @@ export interface SubmitTaskRequestInput {
   description?: string | null
   category?: string | null
   due_date?: string | null
+  recurrence_spec?: RecurrenceSpecInput | null
+  /** Merged priority+required flag (PR #17). */
+  is_required?: boolean
 }
 
 export async function submitTaskRequest(
@@ -56,6 +77,8 @@ export async function submitTaskRequest(
     p_description: input.description ?? null,
     p_category: input.category ?? null,
     p_due_date: input.due_date ?? null,
+    p_recurrence_spec: input.recurrence_spec ?? null,
+    p_is_required: input.is_required ?? false,
   })
   if (error) {
     console.error('[queries/taskRequests] submitTaskRequest failed:', error)
@@ -84,17 +107,22 @@ export async function fetchMyTaskRequests(limit = 20): Promise<MyTaskRequest[]> 
   return (data as MyTaskRequest[] | null) ?? []
 }
 
+// PR #17 — admin can tag the approved task with a flywheel stage
+// during review so KPI tracking catches up the moment the task lands.
+// Passing null/undefined preserves the requester's own category.
 export async function approveTaskRequest(
   requestId: string,
-): Promise<{ request_id: string; task_id: string; batch_id: string; notification_id: string }> {
+  category: string | null = null,
+): Promise<{ request_id: string; task_id: string; batch_id: string; category: string | null; notification_id: string }> {
   const { data, error } = await supabase.rpc('approve_task_request', {
     p_request_id: requestId,
+    p_category: category,
   })
   if (error) {
     console.error('[queries/taskRequests] approveTaskRequest failed:', error)
     throw new Error(error.message)
   }
-  return data as { request_id: string; task_id: string; batch_id: string; notification_id: string }
+  return data as { request_id: string; task_id: string; batch_id: string; category: string | null; notification_id: string }
 }
 
 export async function rejectTaskRequest(
