@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase'
 import type { AssignedTask } from '../../types/assignments'
 import { Card, CardHeader, CompletedToggle } from './shared'
 import TaskRequestModal from './requests/TaskRequestModal'
+import TaskDetailModal from './TaskDetailModal'
 
 interface MyTasksCardProps {
   embedded?: boolean
@@ -27,6 +28,8 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [requestModalOpen, setRequestModalOpen] = useState(false)
   const [requestsExpanded, setRequestsExpanded] = useState(false)
+  // PR #25 — click task body (not checkbox) opens this detail modal
+  const [detailTask, setDetailTask] = useState<AssignedTask | null>(null)
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   // PR #16 — user can ask admin for a task. Fetch any outstanding
@@ -250,6 +253,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
                   task={task}
                   highlighted={highlightedId === task.id}
                   onToggle={(nextTask) => toggleMutation.mutate({ taskId: nextTask.id, next: !nextTask.is_completed })}
+                  onOpenDetail={(nextTask) => setDetailTask(nextTask)}
                   rowRef={(node) => {
                     if (node) rowRefs.current.set(task.id, node)
                     else rowRefs.current.delete(task.id)
@@ -272,6 +276,9 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
       <>
         <div className="flex flex-col h-full min-h-0">{body}</div>
         {requestModalOpen && <TaskRequestModal onClose={() => setRequestModalOpen(false)} />}
+        {detailTask && (
+          <TaskDetailModal task={detailTask} onClose={() => setDetailTask(null)} />
+        )}
       </>
     )
   }
@@ -280,6 +287,9 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     <>
       <Card className="h-full">{body}</Card>
       {requestModalOpen && <TaskRequestModal onClose={() => setRequestModalOpen(false)} />}
+      {detailTask && (
+        <TaskDetailModal task={detailTask} onClose={() => setDetailTask(null)} />
+      )}
     </>
   )
 }
@@ -341,11 +351,13 @@ function AssignedTaskRow({
   task,
   highlighted,
   onToggle,
+  onOpenDetail,
   rowRef,
 }: {
   task: AssignedTask
   highlighted: boolean
   onToggle: (task: AssignedTask) => void
+  onOpenDetail: (task: AssignedTask) => void
   rowRef: (node: HTMLDivElement | null) => void
 }) {
   const done = task.is_completed
@@ -364,22 +376,25 @@ function AssignedTaskRow({
     return null
   })()
 
+  // PR #25 — split click surfaces. Checkbox toggles completion;
+  // body-click opens the detail modal. Keyboard: Space toggles
+  // (monday convention), Enter opens detail.
   return (
     <div
       ref={rowRef}
-      onClick={() => task.can_complete && onToggle(task)}
-      role={task.can_complete ? 'button' : undefined}
-      tabIndex={task.can_complete ? 0 : -1}
+      onClick={() => onOpenDetail(task)}
+      role="button"
+      tabIndex={0}
       onKeyDown={(event) => {
-        if (!task.can_complete) return
-        if (event.key === 'Enter' || event.key === ' ') {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          onOpenDetail(task)
+        } else if (event.key === ' ' && task.can_complete) {
           event.preventDefault()
           onToggle(task)
         }
       }}
-      className={`group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left ${
-        task.can_complete ? 'cursor-pointer' : 'cursor-default'
-      } ${
+      className={`group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left cursor-pointer ${
         highlighted
           ? 'bg-gold/20 ring-2 ring-gold animate-[pulse_0.8s_ease-in-out_2]'
           : done
@@ -389,16 +404,25 @@ function AssignedTaskRow({
               : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
       }`}
     >
-      <span
+      {/* Checkbox — independent click target. stopPropagation so the
+          body's onClick doesn't also open the detail modal. */}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation()
+          if (task.can_complete) onToggle(task)
+        }}
+        disabled={!task.can_complete}
+        aria-label={done ? 'Mark incomplete' : 'Mark complete'}
+        aria-pressed={done}
         className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md flex items-center justify-center transition-colors ${
           done
             ? 'bg-emerald-500/80 border border-emerald-500/80 text-white'
             : 'bg-surface-alt border border-border-light group-hover:border-gold/50'
-        }`}
-        aria-hidden="true"
+        } ${task.can_complete ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
       >
-        {done && <Check size={12} strokeWidth={3} />}
-      </span>
+        {done && <Check size={12} strokeWidth={3} aria-hidden="true" />}
+      </button>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
