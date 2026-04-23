@@ -25,7 +25,6 @@ import {
   TemplateEditorModal,
   TemplatePreviewModal,
 } from '../../components/admin/templates'
-import QuickAssignWidget from '../../components/admin/assign/QuickAssignWidget'
 import SessionAssignModal from '../../components/admin/assign/SessionAssignModal'
 import type { RecentAssignmentBatch } from '../../lib/queries/taskTemplates'
 
@@ -115,16 +114,18 @@ export default function Templates() {
       <PageHeader
         icon={FolderKanban}
         title="Assign"
-        subtitle="Send work to the team — quick one-off tasks, session bookings, or reusable templates for onboarding + repeat work."
+        subtitle="Reusable templates, session bookings, and the full assign flow. For quick one-off tasks, use Quick Assign on the Hub."
       />
 
-      {/* 1. Quick Assign (inline) ──────────────────────────────────── */}
-      <QuickAssignWidget />
+      {/* PR #18 — Quick Assign retired from this page. Admin Hub is
+          the canonical place for one-off task compose (matches the
+          "Hub = snapshot + quick actions" framing). The comprehensive
+          surface (templates + sessions) stays here. */}
 
-      {/* 2. Assign a Session (tile opens modal) ─────────────────────── */}
+      {/* Assign a Session (tile opens modal) ─────────────────────── */}
       <AssignSessionTile onClick={() => setSessionAssignOpen(true)} />
 
-      {/* 3. Templates section header ──────────────────────────────── */}
+      {/* Templates section header ──────────────────────────────── */}
       <section className="pt-2">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div>
