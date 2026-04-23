@@ -30,6 +30,19 @@ import PendingTaskRequestsWidget from '../../components/admin/assign/PendingTask
 import { AdminAssignWidget } from '../../components/dashboard/adminHubWidgets'
 import type { RecentAssignmentBatch } from '../../lib/queries/taskTemplates'
 
+// PR #21 — canonical business-section filter list. Ableton-style.
+// Add, rename, or reorder a section here and every admin on every
+// device picks it up on next deploy. Keep `value` lowercase to match
+// the free-text `task_templates.role_tag` column in the DB.
+const CANONICAL_ROLE_TAGS = [
+  { value: 'engineer',  label: 'Engineer'  },
+  { value: 'marketing', label: 'Marketing' },
+  { value: 'intern',    label: 'Intern'    },
+  { value: 'dev',       label: 'Dev'       },
+  { value: 'admin',     label: 'Admin'     },
+  { value: 'ops',       label: 'Ops'       },
+] as const
+
 /**
  * Assign page (`/admin/templates`) — Trello-style 3-column layout.
  *
@@ -77,13 +90,27 @@ export default function Templates() {
     queryKey: taskTemplateKeys.library(null, includeInactive),
     queryFn: () => fetchTaskTemplateLibrary({ roleTag: null, includeInactive }),
   })
-  const roleTags = useMemo(() => {
-    const set = new Set<string>()
+
+  // PR #21 — canonical business-section pills (Ableton-style).
+  // Replaces the dynamically-extracted role_tag pills. Every section
+  // always renders with its count so the filter row is stable and
+  // scannable. Any role_tag that's NOT in the canonical list still
+  // gets a pill (rendered after the canonical set, labeled via
+  // title-case) so future studio roles don't need a code change to
+  // be filterable — they just render alongside the primary pills.
+  const countsByTag = useMemo(() => {
+    const map: Record<string, number> = {}
     for (const t of allForPills.data ?? []) {
-      if (t.role_tag) set.add(t.role_tag)
+      if (t.role_tag) map[t.role_tag] = (map[t.role_tag] ?? 0) + 1
     }
-    return Array.from(set).sort()
+    return map
   }, [allForPills.data])
+  const extraRoleTags = useMemo(() => {
+    const canonicalSet = new Set<string>(CANONICAL_ROLE_TAGS.map((t) => t.value))
+    return Object.keys(countsByTag)
+      .filter((t) => !canonicalSet.has(t))
+      .sort()
+  }, [countsByTag])
 
   const templates = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -165,19 +192,35 @@ export default function Templates() {
               />
             </div>
 
-            {/* Role pills + toggles */}
+            {/* Role pills — Ableton-style fixed canonical list +
+                overflow pills for any non-canonical role_tag in the
+                DB. Counts always visible next to the label so admins
+                can see at a glance how many templates exist per
+                section. */}
             <div className="flex flex-wrap items-center gap-1.5">
               <FilterPill
                 label="All"
+                count={allForPills.data?.length ?? 0}
                 active={roleFilter === null}
                 onClick={() => setRoleFilter(null)}
               />
-              {roleTags.map((tag) => (
+              {CANONICAL_ROLE_TAGS.map((tag) => (
+                <FilterPill
+                  key={tag.value}
+                  label={tag.label}
+                  count={countsByTag[tag.value] ?? 0}
+                  active={roleFilter === tag.value}
+                  onClick={() => setRoleFilter(tag.value)}
+                />
+              ))}
+              {extraRoleTags.map((tag) => (
                 <FilterPill
                   key={tag}
-                  label={tag}
+                  label={tag.charAt(0).toUpperCase() + tag.slice(1)}
+                  count={countsByTag[tag] ?? 0}
                   active={roleFilter === tag}
                   onClick={() => setRoleFilter(tag)}
+                  subtle
                 />
               ))}
             </div>
@@ -361,24 +404,48 @@ function Stat({
 
 function FilterPill({
   label,
+  count,
   active,
   onClick,
+  subtle = false,
 }: {
   label: string
+  /** Optional template count rendered next to the label (Ableton style). */
+  count?: number
   active: boolean
   onClick: () => void
+  /** Overflow pills (non-canonical role_tags) render muted so the
+   *  canonical set reads as the primary filter set. */
+  subtle?: boolean
 }) {
+  const hasCount = count !== undefined
+  const isEmpty = hasCount && count === 0 && !active
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+      aria-pressed={active}
+      disabled={isEmpty}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
         active
           ? 'bg-gold/20 text-gold ring-1 ring-gold/40'
-          : 'bg-surface text-text-muted ring-1 ring-border hover:text-text hover:bg-surface-hover'
+          : isEmpty
+            ? 'bg-surface/60 text-text-light/40 ring-1 ring-border/40 cursor-default'
+            : subtle
+              ? 'bg-surface-alt/60 text-text-muted ring-1 ring-border/60 hover:text-text hover:bg-surface-hover'
+              : 'bg-surface text-text-muted ring-1 ring-border hover:text-text hover:bg-surface-hover'
       }`}
     >
       {label}
+      {hasCount && (
+        <span
+          className={`tabular-nums text-[10px] font-bold ${
+            active ? 'text-gold/80' : 'text-text-light/70'
+          }`}
+        >
+          {count}
+        </span>
+      )}
     </button>
   )
 }
