@@ -118,10 +118,26 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 // ═════════════════════════════════════════════════════════════════════
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
+    // PR #19 — compact Hub surface for quick task compose. The full
+    // 3-tile AssignWidget moved to the /admin/templates Assign page;
+    // Hub keeps the lightweight "one-off task" affordance.
+    id: 'admin_quick_assign',
+    title: 'Quick Assign',
+    description: 'Fire off a one-off task without leaving the Hub.',
+    defaultPlacements: [{ scope: 'admin_overview', span: 2 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
+    // The full Assign widget — kept registered so widget-component
+    // lookups resolve, but has NO default placement. Rendered directly
+    // on the Assign page (`/admin/templates`) via import, not via the
+    // workspace-panel registry.
     id: 'admin_assign',
     title: 'Assign',
     description: 'Send out sessions, tasks, task groups, or custom tasks.',
-    defaultPlacements: [{ scope: 'admin_overview', span: 2 }],
+    defaultPlacements: [],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -268,7 +284,11 @@ function buildDefaultWidgetStateForScope(
 // v11 (2026-04-22, PR #16): new `admin_task_requests` widget joins
 // the admin Hub overview so admins see the user-submitted approval
 // queue inline alongside existing approvals.
-export const WORKSPACE_LAYOUT_VERSION = 11
+// v12 (2026-04-23, PR #19): Hub swaps the full `admin_assign` widget
+// for the lightweight `admin_quick_assign`. The full surface now
+// lives on the Assign page. Saved v11 layouts referencing
+// `admin_assign` on `admin_overview` get sanitized away.
+export const WORKSPACE_LAYOUT_VERSION = 12
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

@@ -26,6 +26,7 @@ import {
   TemplatePreviewModal,
 } from '../../components/admin/templates'
 import SessionAssignModal from '../../components/admin/assign/SessionAssignModal'
+import { AdminAssignWidget } from '../../components/dashboard/adminHubWidgets'
 import type { RecentAssignmentBatch } from '../../lib/queries/taskTemplates'
 
 /**
@@ -114,15 +115,19 @@ export default function Templates() {
       <PageHeader
         icon={FolderKanban}
         title="Assign"
-        subtitle="Reusable templates, session bookings, and the full assign flow. For quick one-off tasks, use Quick Assign on the Hub."
+        subtitle="Send out sessions, tasks, or task groups — and manage the template library you'll reuse for onboarding + repeat work."
       />
 
-      {/* PR #18 — Quick Assign retired from this page. Admin Hub is
-          the canonical place for one-off task compose (matches the
-          "Hub = snapshot + quick actions" framing). The comprehensive
-          surface (templates + sessions) stays here. */}
+      {/* PR #19 — the full 3-tile Assign widget lives here now. Hub
+          keeps a lightweight Quick Assign for fast one-off task
+          compose. Session reassignment still has its own tile below
+          the widget since `AdminAssignWidget`'s "Session" CTA opens
+          the BOOKING modal (create), not the reassign flow. */}
+      <section className="rounded-2xl border border-border bg-surface-alt/30 p-4">
+        <AdminAssignWidget />
+      </section>
 
-      {/* Assign a Session (tile opens modal) ─────────────────────── */}
+      {/* Reassign an existing session ─────────────────────────────── */}
       <AssignSessionTile onClick={() => setSessionAssignOpen(true)} />
 
       {/* Templates section header ──────────────────────────────── */}
