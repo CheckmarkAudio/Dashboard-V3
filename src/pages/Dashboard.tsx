@@ -44,15 +44,23 @@ export default function Dashboard() {
       />
       <MemberOverviewProvider>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-          {/* ─── Column 1 · Tasks + Booking ──────────────────────── */}
-          <Column title="Tasks & Booking" subtitle="Your personal queue + what's scheduled">
-            <div className="space-y-4">
+          {/* ─── Column 1 · Tasks + Booking (two separate cards) ── */}
+          <div className="flex flex-col gap-4">
+            <Column
+              title="My Tasks"
+              subtitle="Your personal queue"
+              autoHeight
+            >
               <MyTasksCard embedded />
-              <div className="pt-3 border-t border-border/40">
-                <BookingSnapshotWidget />
-              </div>
-            </div>
-          </Column>
+            </Column>
+            <Column
+              title="Booking"
+              subtitle="What's scheduled"
+              autoHeight
+            >
+              <BookingSnapshotWidget />
+            </Column>
+          </div>
 
           {/* ─── Column 2 · Calendar (day view) ──────────────────── */}
           <Column title="Calendar" subtitle="Today's sessions · toggle days with arrows">
@@ -75,17 +83,28 @@ export default function Dashboard() {
 // Local Column wrapper — mirrors the pattern from the Assign page.
 // Independent scroll per column so a busy notifications feed doesn't
 // push the Calendar column off the screen.
+//
+// `autoHeight` drops the max-h + min-h caps so two cards can stack
+// inside a single grid cell (e.g. My Tasks + Booking in column 1)
+// without each demanding the full viewport height. Single-widget
+// columns (Calendar, Notifications) keep the default caps so their
+// internal scroll works.
 function Column({
   title,
   subtitle,
+  autoHeight = false,
   children,
 }: {
   title: string
   subtitle?: string
+  autoHeight?: boolean
   children: ReactNode
 }) {
+  const sizing = autoHeight
+    ? ''
+    : 'max-h-[calc(100vh-240px)] min-h-[480px]'
   return (
-    <section className="rounded-2xl border border-border bg-surface-alt/30 flex flex-col max-h-[calc(100vh-240px)] min-h-[480px]">
+    <section className={`rounded-2xl border border-border bg-surface-alt/30 flex flex-col ${sizing}`}>
       <header className="flex items-start justify-between gap-3 px-4 py-3 border-b border-border/60 shrink-0">
         <div className="min-w-0">
           <h2 className="text-[14px] font-bold tracking-tight text-text">{title}</h2>
@@ -94,7 +113,13 @@ function Column({
           )}
         </div>
       </header>
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">{children}</div>
+      <div
+        className={`flex-1 min-h-0 px-4 py-3 ${
+          autoHeight ? '' : 'overflow-y-auto'
+        }`}
+      >
+        {children}
+      </div>
     </section>
   )
 }
