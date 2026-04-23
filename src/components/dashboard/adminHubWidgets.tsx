@@ -28,7 +28,6 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useAdminOverviewContext } from '../../contexts/AdminOverviewContext'
 import { supabase } from '../../lib/supabase'
 import {
-  assignCustomTaskToMembers,
   fetchAssignmentNotifications,
   markAssignmentNotificationRead,
 } from '../../lib/queries/assignments'
@@ -42,6 +41,7 @@ import { fetchKPIDefinitions, fetchKPIEntries, kpiKeys } from '../../lib/queries
 import { useToast } from '../Toast'
 import CreateBookingModal from '../CreateBookingModal'
 import MemberMultiSelect from '../members/MemberMultiSelect'
+import AdminTaskCreateModal from '../tasks/requests/AdminTaskCreateModal'
 import type { TeamMember } from '../../types'
 import type { AssignmentNotification } from '../../types/assignments'
 import type { EnrichedApprovalRequest } from '../../domain/dashboard/adminOverview'
@@ -301,7 +301,7 @@ export function AdminAssignWidget() {
 
       {/* Flow modals */}
       {flow === 'session' && <CreateBookingModal onClose={handleClose} />}
-      {flow === 'task' && <AssignTaskModal onClose={handleClose} />}
+      {flow === 'task' && <AdminTaskCreateModal onClose={handleClose} />}
       {flow === 'group' && <AssignGroupModal onClose={handleClose} />}
     </div>
   )
@@ -519,160 +519,6 @@ function AssignGroupModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-// ─── AssignTaskModal — PR #7 (replaces the legacy direct-write flow) ─
-//
-// One-off task assignment to one or more members. Calls
-// `assign_custom_task_to_members` RPC (atomic: batch + recipients +
-// tasks + notifications). The earlier direct-write `AssignTaskModal`
-// that inserted straight into `team_checklist_items` was deleted here
-// — the new backend is authoritative.
-
-function AssignTaskModal({ onClose }: { onClose: () => void }) {
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [category, setCategory] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const [isRequired, setIsRequired] = useState(false)
-  const [saving, setSaving] = useState(false)
-
-  const toggleMember = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const submit = async () => {
-    if (selectedIds.size === 0 || !title.trim()) return
-    setSaving(true)
-    try {
-      const summary = await assignCustomTaskToMembers(Array.from(selectedIds), {
-        title: title.trim(),
-        description: description.trim() || null,
-        category: category.trim() || null,
-        due_date: dueDate || null,
-        is_required: isRequired,
-        show_on_overview: true,
-      })
-      toast(
-        `Assigned to ${summary.recipient_count} ${summary.recipient_count === 1 ? 'member' : 'members'}`,
-        'success',
-      )
-      // Refresh the "Recently assigned" strip + any open members' task widgets
-      void queryClient.invalidateQueries({ queryKey: ['admin-recent-assignments'] })
-      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
-      onClose()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to assign task', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div
-        className="bg-surface rounded-2xl border border-border w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-[16px] font-bold text-text">Assign Task</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-surface-hover" aria-label="Close">
-            <X size={16} className="text-text-light" />
-          </button>
-        </div>
-        <p className="text-[12px] text-text-light">
-          Creates a one-off task for each selected member. Appears on their Overview + Tasks pages.
-        </p>
-
-        <MemberMultiSelect selectedIds={selectedIds} onToggle={toggleMember} />
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Task title</span>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Follow up with 3 warm leads"
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">
-            Description <span className="text-text-light normal-case">(optional)</span>
-          </span>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            placeholder="Short context for the task"
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring resize-y"
-          />
-        </label>
-
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Category</span>
-            <input
-              type="text"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="Outreach"
-              className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Due date</span>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-            />
-          </label>
-        </div>
-
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isRequired}
-            onChange={(e) => setIsRequired(e.target.checked)}
-            className="w-4 h-4 rounded border-border bg-surface-alt text-gold focus-ring"
-          />
-          <span className="text-[13px] text-text">Mark as required</span>
-        </label>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm text-text-light hover:text-text"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={selectedIds.size === 0 || !title.trim() || saving}
-            className="px-4 py-2 rounded-lg bg-gold text-black text-sm font-bold disabled:opacity-50 hover:bg-gold-muted"
-          >
-            {saving
-              ? 'Assigning…'
-              : selectedIds.size === 0
-                ? 'Assign'
-                : `Assign to ${selectedIds.size}`}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ─── Flywheel widget ─────────────────────────────────────────────────
 //
