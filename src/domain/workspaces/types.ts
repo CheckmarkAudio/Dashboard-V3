@@ -102,6 +102,9 @@ export type AdminWidgetId =
   // from `admin_approvals` (which handles task_edit_requests for daily
   // checklists).
   | 'admin_task_requests'
+  // PR #19 — compact task-compose affordance on the Hub. The full
+  // 3-tile `admin_assign` widget now lives on the Assign page.
+  | 'admin_quick_assign'
   // Admin-side widget bank — registered but not on the page yet.
   | 'team_focus'
   | 'approval_queue'

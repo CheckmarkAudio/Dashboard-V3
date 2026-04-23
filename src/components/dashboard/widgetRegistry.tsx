@@ -36,6 +36,7 @@ import {
   AdminTeamWidget,
 } from './adminHubWidgets'
 import PendingTaskRequestsWidget from '../admin/assign/PendingTaskRequestsWidget'
+import AdminQuickAssignWidget from '../admin/assign/AdminQuickAssignWidget'
 
 // ═════════════════════════════════════════════════════════════════════
 // Component maps — ONE per side.
@@ -59,6 +60,7 @@ const memberWidgetComponents: Record<MemberWidgetId, ComponentType> = {
 
 const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
   admin_assign: AdminAssignWidget,
+  admin_quick_assign: AdminQuickAssignWidget,
   admin_notifications: AdminNotificationsWidget,
   admin_team: AdminTeamWidget,
   admin_flywheel: AdminFlywheelWidget,
