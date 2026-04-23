@@ -9,16 +9,13 @@ import {
   CheckCircle2,
   CheckSquare,
   Clock,
-  FolderPlus,
   Hash,
   Inbox,
   ListChecks,
   Loader2,
   MessageSquare,
-  Plus,
   Send,
   Shield,
-  Sparkles,
   Target,
   Users,
   X,
@@ -65,19 +62,6 @@ function TodayAnchor({ right }: { right?: React.ReactNode }) {
   )
 }
 
-function relativeTime(iso: string): string {
-  const diff = Math.max(0, Date.now() - new Date(iso).getTime())
-  const mins = Math.round(diff / 60_000)
-  if (mins < 1) return 'Just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.round(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.round(hrs / 24)
-  if (days === 1) return 'Yesterday'
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
 type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
 const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring: string; label: string }> = {
   deliver: { dot: 'bg-blue-400',   text: 'text-blue-300',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15',   label: 'Deliver' },
@@ -94,209 +78,51 @@ const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring:
 // assignments strip below so admins see continuity of what they've
 // been delegating without bouncing to the Templates page.
 
-type RecentAssignment = {
-  id: string
-  kind: 'session' | 'task' | 'group'
-  title: string
-  assignee: string
-  when: string
-}
-
-async function fetchRecentAssignments(limit = 4): Promise<RecentAssignment[]> {
-  // Pulls the N most recent sessions (with assigned_to) + task_assignments
-  // and stitches them into a unified "what did I just delegate" feed.
-  const [sessionsRes, assignmentsRes, membersRes] = await Promise.all([
-    supabase
-      .from('sessions')
-      .select('id, client_name, session_type, session_date, start_time, assigned_to, created_at')
-      .not('assigned_to', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(limit),
-    supabase
-      .from('task_assignments')
-      .select('id, intern_id, created_at, report_templates(name)')
-      .order('created_at', { ascending: false })
-      .limit(limit),
-    supabase
-      .from('team_members')
-      .select('id, display_name')
-      .eq('status', 'active'),
-  ])
-  type NameRow = { id: string; display_name: string }
-  const nameById = new Map<string, string>(
-    ((membersRes.data ?? []) as NameRow[]).map((m) => [m.id, m.display_name]),
-  )
-
-  type SessionRow = {
-    id: string
-    client_name: string | null
-    session_type: string
-    session_date: string
-    assigned_to: string | null
-    created_at: string
-  }
-  // Supabase returns related rows as arrays even for 1:1 FKs, so normalize
-  // via `unknown` then narrow. We only ever want the first template.
-  type AssignmentRow = {
-    id: string
-    intern_id: string | null
-    created_at: string
-    report_templates: { name: string }[] | { name: string } | null
-  }
-
-  const sessionRows: RecentAssignment[] = ((sessionsRes.data ?? []) as SessionRow[]).map((s) => ({
-    id: `sess-${s.id}`,
-    kind: 'session',
-    title: s.client_name ?? s.session_type.replace(/_/g, ' '),
-    assignee: s.assigned_to ? nameById.get(s.assigned_to) ?? 'Someone' : 'Unassigned',
-    when: s.created_at,
-  }))
-  const taskRows: RecentAssignment[] = ((assignmentsRes.data ?? []) as unknown as AssignmentRow[]).map((a) => {
-    const tmpl = Array.isArray(a.report_templates) ? a.report_templates[0] : a.report_templates
-    return {
-      id: `task-${a.id}`,
-      kind: 'group',
-      title: tmpl?.name ?? 'Template',
-      assignee: a.intern_id ? nameById.get(a.intern_id) ?? 'Someone' : 'Position-level',
-      when: a.created_at,
-    }
-  })
-
-  return [...sessionRows, ...taskRows]
-    .sort((a, b) => b.when.localeCompare(a.when))
-    .slice(0, limit)
-}
-
 type AssignFlow = 'session' | 'task' | 'group' | null
 
 export function AdminAssignWidget() {
   const queryClient = useQueryClient()
   const [flow, setFlow] = useState<AssignFlow>(null)
 
-  // Fetch ~12 recent assignments so the scrollable feed fills the 2×2
-  // widget height without leaving a big empty block. The original 4-item
-  // version left ~60% of the widget blank on a full-height grid row.
-  const recentQuery = useQuery({
-    queryKey: ['admin-recent-assignments'],
-    queryFn: () => fetchRecentAssignments(12),
-  })
-  const recent = recentQuery.data ?? []
-
-  // Roll up kind counts so the strip above the feed gives admins
-  // something quantitative to anchor on.
-  const counts = {
-    sessions: recent.filter((r) => r.kind === 'session').length,
-    tasks: recent.filter((r) => r.kind === 'task').length,
-    groups: recent.filter((r) => r.kind === 'group').length,
-  }
-
   const handleClose = () => {
     setFlow(null)
+    // Keep the invalidate so `RecentAssignmentsSection` on the
+    // Assign page refreshes after a flow closes. The feed is no
+    // longer rendered inside this widget (PR #21) — per user's
+    // spec the 3 tiles stay always visible and history lives in
+    // the full-width strip below the 3-column board.
     void queryClient.invalidateQueries({ queryKey: ['admin-recent-assignments'] })
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <TodayAnchor />
-
-      {/* Three big primary CTAs — all in Checkmark gold. The icon is
-          the only distinguisher: calendar-plus for Session, the
-          Tasks-menu CheckSquare for Task, and a custom folder-with-
-          two-checkmarks glyph for Task Group. */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 shrink-0">
+    <div className="flex flex-col">
+      {/* Three primary CTAs — always visible, no internal scroll.
+          Each tile opens a focused modal (Session → booking create,
+          Task → unified AdminTaskCreateModal, Group → apply a
+          template). The old "Recently assigned" inline feed that
+          shared this widget's scroll region was removed in PR #21
+          per user feedback: the tiles must be always visible, and
+          the page-level RecentAssignmentsSection below the board
+          already covers assignment history. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
         <AssignTile
           icon={CalendarPlus}
           label="Session"
           hint="Book a studio session"
-          count={counts.sessions}
           onClick={() => setFlow('session')}
         />
         <AssignTile
           icon={CheckSquare}
           label="Task"
           hint="One-off task to one or many"
-          count={counts.tasks}
           onClick={() => setFlow('task')}
         />
         <AssignTile
           icon={ListChecks}
           label="Task Group"
           hint="Apply a checklist template"
-          count={counts.groups}
           onClick={() => setFlow('group')}
         />
-      </div>
-
-      {/* Recent assignments strip. Denser rows + scroll so a busy week
-          fills the widget; a quiet week shows a centered empty state. */}
-      <div className="mt-3 flex-1 min-h-0 flex flex-col">
-        <div className="flex items-center justify-between mb-1.5 shrink-0">
-          <p className="text-[11px] font-semibold tracking-wider uppercase text-text-light">
-            Recently assigned
-          </p>
-          {recent.length > 0 && (
-            <span className="text-[10px] text-text-light">{recent.length} total</span>
-          )}
-        </div>
-        <div className="flex-1 min-h-0 overflow-hidden -mx-1 space-y-0.5">
-          {recentQuery.isLoading ? (
-            <div className="flex items-center gap-2 px-2 py-2 text-text-light">
-              <Loader2 size={14} className="animate-spin" />
-              <span className="text-[12px]">Loading…</span>
-            </div>
-          ) : recent.length === 0 ? (
-            // Top-aligned empty state + "ideas to try" tips. Previously
-            // this state was vertically centered inside a 2-row widget
-            // cell which made the widget look like a giant void. The
-            // tips now fill the space with something useful so the
-            // widget feels intentional even on a fresh install.
-            <div className="px-1 py-1 space-y-3">
-              <div className="flex items-start gap-2.5 px-1">
-                <div className="shrink-0 w-8 h-8 rounded-lg bg-gold/10 ring-1 ring-gold/20 flex items-center justify-center">
-                  <Sparkles size={15} className="text-gold" aria-hidden="true" />
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-text leading-tight">Nothing assigned yet</p>
-                  <p className="text-[11px] text-text-light leading-snug mt-0.5">
-                    Pick a tile above to send out your first delegation.
-                  </p>
-                </div>
-              </div>
-              <div className="pt-2 border-t border-border/30 space-y-1">
-                <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold mb-1 px-1">
-                  Ideas to try
-                </p>
-                <AssignTip icon={CalendarPlus} tone="sky" text="Book next week's first session" />
-                <AssignTip icon={Plus} tone="emerald" text="Drop a one-off task into a member's day" />
-                <AssignTip icon={FolderPlus} tone="violet" text="Apply the Daily Checklist to a new hire" />
-              </div>
-            </div>
-          ) : (
-            recent.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-surface-hover/40 transition-colors"
-              >
-                <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${
-                  r.kind === 'session' ? 'bg-sky-500/15 text-sky-300'
-                  : r.kind === 'task'  ? 'bg-emerald-500/15 text-emerald-300'
-                  :                      'bg-violet-500/15 text-violet-300'
-                }`}>
-                  {r.kind === 'session' ? <CalendarPlus size={13} />
-                    : r.kind === 'task' ? <CheckSquare size={13} />
-                    : <ListChecks size={13} />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12.5px] font-medium text-text truncate leading-tight">{r.title}</p>
-                  <p className="text-[10.5px] text-text-light truncate leading-tight">
-                    {r.kind === 'session' ? 'Session' : r.kind === 'task' ? 'Task' : 'Task Group'} · {r.assignee}
-                  </p>
-                </div>
-                <span className="text-[10px] text-text-light shrink-0">{relativeTime(r.when)}</span>
-              </div>
-            ))
-          )}
-        </div>
       </div>
 
       {/* Flow modals */}
@@ -310,30 +136,6 @@ export function AdminAssignWidget() {
 // Inline tip row — mirrors the kind-icon styling of the tile row so
 // empty-state hints feel like "here's what each tile does" rather
 // than generic tutorial copy.
-function AssignTip({
-  icon: Icon,
-  tone,
-  text,
-}: {
-  icon: React.ComponentType<{ size?: number; className?: string }>
-  tone: 'sky' | 'emerald' | 'violet'
-  text: string
-}) {
-  const toneMap = {
-    sky:     'bg-sky-500/10 text-sky-300',
-    emerald: 'bg-emerald-500/10 text-emerald-300',
-    violet:  'bg-violet-500/10 text-violet-300',
-  }[tone]
-  return (
-    <div className="flex items-center gap-2 px-1 py-1">
-      <div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center ${toneMap}`}>
-        <Icon size={12} />
-      </div>
-      <p className="text-[12px] text-text-muted leading-snug">{text}</p>
-    </div>
-  )
-}
-
 // AssignTile — unified gold treatment. The icon does the work of
 // telling the three CTAs apart; color stays consistent with the
 // brand rather than pulling in flywheel stage hues.
