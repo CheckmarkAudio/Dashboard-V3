@@ -41,7 +41,17 @@ import {
  * auto-activate.
  */
 
-export default function AdminTaskCreateModal({ onClose }: { onClose: () => void }) {
+export default function AdminTaskCreateModal({
+  onClose,
+  initialScope = 'member',
+}: {
+  onClose: () => void
+  // PR #39 — optional preset. When callers want a "Studio Task" tile
+  // that lands admins directly in studio-scope mode, pass
+  // initialScope="studio" and the toggle starts on Studio + recipient
+  // picker is hidden.
+  initialScope?: AssignedTaskScope
+}) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
@@ -53,7 +63,7 @@ export default function AdminTaskCreateModal({ onClose }: { onClose: () => void 
   const [recurrence, setRecurrence] = useState<RecurrenceFrequency>('off')
   // ─── Admin-only ───────────────────────────────────────────────────
   const [stage, setStage] = useState<FlywheelStage | null>(null)
-  const [scope, setScope] = useState<AssignedTaskScope>('member')
+  const [scope, setScope] = useState<AssignedTaskScope>(initialScope)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const assignMutation = useMutation({
