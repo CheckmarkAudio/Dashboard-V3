@@ -94,6 +94,20 @@ export interface SessionNotificationRef {
   status: string
 }
 
+// PR #26 — embedded task-request summary for click routing on
+// task_request_submitted / _approved / _rejected notifications.
+export interface TaskRequestNotificationRef {
+  id: string
+  title: string
+  status: 'pending' | 'approved' | 'rejected'
+  /** Populated when status='approved' — the assigned_tasks row that
+   *  materialized from this request. Lets the frontend dispatch a
+   *  highlight-task event with the exact taskId on click. */
+  approved_task_id: string | null
+  reviewer_note: string | null
+  created_at: string
+}
+
 export interface AssignmentNotification {
   id: string
   // Exactly one of batch_id / session_id / task_request_id is non-null
@@ -110,6 +124,8 @@ export interface AssignmentNotification {
   created_at: string
   batch: AssignmentBatchRef | null
   session: SessionNotificationRef | null
+  /** PR #26 — populated when notification_type is a task_request_* */
+  task_request: TaskRequestNotificationRef | null
 }
 
 // Structured response from every assign_* RPC.
