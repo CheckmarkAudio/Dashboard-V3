@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, Check, Inbox, Loader2, Users } from 'lucide-react'
+import { AlertCircle, ArrowRightLeft, Check, Inbox, Loader2, Users } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   completeAssignedTask,
   fetchStudioAssignedTasks,
   fetchTeamAssignedTasks,
 } from '../../lib/queries/assignments'
+import { requestTaskReassignment } from '../../lib/queries/taskReassign'
 import type { AssignedTask } from '../../types/assignments'
 import {
   CompletedToggle,
@@ -103,6 +104,25 @@ function AssignmentBoardBody({
     },
   })
 
+  // PR #38 — request-to-take feature. When a user hovers over a team
+  // task assigned to someone else (can_complete=false but assigned_to
+  // is set), a "Request to take" overlay appears. Clicking fires the
+  // RPC which inserts a task_reassign_requests row + notifies the
+  // current assignee. Once the request is sent we remember the task
+  // id locally so the overlay shows "Request sent" instead of letting
+  // the user fire again.
+  const [requestedTaskIds, setRequestedTaskIds] = useState<Set<string>>(() => new Set())
+  const reassignMutation = useMutation({
+    mutationFn: (taskId: string) => requestTaskReassignment(taskId),
+    onSuccess: (_data, taskId) => {
+      setRequestedTaskIds((prev) => {
+        const next = new Set(prev)
+        next.add(taskId)
+        return next
+      })
+    },
+  })
+
   const openTasks = useMemo(
     () => (tasksQuery.data ?? []).filter((t) => !t.is_completed),
     [tasksQuery.data],
@@ -171,60 +191,32 @@ function AssignmentBoardBody({
             const dueLabel = formatDueShort(task.due_date)
             const isPending = pendingIds.has(task.id)
             const checkVisual = task.is_completed !== isPending // XOR
+            // PR #38 — a task qualifies for the "Request to take"
+            // overlay when: it's member-scope + someone else's +
+            // incomplete + caller can't complete. Studio tasks and
+            // own rows take the normal checkbox path.
+            const canRequestTransfer =
+              !task.can_complete &&
+              !task.is_completed &&
+              task.scope === 'member' &&
+              Boolean(task.assigned_to) &&
+              task.assigned_to !== profile?.id
+            const alreadyRequested = requestedTaskIds.has(task.id)
+
             return (
-              <button
+              <TeamTaskRow
                 key={task.id}
-                type="button"
-                disabled={!task.can_complete || submitMutation.isPending}
-                onClick={() => togglePending(task.id)}
-                className={`w-full text-left grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2.5 py-2 rounded-[14px] border transition-all ${
-                  isPending
-                    ? 'bg-gold/8 border-gold/30'
-                    : 'bg-white/[0.018] border-transparent hover:bg-white/[0.03] hover:border-white/[0.08]'
-                } ${task.is_completed && !isPending ? 'opacity-40' : ''} ${
-                  !task.can_complete ? 'cursor-default opacity-60' : ''
-                }`}
-              >
-                <span
-                  className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-[5px] border-[1.5px] flex items-center justify-center ${
-                    isPending
-                      ? 'bg-gold/30 border-gold'
-                      : task.is_completed
-                        ? 'bg-gold/30 border-gold/40'
-                        : 'border-white/20'
-                  }`}
-                >
-                  {checkVisual && <Check size={11} className="text-gold" strokeWidth={3} />}
-                </span>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className={`text-[14px] leading-snug truncate ${task.is_completed ? 'line-through text-text-light' : 'text-text'}`}>
-                      {task.title}
-                    </p>
-                    {task.is_required && !task.is_completed && (
-                      <span className="text-[10px] uppercase tracking-wider text-rose-400 font-bold">Required</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5 text-[11px] text-text-light flex-wrap">
-                    {task.assigned_to_name && (
-                      <span className="inline-flex items-center gap-1">
-                        <Users size={10} />
-                        {task.assigned_to_name}
-                      </span>
-                    )}
-                    {task.category && <span>{task.category}</span>}
-                  </div>
-                </div>
-                {/* PR #36 — due date right-aligned inline with title. */}
-                <span
-                  className={`shrink-0 text-[12px] tabular-nums whitespace-nowrap mt-[2px] ${
-                    dueLabel ? 'text-text-light' : 'text-text-light/30'
-                  }`}
-                  title={dueLabel ? `Due ${dueLabel}` : 'No due date'}
-                >
-                  {dueLabel ?? '—'}
-                </span>
-              </button>
+                task={task}
+                dueLabel={dueLabel}
+                isPending={isPending}
+                checkVisual={checkVisual}
+                canRequestTransfer={canRequestTransfer}
+                alreadyRequested={alreadyRequested}
+                isRequesting={reassignMutation.isPending}
+                disableCheckbox={!task.can_complete || submitMutation.isPending}
+                onTogglePending={() => togglePending(task.id)}
+                onRequestTake={() => reassignMutation.mutate(task.id)}
+              />
             )
           })
         )}
@@ -253,5 +245,137 @@ function AssignmentBoardBody({
         </div>
       </div>
     </div>
+  )
+}
+
+// Single task row. Two interaction modes:
+//   - Own/studio (can_complete=true): button-style row, click to
+//     toggle the pending set, sibling rows join the Submit batch.
+//   - Peer's member task (canRequestTransfer=true): non-interactive
+//     row with a hover overlay showing "Request to take this task".
+//     Clicking the overlay fires the reassign RPC; after success the
+//     overlay flips to a confirmed "Request sent" state.
+// Both variants share the grid-layout + stage pill + due-label look.
+function TeamTaskRow({
+  task,
+  dueLabel,
+  isPending,
+  checkVisual,
+  canRequestTransfer,
+  alreadyRequested,
+  isRequesting,
+  disableCheckbox,
+  onTogglePending,
+  onRequestTake,
+}: {
+  task: AssignedTask
+  dueLabel: string | null
+  isPending: boolean
+  checkVisual: boolean
+  canRequestTransfer: boolean
+  alreadyRequested: boolean
+  isRequesting: boolean
+  disableCheckbox: boolean
+  onTogglePending: () => void
+  onRequestTake: () => void
+}) {
+  const rowBase = 'relative w-full text-left grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2.5 py-2 rounded-[14px] border transition-all'
+
+  const rowContent = (
+    <>
+      <span
+        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-[5px] border-[1.5px] flex items-center justify-center ${
+          isPending
+            ? 'bg-gold/30 border-gold'
+            : task.is_completed
+              ? 'bg-gold/30 border-gold/40'
+              : 'border-white/20'
+        }`}
+      >
+        {checkVisual && <Check size={11} className="text-gold" strokeWidth={3} />}
+      </span>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className={`text-[14px] leading-snug truncate ${task.is_completed ? 'line-through text-text-light' : 'text-text'}`}>
+            {task.title}
+          </p>
+          {task.is_required && !task.is_completed && (
+            <span className="text-[10px] uppercase tracking-wider text-rose-400 font-bold">Required</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-text-light flex-wrap">
+          {task.assigned_to_name && (
+            <span className="inline-flex items-center gap-1">
+              <Users size={10} />
+              {task.assigned_to_name}
+            </span>
+          )}
+          {task.category && <span>{task.category}</span>}
+        </div>
+      </div>
+      <span
+        className={`shrink-0 text-[12px] tabular-nums whitespace-nowrap mt-[2px] ${
+          dueLabel ? 'text-text-light' : 'text-text-light/30'
+        }`}
+        title={dueLabel ? `Due ${dueLabel}` : 'No due date'}
+      >
+        {dueLabel ?? '—'}
+      </span>
+    </>
+  )
+
+  if (canRequestTransfer) {
+    // Non-own member task. Render as a div (not button) so clicks go
+    // to the overlay, not a toggle. Overlay fades in on hover/focus.
+    return (
+      <div
+        className={`group ${rowBase} bg-white/[0.018] border-transparent cursor-default overflow-hidden`}
+        tabIndex={0}
+      >
+        {rowContent}
+        <div
+          className={`absolute inset-0 rounded-[14px] flex items-center justify-center transition-opacity ${
+            alreadyRequested
+              ? 'bg-emerald-500/15 ring-1 ring-emerald-500/30 opacity-100'
+              : 'bg-gold/10 ring-1 ring-gold/40 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+          }`}
+        >
+          {alreadyRequested ? (
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-emerald-300">
+              <Check size={12} strokeWidth={3} />
+              Request sent
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onRequestTake}
+              disabled={isRequesting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold bg-gradient-to-b from-gold to-gold-muted text-black hover:brightness-105 shadow-[0_6px_14px_rgba(214,170,55,0.25)] disabled:opacity-60"
+            >
+              <ArrowRightLeft size={12} strokeWidth={2.5} />
+              Request to take this task
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Own task or studio-pool task — standard checkbox-button row.
+  return (
+    <button
+      type="button"
+      disabled={disableCheckbox}
+      onClick={onTogglePending}
+      className={`${rowBase} ${
+        isPending
+          ? 'bg-gold/8 border-gold/30'
+          : 'bg-white/[0.018] border-transparent hover:bg-white/[0.03] hover:border-white/[0.08]'
+      } ${task.is_completed && !isPending ? 'opacity-40' : ''} ${
+        !task.can_complete ? 'cursor-default opacity-60' : ''
+      }`}
+    >
+      {rowContent}
+    </button>
   )
 }
