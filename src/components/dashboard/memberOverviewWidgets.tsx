@@ -5,7 +5,6 @@ import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
 import {
   AlertCircle,
   Bell,
-  Calendar as CalendarIcon,
   Check,
   ChevronRight,
   FileText,
@@ -22,6 +21,7 @@ import {
 import { APP_ROUTES } from '../../app/routes'
 import { useAuth } from '../../contexts/AuthContext'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
+import CalendarDayCard from '../calendar/CalendarDayCard'
 import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
 import {
   fetchAssignmentNotifications,
@@ -62,14 +62,9 @@ function formatTime12(t: string): string {
   return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`
 }
 
-function durationLabel(start: string, end: string): string {
-  const [sh, sm] = parseClock(start)
-  const [eh, em] = parseClock(end)
-  const mins = (eh * 60 + em) - (sh * 60 + sm)
-  const hrs = Math.floor(mins / 60)
-  const rm = mins % 60
-  return hrs > 0 ? `${hrs}h${rm > 0 ? ` ${rm}m` : ''}` : `${rm}m`
-}
+// NOTE: durationLabel + SessionStatusPill + computeSessionStatus were
+// inlined into the old TodayCalendarWidget that PR #29 retired. They
+// now live inside `CalendarDayCard` (the shared day-view component).
 
 function WidgetStatus({ error, loading }: { error: string | null; loading: boolean }) {
   if (loading) {
@@ -158,171 +153,18 @@ export function TeamSnapshotWidget() {
 }
 
 /**
- * Status pill for sessions — Live (rose pulse) | Wrapped (emerald) | "In 42m" (neutral).
- * Computes against current wall-clock time, not session metadata, so the pill
- * stays accurate as the day progresses without a refetch.
+ * TodayCalendarWidget — the shared `CalendarDayCard` rendered inside
+ * the WorkspacePanel widget frame. PR #29 swapped the old TODAY-
+ * eyebrow + weekday-strip implementation for this so Overview, the
+ * Calendar page, and any future mount show the exact same day-view
+ * with chevron day-nav + inline per-booking notes (notes sync via
+ * shared localStorage).
+ *
+ * `border-0 bg-transparent` strips CalendarDayCard's own rounded
+ * card since DashboardWidgetFrame already provides the frame + title.
  */
-function computeSessionStatus(start: string, end: string, now: Date): { label: string; tone: 'live' | 'wrapped' | 'upcoming' } {
-  const today = new Date(now)
-  const [sh, sm] = parseClock(start)
-  const [eh, em] = parseClock(end)
-  const startDate = new Date(today); startDate.setHours(sh, sm, 0, 0)
-  const endDate = new Date(today);   endDate.setHours(eh, em, 0, 0)
-  if (now > endDate) return { label: 'Wrapped', tone: 'wrapped' }
-  if (now >= startDate) return { label: 'Live', tone: 'live' }
-  const minsUntil = Math.round((startDate.getTime() - now.getTime()) / 60000)
-  if (minsUntil < 60) return { label: `In ${minsUntil}m`, tone: 'upcoming' }
-  const hrs = Math.floor(minsUntil / 60)
-  const mins = minsUntil % 60
-  return { label: mins > 0 ? `In ${hrs}h ${mins}m` : `In ${hrs}h`, tone: 'upcoming' }
-}
-
-function SessionStatusPill({ status }: { status: ReturnType<typeof computeSessionStatus> }) {
-  const styleMap = {
-    live:     'bg-rose-500/10 text-rose-300 ring-rose-500/30',
-    wrapped:  'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
-    upcoming: 'bg-surface-alt text-text-muted ring-border-light',
-  } as const
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium tracking-tight ring-1 ${styleMap[status.tone]}`}>
-      {status.tone === 'live' && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" aria-hidden="true" />}
-      {status.label}
-    </span>
-  )
-}
-
-/**
- * Calendar widget — TODAY anchor + Mon-Sun weekday strip + today's
- * session list. The weekday strip ensures the widget has visible
- * structure even when the day is empty (no sessions). Pattern lifted
- * from src/pages/Calendar.tsx so the widget feels like a mini version
- * of the full Calendar page.
- */
-function buildWeekdayStrip(): { date: Date; label: string; dayNum: number; isToday: boolean }[] {
-  // Week starts on Monday (matches Calendar.tsx convention).
-  const today = new Date()
-  const day = today.getDay() // 0 = Sunday
-  const mondayOffset = day === 0 ? -6 : 1 - day
-  const monday = new Date(today)
-  monday.setDate(today.getDate() + mondayOffset)
-  monday.setHours(0, 0, 0, 0)
-  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-  const todayKey = today.toDateString()
-  return labels.map((label, i) => {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    return { date: d, label, dayNum: d.getDate(), isToday: d.toDateString() === todayKey }
-  })
-}
-
 export function TodayCalendarWidget() {
-  const { todaySessions, loading, error } = useMemberOverviewContext()
-  // Note: chrome (TODAY eyebrow + weekday strip) renders regardless of
-  // data state — those are date-derived, not Supabase-dependent. Only
-  // the session list inside shows loading/error.
-  const weekdays = buildWeekdayStrip()
-  const now = new Date()
-  const todayLabel = now
-    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    .toUpperCase()
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* TODAY eyebrow — matches the Tasks widget pattern. */}
-      <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70 mb-2 shrink-0">
-        TODAY · {todayLabel}
-      </p>
-
-      {/* Weekday strip — Mon-Sun. Today highlighted in gold. */}
-      <div className="grid grid-cols-7 gap-1 mb-3 shrink-0">
-        {weekdays.map((d) => (
-          <div
-            key={d.label}
-            // Today's tile gets a richer gold gradient with a white
-            // highlight line at the top, matching the mockup. Other
-            // days use a subtle resting background.
-            className={`flex flex-col items-center justify-center py-2 rounded-xl transition-colors ${
-              d.isToday
-                ? 'bg-gradient-to-b from-gold/28 to-gold/12 ring-1 ring-gold/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-                : 'bg-white/[0.02] hover:bg-white/[0.04] border border-transparent hover:border-white/8'
-            }`}
-          >
-            <p
-              className={`text-[10px] font-semibold uppercase tracking-wider ${
-                d.isToday ? 'text-gold' : 'text-text-light'
-              }`}
-            >
-              {d.label}
-            </p>
-            <p
-              className={`text-[16px] font-bold tabular-nums leading-tight mt-0.5 ${
-                d.isToday ? 'text-gold' : 'text-text'
-              }`}
-            >
-              {d.dayNum}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Today's sessions list — internal scroll if many.
-          Loading/error scoped here so the chrome above stays visible. */}
-      <div className="flex-1 min-h-0 overflow-hidden -mx-1">
-        {loading ? (
-          <div className="h-full flex items-center justify-center text-text-light">
-            <Loader2 size={18} className="animate-spin" />
-          </div>
-        ) : error ? (
-          <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
-            <AlertCircle size={16} />
-            <span className="truncate">{error}</span>
-          </div>
-        ) : todaySessions.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-4">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
-              <CalendarIcon size={18} className="text-gold" aria-hidden="true" />
-            </div>
-            <p className="text-[14px] font-medium text-text">Your day is open</p>
-            <p className="text-[12px] text-text-light mt-0.5">No sessions scheduled today.</p>
-          </div>
-        ) : (
-          todaySessions.map((session) => {
-            const formatted = formatTime12(session.start_time)
-            const [hourMin, ampm] = formatted.split(' ')
-            const sessionStatus = computeSessionStatus(session.start_time, session.end_time, now)
-            const sessionType = session.session_type.replace(/_/g, ' ')
-            const sessionTypeCap = sessionType.charAt(0).toUpperCase() + sessionType.slice(1)
-            return (
-              <div
-                key={session.id}
-                // Lift on hover — subtle border and brighter bg so
-                // the session row reads as tappable.
-                className="flex items-stretch gap-3 px-2 py-2.5 rounded-xl border border-transparent bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10 transition-all"
-              >
-                <div className="shrink-0 w-14 text-right border-r border-border/40 pr-3 flex flex-col justify-center">
-                  <p className="text-[15px] font-semibold tracking-tight text-text leading-none">{hourMin}</p>
-                  <p className="text-[10px] font-medium text-text-light tracking-wider uppercase mt-0.5">{ampm}</p>
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <p className="text-[14px] font-medium text-text truncate">
-                    {session.client_name ?? 'Studio Session'}{' '}
-                    <span className="text-text-light font-normal">— {sessionTypeCap}</span>
-                  </p>
-                  <p className="text-[11px] text-text-light truncate mt-0.5">
-                    {sessionTypeCap} · {session.room ?? 'Room TBD'} · {durationLabel(session.start_time, session.end_time)}
-                  </p>
-                </div>
-                <div className="shrink-0 self-center">
-                  <SessionStatusPill status={sessionStatus} />
-                </div>
-              </div>
-            )
-          })
-        )}
-      </div>
-
-    </div>
-  )
+  return <CalendarDayCard className="border-0 bg-transparent h-full" />
 }
 
 /**

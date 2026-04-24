@@ -37,6 +37,11 @@ import {
 } from './adminHubWidgets'
 import PendingTaskRequestsWidget from '../admin/assign/PendingTaskRequestsWidget'
 import AdminQuickAssignWidget from '../admin/assign/AdminQuickAssignWidget'
+import {
+  StudioAssignedTasksCard,
+  TeamAssignedTasksCard,
+} from '../tasks/AssignedTaskBoards'
+import AdminTemplatesWidget from '../admin/templates/AdminTemplatesWidget'
 
 // ═════════════════════════════════════════════════════════════════════
 // Component maps — ONE per side.
@@ -56,6 +61,10 @@ const memberWidgetComponents: Record<MemberWidgetId, ComponentType> = {
   team_directory: TeamDirectoryWidget,
   team_activity: TeamActivityWidget,
   flywheel_summary: FlywheelSummaryWidget,
+  // PR #29 — Tasks page board widgets. Shared / team-scope reads
+  // alongside the personal team_tasks (MyTasksCard).
+  studio_tasks: StudioAssignedTasksCard,
+  team_board: TeamAssignedTasksCard,
 }
 
 const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
@@ -66,6 +75,9 @@ const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
   admin_flywheel: AdminFlywheelWidget,
   admin_approvals: AdminApprovalsWidget,
   admin_task_requests: PendingTaskRequestsWidget,
+  // PR #29 — Templates library as a widget so the Assign page runs
+  // on WorkspacePanel like the other surfaces.
+  admin_templates: AdminTemplatesWidget,
   team_focus: TeamFocusWidget,
   approval_queue: ApprovalQueueWidget,
   admin_schedule: AdminScheduleWidget,
