@@ -10,7 +10,6 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
 import {
@@ -192,6 +191,7 @@ export default function WorkspacePanel({
     visibleWidgets,
     toggleWidgetVisibility,
     moveWidgetByDropTarget,
+    swapWidgets,
     resetLayout,
   } = useWorkspaceLayout({
     scope,
@@ -234,49 +234,45 @@ export default function WorkspacePanel({
     setActiveId(event.active.id as WorkspaceWidgetId)
   }
 
-  // onDragOver fires continuously as the cursor moves. We only move
-  // widgets here when the column changes (cross-column moves need
-  // state updates so the target column's SortableContext can shift its
-  // siblings). Same-column drags rely on useSortable's built-in
-  // transform preview — no state change until onDragEnd.
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const activeWidgetId = active.id as WorkspaceWidgetId
-    const overId = over.id as string
-
-    // Find current column of the active widget.
-    const currentWidget = visibleWidgets.find((w) => w.id === activeWidgetId)
-    if (!currentWidget) return
-
-    // Determine the target column.
-    let targetCol: number | null = null
-    const colMatch = /^col-(\d+)$/.exec(overId)
-    if (colMatch) {
-      targetCol = Number(colMatch[1])
-    } else {
-      const overWidget = visibleWidgets.find((w) => w.id === overId)
-      if (overWidget) targetCol = overWidget.col
-    }
-
-    if (targetCol === null) return
-    // Same column: let useSortable handle the preview; no state change.
-    if (targetCol === currentWidget.col) return
-
-    // Cross-column: update state live so target column siblings shift.
-    moveWidgetByDropTarget(activeWidgetId, overId)
-  }
-
-  // onDragEnd finalizes the position. For cross-column moves the state
-  // is already correct (from onDragOver); this mainly handles
-  // same-column reorder (where we deliberately didn't update state
-  // during the drag).
+  // onDragEnd is the SINGLE commit point for cross-column moves. We
+  // deliberately do NOT update state in onDragOver — updating live as
+  // the cursor passes over multiple widgets caused cascading swaps
+  // (every widget the cursor brushed got swapped with the active one,
+  // piling up in whichever column the cursor ended in). By committing
+  // only on drop, exactly one swap/move happens per drag.
+  //
+  // Three drop targets:
+  //   - Column droppable (`col-N`) → move active into that column.
+  //   - Widget in SAME column → insert + shift (list-reorder feel,
+  //     handled by useSortable's live transforms during drag).
+  //   - Widget in DIFFERENT column → DIRECT SWAP: active takes over's
+  //     slot, over takes active's old slot. One atomic exchange.
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
-    moveWidgetByDropTarget(active.id as WorkspaceWidgetId, over.id as string)
+
+    const activeId = active.id as WorkspaceWidgetId
+    const overIdStr = typeof over.id === 'string' ? over.id : String(over.id)
+
+    // Column droppable → move to that column's end.
+    if (/^col-\d+$/.test(overIdStr)) {
+      moveWidgetByDropTarget(activeId, overIdStr)
+      return
+    }
+
+    // Over another widget.
+    const activeWidget = visibleWidgets.find((w) => w.id === activeId)
+    const overWidget = visibleWidgets.find((w) => w.id === over.id)
+    if (!activeWidget || !overWidget) return
+
+    if (activeWidget.col === overWidget.col) {
+      // Same column → sortable insert + shift.
+      moveWidgetByDropTarget(activeId, overIdStr)
+    } else {
+      // Different column → direct 1-for-1 swap.
+      swapWidgets(activeId, over.id as WorkspaceWidgetId)
+    }
   }
 
   const handleDragCancel = () => {
@@ -348,7 +344,6 @@ export default function WorkspacePanel({
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >

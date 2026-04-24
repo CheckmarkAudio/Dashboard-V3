@@ -229,11 +229,37 @@ export function useWorkspaceLayout({
     })
   }
 
+  // PR #34 — direct 1-for-1 swap between two widgets. Used for
+  // cross-column drag-over: instead of "A pushes B down," A takes B's
+  // slot and B takes A's old slot in one atomic move. Intra-column
+  // reorder still uses moveWidgetByDropTarget (insert + shift) because
+  // list-style reorder feels right for a sorted stack.
+  const swapWidgets = (
+    aId: WorkspaceWidgetState['id'],
+    bId: WorkspaceWidgetState['id'],
+  ) => {
+    setLayout((current) => {
+      const a = current.widgets.find((w) => w.id === aId)
+      const b = current.widgets.find((w) => w.id === bId)
+      if (!a || !b) return current
+      if (a.col === b.col && a.order === b.order) return current
+      return {
+        ...current,
+        widgets: current.widgets.map((w) => {
+          if (w.id === aId) return { ...w, col: b.col, order: b.order }
+          if (w.id === bId) return { ...w, col: a.col, order: a.order }
+          return w
+        }),
+      }
+    })
+  }
+
   return {
     layout,
     visibleWidgets,
     moveWidget,
     moveWidgetByDropTarget,
+    swapWidgets,
     reorderWidgets,
     toggleWidgetVisibility,
     resetLayout,
