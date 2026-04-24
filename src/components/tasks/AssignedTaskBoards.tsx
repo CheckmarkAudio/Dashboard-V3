@@ -8,52 +8,48 @@ import {
   fetchTeamAssignedTasks,
 } from '../../lib/queries/assignments'
 import type { AssignedTask } from '../../types/assignments'
-import { Card, CardHeader, CompletedToggle } from './shared'
+import { CompletedToggle } from './shared'
+
+// These boards are ONLY rendered inside a `DashboardWidgetFrame`
+// (studio_tasks / team_board widget slots on the /daily Tasks page).
+// The frame already provides the widget-card chrome + title +
+// description, so we render body-only here — no inner Card wrapper,
+// no duplicate heading. Previously both rendered their own chrome
+// which created a visible "double box" (outer widget card + inner
+// widget-style card with a bolder heading inside it).
 
 export function TeamAssignedTasksCard() {
   return (
-    <AssignmentBoardCard
-      title="Team Tasks"
-      subtitle="Team-wide assigned work."
+    <AssignmentBoardBody
       emptyTitle="No team tasks"
       emptyBody="Once team-task reads are wired, everyone will show up here."
       queryKeyPrefix="team-assigned-tasks"
       queryFn={fetchTeamAssignedTasks}
-      accent="text-gold/80"
     />
   )
 }
 
 export function StudioAssignedTasksCard() {
   return (
-    <AssignmentBoardCard
-      title="Studio Tasks"
-      subtitle="Shared studio upkeep and recurring work."
+    <AssignmentBoardBody
       emptyTitle="No studio tasks"
       emptyBody="Studio tasks need the scope migration before shared tasks can flow here."
       queryKeyPrefix="studio-assigned-tasks"
       queryFn={fetchStudioAssignedTasks}
-      accent="text-cyan-300/80"
     />
   )
 }
 
-function AssignmentBoardCard({
-  title,
-  subtitle,
+function AssignmentBoardBody({
   emptyTitle,
   emptyBody,
   queryKeyPrefix,
   queryFn,
-  accent,
 }: {
-  title: string
-  subtitle: string
   emptyTitle: string
   emptyBody: string
   queryKeyPrefix: string
   queryFn: (userId: string, opts?: { includeCompleted?: boolean }) => Promise<AssignedTask[]>
-  accent: string
 }) {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
@@ -87,16 +83,14 @@ function AssignmentBoardCard({
   }, [showCompleted, tasksQuery.data])
 
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${accent}`}>{subtitle}</p>
-        <div className="mt-1 flex items-center justify-between gap-3">
-          <h2 className="text-[22px] font-bold tracking-tight text-text">{title}</h2>
-          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-        </div>
-      </CardHeader>
+    <div className="flex flex-col h-full min-h-0">
+      {/* Show-completed toggle — right-aligned chip at the top of the
+          body. Matches the MyTasksCard embedded layout. */}
+      <div className="flex justify-end pb-2 shrink-0">
+        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+      </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-1.5">
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
         {tasksQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light py-6">
             <Loader2 size={18} className="animate-spin" />
@@ -162,6 +156,6 @@ function AssignmentBoardCard({
           ))
         )}
       </div>
-    </Card>
+    </div>
   )
 }
