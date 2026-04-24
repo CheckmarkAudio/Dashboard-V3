@@ -190,6 +190,18 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
+    // PR #40 — Assign-page col 1, under admin_assign. Opens a modal
+    // with every in-flight task + click-to-edit rows. Fires
+    // task_edited notifications to the assignee on save.
+    id: 'admin_edit_tasks',
+    title: 'Edit Tasks',
+    description: '',
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
     id: 'admin_task_requests',
     title: 'Task Requests',
     description: 'Members asking for tasks to be added to their queue.',
@@ -359,7 +371,9 @@ function buildDefaultWidgetStateForScope(
 // Booking widget compacted to rowSpan=0.5 (~170px) and moved to col 2
 // above Calendar — reflects the "just the Book a Session button"
 // redesign. New fractional `0.5` rowSpan supported by `widgetHeight()`.
-export const WORKSPACE_LAYOUT_VERSION = 16
+// v17 (2026-04-25, PR #40): new `admin_edit_tasks` widget placed on
+// the Assign page, col 1 below admin_assign.
+export const WORKSPACE_LAYOUT_VERSION = 17
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

@@ -128,6 +128,10 @@ export type AdminWidgetId =
   // PR #19 — compact task-compose affordance on the Hub. The full
   // 3-tile `admin_assign` widget now lives on the Assign page.
   | 'admin_quick_assign'
+  // PR #40 — Edit Tasks library (Assign page, col 1 under the
+  // Assign widget). Opens a modal listing every in-flight team task
+  // with click-to-edit rows.
+  | 'admin_edit_tasks'
   // Admin-side widget bank — registered but not on the page yet.
   | 'team_focus'
   | 'approval_queue'
