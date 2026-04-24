@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
+import { useAuth } from '../../contexts/AuthContext'
 import { useTasks } from '../../contexts/TaskContext'
+import { fetchTeamAssignedTasks } from '../../lib/queries/assignments'
 import { Check, Download, Printer, RefreshCcw, Target, CheckSquare, Briefcase, Info, PieChart as PieChartIcon } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -110,6 +113,12 @@ function HealthGauge({ pct }: { pct: number }) {
 
 export default function BusinessHealth() {
   useDocumentTitle('Analytics - Checkmark Workspace')
+  const { profile } = useAuth()
+  // `useTasks` still drives the task-drilldown list + bookings until
+  // the Phase 2 flywheel ledger arrives. Task aggregation for the
+  // flywheel bars now comes from real assigned_tasks via Supabase
+  // (PR #27) so a task tagged with a flywheel stage actually counts
+  // in the per-stage metrics.
   const { tasks, bookings, pendingIds, togglePending, submitPending, hasPending } = useTasks()
   const [selectedStage, setSelectedStage] = useState<typeof STAGES[number]['name']>('Deliver')
   const [timeFilter, setTimeFilter] = useState<'total' | 'year' | 'month' | 'week' | 'day'>('week')
@@ -117,42 +126,81 @@ export default function BusinessHealth() {
   const [from, setFrom] = useState('1900-01-01')
   const [to, setTo] = useState('2999-12-31')
 
-  // ── Derived stats from TaskContext ────────────────────────────────────
+  const assignedTasksQuery = useQuery({
+    queryKey: ['team-assigned-tasks', profile?.id ?? 'none', 'all'] as const,
+    queryFn: () => fetchTeamAssignedTasks(profile!.id, { includeCompleted: true }),
+    enabled: Boolean(profile?.id),
+  })
+  const assignedTasks = assignedTasksQuery.data ?? []
+
+  // ── Derived stats — per-stage task counts from real assigned_tasks ──
 
   const stageStats = useMemo(() => {
-    const stats: Record<string, { total: number; done: number; pct: number }> = {}
+    const stats: Record<string, { total: number; done: number; open: number; pct: number }> = {}
     for (const stage of STAGES) {
       if (stage.name === 'Book') {
+        // Bookings still come from the legacy useTasks mock context
+        // until the sessions page wires through here. Keep this
+        // stage on the existing data source so the widget shape
+        // doesn't change.
         const total = bookings.length
         const done = bookings.filter(b => b.status === 'Confirmed').length
-        stats[stage.name] = { total, done, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
+        stats[stage.name] = {
+          total,
+          done,
+          open: total - done,
+          pct: total > 0 ? Math.round((done / total) * 100) : 0,
+        }
       } else {
-        const st = tasks.filter(t => t.stage === stage.name)
-        const done = st.filter(t => t.completed).length
-        stats[stage.name] = { total: st.length, done, pct: st.length > 0 ? Math.round((done / st.length) * 100) : 0 }
+        // Real assigned_tasks aggregation. Category strings arrive
+        // Title-cased ('Deliver' etc.) from the FlywheelStagePicker,
+        // which matches STAGES.name exactly.
+        const matching = assignedTasks.filter(t => t.category === stage.name)
+        const done = matching.filter(t => t.is_completed).length
+        const total = matching.length
+        stats[stage.name] = {
+          total,
+          done,
+          open: total - done,
+          pct: total > 0 ? Math.round((done / total) * 100) : 0,
+        }
       }
     }
     return stats
-  }, [tasks, bookings])
+  }, [assignedTasks, bookings])
 
-  const totalItems = tasks.length + bookings.length
-  const totalDone = tasks.filter(t => t.completed).length + bookings.filter(b => b.status === 'Confirmed').length
+  // Totals cover both surfaces: real tagged tasks + bookings.
+  const totalAssignedTagged = assignedTasks.filter(t => t.category && ['Deliver', 'Capture', 'Share', 'Attract'].includes(t.category)).length
+  const totalAssignedDone = assignedTasks.filter(t => t.category && ['Deliver', 'Capture', 'Share', 'Attract'].includes(t.category) && t.is_completed).length
+  const totalItems = totalAssignedTagged + bookings.length
+  const totalDone = totalAssignedDone + bookings.filter(b => b.status === 'Confirmed').length
   const overallPct = totalItems > 0 ? Math.round((totalDone / totalItems) * 100) : 0
   const healthLabel = overallPct >= 85 ? 'Excellent' : overallPct >= 65 ? 'Good' : overallPct >= 40 ? 'Average' : 'Low'
 
   const stage = STAGES.find(s => s.name === selectedStage) ?? STAGES[0]
-  const stageTasks = tasks.filter(t => t.stage === selectedStage)
+  // Drill-down list: real assigned_tasks tagged to this stage, plus
+  // the legacy mock-context tasks so the drilldown isn't blank until
+  // the ledger lands. Sort done-last so open work surfaces first.
+  const realStageTasks = assignedTasks.filter(t => t.category === selectedStage)
+  const mockStageTasks = tasks.filter(t => t.stage === selectedStage)
+  const stageTasks = [...realStageTasks.map(t => ({
+    id: t.id,
+    title: t.title,
+    completed: t.is_completed,
+    priority: t.is_required,
+    due: t.due_date,
+  })), ...mockStageTasks]
   const sortedStageTasks = [...stageTasks].sort((a, b) => a.completed === b.completed ? 0 : a.completed ? 1 : -1)
-  const stats = stageStats[selectedStage] ?? { total: 0, done: 0, pct: 0 }
+  const stats = stageStats[selectedStage] ?? { total: 0, done: 0, open: 0, pct: 0 }
 
-  // ── Donut data (raw task counts per stage) ────────────────────────────
+  // ── Donut data — raw task counts per stage, real + mock ──────────────
 
   const tasksByKpiStage = useMemo(() =>
     STAGES.map(s => ({
       stage: s.name,
-      count: s.name === 'Book' ? bookings.length : tasks.filter(t => t.stage === s.name).length,
+      count: s.name === 'Book' ? bookings.length : (stageStats[s.name]?.total ?? 0),
       color: s.color,
-    })), [tasks, bookings])
+    })), [stageStats, bookings])
 
   // ── Empty-state guards ────────────────────────────────────────────────
 
@@ -246,35 +294,57 @@ export default function BusinessHealth() {
         </button>
       </div>
 
-      {/* ── 3. KPI Performance bar (completion % per stage) ── */}
+      {/* ── 3. Flywheel Activity (done opaque + open translucent) ──
+           PR #27: stacked-bar raw counts per stage. Opaque segment is
+           completed tasks; translucent segment on top is assigned-
+           but-open tasks. Bar color per stage — visually legible at a
+           glance. Replaces the old monochrome % bar; real counts tell
+           admins how much work is actually tagged to each stage. */}
       {(() => {
         const chartData = STAGES.map(s => ({
           name: s.name,
-          completed: stageStats[s.name]?.pct ?? 0,
-          remaining: 100 - (stageStats[s.name]?.pct ?? 0),
+          done: stageStats[s.name]?.done ?? 0,
+          open: stageStats[s.name]?.open ?? 0,
+          color: s.color,
         }))
+        const maxCount = Math.max(1, ...chartData.map(d => d.done + d.open))
         return (
           <div className="bg-surface rounded-2xl border border-border p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[16px] font-bold text-text tracking-tight">KPI Performance</h2>
-              <span className="text-[11px] text-text-light">Completion by stage</span>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-[16px] font-bold text-text tracking-tight">Flywheel Activity</h2>
+              <span className="text-[11px] text-text-light">Tasks per stage</span>
             </div>
+            <p className="text-[11px] text-text-light mb-4">
+              <span className="inline-flex items-center gap-1.5 mr-3">
+                <span className="w-2 h-2 rounded-sm bg-gold inline-block" aria-hidden="true" />
+                Completed
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-sm bg-gold/30 inline-block" aria-hidden="true" />
+                Assigned · in progress
+              </span>
+            </p>
             <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} barSize={32} barGap={8}>
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6e6e76', fontSize: 12 }} />
-                  <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: '#46464e', fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
+                  <YAxis domain={[0, Math.ceil(maxCount * 1.1)]} axisLine={false} tickLine={false} tick={{ fill: '#46464e', fontSize: 10 }} allowDecimals={false} />
                   <Tooltip
                     contentStyle={tooltipStyle}
                     labelStyle={tooltipLabelStyle}
-                    formatter={(value) => [`${Number(value ?? 0)}%`, 'Completed']}
+                    formatter={(value, name) => [
+                      `${value} ${Number(value) === 1 ? 'task' : 'tasks'}`,
+                      name === 'done' ? 'Completed' : 'Assigned · open',
+                    ]}
                     cursor={{ fill: 'rgba(201, 168, 76, 0.05)' }}
                   />
-                  <Bar dataKey="completed" radius={[6, 6, 0, 0]}>
-                    {chartData.map((_, i) => <Cell key={i} fill="#C9A84C" fillOpacity={0.8} />)}
+                  {/* Opaque completed segment (bottom of stack) */}
+                  <Bar dataKey="done" stackId="a" radius={[0, 0, 0, 0]}>
+                    {chartData.map((d, i) => <Cell key={`done-${i}`} fill={d.color} fillOpacity={0.95} />)}
                   </Bar>
-                  <Bar dataKey="remaining" radius={[6, 6, 0, 0]} stackId="a">
-                    {chartData.map((_, i) => <Cell key={i} fill="#2c2c34" />)}
+                  {/* Translucent open segment (top of stack) */}
+                  <Bar dataKey="open" stackId="a" radius={[6, 6, 0, 0]}>
+                    {chartData.map((d, i) => <Cell key={`open-${i}`} fill={d.color} fillOpacity={0.3} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -353,7 +423,7 @@ export default function BusinessHealth() {
                       {isChecked && <Check size={11} className="text-gold" />}
                     </div>
                     <span className={`flex-1 text-[14px] font-normal tracking-tight truncate ${task.completed ? 'line-through text-text-light' : 'text-text-muted'}`}>{task.title}</span>
-                    <span className="text-[11px] text-text-light shrink-0">{task.due.split(',')[0]}</span>
+                    <span className="text-[11px] text-text-light shrink-0">{task.due ? task.due.split(',')[0] : ''}</span>
                   </button>
                 )
               })
