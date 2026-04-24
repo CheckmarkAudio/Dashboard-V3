@@ -229,6 +229,13 @@ relitigate them unless the user brings them up.**
 - **Implicit auth flow, not PKCE.** The whole recovery-gate layer
   is built around hash-based recovery tokens. Flipping to PKCE
   breaks it.
+- **No state updates inside `onDragOver` for multi-container dnd-kit
+  sortables.** A single mouse gesture sweeps the cursor through many
+  over-targets; each state update fires a reshuffle, which cascades
+  (learned the hard way in PR #34 — widgets piled into whichever
+  column the cursor ended in). Commit on `onDragEnd` only. Live
+  sibling-shift during drag is provided by useSortable's transform
+  previews, not by state changes.
 
 ### Performance (added April 2026 based on Codex diagnosis)
 
@@ -412,9 +419,12 @@ Everything depends on this layer. Start here.
 ### In progress — UI design refresh
 
 All 4 highest-impact surfaces now share the same grammar:
-`WorkspacePanel` + equal-width 3-column grid + `DashboardWidgetFrame`
-(drag grip + expand-to-modal). Controls card hidden; widgets are
-visible-by-default and non-removable for now.
+column-snap `WorkspacePanel` (3 independent column stacks) +
+`DashboardWidgetFrame` (drag grip + expand-to-modal). Drag model
+(PR #34): during drag only the `DragOverlay` ghost follows the
+cursor; on release, cross-column = direct 1-for-1 swap, same-column
+= sortable insert+shift, empty column = append. Controls card
+hidden; widgets are visible-by-default and non-removable for now.
 
 - ✅ **Overview (`/`)** — 3-col grid: Tasks / Today's Calendar /
   Forum Notifications / Booking Snapshot. Shared `CalendarDayCard`
@@ -553,6 +563,12 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
+- **Column-snap grid + smooth drag + direct swap — 3 PRs, 2026-04-24 afternoon.** PRs #32–#34 reworked the widget grid's interaction model.
+  - **PR #32 `a48b081`** — `WorkspacePanel` moved from implicit row-major flow to 3 independent column stacks (`col` + per-column `order`). Drag feel made Monday.com-smooth via `DragOverlay` (widget-shaped gold-outlined ghost following the cursor above the grid) + live cross-column move in `onDragOver` so siblings shift out of the way. `closestCorners` collision detection for multi-container drag. Empty column drops supported via `col-N` droppable wrappers. `WORKSPACE_LAYOUT_VERSION` 14 → 15.
+  - **PR #33 `dd105b0`** — three focused polish items: (1) Tasks-page widgets all bumped to rowSpan 2 (~696px) so long queues are visible at a glance. (2) Booking widget compacted to rowSpan 0.5 (~170px) as a pure "+ Book a Session" action chip — upcoming-today counter + next-session detail removed. Repositioned from col 1 under My Tasks to col 2 above Calendar. New fractional rowSpan supported by `WidgetRowSpan` type + `widgetHeight()`. (3) Fixed `column assignee.name does not exist` on /daily Team Tasks — `get_team_assigned_tasks` RPC recreated with `assignee.display_name` instead of `.name` (intern_users has no `name` col). Migration applied to prod Supabase. `WORKSPACE_LAYOUT_VERSION` 15 → 16.
+  - **PR #34 `f95f3a5`** — cross-column widget-to-widget drag now does DIRECT 1-for-1 swap (A takes B's slot, B takes A's old slot). First attempt committed the swap live in `onDragOver` → caused a **cascading-swap bug**: every widget the cursor brushed got swapped with the active one, piling widgets into whichever column the cursor ended in (screenshot from user showed col 1 empty + 3 widgets stacked in col 3). Fix: removed `onDragOver` entirely. `onDragEnd` is the single commit point now. During drag only the ghost moves; on release, exactly one swap/move/reorder happens based on drop target. New `swapWidgets(aId, bId)` helper on `useWorkspaceLayout`. Same-column reorder still uses sortable's transform preview + insert-on-drop.
+  - **Key lesson captured**: live state updates in `onDragOver` during multi-container sortable drags are dangerous — the cursor sweeps through many over-targets in a single gesture, and each one firing a state change causes cascading reshuffles. Commit on drop only.
+  - **Net across #32-34**: widget grid went from row-major flow (PR #30) → column-snap explicit placement (#32) → column-snap with direct-swap + Monday-level drag smoothness (#34). The "resolution-proof single layout" roadmap item (Phase 4) gets meaningfully closer.
 - **Layout + task-surface consolidation — 15 PRs, 2026-04-23/24 session.** PRs #17–#31 all merged to main. Overview / Hub / Tasks / Assign now share one grammar: `WorkspacePanel` + equal-width 3-column grid + `DashboardWidgetFrame` (drag grip + expand-to-modal). Controls card hidden site-wide.
   - **PR #17 `a13dbe4`** — Rich `+Task` modal (Monday.com "+ Add item" bottom-of-list pattern) with title + description + flywheel stage picker + due-date. Tags carry through request → approval → materialized task.
   - **PRs #18–#19 `148257a` · `c07a7ea`** — Unified admin task modal (consolidated 3 overlapping admin modals into one Hub-owned Quick Assign). Hub's Assign widget reordered to lead with Quick Assign.
