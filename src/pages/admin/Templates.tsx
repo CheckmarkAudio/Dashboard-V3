@@ -3,7 +3,7 @@ import { AdminOverviewProvider } from '../../contexts/AdminOverviewContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { EmptyState, PageHeader } from '../../components/ui'
 import WorkspacePanel from '../../components/dashboard/WorkspacePanel'
-import { ADMIN_WIDGET_DEFINITIONS } from '../../components/dashboard/widgetRegistry'
+import { ASSIGN_WIDGET_DEFINITIONS } from '../../components/dashboard/widgetRegistry'
 import { FolderKanban, Shield } from 'lucide-react'
 
 /**
@@ -49,7 +49,7 @@ export default function Templates() {
           role={appRole}
           userId={profile?.id ?? 'guest'}
           scope={ASSIGN_SCOPE}
-          definitions={ADMIN_WIDGET_DEFINITIONS}
+          definitions={ASSIGN_WIDGET_DEFINITIONS}
           controlsTitle="Arrange the Assign page"
           controlsDescription="Drag a widget's grip to reorder · click title to expand · hide widgets you don't need."
           showControls
