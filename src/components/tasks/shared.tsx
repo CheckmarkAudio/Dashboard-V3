@@ -252,6 +252,32 @@ export function CompletedToggle({ show, onToggle }: { show: boolean; onToggle: (
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
+// Map a stored task category to a canonical flywheel stage. DB stores
+// these title-cased ("Deliver", "Capture", …); we normalise to
+// lowercase so the STAGE union type is the single source of truth.
+// Returns null for tasks that aren't flywheel-tagged.
+export function taskStage(category: string | null | undefined): Stage | null {
+  if (!category) return null
+  const key = category.toLowerCase().trim()
+  return (STAGES as readonly string[]).includes(key) ? (key as Stage) : null
+}
+
+// Short, at-a-glance due-date label for the right-side task column.
+// "Today" when due today, short "Mon 22" format otherwise, null when
+// no due date set.
+export function formatDueShort(dueDate: string | null | undefined): string | null {
+  if (!dueDate) return null
+  const d = new Date(dueDate)
+  if (Number.isNaN(d.getTime())) return null
+  const today = new Date()
+  const isToday =
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate()
+  if (isToday) return 'Today'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 export function countByStage(
   tasks: { stage: Stage; done: boolean }[],
   submitted: Set<string> = new Set<string>(),

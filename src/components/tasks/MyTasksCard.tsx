@@ -10,7 +10,15 @@ import {
 } from '../../lib/queries/taskRequests'
 import { supabase } from '../../lib/supabase'
 import type { AssignedTask } from '../../types/assignments'
-import { Card, CardHeader, CompletedToggle } from './shared'
+import {
+  Card,
+  CardHeader,
+  CompletedToggle,
+  StagePillRow,
+  formatDueShort,
+  taskStage,
+  type Stage,
+} from './shared'
 import TaskRequestModal from './requests/TaskRequestModal'
 import TaskDetailModal from './TaskDetailModal'
 
@@ -28,6 +36,9 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [requestModalOpen, setRequestModalOpen] = useState(false)
   const [requestsExpanded, setRequestsExpanded] = useState(false)
+  // PR #36 — flywheel stage filter. 'all' = no filter; otherwise the
+  // active stage. The pill row renders above the task list.
+  const [stageFilter, setStageFilter] = useState<'all' | Stage>('all')
   // PR #25 — click task body (not checkbox) opens this detail modal
   const [detailTask, setDetailTask] = useState<AssignedTask | null>(null)
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -148,7 +159,26 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     return { openTasks: open, doneTasks: done }
   }, [tasksQuery.data])
 
-  const visibleTasks = showCompleted ? [...openTasks, ...doneTasks] : openTasks
+  // Stage counts — always computed against OPEN tasks (not completed)
+  // so the "All" count matches the "N open" line in the header and
+  // filtering by stage only reveals work that's still needed.
+  const stageCounts = useMemo(() => {
+    const c: Record<'all' | Stage, number> = {
+      all: openTasks.length,
+      deliver: 0, capture: 0, share: 0, attract: 0, book: 0,
+    }
+    for (const t of openTasks) {
+      const s = taskStage(t.category)
+      if (s) c[s]++
+    }
+    return c
+  }, [openTasks])
+
+  const preFilterVisible = showCompleted ? [...openTasks, ...doneTasks] : openTasks
+  const visibleTasks =
+    stageFilter === 'all'
+      ? preFilterVisible
+      : preFilterVisible.filter((t) => taskStage(t.category) === stageFilter)
 
   // PR #17 — header no longer carries the "+ Task" chip. The button
   // lives as an inline link at the bottom of the list (monday-style)
@@ -216,6 +246,15 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   const body = (
     <>
       {header}
+
+      {/* PR #36 — flywheel stage filter. Sits directly under the header
+          so it reads as "filter bar" for the list below. Rendered even
+          when every stage count is 0 so the user can see at a glance
+          there are no flywheel-tagged tasks today (rather than silently
+          hiding the bar). */}
+      <div className={`shrink-0 ${embedded ? 'mb-2' : 'px-5 pt-2 pb-1'}`}>
+        <StagePillRow counts={stageCounts} active={stageFilter} onChange={setStageFilter} />
+      </div>
 
       {/* PR #16 — pending-request strip. Collapsed by default; the
           "N pending" chip in the header toggles it. Shows title +
@@ -377,9 +416,7 @@ function AssignedTaskRow({
   rowRef: (node: HTMLDivElement | null) => void
 }) {
   const done = task.is_completed
-  const dueLabel = task.due_date
-    ? new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : null
+  const dueLabel = formatDueShort(task.due_date)
   const isNew =
     !done &&
     Boolean(task.batch?.created_at) &&
@@ -395,6 +432,10 @@ function AssignedTaskRow({
   // PR #25 — split click surfaces. Checkbox toggles completion;
   // body-click opens the detail modal. Keyboard: Space toggles
   // (monday convention), Enter opens detail.
+  //
+  // PR #36 — layout is a 3-col grid so the due-date label sits
+  // right-aligned inline with the title (not buried in the sub-meta
+  // line). Empty right column when no due date.
   return (
     <div
       ref={rowRef}
@@ -410,7 +451,7 @@ function AssignedTaskRow({
           onToggle(task)
         }
       }}
-      className={`group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left cursor-pointer ${
+      className={`group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left cursor-pointer ${
         highlighted
           ? 'bg-gold/20 ring-2 ring-gold animate-[pulse_0.8s_ease-in-out_2]'
           : done
@@ -440,7 +481,7 @@ function AssignedTaskRow({
         {done && <Check size={12} strokeWidth={3} aria-hidden="true" />}
       </button>
 
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className={`text-[13px] truncate ${done ? 'line-through text-text-muted' : 'font-semibold text-text'}`}>
             {task.title}
@@ -468,10 +509,20 @@ function AssignedTaskRow({
           {task.category && <span>{task.category}</span>}
           {(originLabel || task.category) && task.assigned_to_name && <span aria-hidden="true">·</span>}
           {task.assigned_to_name && <span>{task.assigned_to_name}</span>}
-          {(originLabel || task.category || task.assigned_to_name) && dueLabel && <span aria-hidden="true">·</span>}
-          {dueLabel && <span>Due {dueLabel}</span>}
         </div>
       </div>
+
+      {/* Due date — right column of the grid, vertically top-aligned
+          with the title. Em-dash-style empty state keeps rows aligned
+          when there's no date set. */}
+      <span
+        className={`shrink-0 text-[12px] tabular-nums whitespace-nowrap mt-[2px] ${
+          dueLabel ? 'text-text-light' : 'text-text-light/30'
+        }`}
+        title={dueLabel ? `Due ${dueLabel}` : 'No due date'}
+      >
+        {dueLabel ?? '—'}
+      </span>
     </div>
   )
 }
