@@ -120,8 +120,13 @@ export function StagePillRow({
   active: 'all' | Stage
   onChange: (next: 'all' | Stage) => void
 }) {
+  // PR #36 — one-row constraint. `flex-nowrap` keeps all 6 pills on a
+  // single line inside narrow widget columns; `overflow-x-auto` +
+  // `scrollbar-none` lets the row scroll horizontally on ultra-narrow
+  // viewports without wrapping. Pills themselves are compact (see
+  // StagePill).
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
+    <div className="flex items-center gap-1 flex-nowrap overflow-x-auto scrollbar-none">
       <StagePill
         label="All"
         count={counts.all}
@@ -161,7 +166,7 @@ function StagePill({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all ring-1 whitespace-nowrap ${
+      className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-all ring-1 whitespace-nowrap ${
         isActive
           ? tone === 'gold'
             ? 'bg-gold/15 text-gold ring-gold/30'
@@ -170,7 +175,7 @@ function StagePill({
       }`}
     >
       {stageStyle && (
-        <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot}`} aria-hidden="true" />
+        <span className={`w-1 h-1 rounded-full ${stageStyle.dot}`} aria-hidden="true" />
       )}
       {label}
       <span className={`tabular-nums ${isActive ? 'opacity-100' : 'opacity-70'}`}>{count}</span>
