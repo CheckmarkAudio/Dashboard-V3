@@ -33,6 +33,7 @@ import type { TeamMember } from '../../types'
 import type { AssignmentNotification } from '../../types/assignments'
 import MyTasksCard from '../tasks/MyTasksCard'
 import CreateBookingModal from '../CreateBookingModal'
+import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
 
 // Stage tokens shared between the activity feed + status pills.
 // Sourced from the v1.0 design system (Deliver/Capture/Share/Attract/Book).
@@ -279,6 +280,10 @@ async function markChannelRead(channelId: string): Promise<void> {
 export function ForumNotificationsWidget() {
   const queryClient = useQueryClient()
   const { profile } = useAuth()
+  // PR #38 — reassign-request modal. Opens when the user clicks a
+  // `task_reassign_requested` notification so they can Approve /
+  // Decline the peer's ask without leaving Overview.
+  const [reassignModalOpen, setReassignModalOpen] = useState(false)
   const todayLabel = new Date()
     .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     .toUpperCase()
@@ -425,6 +430,27 @@ export function ForumNotificationsWidget() {
       }
       // submitted/unknown → no-op on the member side (admin handler
       // covers the submitted case from their own notifications widget).
+      return
+    }
+
+    // PR #38 — peer-to-peer reassignment notifications.
+    if (n.task_reassign_request_id) {
+      if (n.notification_type === 'task_reassign_requested') {
+        // Current assignee side — open the Approve/Decline modal.
+        setReassignModalOpen(true)
+        return
+      }
+      if (n.notification_type === 'task_reassign_approved') {
+        // Requester side — the task just moved into their queue.
+        // Invalidate My Tasks so the new row appears and flash it.
+        void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+        return
+      }
+      if (n.notification_type === 'task_reassign_declined') {
+        // Requester side — no-op for now. Title+body already tell the
+        // story; future iteration could pop a small toast.
+        return
+      }
       return
     }
 
@@ -594,6 +620,11 @@ export function ForumNotificationsWidget() {
         )}
       </div>
 
+      {/* PR #38 — peer reassignment request modal. Opens when the
+          user clicks a `task_reassign_requested` notification. */}
+      {reassignModalOpen && (
+        <TaskReassignRequestModal onClose={() => setReassignModalOpen(false)} />
+      )}
     </div>
   )
 }

@@ -32,6 +32,11 @@ export type AssignmentNotificationType =
   | 'task_request_submitted'
   | 'task_request_approved'
   | 'task_request_rejected'
+  // PR #38 — peer-to-peer reassignment. `task_reassign_request_id` is
+  // populated; all other polymorphic refs null.
+  | 'task_reassign_requested'
+  | 'task_reassign_approved'
+  | 'task_reassign_declined'
 
 // Embedded batch summary that every assigned-task / notification row
 // carries so the UI can render `Assigned by X on Y` without a join.
@@ -110,12 +115,14 @@ export interface TaskRequestNotificationRef {
 
 export interface AssignmentNotification {
   id: string
-  // Exactly one of batch_id / session_id / task_request_id is non-null
-  // (DB-enforced CHECK). The notification_type tells you which of
-  // `batch` / `session` / `task_request` shape carries the subject.
+  // Exactly one of batch_id / session_id / task_request_id /
+  // task_reassign_request_id is non-null (DB-enforced CHECK).
+  // `notification_type` tells you which shape carries the subject.
   batch_id: string | null
   session_id: string | null
   task_request_id: string | null
+  /** PR #38 — peer-to-peer reassignment request. */
+  task_reassign_request_id: string | null
   notification_type: AssignmentNotificationType
   title: string
   body: string | null
