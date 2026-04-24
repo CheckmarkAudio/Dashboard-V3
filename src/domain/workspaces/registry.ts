@@ -26,11 +26,11 @@ import type {
 // falls out of registration order here; users reorder via drag.
 //
 // Overview stacks:
-//   col 1: team_tasks · booking_snapshot
-//   col 2: today_calendar (rs2)
+//   col 1: team_tasks (rs1)
+//   col 2: booking_snapshot (rs0.5 — compact Book-a-Session button) · today_calendar (rs2)
 //   col 3: forum_notifications (rs2)
 //
-// Tasks stacks:
+// Tasks stacks (all rs2 so each column shows a long queue at a glance):
 //   col 1: team_tasks   |   col 2: studio_tasks   |   col 3: team_board
 export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
   {
@@ -39,8 +39,19 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     description: 'Personal queue — synced with the Tasks page.',
     defaultPlacements: [
       { scope: 'member_overview', span: 1, rowSpan: 1, col: 1 },
-      { scope: 'member_tasks', span: 1, rowSpan: 1, col: 1 },
+      { scope: 'member_tasks', span: 1, rowSpan: 2, col: 1 },
     ],
+    accessVisibility: 'personal',
+    dataScope: 'self',
+    allowedRoles: ['member', 'admin', 'owner'],
+  },
+  {
+    // Compact Book-a-Session action — registered BEFORE today_calendar
+    // so it stacks on top in col 2's default order. rowSpan 0.5 ≈ 170px.
+    id: 'booking_snapshot',
+    title: 'Booking',
+    description: 'Quick-book a studio session.',
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 0.5, col: 2 }],
     accessVisibility: 'personal',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -63,23 +74,12 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
-  {
-    id: 'booking_snapshot',
-    title: 'Booking',
-    description: 'Upcoming sessions and quick book.',
-    // Col 1 — stacks under My Tasks (registered AFTER so it lands
-    // second in col 1's default order).
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 1, col: 1 }],
-    accessVisibility: 'personal',
-    dataScope: 'self',
-    allowedRoles: ['member', 'admin', 'owner'],
-  },
   // ─── Tasks page (`/daily`) widgets ──────────────────────────────
   {
     id: 'studio_tasks',
     title: 'Studio Tasks',
     description: 'Shared studio tasks anyone on the team can complete.',
-    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 1, col: 2 }],
+    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 2, col: 2 }],
     accessVisibility: 'shared',
     dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -88,7 +88,7 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     id: 'team_board',
     title: 'Team Tasks',
     description: 'Team-wide view of member + studio work.',
-    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 1, col: 3 }],
+    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 2, col: 3 }],
     accessVisibility: 'shared',
     dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -352,7 +352,12 @@ function buildDefaultWidgetStateForScope(
 // snaps to that column. `rowSpan` still controls widget height inside
 // its column. `WorkspaceWidgetState` gains `col`; saved v14 layouts
 // reset to the new defaults.
-export const WORKSPACE_LAYOUT_VERSION = 15
+// v16 (2026-04-24, PR #33): Tasks page widgets bumped to rowSpan=2
+// (~696px each) so long queues are visible at a glance. Overview
+// Booking widget compacted to rowSpan=0.5 (~170px) and moved to col 2
+// above Calendar — reflects the "just the Book a Session button"
+// redesign. New fractional `0.5` rowSpan supported by `widgetHeight()`.
+export const WORKSPACE_LAYOUT_VERSION = 16
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
