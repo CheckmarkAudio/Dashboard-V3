@@ -120,30 +120,34 @@ export function StagePillRow({
   active: 'all' | Stage
   onChange: (next: 'all' | Stage) => void
 }) {
-  // PR #36 — one-row constraint. `flex-nowrap` keeps all 6 pills on a
-  // single line inside narrow widget columns; `overflow-x-auto` +
-  // `scrollbar-none` lets the row scroll horizontally on ultra-narrow
-  // viewports without wrapping. Pills themselves are compact (see
-  // StagePill).
+  // PR #36 — two-row layout: "All" (clear-filter affordance) sits on
+  // its own row above the 5 flywheel stage pills. No horizontal
+  // scroll — with 10px text + 1.5px padding the 5 stage pills fit
+  // comfortably on one line in a 3-col widget; wrap is the fallback
+  // on extreme viewport squeezes.
   return (
-    <div className="flex items-center gap-1 flex-nowrap overflow-x-auto scrollbar-none">
-      <StagePill
-        label="All"
-        count={counts.all}
-        tone="gold"
-        isActive={active === 'all'}
-        onClick={() => onChange('all')}
-      />
-      {STAGES.map((s) => (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1">
         <StagePill
-          key={s}
-          label={STAGE_STYLE[s].label}
-          count={counts[s]}
-          tone={s}
-          isActive={active === s}
-          onClick={() => onChange(s)}
+          label="All"
+          count={counts.all}
+          tone="gold"
+          isActive={active === 'all'}
+          onClick={() => onChange('all')}
         />
-      ))}
+      </div>
+      <div className="flex items-center gap-1 flex-wrap">
+        {STAGES.map((s) => (
+          <StagePill
+            key={s}
+            label={STAGE_STYLE[s].label}
+            count={counts[s]}
+            tone={s}
+            isActive={active === s}
+            onClick={() => onChange(s)}
+          />
+        ))}
+      </div>
     </div>
   )
 }
