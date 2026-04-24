@@ -26,6 +26,7 @@ import { useAdminOverviewContext } from '../../contexts/AdminOverviewContext'
 import { supabase } from '../../lib/supabase'
 import {
   fetchAssignmentNotifications,
+  fetchTeamAssignedTasks,
   markAssignmentNotificationRead,
 } from '../../lib/queries/assignments'
 import {
@@ -331,6 +332,7 @@ function AssignGroupModal({ onClose }: { onClose: () => void }) {
 type StageKey = Lowercase<'Deliver' | 'Capture' | 'Share' | 'Attract' | 'Book'>
 
 export function AdminFlywheelWidget() {
+  const { profile } = useAuth()
   const defsQuery = useQuery({
     queryKey: kpiKeys.definitions(),
     queryFn: fetchKPIDefinitions,
@@ -339,6 +341,16 @@ export function AdminFlywheelWidget() {
     queryKey: kpiKeys.entries(),
     queryFn: fetchKPIEntries,
   })
+  // PR #27 — pull team-wide assigned_tasks so the flywheel reflects
+  // real task activity per stage. Completed = opaque, assigned-but-
+  // not-yet-done = translucent in the bar below each stage. Same
+  // cache key the Tasks page + member widgets use, so the fetch is
+  // deduped by react-query.
+  const tasksQuery = useQuery({
+    queryKey: ['team-assigned-tasks', profile?.id ?? 'none', 'all'] as const,
+    queryFn: () => fetchTeamAssignedTasks(profile!.id, { includeCompleted: true }),
+    enabled: Boolean(profile?.id),
+  })
 
   const loading = defsQuery.isLoading || entriesQuery.isLoading
   const error = defsQuery.error ?? entriesQuery.error
@@ -346,6 +358,22 @@ export function AdminFlywheelWidget() {
   const stages = useMemo(() => {
     const defs = defsQuery.data ?? []
     const entries = entriesQuery.data ?? []
+    const tasks = tasksQuery.data ?? []
+
+    // Task category strings are Title-cased ('Deliver', ...) — the
+    // FlywheelStagePicker emits exactly these. Normalize to the
+    // lowercase StageKey used for lookups against STAGE_STYLES.
+    const tasksByStage = new Map<StageKey, { total: number; completed: number }>()
+    for (const t of tasks) {
+      if (!t.category) continue
+      const key = t.category.toLowerCase() as StageKey
+      if (!['deliver', 'capture', 'share', 'attract', 'book'].includes(key)) continue
+      const bucket = tasksByStage.get(key) ?? { total: 0, completed: 0 }
+      bucket.total += 1
+      if (t.is_completed) bucket.completed += 1
+      tasksByStage.set(key, bucket)
+    }
+
     const byStage = new Map<StageKey, { defs: typeof defs; totalPct: number; count: number }>()
     for (const d of defs) {
       const stage = d.flywheel_stage as StageKey
@@ -365,15 +393,18 @@ export function AdminFlywheelWidget() {
       const s = STAGE_STYLES[key]
       const bucket = byStage.get(key)
       const pct = bucket && bucket.count > 0 ? Math.round(bucket.totalPct / bucket.count) : null
+      const taskStats = tasksByStage.get(key) ?? { total: 0, completed: 0 }
       return {
         key,
         label: s.label,
         style: s,
         pct,
         kpiCount: bucket?.defs.length ?? 0,
+        taskTotal: taskStats.total,
+        taskCompleted: taskStats.completed,
       }
     })
-  }, [defsQuery.data, entriesQuery.data])
+  }, [defsQuery.data, entriesQuery.data, tasksQuery.data])
 
   // Summary figures for the header strip — total KPIs tracked + overall
   // aggregate % (average of the stages that have data). Gives admins
@@ -428,28 +459,79 @@ export function AdminFlywheelWidget() {
             <span className="truncate">Could not load KPI data</span>
           </div>
         ) : (
-          stages.map((s) => (
-            <div key={s.key} className="rounded-lg bg-surface-alt/40 border border-border/40 px-3 py-2">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className={`inline-flex items-center gap-2 text-[13px] font-bold ${s.style.text}`}>
-                  <span className={`w-2.5 h-2.5 rounded-full ${s.style.dot}`} aria-hidden="true" />
-                  {s.label}
-                </span>
-                <span className="text-[12px] tabular-nums text-text font-semibold">
-                  {s.pct === null ? <span className="text-text-light italic font-normal">no KPI yet</span> : `${s.pct}%`}
-                </span>
+          stages.map((s) => {
+            // PR #27 — Task-completion portion of the bar. Each stage
+            // now surfaces real task activity: opaque = completed,
+            // translucent = assigned-but-not-yet-done. Empty background
+            // (zero tasks tagged) shows neutral surface.
+            const taskPct = s.taskTotal > 0
+              ? Math.round((s.taskCompleted / s.taskTotal) * 100)
+              : 0
+            const openCount = s.taskTotal - s.taskCompleted
+            return (
+              <div key={s.key} className="rounded-lg bg-surface-alt/40 border border-border/40 px-3 py-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`inline-flex items-center gap-2 text-[13px] font-bold ${s.style.text}`}>
+                    <span className={`w-2.5 h-2.5 rounded-full ${s.style.dot}`} aria-hidden="true" />
+                    {s.label}
+                  </span>
+                  <span className="text-[12px] tabular-nums text-text font-semibold">
+                    {s.taskTotal > 0 ? (
+                      <span>
+                        {s.taskCompleted}<span className="text-text-light">/{s.taskTotal}</span>
+                      </span>
+                    ) : s.pct !== null ? (
+                      `${s.pct}%`
+                    ) : (
+                      <span className="text-text-light italic font-normal">no tasks tagged</span>
+                    )}
+                  </span>
+                </div>
+                {/* Dual-opacity task bar: opaque completed segment +
+                    translucent assigned-but-open segment on the same
+                    track. Full width when all tasks done; empty when
+                    no tasks tagged to this stage. */}
+                <div className="h-2 rounded-full bg-surface overflow-hidden relative">
+                  {s.taskTotal > 0 ? (
+                    <div className="absolute inset-0 flex">
+                      <div
+                        className={`h-full ${s.style.dot} transition-all duration-500`}
+                        style={{ width: `${taskPct}%` }}
+                        aria-label={`${s.taskCompleted} completed`}
+                      />
+                      <div
+                        className={`h-full ${s.style.dot} transition-all duration-500`}
+                        style={{
+                          width: `${100 - taskPct}%`,
+                          opacity: 0.3,
+                        }}
+                        aria-label={`${openCount} open`}
+                      />
+                    </div>
+                  ) : (
+                    // Fallback: if no tasks tagged, show the KPI-based
+                    // bar so the widget isn't empty on a fresh install.
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${s.pct === null ? '' : s.style.dot}`}
+                      style={{ width: `${s.pct ?? 4}%`, opacity: s.pct === null ? 0.25 : 1 }}
+                    />
+                  )}
+                </div>
+                <p className="text-[10px] text-text-light mt-1">
+                  {s.taskTotal > 0 ? (
+                    <>
+                      {s.taskCompleted} done · {openCount} open
+                      {s.kpiCount > 0 && ` · ${s.kpiCount} KPI${s.kpiCount === 1 ? '' : 's'}`}
+                    </>
+                  ) : s.kpiCount === 0 ? (
+                    'Tracking zero KPIs · no tasks tagged'
+                  ) : (
+                    `${s.kpiCount} KPI${s.kpiCount === 1 ? '' : 's'} linked · no tasks tagged`
+                  )}
+                </p>
               </div>
-              <div className="h-2 rounded-full bg-surface overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${s.pct === null ? '' : s.style.dot}`}
-                  style={{ width: `${s.pct ?? 4}%`, opacity: s.pct === null ? 0.25 : 1 }}
-                />
-              </div>
-              <p className="text-[10px] text-text-light mt-1">
-                {s.kpiCount === 0 ? 'Tracking zero KPIs' : `${s.kpiCount} KPI${s.kpiCount === 1 ? '' : 's'} linked`}
-              </p>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
 
