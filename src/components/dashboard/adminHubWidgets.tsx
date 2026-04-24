@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
   Bell,
-  Building2,
   CalendarPlus,
   Check,
   CheckCircle2,
@@ -12,7 +11,6 @@ import {
   Clock,
   Hash,
   Inbox,
-  ListChecks,
   Loader2,
   MessageSquare,
   Send,
@@ -30,16 +28,10 @@ import {
   fetchTeamAssignedTasks,
   markAssignmentNotificationRead,
 } from '../../lib/queries/assignments'
-import {
-  assignTemplateToMembers,
-  fetchTaskTemplateLibrary,
-  taskTemplateKeys,
-} from '../../lib/queries/taskTemplates'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { fetchKPIDefinitions, fetchKPIEntries, kpiKeys } from '../../lib/queries/kpi'
 import { useToast } from '../Toast'
 import CreateBookingModal from '../CreateBookingModal'
-import MemberMultiSelect from '../members/MemberMultiSelect'
 import AdminTaskCreateModal from '../tasks/requests/AdminTaskCreateModal'
 import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
 import type { TeamMember } from '../../types'
@@ -81,7 +73,12 @@ const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring:
 // assignments strip below so admins see continuity of what they've
 // been delegating without bouncing to the Templates page.
 
-type AssignFlow = 'session' | 'task' | 'group' | 'studio' | null
+// PR #41 reorg — Assign widget shrinks to 2 tiles (Task + Session)
+// per the sketch. Studio task is now reachable via the scope toggle
+// inside AdminTaskCreateModal; Task-Group / template-based assignment
+// will be folded into the Task modal's "Add from template" flow in
+// PR #42, replacing the standalone AssignGroupModal tile.
+type AssignFlow = 'session' | 'task' | null
 
 export function AdminAssignWidget() {
   const queryClient = useQueryClient()
@@ -107,42 +104,24 @@ export function AdminAssignWidget() {
           per user feedback: the tiles must be always visible, and
           the page-level RecentAssignmentsSection below the board
           already covers assignment history. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        <AssignTile
-          icon={CalendarPlus}
-          label="Session"
-          hint="Book a studio session"
-          onClick={() => setFlow('session')}
-        />
+      <div className="grid grid-cols-2 gap-2.5">
         <AssignTile
           icon={CheckSquare}
-          label="Task"
-          hint="One-off task to one or many"
+          label="+Task"
+          hint="One-off task or studio task — toggle inside"
           onClick={() => setFlow('task')}
         />
         <AssignTile
-          icon={ListChecks}
-          label="Task Group"
-          hint="Apply a checklist template"
-          onClick={() => setFlow('group')}
-        />
-        {/* PR #39 — Studio Task is a shared pool row (no assignee).
-            Launches AdminTaskCreateModal pre-seeded to studio scope so
-            the recipient picker is hidden and the toggle starts on
-            Studio. */}
-        <AssignTile
-          icon={Building2}
-          label="Studio Task"
-          hint="Shared pool — any team member can claim"
-          onClick={() => setFlow('studio')}
+          icon={CalendarPlus}
+          label="+Session"
+          hint="Book a studio session"
+          onClick={() => setFlow('session')}
         />
       </div>
 
       {/* Flow modals */}
       {flow === 'session' && <CreateBookingModal onClose={handleClose} />}
       {flow === 'task' && <AdminTaskCreateModal onClose={handleClose} />}
-      {flow === 'group' && <AssignGroupModal onClose={handleClose} />}
-      {flow === 'studio' && <AdminTaskCreateModal initialScope="studio" onClose={handleClose} />}
     </div>
   )
 }
@@ -186,154 +165,16 @@ function AssignTile({
   )
 }
 
-// ─── AssignGroupModal — PR #11 rewire ───────────────────────────────
-//
-// Historical: wrote directly to legacy `task_assignments` (template→
-// position binding for daily cron). That didn't trigger assignment
-// notifications OR materialize real assigned_tasks rows, so the
-// recipient never saw anything on their widgets — the bug the user
-// surfaced after PR #10 preview.
-//
-// Rewired to: pick a `task_templates` row → multi-recipient →
-// calls `assignTemplateToMembers` RPC (atomic batch + recipients +
-// assigned_tasks + notifications in one transaction). Uses the same
-// MemberMultiSelect as AssignTaskModal so the two Hub flows feel
-// identical. For partial-item selection, admins use the full Assign
-// wizard on `/admin/templates`; this tile is the quick "send the
-// whole template" path.
+// ─── AssignGroupModal removed (PR #41) ─────────────────────────────
+// PR #11 introduced this as the standalone "apply a template
+// wholesale" flow behind a 3rd Assign tile. PR #41 reduces the
+// Assign widget to 2 tiles per the user sketch. PR #42 will revive
+// the template-application flow as an "Add from template" sub-flow
+// inside the new row-by-row +Task modal — letting admins pick which
+// items from a template to add, instead of applying it wholesale.
+// Until #42 lands, the full Assign wizard on /admin/templates
+// covers the gap.
 
-function AssignGroupModal({ onClose }: { onClose: () => void }) {
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [templateId, setTemplateId] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const templatesQuery = useQuery({
-    queryKey: taskTemplateKeys.library(null, false),
-    queryFn: () => fetchTaskTemplateLibrary({ roleTag: null, includeInactive: false }),
-  })
-  const templates = templatesQuery.data ?? []
-
-  const toggleMember = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const submit = async () => {
-    if (selectedIds.size === 0 || !templateId) return
-    setSaving(true)
-    try {
-      const summary = await assignTemplateToMembers(
-        templateId,
-        Array.from(selectedIds),
-        { due_date: dueDate || null },
-      )
-      toast(
-        `Assigned to ${summary.recipient_count} ${summary.recipient_count === 1 ? 'member' : 'members'} · ${summary.task_count} tasks`,
-        'success',
-      )
-      void queryClient.invalidateQueries({ queryKey: ['admin-recent-assignments'] })
-      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
-      void queryClient.invalidateQueries({ queryKey: taskTemplateKeys.all })
-      onClose()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to assign template', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const disabled = selectedIds.size === 0 || !templateId || saving
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div
-        className="bg-surface rounded-2xl border border-border w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-[16px] font-bold text-text">Assign Task Group</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-surface-hover" aria-label="Close">
-            <X size={16} className="text-text-light" />
-          </button>
-        </div>
-        <p className="text-[12px] text-text-light">
-          Sends an entire template as a batch of tasks. Recipients see each
-          item on their My Tasks widget + a "new assignment" notification.
-          For partial-item selection, use the full flow on the Assign page.
-        </p>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">
-            Template
-          </span>
-          <select
-            value={templateId}
-            onChange={(e) => setTemplateId(e.target.value)}
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          >
-            <option value="">
-              {templatesQuery.isLoading ? 'Loading templates…' : 'Pick a template…'}
-            </option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} · {t.item_count} {t.item_count === 1 ? 'task' : 'tasks'}
-                {t.role_tag ? ` · ${t.role_tag}` : ''}
-              </option>
-            ))}
-          </select>
-          {!templatesQuery.isLoading && templates.length === 0 && (
-            <p className="mt-1.5 text-[11px] text-text-light italic">
-              No templates yet. Head to the Assign page to create one.
-            </p>
-          )}
-        </label>
-
-        <MemberMultiSelect selectedIds={selectedIds} onToggle={toggleMember} />
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">
-            Due date <span className="normal-case text-text-light">(optional, applies to all tasks)</span>
-          </span>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          />
-        </label>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm text-text-light hover:text-text"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={disabled}
-            className="px-4 py-2 rounded-lg bg-gold text-black text-sm font-bold disabled:opacity-50 hover:bg-gold-muted"
-          >
-            {saving
-              ? 'Assigning…'
-              : selectedIds.size === 0
-                ? 'Assign'
-                : `Assign to ${selectedIds.size}`}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 
 // ─── Flywheel widget ─────────────────────────────────────────────────
