@@ -197,31 +197,41 @@ export function CardHeader({ children }: { children: ReactNode }) {
   return <div className="px-5 pt-4 pb-3 border-b border-white/5">{children}</div>
 }
 
-// ─── Submit bar (gold gradient, "Submit Completed (n)") ───────────────
-// Only renders when there's at least one pending check — when nothing
-// is queued the bar collapses to zero height, freeing ~70px for more
-// task rows. This matches the Workspace-UI-Draft mockup where the
-// Overview Tasks widget has no submit chrome at all in its idle state.
+// ─── Submit bar ───────────────────────────────────────────────────────
+//
+// PR #37 — always renders inside the widget footer. Greyed/disabled
+// when there's nothing pending; lights up gold when the user has
+// queued at least one check. Clicking commits all pending toggles via
+// the `onClick` callback the widget provides.
+//
+// Shows the pending count inline when > 0 so the user knows how many
+// tasks they're about to commit.
 
 export function SubmitBar({
   count,
+  isSubmitting = false,
   onClick,
 }: {
   count: number
+  isSubmitting?: boolean
   onClick: () => void
 }) {
-  if (count === 0) return null
+  const disabled = count === 0 || isSubmitting
   return (
-    <div className="px-4 py-3 border-t border-white/5 mt-auto">
-      <button
-        type="button"
-        onClick={onClick}
-        className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-bold tracking-tight transition-all bg-gradient-to-b from-gold to-gold-muted text-black hover:brightness-105 shadow-[0_10px_20px_rgba(214,170,55,0.18)]"
-      >
-        <Check size={12} strokeWidth={3} />
-        Submit ({count})
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={count > 0 ? `Submit ${count} completed task${count === 1 ? '' : 's'}` : 'Submit completed (none pending)'}
+      className={`w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-bold tracking-tight transition-all ${
+        disabled
+          ? 'bg-white/[0.04] text-text-light/50 ring-1 ring-white/5 cursor-not-allowed'
+          : 'bg-gradient-to-b from-gold to-gold-muted text-black hover:brightness-105 shadow-[0_10px_20px_rgba(214,170,55,0.18)]'
+      }`}
+    >
+      <Check size={12} strokeWidth={3} />
+      Submit Completed{count > 0 ? ` (${count})` : ''}
+    </button>
   )
 }
 
