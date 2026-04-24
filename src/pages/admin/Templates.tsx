@@ -50,9 +50,10 @@ export default function Templates() {
           userId={profile?.id ?? 'guest'}
           scope={ASSIGN_SCOPE}
           definitions={ASSIGN_WIDGET_DEFINITIONS}
-          controlsTitle="Arrange the Assign page"
-          controlsDescription="Drag a widget's grip to reorder · click title to expand · hide widgets you don't need."
-          showControls
+          // PR #31 — controls bar hidden; drag-reorder + expand-to-modal
+          // still work via each widget's frame.
+          controlsDescription=""
+          showControls={false}
         />
       </div>
     </AdminOverviewProvider>
