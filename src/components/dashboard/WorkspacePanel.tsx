@@ -1,7 +1,8 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { RotateCcw } from 'lucide-react'
+import { RotateCcw, GripVertical } from 'lucide-react'
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   KeyboardSensor,
   closestCorners,
@@ -9,6 +10,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
 import {
@@ -32,16 +34,24 @@ import FloatingDetailModal from '../FloatingDetailModal'
 import { Button, Card } from '../ui'
 
 /**
- * Column-snap widget grid (PR #32).
+ * Column-snap widget grid with live sibling animation (PR #32).
  *
- * Three independent vertical stacks (cols 1, 2, 3). Within a column,
- * widgets auto-arrange top-to-bottom and dragging reorders them via
- * standard sortable shift semantics (drop A onto B → B shifts aside).
- * Dragging a widget into a different column assigns it to that column;
- * nothing ever slides across the whole page on its own.
+ * Three independent column stacks. Key dnd-kit wiring:
  *
- * `rowSpan` still controls widget HEIGHT inside its column (rs=1 →
- * 340px, rs=2 → 696px).
+ *   - Each column is its own `SortableContext` with
+ *     `verticalListSortingStrategy` — within-column shifts animate
+ *     via built-in transforms (neighbors glide out of the way).
+ *   - `onDragOver` moves widgets to new columns LIVE during drag so
+ *     target-column siblings shift to make space as the cursor
+ *     approaches. This is what made the prior iteration feel janky
+ *     (state only updated on drop).
+ *   - `onDragEnd` finalizes intra-column reorder (same-column final
+ *     position).
+ *   - `DragOverlay` renders a floating ghost that tracks the cursor
+ *     smoothly above the grid while the original slot dims to a
+ *     placeholder — standard dnd-kit "card-being-carried" UX.
+ *
+ * `rowSpan` controls widget height inside its column (rs=1 → 340px).
  */
 const ROW_HEIGHT_PX = 340
 const ROW_GAP_PX = 16
@@ -51,11 +61,10 @@ function widgetHeight(rowSpan: WidgetRowSpan = 1): number {
   return rowSpan * ROW_HEIGHT_PX + (rowSpan - 1) * ROW_GAP_PX
 }
 
-// Sortable widget inside a column. Uses dnd-kit's vertical sortable so
-// drops shift siblings up/down inside the same column automatically.
-// Cross-column drops are handled by the parent `DndContext` via
-// `closestCorners`, which tracks the nearest item across all
-// SortableContexts.
+// Sortable widget inside a column. While being dragged, the original
+// slot dims to 0.35 opacity so the user sees "this is where the card
+// came from" — a DragOverlay copy (rendered above the grid) is what
+// tracks the cursor.
 function SortableWidget({
   id,
   rowSpan,
@@ -76,14 +85,15 @@ function SortableWidget({
     flexDirection: 'column',
     overflow: 'hidden',
     minHeight: 0,
-    zIndex: isDragging ? 20 : undefined,
-    opacity: isDragging ? 0.85 : 1,
+    opacity: isDragging ? 0.35 : 1,
+    // Hide the chrome of the placeholder a bit more while the ghost
+    // floats above — a subtle dashed outline hints "card goes here."
   }
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={isDragging ? 'ring-2 ring-gold/60 rounded-2xl shadow-2xl' : ''}
+      className={isDragging ? 'rounded-2xl ring-2 ring-dashed ring-gold/40' : ''}
     >
       {children({
         attributes: attributes as DragHandleProps['attributes'],
@@ -94,34 +104,24 @@ function SortableWidget({
   )
 }
 
-// A droppable column. Registers the column's id + its sortable items
-// so cross-column drags land correctly. Empty columns still register
-// so you can drop the first widget into an empty stack.
+// A droppable column. Always registered (even when empty) so
+// cross-column drops land. No outline when idle — the sibling-shift
+// animation is affordance enough.
 function Column({
   col,
   itemIds,
-  isDragActive,
   children,
 }: {
   col: number
   itemIds: WorkspaceWidgetId[]
-  isDragActive: boolean
   children: ReactNode
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `col-${col}` })
+  const { setNodeRef } = useDroppable({ id: `col-${col}` })
   return (
     <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
       <div
         ref={setNodeRef}
-        className={[
-          'flex flex-col gap-4 rounded-2xl transition-colors',
-          `min-h-[${ROW_HEIGHT_PX}px]`,
-          isDragActive
-            ? isOver
-              ? 'bg-gold/5 outline outline-2 outline-dashed outline-gold/60'
-              : 'outline outline-2 outline-dashed outline-border/60'
-            : '',
-        ].join(' ')}
+        className="flex flex-col gap-4"
         style={{ minHeight: `${ROW_HEIGHT_PX}px` }}
       >
         {children}
@@ -130,12 +130,33 @@ function Column({
   )
 }
 
-// Parse a droppable id of the form `col-{N}` back into a column number.
-function parseColumnId(id: string | number | null | undefined): number | null {
-  if (typeof id !== 'string') return null
-  const match = /^col-(\d+)$/.exec(id)
-  if (!match) return null
-  return Number(match[1])
+// DragOverlay ghost — a simplified widget-card shape with the title
+// and description. Rendering the full widget component here would
+// trigger fresh data fetches / re-mounts, so we use chrome-only.
+function DragGhost({
+  definition,
+  rowSpan,
+}: {
+  definition: WorkspaceWidgetDefinition
+  rowSpan: WidgetRowSpan
+}) {
+  return (
+    <div
+      style={{ height: `${widgetHeight(rowSpan)}px` }}
+      className="widget-card bg-surface shadow-2xl ring-2 ring-gold/60 rounded-2xl overflow-hidden cursor-grabbing"
+    >
+      <div className="flex items-start gap-3 px-5 py-4 border-b border-border">
+        <GripVertical size={16} className="text-text-muted mt-1 flex-shrink-0" />
+        <div className="min-w-0">
+          <h3 className="text-section text-text truncate">{definition.title}</h3>
+          <p className="mt-1 text-caption line-clamp-2">{definition.description}</p>
+        </div>
+      </div>
+      <div className="flex-1 flex items-center justify-center text-caption text-text-muted/70">
+        Drop to place
+      </div>
+    </div>
+  )
 }
 
 interface WorkspacePanelProps {
@@ -166,7 +187,7 @@ export default function WorkspacePanel({
     layout,
     visibleWidgets,
     toggleWidgetVisibility,
-    moveWidgetToColumn,
+    moveWidgetByDropTarget,
     resetLayout,
   } = useWorkspaceLayout({
     scope,
@@ -180,15 +201,19 @@ export default function WorkspacePanel({
   const expandedDefinition = expandedId ? definitionsById.get(expandedId) : null
   const ExpandedComponent = expandedDefinition?.component
 
-  // Active drag — drives visual affordance on the column containers.
+  // Active drag — drives the DragOverlay.
   const [activeId, setActiveId] = useState<WorkspaceWidgetId | null>(null)
+  const activeWidget = activeId
+    ? visibleWidgets.find((w) => w.id === activeId)
+    : null
+  const activeDefinition = activeId ? definitionsById.get(activeId) : null
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  // Group visible widgets by column, sorted by their intra-column order.
+  // Group visible widgets by column for render.
   const widgetsByColumn = useMemo(() => {
     const map = new Map<number, WorkspaceWidgetState[]>()
     for (const col of COLUMN_IDS) map.set(col, [])
@@ -201,55 +226,53 @@ export default function WorkspacePanel({
     return map
   }, [visibleWidgets])
 
-  // Find the column + in-column index for a given widget id.
-  const locateWidget = (id: WorkspaceWidgetId): { col: number; index: number } | null => {
-    for (const col of COLUMN_IDS) {
-      const list = widgetsByColumn.get(col) ?? []
-      const idx = list.findIndex((w) => w.id === id)
-      if (idx !== -1) return { col, index: idx }
-    }
-    return null
-  }
-
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as WorkspaceWidgetId)
   }
 
+  // onDragOver fires continuously as the cursor moves. We only move
+  // widgets here when the column changes (cross-column moves need
+  // state updates so the target column's SortableContext can shift its
+  // siblings). Same-column drags rely on useSortable's built-in
+  // transform preview — no state change until onDragEnd.
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const activeWidgetId = active.id as WorkspaceWidgetId
+    const overId = over.id as string
+
+    // Find current column of the active widget.
+    const currentWidget = visibleWidgets.find((w) => w.id === activeWidgetId)
+    if (!currentWidget) return
+
+    // Determine the target column.
+    let targetCol: number | null = null
+    const colMatch = /^col-(\d+)$/.exec(overId)
+    if (colMatch) {
+      targetCol = Number(colMatch[1])
+    } else {
+      const overWidget = visibleWidgets.find((w) => w.id === overId)
+      if (overWidget) targetCol = overWidget.col
+    }
+
+    if (targetCol === null) return
+    // Same column: let useSortable handle the preview; no state change.
+    if (targetCol === currentWidget.col) return
+
+    // Cross-column: update state live so target column siblings shift.
+    moveWidgetByDropTarget(activeWidgetId, overId)
+  }
+
+  // onDragEnd finalizes the position. For cross-column moves the state
+  // is already correct (from onDragOver); this mainly handles
+  // same-column reorder (where we deliberately didn't update state
+  // during the drag).
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null)
     const { active, over } = event
-    if (!over) return
-    if (active.id === over.id) return
-
-    const activeId = active.id as WorkspaceWidgetId
-    const source = locateWidget(activeId)
-    if (!source) return
-
-    // Determine destination column + index. Two shapes of `over.id`:
-    //   1. another widget id → same/other column, slot next to that widget
-    //   2. `col-N` (droppable wrapper) → append to column N
-    const columnTarget = parseColumnId(over.id as string)
-    let destCol: number
-    let destIndex: number
-
-    if (columnTarget !== null) {
-      destCol = columnTarget
-      destIndex = (widgetsByColumn.get(destCol) ?? []).length
-    } else {
-      const overLoc = locateWidget(over.id as WorkspaceWidgetId)
-      if (!overLoc) return
-      destCol = overLoc.col
-      destIndex = overLoc.index
-      // When reordering within the same column past the current slot,
-      // dnd-kit's arrayMove expects the target index unchanged; our
-      // insert-remove approach handles this correctly because removing
-      // the source first shifts the remaining indices down.
-    }
-
-    // No-op if the result is identical to the source position.
-    if (destCol === source.col && destIndex === source.index) return
-
-    moveWidgetToColumn(activeId, destCol, destIndex)
+    if (!over || active.id === over.id) return
+    moveWidgetByDropTarget(active.id as WorkspaceWidgetId, over.id as string)
   }
 
   const handleDragCancel = () => {
@@ -300,8 +323,8 @@ export default function WorkspacePanel({
         </Card>
       )}
 
-      {/* Tiny reset chip above the grid when the full controls bar is
-          hidden — so users can always recover from a botched layout. */}
+      {/* Tiny reset chip when the full controls bar is hidden, so
+          users can always recover from a botched layout. */}
       {!showControls && (
         <div className="flex justify-end">
           <button
@@ -316,14 +339,12 @@ export default function WorkspacePanel({
         </div>
       )}
 
-      {/* 3 independent column stacks. Dnd-kit's `closestCorners` is the
-          multi-container recommendation — it tracks the nearest item
-          across all SortableContexts so cross-column drops land in the
-          right slot. */}
+      {/* 3 independent column stacks with live cross-column dragging. */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
@@ -332,12 +353,7 @@ export default function WorkspacePanel({
             const list = widgetsByColumn.get(col) ?? []
             const ids = list.map((w) => w.id as WorkspaceWidgetId)
             return (
-              <Column
-                key={col}
-                col={col}
-                itemIds={ids}
-                isDragActive={activeId !== null}
-              >
+              <Column key={col} col={col} itemIds={ids}>
                 {list.map((widget) => {
                   const definition = definitionsById.get(widget.id)
                   if (!definition) return null
@@ -354,7 +370,9 @@ export default function WorkspacePanel({
                           description={definition.description}
                           visible={widget.visible}
                           dragHandleProps={dragHandleProps}
-                          onExpand={() => setExpandedId(widget.id as WorkspaceWidgetId)}
+                          onExpand={() =>
+                            setExpandedId(widget.id as WorkspaceWidgetId)
+                          }
                         >
                           <WidgetComponent />
                         </DashboardWidgetFrame>
@@ -366,11 +384,26 @@ export default function WorkspacePanel({
             )
           })}
         </div>
+
+        {/* Floating ghost that tracks the cursor while dragging. */}
+        <DragOverlay
+          dropAnimation={{
+            duration: 220,
+            easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+          }}
+        >
+          {activeWidget && activeDefinition ? (
+            <DragGhost
+              definition={activeDefinition}
+              rowSpan={activeWidget.rowSpan ?? 1}
+            />
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       {/* Floating detail modal — renders a second instance of the
           selected widget's component, unconstrained by the grid cell
-          max-height. Dismiss with Esc, backdrop click, or X. */}
+          height. Dismiss with Esc, backdrop click, or X. */}
       {expandedDefinition && ExpandedComponent && (
         <FloatingDetailModal
           title={expandedDefinition.title}
