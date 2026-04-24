@@ -39,30 +39,31 @@ function sanitizeLayout(
   const defaults = getDefaultWorkspaceLayout(scope)
   const defaultById = new Map(defaults.widgets.map((w) => [w.id, w]))
 
-  // PR #32 — backfill (col, row) for widgets that pre-date v15 manual
-  // placement. If a saved widget is missing coords, fall back to the
-  // default coords for its id, so sanitize is idempotent on the new
-  // shape even if version gating ever misses a migration.
+  // PR #32 — backfill `col` for widgets that pre-date v15 column-snap.
   const existing = sortWidgets(layout.widgets)
     .filter((widget) => allowedIds.has(widget.id))
     .map((widget) => {
-      const needsCoords =
-        typeof widget.col !== 'number' || typeof widget.row !== 'number'
-      if (!needsCoords) return widget
+      if (typeof widget.col === 'number') return widget
       const fallback = defaultById.get(widget.id)
-      return {
-        ...widget,
-        col: fallback?.col ?? 1,
-        row: fallback?.row ?? 1,
-      }
+      return { ...widget, col: fallback?.col ?? 1 }
     })
   const existingIds = new Set(existing.map((widget) => widget.id))
   const missing = defaults.widgets.filter((widget) => !existingIds.has(widget.id))
 
-  const nextWidgets = [...existing, ...missing].map((widget, index) => ({
-    ...widget,
-    order: index,
-  }))
+  // Re-index `order` per column so values are always contiguous 0..N-1
+  // within each column regardless of user shuffles or appended missing
+  // widgets.
+  const combined = [...existing, ...missing]
+  const perColumnSeq: Record<number, number> = { 1: 0, 2: 0, 3: 0 }
+  const nextWidgets = combined
+    .slice()
+    .sort((a, b) => (a.col - b.col) || (a.order - b.order))
+    .map((widget) => {
+      const col = widget.col ?? 1
+      const order = perColumnSeq[col] ?? 0
+      perColumnSeq[col] = order + 1
+      return { ...widget, col, order }
+    })
 
   return {
     ...defaults,
@@ -144,28 +145,55 @@ export function useWorkspaceLayout({
     })
   }
 
-  // PR #32 — move a single widget to an explicit (col, row) cell. Used
-  // by the manual-placement drag handler. Pure coord update — does not
-  // touch order, span, or rowSpan. No auto-pack / compaction happens;
-  // if this leaves other cells empty, they stay empty.
-  const moveWidgetToCell = (
+  // PR #32 — move a widget to (destCol, destIndex) in that column's
+  // stack. Handles both intra-column reorder (shift siblings) and
+  // cross-column moves (remove from source, insert into dest). All
+  // affected columns get re-indexed to contiguous 0..N-1 orders so
+  // the state is always canonical.
+  const moveWidgetToColumn = (
     id: WorkspaceWidgetState['id'],
-    col: number,
-    row: number,
+    destCol: number,
+    destIndex: number,
   ) => {
-    setLayout((current) => ({
-      ...current,
-      widgets: current.widgets.map((widget) =>
-        widget.id === id ? { ...widget, col, row } : widget,
-      ),
-    }))
+    setLayout((current) => {
+      const moving = current.widgets.find((w) => w.id === id)
+      if (!moving) return current
+
+      // Group + sort by column.
+      const byCol = new Map<number, WorkspaceWidgetState[]>()
+      for (const w of current.widgets) {
+        const list = byCol.get(w.col) ?? []
+        list.push(w)
+        byCol.set(w.col, list)
+      }
+      for (const list of byCol.values()) list.sort((a, b) => a.order - b.order)
+
+      // Remove from source column.
+      const sourceList = byCol.get(moving.col) ?? []
+      const sourceIdx = sourceList.findIndex((w) => w.id === id)
+      if (sourceIdx >= 0) sourceList.splice(sourceIdx, 1)
+      byCol.set(moving.col, sourceList)
+
+      // Insert into destination column at the clamped index.
+      const destList = byCol.get(destCol) ?? []
+      const clampedIndex = Math.max(0, Math.min(destIndex, destList.length))
+      destList.splice(clampedIndex, 0, { ...moving, col: destCol })
+      byCol.set(destCol, destList)
+
+      // Flatten + re-assign contiguous orders per column.
+      const nextWidgets: WorkspaceWidgetState[] = []
+      for (const [col, list] of byCol.entries()) {
+        list.forEach((w, idx) => nextWidgets.push({ ...w, col, order: idx }))
+      }
+      return { ...current, widgets: nextWidgets }
+    })
   }
 
   return {
     layout,
     visibleWidgets,
     moveWidget,
-    moveWidgetToCell,
+    moveWidgetToColumn,
     reorderWidgets,
     toggleWidgetVisibility,
     resetLayout,
