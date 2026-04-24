@@ -18,15 +18,19 @@ import type {
 // error — `MemberWidgetRegistration` narrows the placement Scope to
 // `MemberScope` only.
 // ═════════════════════════════════════════════════════════════════════
-// PR #29 — every widget is `span: 1, rowSpan: 1` so columns stay
-// equal width across the 3-col grid. Widget heights flex to content.
-// This makes drag-reorder predictable — a widget always moves into
-// a 1×1 slot, never straddles columns.
+// PR #30 — columns always equal width (span: 1) but rowSpan varies
+// so the intended per-page positioning falls out of the default.
+// Order in this array drives left-to-right / top-to-bottom flow in
+// the CSS grid before any user reorder.
+//
+// Overview layout (row-major flow into a 3-col grid):
+//   row 1  | team_tasks (rs1)      | today_calendar (rs2) | forum_notifications (rs2) |
+//   row 2  | booking_snapshot (rs1)| (cal continues)      | (notif continues)         |
+//
+// Tasks layout (3 equal cells in one row):
+//   row 1  | team_tasks | studio_tasks | team_board |
 export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
   {
-    // Widget id stays `team_tasks` so saved layouts keep resolving;
-    // the rendered component is `MyTasksCard`. Appears on BOTH member
-    // pages — Overview default + the new Tasks widget grid.
     id: 'team_tasks',
     title: 'My Tasks',
     description: 'Personal queue — synced with the Tasks page.',
@@ -39,20 +43,24 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
-    id: 'forum_notifications',
-    title: 'Notifications',
-    description: 'Unread messages across channels and new assignments.',
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 1 }],
-    accessVisibility: 'shared',
+    id: 'today_calendar',
+    title: 'Calendar',
+    description: "Today's schedule — toggle days with the arrows.",
+    // rowSpan 2 on Overview so Calendar sits in column 2 alongside
+    // the Tasks + Booking stack in column 1.
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 2 }],
+    accessVisibility: 'personal',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
-    id: 'today_calendar',
-    title: 'Calendar',
-    description: "Today's schedule — toggle days with the arrows.",
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 1 }],
-    accessVisibility: 'personal',
+    id: 'forum_notifications',
+    title: 'Notifications',
+    description: 'Unread messages across channels and new assignments.',
+    // rowSpan 2 so Notifications fills column 3 alongside Tasks/Booking
+    // in column 1 and Calendar in column 2.
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 2 }],
+    accessVisibility: 'shared',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
@@ -60,14 +68,14 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     id: 'booking_snapshot',
     title: 'Booking',
     description: 'Upcoming sessions and quick book.',
+    // Registered AFTER calendar + notifications so grid flow places it
+    // in row 2 of column 1 (under My Tasks), not on row 1.
     defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 1 }],
     accessVisibility: 'personal',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
   // ─── Tasks page (`/daily`) widgets ──────────────────────────────
-  // MyTasksCard is re-used here (see team_tasks above — dual
-  // placement). Studio + Team boards register as their own widgets.
   {
     id: 'studio_tasks',
     title: 'Studio Tasks',
@@ -133,9 +141,17 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 // Admin widgets' placements must target `admin_overview` only — the
 // type system enforces it via `AdminWidgetRegistration`.
 // ═════════════════════════════════════════════════════════════════════
-// PR #29 — all admin widgets settle at `span: 1, rowSpan: 1` so
-// columns stay equal width across the grid, the same as member
-// widgets. Drag-reorder is predictable; widget heights flex.
+// PR #30 — admin widgets: columns are equal width (span: 1) but
+// rowSpan varies so the earlier Hub + Assign positioning falls out
+// of the default layout.
+//
+// Hub layout (row-major flow into a 3-col grid):
+//   row 1  | admin_quick_assign (rs1) | admin_flywheel (rs2)  | admin_notifications (rs1) |
+//   row 2  | admin_task_requests (rs1)| (flywheel continues)  | admin_team (rs1)          |
+//
+// Assign layout:
+//   row 1  | admin_assign (rs1) | admin_task_requests (rs1) | admin_templates (rs2) |
+//   row 2  |   (empty)          |   (empty)                 | (templates continues) |
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
     id: 'admin_quick_assign',
@@ -147,12 +163,13 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // Full 3-tile Assign widget — lives on the Assign page grid now,
-    // not the Hub (PR #29).
-    id: 'admin_assign',
-    title: 'Assign',
-    description: 'Send out sessions, tasks, or task groups.',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1 }],
+    id: 'admin_flywheel',
+    title: 'Flywheel',
+    description: 'KPIs across the five flywheel stages.',
+    // rowSpan 2 so Flywheel fills column 2 on Hub while column 1
+    // stacks Quick Assign + Task Requests and column 3 stacks
+    // Notifications + Team.
+    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 2 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -167,40 +184,19 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
-    id: 'admin_flywheel',
-    title: 'Flywheel',
-    description: 'KPIs across the five flywheel stages.',
-    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 1 }],
+    // Full 3-tile Assign widget — Assign page col 1 / row 1.
+    // Registered BEFORE admin_task_requests so it lands in col 1 on
+    // the Assign page (semantic: the widget named after the page
+    // comes first).
+    id: 'admin_assign',
+    title: 'Assign',
+    description: 'Send out sessions, tasks, or task groups.',
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
-    id: 'admin_team',
-    title: 'Team',
-    description: 'Your crew at a glance.',
-    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 1 }],
-    accessVisibility: 'admin',
-    dataScope: 'team',
-    allowedRoles: ['admin', 'owner'],
-  },
-  {
-    // Legacy task_edit_requests approvals (daily-checklist edits).
-    // Kept registered; placement is intentionally empty so the default
-    // layout doesn't surface it until reviewed. Can be re-enabled by
-    // an admin via the workspace controls.
-    id: 'admin_approvals',
-    title: 'Checklist Approvals',
-    description: 'Pending daily-checklist edit requests.',
-    defaultPlacements: [],
-    accessVisibility: 'admin',
-    dataScope: 'team',
-    allowedRoles: ['admin', 'owner'],
-  },
-  {
-    // PR #16 — user-submitted task requests awaiting admin review.
-    // Placed on BOTH the Hub (quick-glance) AND the Assign page
-    // (full review surface).
     id: 'admin_task_requests',
     title: 'Task Requests',
     description: 'Members asking for tasks to be added to their queue.',
@@ -213,12 +209,34 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // PR #29 — Templates library as a widget on the Assign page so
-    // the whole page runs on WorkspacePanel (drag-reorder + expand).
+    id: 'admin_team',
+    title: 'Team',
+    description: 'Your crew at a glance.',
+    // Last widget on Hub in default order → row 2 col 3.
+    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 1 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
+    // Templates spans 2 rows on Assign so the scrollable library has
+    // room to breathe next to the (shorter) Assign + Task Requests
+    // widgets in columns 1 + 2.
     id: 'admin_templates',
     title: 'Templates',
     description: 'Reusable blueprints for onboarding + repeat work.',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1 }],
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 2 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
+    // Legacy task_edit_requests approvals (daily-checklist edits).
+    // De-placed — admins can surface via controls.
+    id: 'admin_approvals',
+    title: 'Checklist Approvals',
+    description: 'Pending daily-checklist edit requests.',
+    defaultPlacements: [],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -327,7 +345,14 @@ function buildDefaultWidgetStateForScope(
 // scope + widgets (admin_templates plus dual placement for
 // admin_assign + admin_task_requests). Legacy `admin_approvals`
 // (daily-checklist edits) de-placed. Existing v12 layouts reset.
-export const WORKSPACE_LAYOUT_VERSION = 13
+// v14 (2026-04-24, PR #30): rowSpans restored so per-page positioning
+// matches the pre-refactor layouts — Overview stacks Tasks+Booking
+// in col 1 with Calendar/Notifications spanning both rows; Hub stacks
+// Quick Assign+Task Requests in col 1 with Flywheel spanning col 2
+// and Notifications+Team in col 3; Assign places Assign·TaskRequests
+// in row 1 with Templates spanning col 3. Tasks + Assign page
+// definitions wired through their own scope filters.
+export const WORKSPACE_LAYOUT_VERSION = 14
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

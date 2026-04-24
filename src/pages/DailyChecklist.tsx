@@ -3,7 +3,7 @@ import { MemberOverviewProvider } from '../contexts/MemberOverviewContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import WorkspacePanel from '../components/dashboard/WorkspacePanel'
-import { MEMBER_WIDGET_DEFINITIONS } from '../components/dashboard/widgetRegistry'
+import { TASKS_WIDGET_DEFINITIONS } from '../components/dashboard/widgetRegistry'
 import { PageHeader } from '../components/ui'
 
 /**
@@ -34,7 +34,7 @@ export default function DailyChecklist() {
           role={appRole}
           userId={profile?.id ?? 'guest'}
           scope={TASKS_SCOPE}
-          definitions={MEMBER_WIDGET_DEFINITIONS}
+          definitions={TASKS_WIDGET_DEFINITIONS}
           controlsTitle="Arrange your Tasks view"
           controlsDescription="Drag a widget's grip to reorder · click title to expand · hide widgets you don't need."
           showControls

@@ -120,6 +120,10 @@ export const MEMBER_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition<MemberWidgetId
     (widget) => widget.defaultPlacements.some((p) => p.scope === 'member_overview'),
   )
 
+// Export the full set so pages that render a member scope other than
+// Overview (e.g. Tasks) can pass the right subset to WorkspacePanel.
+export const ALL_MEMBER_WIDGET_DEFINITIONS = ALL_MEMBER_DEFINITIONS
+
 // Tasks page — widgets whose defaultPlacements target 'member_tasks'.
 // After PR #7 this is `team_tasks` (My Tasks/Checklist) + `assigned_tasks`.
 export const TASKS_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition<MemberWidgetId>[] =
@@ -127,13 +131,26 @@ export const TASKS_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition<MemberWidgetId>
     (widget) => widget.defaultPlacements.some((p) => p.scope === 'member_tasks'),
   )
 
+// Admin — single pool. Pages filter by scope via WorkspacePanel (not
+// pre-filtered here) so a widget registered for BOTH 'admin_overview'
+// and 'admin_assign' can render on either page without two exports.
+const ALL_ADMIN_DEFINITIONS: WorkspaceWidgetDefinition<AdminWidgetId>[] = [
+  ...ADMIN_WIDGET_REGISTRATIONS.map(resolveAdmin),
+  ...ADMIN_BANK_REGISTRATIONS.map(resolveAdmin),
+]
+
 // Admin Hub — widgets whose defaultPlacements target 'admin_overview'.
 export const ADMIN_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition<AdminWidgetId>[] =
-  [
-    ...ADMIN_WIDGET_REGISTRATIONS.map(resolveAdmin),
-    ...ADMIN_BANK_REGISTRATIONS.map(resolveAdmin),
-  ].filter(
+  ALL_ADMIN_DEFINITIONS.filter(
     (widget) => widget.defaultPlacements.some((p) => p.scope === 'admin_overview'),
+  )
+
+// Assign page — widgets whose defaultPlacements target 'admin_assign'.
+// PR #29 introduced this scope; PR #30 exports its definitions so the
+// page can actually find its widgets (Assign, Task Requests, Templates).
+export const ASSIGN_WIDGET_DEFINITIONS: WorkspaceWidgetDefinition<AdminWidgetId>[] =
+  ALL_ADMIN_DEFINITIONS.filter(
+    (widget) => widget.defaultPlacements.some((p) => p.scope === 'admin_assign'),
   )
 
 // Exposed for layout sanitization ("is this saved widget id still a
