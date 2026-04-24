@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
   Bell,
+  Building2,
   CalendarPlus,
   Check,
   CheckCircle2,
@@ -40,6 +41,7 @@ import { useToast } from '../Toast'
 import CreateBookingModal from '../CreateBookingModal'
 import MemberMultiSelect from '../members/MemberMultiSelect'
 import AdminTaskCreateModal from '../tasks/requests/AdminTaskCreateModal'
+import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
 import type { TeamMember } from '../../types'
 import type { AssignmentNotification } from '../../types/assignments'
 import type { EnrichedApprovalRequest } from '../../domain/dashboard/adminOverview'
@@ -79,7 +81,7 @@ const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring:
 // assignments strip below so admins see continuity of what they've
 // been delegating without bouncing to the Templates page.
 
-type AssignFlow = 'session' | 'task' | 'group' | null
+type AssignFlow = 'session' | 'task' | 'group' | 'studio' | null
 
 export function AdminAssignWidget() {
   const queryClient = useQueryClient()
@@ -105,7 +107,7 @@ export function AdminAssignWidget() {
           per user feedback: the tiles must be always visible, and
           the page-level RecentAssignmentsSection below the board
           already covers assignment history. */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         <AssignTile
           icon={CalendarPlus}
           label="Session"
@@ -124,12 +126,23 @@ export function AdminAssignWidget() {
           hint="Apply a checklist template"
           onClick={() => setFlow('group')}
         />
+        {/* PR #39 — Studio Task is a shared pool row (no assignee).
+            Launches AdminTaskCreateModal pre-seeded to studio scope so
+            the recipient picker is hidden and the toggle starts on
+            Studio. */}
+        <AssignTile
+          icon={Building2}
+          label="Studio Task"
+          hint="Shared pool — any team member can claim"
+          onClick={() => setFlow('studio')}
+        />
       </div>
 
       {/* Flow modals */}
       {flow === 'session' && <CreateBookingModal onClose={handleClose} />}
       {flow === 'task' && <AdminTaskCreateModal onClose={handleClose} />}
       {flow === 'group' && <AssignGroupModal onClose={handleClose} />}
+      {flow === 'studio' && <AdminTaskCreateModal initialScope="studio" onClose={handleClose} />}
     </div>
   )
 }
@@ -578,6 +591,10 @@ export function AdminNotificationsWidget() {
   const { profile } = useAuth()
   const [postOpen, setPostOpen] = useState(false)
   const [channelOpen, setChannelOpen] = useState(false)
+  // PR #39 — mirror the member-side reassign modal so admins can
+  // approve/decline peer-to-peer reassignment requests from the Hub
+  // (matching the ForumNotificationsWidget wiring on Overview).
+  const [reassignModalOpen, setReassignModalOpen] = useState(false)
 
   const notifQuery = useQuery({
     queryKey: ['overview-notifications'],
@@ -686,6 +703,20 @@ export function AdminNotificationsWidget() {
       }
       return
     }
+
+    // PR #39 — peer-to-peer reassignment parity with the member widget.
+    if (n.task_reassign_request_id) {
+      if (n.notification_type === 'task_reassign_requested') {
+        setReassignModalOpen(true)
+        return
+      }
+      if (n.notification_type === 'task_reassign_approved') {
+        void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+        return
+      }
+      return
+    }
+
     // Task-assign notification — highlight the task from this batch.
     window.dispatchEvent(
       new CustomEvent('highlight-task', { detail: { batchId: n.batch_id } }),
@@ -837,6 +868,10 @@ export function AdminNotificationsWidget() {
 
       {postOpen && <PostToChannelModal channels={channels} onClose={() => { setPostOpen(false); void notifQuery.refetch() }} />}
       {channelOpen && <CreateChannelModal onClose={() => { setChannelOpen(false); void notifQuery.refetch() }} />}
+      {/* PR #39 — reassignment approve/decline modal. */}
+      {reassignModalOpen && (
+        <TaskReassignRequestModal onClose={() => setReassignModalOpen(false)} />
+      )}
     </div>
   )
 }
