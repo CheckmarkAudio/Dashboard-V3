@@ -3,19 +3,13 @@ import { RotateCcw } from 'lucide-react'
 import {
   DndContext,
   PointerSensor,
-  KeyboardSensor,
-  closestCenter,
   useSensor,
   useSensors,
+  useDraggable,
+  useDroppable,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
-import {
-  SortableContext,
-  arrayMove,
-  rectSortingStrategy,
-  sortableKeyboardCoordinates,
-  useSortable,
-} from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useWorkspaceLayout } from '../../hooks/useWorkspaceLayout'
 import type { AppRole } from '../../domain/permissions'
@@ -31,18 +25,34 @@ import FloatingDetailModal from '../FloatingDetailModal'
 import { Button, Card } from '../ui'
 
 /**
- * Grid cell styling. `auto-rows-min` hugs short widgets; max-height
- * caps a tall widget + overflow-hidden clips neatly. The click-to-
- * expand now opens a floating modal instead of growing the cell, so
- * the cell itself doesn't need to change when a widget expands.
+ * Manual-placement widget grid (PR #32).
+ *
+ * Every widget has an explicit (col, row) anchor. The CSS grid renders
+ * with `gridColumn` + `gridRow` assignments — no auto-flow, no
+ * compaction. Empty cells stay empty until the user drags a widget
+ * onto them.
+ *
+ * Drop targets: every unoccupied (col, row) cell is a `useDroppable`.
+ * The dragged widget moves to the cell it's dropped on. Dropping onto
+ * an occupied cell is a no-op (we don't swap — user moves widgets one
+ * at a time to keep behavior predictable).
+ *
+ * One spare empty row always renders below the bottom-most widget so
+ * users can always drop "further down."
  */
 const ROW_HEIGHT_PX = 340
 const ROW_GAP_PX = 16
+const GRID_COLS = 3
 
-function widgetGridStyle(span: WidgetSpan, rowSpan: WidgetRowSpan = 1): CSSProperties {
+function widgetGridStyle(
+  col: number,
+  row: number,
+  span: WidgetSpan,
+  rowSpan: WidgetRowSpan = 1,
+): CSSProperties {
   return {
-    gridColumn: `span ${span}`,
-    gridRow: rowSpan > 1 ? `span ${rowSpan}` : undefined,
+    gridColumn: `${col} / span ${span}`,
+    gridRow: `${row} / span ${rowSpan}`,
     maxHeight: `${rowSpan * ROW_HEIGHT_PX + (rowSpan - 1) * ROW_GAP_PX}px`,
     display: 'flex',
     flexDirection: 'column',
@@ -51,31 +61,39 @@ function widgetGridStyle(span: WidgetSpan, rowSpan: WidgetRowSpan = 1): CSSPrope
   }
 }
 
-// Individual sortable widget wrapper. Keeps dnd-kit wiring isolated
-// from the rest of the panel. The "expand" interaction now lives in
-// the parent panel as a modal, so this wrapper only manages the
-// sortable handle + visual drag state.
-function SortableWidget({
+// Draggable widget wrapper. Uses dnd-kit's `useDraggable` (not
+// `useSortable`) so drop targets are explicit cells rather than
+// neighboring widgets.
+function DraggableWidget({
   id,
+  col,
+  row,
   span,
   rowSpan,
   children,
 }: {
   id: WorkspaceWidgetId
+  col: number
+  row: number
   span: WidgetSpan
   rowSpan: WidgetRowSpan
   children: (dragHandleProps: DragHandleProps) => ReactNode
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id })
   const style: CSSProperties = {
-    ...widgetGridStyle(span, rowSpan),
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : undefined,
+    ...widgetGridStyle(col, row, span, rowSpan),
+    transform: CSS.Translate.toString(transform),
+    // Drag transform uses translate; no `transition` so drops feel
+    // immediate. While dragging, lift above other widgets.
+    zIndex: isDragging ? 20 : undefined,
     opacity: isDragging ? 0.85 : 1,
   }
   return (
-    <div ref={setNodeRef} style={style} className={isDragging ? 'ring-2 ring-gold/60 rounded-2xl shadow-2xl' : ''}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={isDragging ? 'ring-2 ring-gold/60 rounded-2xl shadow-2xl' : ''}
+    >
       {children({
         attributes: attributes as DragHandleProps['attributes'],
         listeners: listeners as DragHandleProps['listeners'],
@@ -83,6 +101,42 @@ function SortableWidget({
       })}
     </div>
   )
+}
+
+// Empty cell droppable. Only visible (as a dashed outline) while a
+// drag is active — otherwise it's invisible space in the grid.
+function DropCell({
+  col,
+  row,
+  isDragActive,
+}: {
+  col: number
+  row: number
+  isDragActive: boolean
+}) {
+  const id = `cell-${col}-${row}`
+  const { setNodeRef, isOver } = useDroppable({ id })
+  const style: CSSProperties = {
+    gridColumn: `${col} / span 1`,
+    gridRow: `${row} / span 1`,
+    minHeight: `${ROW_HEIGHT_PX}px`,
+  }
+  // Invisible when idle; subtle dashed gold outline during drag;
+  // brighter fill when the cursor is directly over this cell.
+  const className = !isDragActive
+    ? ''
+    : isOver
+      ? 'rounded-2xl border-2 border-dashed border-gold/70 bg-gold/5 transition-colors'
+      : 'rounded-2xl border-2 border-dashed border-border/60 transition-colors'
+  return <div ref={setNodeRef} style={style} className={className} aria-hidden={!isDragActive} />
+}
+
+// Parse a droppable id of the form `cell-{col}-{row}` back into coords.
+function parseCellId(id: string | number | null | undefined): { col: number; row: number } | null {
+  if (typeof id !== 'string') return null
+  const match = /^cell-(\d+)-(\d+)$/.exec(id)
+  if (!match) return null
+  return { col: Number(match[1]), row: Number(match[2]) }
 }
 
 interface WorkspacePanelProps {
@@ -113,7 +167,7 @@ export default function WorkspacePanel({
     layout,
     visibleWidgets,
     toggleWidgetVisibility,
-    reorderWidgets,
+    moveWidgetToCell,
     resetLayout,
   } = useWorkspaceLayout({
     scope,
@@ -122,33 +176,70 @@ export default function WorkspacePanel({
     definitions,
   })
 
-  // Which widget, if any, is currently expanded into the floating
-  // detail modal. Clicking a widget's title sets this id; closing the
-  // modal clears it.
+  // Floating detail modal (click widget title to expand).
   const [expandedId, setExpandedId] = useState<WorkspaceWidgetId | null>(null)
   const expandedDefinition = expandedId ? definitionsById.get(expandedId) : null
   const ExpandedComponent = expandedDefinition?.component
+
+  // Active drag id — drives visual affordance on empty cells. Null when
+  // nothing is being dragged.
+  const [activeId, setActiveId] = useState<WorkspaceWidgetId | null>(null)
 
   // dnd-kit sensors. Require a small pointer move before activating so
   // plain clicks on buttons/links inside the widget still pass through.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  const visibleIds = useMemo(
-    () => visibleWidgets.map((w) => w.id as WorkspaceWidgetId),
-    [visibleWidgets],
-  )
+  // Compute occupancy + max row. A widget at (col, row, rowSpan=N)
+  // occupies rows [row..row+N-1] in that column.
+  const { maxRow, occupied } = useMemo(() => {
+    const occ = new Set<string>()
+    let rowMax = 1
+    for (const widget of visibleWidgets) {
+      const col = widget.col
+      const top = widget.row
+      const bottom = top + ((widget.rowSpan ?? 1) - 1)
+      for (let r = top; r <= bottom; r++) {
+        occ.add(`${col}:${r}`)
+      }
+      if (bottom > rowMax) rowMax = bottom
+    }
+    return { maxRow: rowMax, occupied: occ }
+  }, [visibleWidgets])
+
+  // Total grid rows = content rows + 1 spare empty row so users can
+  // always drop "further down."
+  const totalRows = maxRow + 1
+
+  // Empty cells are every (col, row) that isn't occupied by a widget.
+  const emptyCells = useMemo(() => {
+    const cells: { col: number; row: number }[] = []
+    for (let row = 1; row <= totalRows; row++) {
+      for (let col = 1; col <= GRID_COLS; col++) {
+        if (!occupied.has(`${col}:${row}`)) {
+          cells.push({ col, row })
+        }
+      }
+    }
+    return cells
+  }, [occupied, totalRows])
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as WorkspaceWidgetId)
+  }
 
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveId(null)
     const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = visibleIds.indexOf(active.id as WorkspaceWidgetId)
-    const newIndex = visibleIds.indexOf(over.id as WorkspaceWidgetId)
-    if (oldIndex === -1 || newIndex === -1) return
-    const nextIds = arrayMove(visibleIds, oldIndex, newIndex)
-    reorderWidgets(nextIds)
+    if (!over) return
+    const cell = parseCellId(over.id as string)
+    if (!cell) return // Dropped on a widget (not an empty cell) — no-op.
+    moveWidgetToCell(active.id as WorkspaceWidgetId, cell.col, cell.row)
+  }
+
+  const handleDragCancel = () => {
+    setActiveId(null)
   }
 
   return (
@@ -195,37 +286,76 @@ export default function WorkspacePanel({
         </Card>
       )}
 
-      {/* 3-col grid with auto-rows-min so every widget hugs its content. */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-min">
-            {visibleWidgets.map((widget) => {
-              const definition = definitionsById.get(widget.id)
-              if (!definition) return null
-              const WidgetComponent = definition.component
-              return (
-                <SortableWidget
-                  key={widget.id}
-                  id={widget.id as WorkspaceWidgetId}
-                  span={widget.span}
-                  rowSpan={widget.rowSpan ?? 1}
-                >
-                  {(dragHandleProps) => (
-                    <DashboardWidgetFrame
-                      title={definition.title}
-                      description={definition.description}
-                      visible={widget.visible}
-                      dragHandleProps={dragHandleProps}
-                      onExpand={() => setExpandedId(widget.id as WorkspaceWidgetId)}
-                    >
-                      <WidgetComponent />
-                    </DashboardWidgetFrame>
-                  )}
-                </SortableWidget>
-              )
-            })}
-          </div>
-        </SortableContext>
+      {/* Tiny reset chip — surfaces even when the full controls bar is
+          hidden so users can always recover from a botched layout.
+          Right-aligned, small, low-contrast until hover. */}
+      {!showControls && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={resetLayout}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold text-text-muted hover:text-text hover:bg-surface-alt/60 transition-colors"
+            title="Reset widgets to default layout"
+          >
+            <RotateCcw size={11} />
+            Reset layout
+          </button>
+        </div>
+      )}
+
+      {/* Manual-placement grid. Fixed 3 columns; rows expand to fit the
+          bottom-most widget + 1 spare. Every non-occupied (col, row) is
+          a droppable cell; widgets render at their (col, row) anchor via
+          explicit `gridColumn` + `gridRow` CSS. */}
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
+        <div
+          className="grid gap-4"
+          style={{
+            gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${totalRows}, ${ROW_HEIGHT_PX}px)`,
+          }}
+        >
+          {emptyCells.map(({ col, row }) => (
+            <DropCell
+              key={`cell-${col}-${row}`}
+              col={col}
+              row={row}
+              isDragActive={activeId !== null}
+            />
+          ))}
+          {visibleWidgets.map((widget) => {
+            const definition = definitionsById.get(widget.id)
+            if (!definition) return null
+            const WidgetComponent = definition.component
+            return (
+              <DraggableWidget
+                key={widget.id}
+                id={widget.id as WorkspaceWidgetId}
+                col={widget.col}
+                row={widget.row}
+                span={widget.span}
+                rowSpan={widget.rowSpan ?? 1}
+              >
+                {(dragHandleProps) => (
+                  <DashboardWidgetFrame
+                    title={definition.title}
+                    description={definition.description}
+                    visible={widget.visible}
+                    dragHandleProps={dragHandleProps}
+                    onExpand={() => setExpandedId(widget.id as WorkspaceWidgetId)}
+                  >
+                    <WidgetComponent />
+                  </DashboardWidgetFrame>
+                )}
+              </DraggableWidget>
+            )
+          })}
+        </div>
       </DndContext>
 
       {/* Floating detail modal — renders a second instance of the
@@ -245,3 +375,4 @@ export default function WorkspacePanel({
     </div>
   )
 }
+

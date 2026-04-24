@@ -37,7 +37,25 @@ function sanitizeLayout(
   )
 
   const defaults = getDefaultWorkspaceLayout(scope)
-  const existing = sortWidgets(layout.widgets).filter((widget) => allowedIds.has(widget.id))
+  const defaultById = new Map(defaults.widgets.map((w) => [w.id, w]))
+
+  // PR #32 — backfill (col, row) for widgets that pre-date v15 manual
+  // placement. If a saved widget is missing coords, fall back to the
+  // default coords for its id, so sanitize is idempotent on the new
+  // shape even if version gating ever misses a migration.
+  const existing = sortWidgets(layout.widgets)
+    .filter((widget) => allowedIds.has(widget.id))
+    .map((widget) => {
+      const needsCoords =
+        typeof widget.col !== 'number' || typeof widget.row !== 'number'
+      if (!needsCoords) return widget
+      const fallback = defaultById.get(widget.id)
+      return {
+        ...widget,
+        col: fallback?.col ?? 1,
+        row: fallback?.row ?? 1,
+      }
+    })
   const existingIds = new Set(existing.map((widget) => widget.id))
   const missing = defaults.widgets.filter((widget) => !existingIds.has(widget.id))
 
@@ -126,10 +144,28 @@ export function useWorkspaceLayout({
     })
   }
 
+  // PR #32 — move a single widget to an explicit (col, row) cell. Used
+  // by the manual-placement drag handler. Pure coord update — does not
+  // touch order, span, or rowSpan. No auto-pack / compaction happens;
+  // if this leaves other cells empty, they stay empty.
+  const moveWidgetToCell = (
+    id: WorkspaceWidgetState['id'],
+    col: number,
+    row: number,
+  ) => {
+    setLayout((current) => ({
+      ...current,
+      widgets: current.widgets.map((widget) =>
+        widget.id === id ? { ...widget, col, row } : widget,
+      ),
+    }))
+  }
+
   return {
     layout,
     visibleWidgets,
     moveWidget,
+    moveWidgetToCell,
     reorderWidgets,
     toggleWidgetVisibility,
     resetLayout,
