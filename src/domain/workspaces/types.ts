@@ -34,7 +34,10 @@ import type { AppRole } from '../permissions'
 export type MemberScope = 'member_overview' | 'member_tasks'
 
 // Admin-side pages. An admin widget's placement must target one of these.
-export type AdminScope = 'admin_overview'
+// PR #29 — `admin_assign` scope lets the Assign page run on
+// WorkspacePanel (drag-reorder + expand-to-modal) the same way
+// Hub + Overview + Tasks do.
+export type AdminScope = 'admin_overview' | 'admin_assign'
 
 // Full union of every workspace scope. Used for localStorage key
 // differentiation + the `WorkspacePanel` scope prop.
@@ -80,6 +83,10 @@ export type MemberWidgetId =
   | 'forum_notifications'
   | 'today_calendar'
   | 'booking_snapshot'
+  // PR #29 — Tasks page (`/daily`) Studio + Team boards. Rendered
+  // alongside team_tasks (MyTasksCard) in the member_tasks scope.
+  | 'studio_tasks'
+  | 'team_board'
   // NOTE: `assigned_tasks` was retired in PR #11 — its content folded
   // into `team_tasks` (MyTasksCard). Keeping the id out of the union
   // so saved layouts referencing it get sanitized cleanly via the
@@ -102,6 +109,9 @@ export type AdminWidgetId =
   // from `admin_approvals` (which handles task_edit_requests for daily
   // checklists).
   | 'admin_task_requests'
+  // PR #29 — Templates library as a widget on the Assign page so
+  // the whole page is a WorkspacePanel grid (drag-reorder + expand).
+  | 'admin_templates'
   // PR #19 — compact task-compose affordance on the Hub. The full
   // 3-tile `admin_assign` widget now lives on the Assign page.
   | 'admin_quick_assign'

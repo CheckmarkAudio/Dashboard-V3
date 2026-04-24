@@ -1,40 +1,27 @@
-import type { ReactNode } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { AdminOverviewProvider } from '../../contexts/AdminOverviewContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { EmptyState, PageHeader } from '../../components/ui'
+import WorkspacePanel from '../../components/dashboard/WorkspacePanel'
+import { ADMIN_WIDGET_DEFINITIONS } from '../../components/dashboard/widgetRegistry'
 import { UsersRound, Shield } from 'lucide-react'
-import AdminQuickAssignWidget from '../../components/admin/assign/AdminQuickAssignWidget'
-import PendingTaskRequestsWidget from '../../components/admin/assign/PendingTaskRequestsWidget'
-import {
-  AdminFlywheelWidget,
-  AdminNotificationsWidget,
-  AdminTeamWidget,
-} from '../../components/dashboard/adminHubWidgets'
 
 /**
- * Admin Hub — the landing surface for owners/admins at /admin.
+ * Admin Hub — `/admin`
  *
- * PR #24 — hand-coded 3-column layout matching the member Overview
- * (PR #22/#23) and the Assign page (PR #20). Each widget lives in
- * its own card; columns 1 and 3 stack two cards each with a gap.
+ * PR #29 — back on `WorkspacePanel` with the 3-column equal-width
+ * grid. Every admin widget is span: 1 so drag-reorder keeps columns
+ * uniform. Default widgets: Quick Assign · Notifications · Flywheel ·
+ * Team · Task Requests (all draggable, all expandable).
  *
- *   Column 1: Quick Assign (top) + Approvals (below)
- *   Column 2: Flywheel Snapshot
- *   Column 3: Notifications (top) + Team Snapshot (below)
- *
- * Separate cards, separate scroll regions — never one shared
- * scroller that could bury a widget. The same `Column` wrapper from
- * Dashboard.tsx is cloned here so the grammar stays consistent across
- * all three surfaces (Overview · Hub · Assign).
- *
- * Hub still hardcodes the role check so member widgets can never
- * leak in via a registry mistake.
+ * `isAdmin` gate still hardcoded here — member widgets cannot leak
+ * onto this page via a registry mistake.
  */
+const ADMIN_SCOPE = 'admin_overview' as const
 
 export default function AdminHub() {
   useDocumentTitle('Dashboard - Checkmark Workspace')
-  const { isAdmin } = useAuth()
+  const { isAdmin, appRole, profile } = useAuth()
 
   if (!isAdmin) {
     return (
@@ -54,82 +41,16 @@ export default function AdminHub() {
           title="Dashboard"
           subtitle="Assign work, clear approvals, and keep tabs on the studio at a glance."
         />
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-          {/* ─── Column 1 · Quick Assign + Approvals ──────────────── */}
-          <div className="flex flex-col gap-4">
-            <Column title="Quick Assign" subtitle="Send a one-off task fast" autoHeight>
-              <AdminQuickAssignWidget />
-            </Column>
-            <Column
-              title="Approvals"
-              subtitle="Pending task requests from the team"
-              autoHeight
-            >
-              <PendingTaskRequestsWidget />
-            </Column>
-          </div>
-
-          {/* ─── Column 2 · Flywheel Snapshot ─────────────────────── */}
-          <Column title="Flywheel" subtitle="KPI health across the five stages">
-            <AdminFlywheelWidget />
-          </Column>
-
-          {/* ─── Column 3 · Notifications + Team Snapshot ─────────── */}
-          <div className="flex flex-col gap-4">
-            <Column
-              title="Notifications"
-              subtitle="Channels + assignment alerts"
-              autoHeight
-            >
-              <AdminNotificationsWidget />
-            </Column>
-            <Column title="Team" subtitle="Your crew at a glance" autoHeight>
-              <AdminTeamWidget />
-            </Column>
-          </div>
-        </div>
+        <WorkspacePanel
+          role={appRole}
+          userId={profile?.id ?? 'guest'}
+          scope={ADMIN_SCOPE}
+          definitions={ADMIN_WIDGET_DEFINITIONS}
+          controlsTitle="Arrange the Hub"
+          controlsDescription="Drag a widget's grip to reorder · click title to expand · hide widgets you don't need."
+          showControls
+        />
       </div>
     </AdminOverviewProvider>
-  )
-}
-
-// ─── Local Column wrapper ────────────────────────────────────────
-// Identical to the one on the member Overview. Single-widget columns
-// cap their height + get an internal scroll; stacked-card columns
-// pass `autoHeight` so the cards render content-sized and the page
-// itself scrolls if the stack is tall.
-function Column({
-  title,
-  subtitle,
-  autoHeight = false,
-  children,
-}: {
-  title: string
-  subtitle?: string
-  autoHeight?: boolean
-  children: ReactNode
-}) {
-  const sizing = autoHeight ? '' : 'max-h-[calc(100vh-240px)] min-h-[480px]'
-  return (
-    <section
-      className={`rounded-2xl border border-border bg-surface-alt/30 flex flex-col ${sizing}`}
-    >
-      <header className="flex items-start justify-between gap-3 px-4 py-3 border-b border-border/60 shrink-0">
-        <div className="min-w-0">
-          <h2 className="text-[14px] font-bold tracking-tight text-text">{title}</h2>
-          {subtitle && (
-            <p className="text-[11px] text-text-light mt-0.5 truncate">{subtitle}</p>
-          )}
-        </div>
-      </header>
-      <div
-        className={`flex-1 min-h-0 px-4 py-3 ${
-          autoHeight ? '' : 'overflow-y-auto'
-        }`}
-      >
-        {children}
-      </div>
-    </section>
   )
 }
