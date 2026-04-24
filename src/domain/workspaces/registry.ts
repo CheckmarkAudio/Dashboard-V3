@@ -150,8 +150,14 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 //   col 2: admin_flywheel (rs2)
 //   col 3: admin_notifications · admin_team
 //
-// Assign stacks:
-//   col 1: admin_assign  |  col 2: admin_task_requests  |  col 3: admin_templates (rs2)
+// Assign stacks (PR #41 reorg per sketch):
+//   col 1: admin_task_requests · admin_edit_tasks
+//   col 2: admin_assign (2 tiles only)
+//   col 3: admin_templates (rs2)
+//
+// Approval Log + Assign Log + Preview widgets are queued for
+// follow-up PRs and slot beside the existing widgets in cols 1/2/3
+// when they ship.
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
     id: 'admin_quick_assign',
@@ -181,18 +187,22 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
+    // PR #41 reorg — moved to col 2 (middle) per the sketch. Tiles
+    // shrunk from 4 to 2 (Task + Session). Studio Task is reachable
+    // via the Task modal's scope toggle; Task Group is folded into
+    // PR #42's Add-from-template flow.
     id: 'admin_assign',
     title: 'Assign',
     description: 'Send out sessions, tasks, or task groups.',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 }],
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 2 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // PR #40 — Assign-page col 1, under admin_assign. Opens a modal
-    // with every in-flight task + click-to-edit rows. Fires
-    // task_edited notifications to the assignee on save.
+    // PR #40 — Edit Tasks library. PR #41 moves it to col 1 below
+    // Task Requests (per sketch). PR #43 will gain a sibling Edit
+    // Session button.
     id: 'admin_edit_tasks',
     title: 'Edit Tasks',
     description: '',
@@ -205,10 +215,12 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     id: 'admin_task_requests',
     title: 'Task Requests',
     description: 'Members asking for tasks to be added to their queue.',
-    // Hub col 1 (stacks under Quick Assign). Assign col 2.
+    // Hub col 1 (stacks under Quick Assign). Assign col 1 (PR #41
+    // reorg — was col 2; per sketch Task Requests anchors col 1
+    // and Assign moves to col 2).
     defaultPlacements: [
       { scope: 'admin_overview', span: 1, rowSpan: 1, col: 1 },
-      { scope: 'admin_assign', span: 1, rowSpan: 1, col: 2 },
+      { scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 },
     ],
     accessVisibility: 'admin',
     dataScope: 'team',
@@ -373,7 +385,10 @@ function buildDefaultWidgetStateForScope(
 // redesign. New fractional `0.5` rowSpan supported by `widgetHeight()`.
 // v17 (2026-04-25, PR #40): new `admin_edit_tasks` widget placed on
 // the Assign page, col 1 below admin_assign.
-export const WORKSPACE_LAYOUT_VERSION = 17
+// v18 (2026-04-25, PR #41): Assign-page reorg per user sketch.
+// Col 1: Task Requests + Edit Tasks. Col 2: Assign. Col 3:
+// Templates. Assign widget itself shrinks from 4 tiles to 2.
+export const WORKSPACE_LAYOUT_VERSION = 18
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
