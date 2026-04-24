@@ -192,6 +192,7 @@ export default function WorkspacePanel({
     visibleWidgets,
     toggleWidgetVisibility,
     moveWidgetByDropTarget,
+    swapWidgets,
     resetLayout,
   } = useWorkspaceLayout({
     scope,
@@ -234,11 +235,15 @@ export default function WorkspacePanel({
     setActiveId(event.active.id as WorkspaceWidgetId)
   }
 
-  // onDragOver fires continuously as the cursor moves. We only move
-  // widgets here when the column changes (cross-column moves need
-  // state updates so the target column's SortableContext can shift its
-  // siblings). Same-column drags rely on useSortable's built-in
-  // transform preview — no state change until onDragEnd.
+  // onDragOver fires continuously as the cursor moves. Three cases:
+  //   1. Over an empty-column droppable (`col-N`) in a different column
+  //      → move active into that column's end.
+  //   2. Over another widget in a different column → DIRECT SWAP (PR
+  //      #34). A takes B's slot and B takes A's old slot in one atomic
+  //      move — no cascading push-down, no "stacking" feel.
+  //   3. Over another widget in the SAME column → no state change;
+  //      useSortable's transform preview handles intra-column reorder
+  //      (final commit happens in onDragEnd).
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -246,36 +251,51 @@ export default function WorkspacePanel({
     const activeWidgetId = active.id as WorkspaceWidgetId
     const overId = over.id as string
 
-    // Find current column of the active widget.
     const currentWidget = visibleWidgets.find((w) => w.id === activeWidgetId)
     if (!currentWidget) return
 
-    // Determine the target column.
-    let targetCol: number | null = null
+    // (1) Column droppable
     const colMatch = /^col-(\d+)$/.exec(overId)
     if (colMatch) {
-      targetCol = Number(colMatch[1])
-    } else {
-      const overWidget = visibleWidgets.find((w) => w.id === overId)
-      if (overWidget) targetCol = overWidget.col
+      const targetCol = Number(colMatch[1])
+      if (targetCol !== currentWidget.col) {
+        moveWidgetByDropTarget(activeWidgetId, overId)
+      }
+      return
     }
 
-    if (targetCol === null) return
-    // Same column: let useSortable handle the preview; no state change.
-    if (targetCol === currentWidget.col) return
+    // (2) / (3) Another widget
+    const overWidget = visibleWidgets.find((w) => w.id === overId)
+    if (!overWidget) return
 
-    // Cross-column: update state live so target column siblings shift.
-    moveWidgetByDropTarget(activeWidgetId, overId)
+    if (overWidget.col !== currentWidget.col) {
+      // Cross-column → direct swap
+      swapWidgets(activeWidgetId, overId as WorkspaceWidgetId)
+    }
+    // Same column → let the sortable strategy preview the shift;
+    // onDragEnd finalizes.
   }
 
-  // onDragEnd finalizes the position. For cross-column moves the state
-  // is already correct (from onDragOver); this mainly handles
-  // same-column reorder (where we deliberately didn't update state
-  // during the drag).
+  // onDragEnd finalizes. Cross-column drops are ALREADY correct from
+  // the swap/move in onDragOver, so we only commit for same-column
+  // reorders onto another widget (the sortable-style insert + shift).
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
+
+    const overIdStr = typeof over.id === 'string' ? over.id : String(over.id)
+    if (/^col-\d+$/.test(overIdStr)) return // column drops handled in onDragOver
+
+    const activeWidget = visibleWidgets.find((w) => w.id === active.id)
+    const overWidget = visibleWidgets.find((w) => w.id === over.id)
+    if (!activeWidget || !overWidget) return
+
+    // Cross-column drop on a widget → swap already fired in
+    // onDragOver; nothing to do.
+    if (activeWidget.col !== overWidget.col) return
+
+    // Same-column reorder → insert active at over's position.
     moveWidgetByDropTarget(active.id as WorkspaceWidgetId, over.id as string)
   }
 
