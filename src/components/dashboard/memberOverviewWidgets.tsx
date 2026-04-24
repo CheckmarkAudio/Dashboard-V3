@@ -45,23 +45,6 @@ const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring:
   book:    { dot: 'bg-orange-400', text: 'text-orange-300', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15' },
 }
 
-function splitClockParts(value: string): [string, string] {
-  const [left = '0', right = '0'] = value.split(':')
-  return [left, right]
-}
-
-function parseClock(value: string): [number, number] {
-  const [hours, minutes] = splitClockParts(value)
-  return [Number(hours), Number(minutes)]
-}
-
-function formatTime12(t: string): string {
-  const [h, m] = parseClock(t)
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  const hr = h % 12 || 12
-  return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`
-}
-
 // NOTE: durationLabel + SessionStatusPill + computeSessionStatus were
 // inlined into the old TodayCalendarWidget that PR #29 retired. They
 // now live inside `CalendarDayCard` (the shared day-view component).
@@ -194,86 +177,32 @@ const MOCK_ACTIVITY: { id: string; stage: Stage; actor: string; text: string; ti
  * "Next session" detail line.
  */
 export function BookingSnapshotWidget() {
-  const { todaySessions, loading, error, refetch } = useMemberOverviewContext()
+  const { refetch } = useMemberOverviewContext()
   const [showBooking, setShowBooking] = useState(false)
 
   const todayLabel = new Date()
     .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     .toUpperCase()
 
-  // Sort by start_time so "next" really is the soonest upcoming.
-  const now = new Date()
-  const upcoming = (todaySessions ?? [])
-    .filter((s) => {
-      const [eh, em] = parseClock(s.end_time)
-      const end = new Date(now); end.setHours(eh, em, 0, 0)
-      return end > now
-    })
-    .sort((a, b) => a.start_time.localeCompare(b.start_time))
-  const next = upcoming[0]
-
+  // PR #33 — compact action widget. Stacks above the Calendar at
+  // rowSpan 0.5 (~170px). Just the TODAY eyebrow + a prominent
+  // Book-a-Session button. Upcoming-session counter + next-session
+  // detail moved into the Calendar widget proper (they belong with
+  // the schedule, not above it).
   return (
     <div className="flex flex-col h-full">
-      {/* TODAY eyebrow — matches Tasks + Calendar widget pattern. */}
-      <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70 mb-2 shrink-0">
+      <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70 mb-3 shrink-0">
         TODAY · {todayLabel}
       </p>
 
-      {/* "Book a Session" CTA — placed at the top of the widget so the
-          primary action is the first thing the eye lands on. Opens the
-          canonical CreateBookingModal (same one Sessions.tsx and
-          Calendar.tsx use). Horizontal inset (`mx-0.5`) pulls the pill
-          in from the card edges; the widget chrome then shows the
-          supporting counter + next-session detail below. */}
       <button
         type="button"
         onClick={() => setShowBooking(true)}
-        className="mx-0.5 mb-3 py-2 rounded-xl bg-gold hover:bg-gold-muted text-black text-[13px] font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0"
+        className="w-full flex-1 rounded-xl bg-gold hover:bg-gold-muted text-black text-[14px] font-bold flex items-center justify-center gap-2 transition-colors"
       >
-        <Plus size={15} aria-hidden="true" />
+        <Plus size={18} aria-hidden="true" />
         Book a Session
       </button>
-
-      {/* Counter + next-session detail. Flows top-down below the CTA;
-          `min-h-0 overflow-hidden` prevents overflow if content grows. */}
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-        <p className="text-[11px] uppercase tracking-wider text-text-light font-medium">
-          Upcoming today
-        </p>
-        {/* Magazine-cover number — dropped 56 → 44px so a narrow
-            column fits the counter + session detail + CTA button
-            within the card without vertical overflow. */}
-        <p className="mt-2 text-[44px] leading-none font-light tracking-[-0.04em] text-text tabular-nums">
-          {loading ? '–' : upcoming.length}
-        </p>
-        <p className="mt-1 text-[12px] text-text-light">
-          {loading ? 'loading…' : upcoming.length === 1 ? 'session left' : 'sessions left'}
-        </p>
-
-        {/* Next-session detail — error state scoped here so chrome stays. */}
-        {error ? (
-          <div className="mt-3 pt-3 border-t border-border/40 flex items-center gap-2 text-[12px] text-amber-300">
-            <AlertCircle size={14} className="shrink-0" />
-            <span className="truncate">Could not load sessions</span>
-          </div>
-        ) : next ? (
-          <div className="mt-3 pt-3 border-t border-border/40 min-w-0">
-            <p className="text-[10px] uppercase tracking-wider text-text-light font-medium">
-              Next
-            </p>
-            <p className="mt-1 text-[13px] font-medium text-text truncate">
-              {next.client_name ?? 'Studio Session'}
-            </p>
-            <p className="text-[11px] text-gold mt-0.5 truncate">
-              {formatTime12(next.start_time)} · {next.room ?? 'Room TBD'}
-            </p>
-          </div>
-        ) : !loading ? (
-          <p className="mt-3 pt-3 border-t border-border/40 text-[12px] text-text-light italic">
-            Nothing else today.
-          </p>
-        ) : null}
-      </div>
 
       {showBooking && (
         <CreateBookingModal

@@ -44,7 +44,10 @@ export type AdminScope = 'admin_overview' | 'admin_assign'
 export type WorkspaceScope = MemberScope | AdminScope
 
 export type WidgetSpan = 1 | 2 | 3
-export type WidgetRowSpan = 1 | 2 | 3
+// `0.5` is the half-height slot used for compact action widgets (e.g.
+// a Book-a-Session button stacked above the Calendar). Renders at
+// ~170px instead of the default 340px.
+export type WidgetRowSpan = 0.5 | 1 | 2 | 3
 
 // ── Widget visibility model (PR #7) ──────────────────────────────────
 // Two orthogonal axes per widget:

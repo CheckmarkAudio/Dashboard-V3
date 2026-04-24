@@ -58,7 +58,11 @@ const ROW_GAP_PX = 16
 const COLUMN_IDS = [1, 2, 3] as const
 
 function widgetHeight(rowSpan: WidgetRowSpan = 1): number {
-  return rowSpan * ROW_HEIGHT_PX + (rowSpan - 1) * ROW_GAP_PX
+  // For >= 1-row widgets, add gap rows that get absorbed into the span.
+  // For sub-1 rowSpans (compact button widgets at 0.5) just scale
+  // ROW_HEIGHT_PX directly — no inter-row gap to absorb.
+  const base = rowSpan * ROW_HEIGHT_PX
+  return rowSpan >= 1 ? base + (rowSpan - 1) * ROW_GAP_PX : base
 }
 
 // Sortable widget inside a column. While being dragged, the original
