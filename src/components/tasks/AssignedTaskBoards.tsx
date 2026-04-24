@@ -121,13 +121,8 @@ function AssignmentBoardBody({
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Show-completed toggle — right-aligned chip at the top of the
-          body. Matches the MyTasksCard embedded layout. */}
-      <div className="flex justify-end pb-2 shrink-0">
-        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-      </div>
-
-      {/* PR #36 — flywheel stage filter (Team Tasks widget only). */}
+      {/* PR #36 — flywheel stage filter (Team Tasks widget only). Sits
+          at the top as the filter bar for the list below. */}
       {showStagePills && (
         <div className="shrink-0 mb-2">
           <StagePillRow counts={stageCounts} active={stageFilter} onChange={setStageFilter} />
@@ -206,6 +201,13 @@ function AssignmentBoardBody({
             )
           })
         )}
+      </div>
+
+      {/* PR #37 — sticky footer: show-completed eye, right-aligned.
+          No +Task button here (these boards don't support self-
+          requesting), so the eye sits alone on the right. */}
+      <div className="shrink-0 flex items-center justify-end pt-1.5 mt-1 border-t border-white/5">
+        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
       </div>
     </div>
   )

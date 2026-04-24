@@ -247,14 +247,21 @@ export function DayWeekToggle({ value, onChange }: { value: 'Day' | 'Week'; onCh
 }
 
 export function CompletedToggle({ show, onToggle }: { show: boolean; onToggle: () => void }) {
+  // PR #37 — icon-only. The label is redundant once the eye /
+  // eye-off state telegraphs "currently hiding" vs "currently
+  // showing" completed. `title` surfaces the full text on hover
+  // for accessibility.
   return (
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-1.5 text-[11px] text-text-light hover:text-text transition-colors py-1"
+      aria-label={show ? 'Hide completed tasks' : 'Show completed tasks'}
+      title={show ? 'Hide completed' : 'Show completed'}
+      className={`shrink-0 inline-flex items-center justify-center p-1.5 rounded-md transition-colors ${
+        show ? 'text-gold hover:bg-gold/10' : 'text-text-light hover:text-text hover:bg-white/[0.04]'
+      }`}
     >
-      {show ? <EyeOff size={11} /> : <Eye size={11} />}
-      {show ? 'Hide' : 'Show'} completed
+      {show ? <EyeOff size={13} /> : <Eye size={13} />}
     </button>
   )
 }
