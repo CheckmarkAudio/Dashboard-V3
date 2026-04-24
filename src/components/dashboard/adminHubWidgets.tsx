@@ -113,7 +113,7 @@ export function AdminAssignWidget() {
         />
         <AssignTile
           icon={CalendarPlus}
-          label="+Session"
+          label="+Booking"
           hint="Book a studio session"
           onClick={() => setFlow('session')}
         />
