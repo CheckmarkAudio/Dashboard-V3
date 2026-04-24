@@ -36,7 +36,9 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
   {
     id: 'team_tasks',
     title: 'My Tasks',
-    description: 'Personal queue — synced with the Tasks page.',
+    // PR #37 — description intentionally blank; the title alone is
+    // self-explanatory and the subtitle strip cluttered the widget.
+    description: '',
     defaultPlacements: [
       { scope: 'member_overview', span: 1, rowSpan: 1, col: 1 },
       { scope: 'member_tasks', span: 1, rowSpan: 2, col: 1 },
@@ -78,7 +80,7 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
   {
     id: 'studio_tasks',
     title: 'Studio Tasks',
-    description: 'Shared studio tasks anyone on the team can complete.',
+    description: '',
     defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 2, col: 2 }],
     accessVisibility: 'shared',
     dataScope: 'team',
@@ -87,7 +89,7 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
   {
     id: 'team_board',
     title: 'Team Tasks',
-    description: 'Team-wide view of member + studio work.',
+    description: '',
     defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 2, col: 3 }],
     accessVisibility: 'shared',
     dataScope: 'team',

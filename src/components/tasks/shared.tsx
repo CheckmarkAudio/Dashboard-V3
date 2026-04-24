@@ -120,25 +120,34 @@ export function StagePillRow({
   active: 'all' | Stage
   onChange: (next: 'all' | Stage) => void
 }) {
+  // PR #36 — two-row layout: "All" (clear-filter affordance) sits on
+  // its own row above the 5 flywheel stage pills. No horizontal
+  // scroll — with 10px text + 1.5px padding the 5 stage pills fit
+  // comfortably on one line in a 3-col widget; wrap is the fallback
+  // on extreme viewport squeezes.
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <StagePill
-        label="All"
-        count={counts.all}
-        tone="gold"
-        isActive={active === 'all'}
-        onClick={() => onChange('all')}
-      />
-      {STAGES.map((s) => (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1">
         <StagePill
-          key={s}
-          label={STAGE_STYLE[s].label}
-          count={counts[s]}
-          tone={s}
-          isActive={active === s}
-          onClick={() => onChange(s)}
+          label="All"
+          count={counts.all}
+          tone="gold"
+          isActive={active === 'all'}
+          onClick={() => onChange('all')}
         />
-      ))}
+      </div>
+      <div className="flex items-center gap-1 flex-wrap">
+        {STAGES.map((s) => (
+          <StagePill
+            key={s}
+            label={STAGE_STYLE[s].label}
+            count={counts[s]}
+            tone={s}
+            isActive={active === s}
+            onClick={() => onChange(s)}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -161,7 +170,7 @@ function StagePill({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all ring-1 whitespace-nowrap ${
+      className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-all ring-1 whitespace-nowrap ${
         isActive
           ? tone === 'gold'
             ? 'bg-gold/15 text-gold ring-gold/30'
@@ -170,7 +179,7 @@ function StagePill({
       }`}
     >
       {stageStyle && (
-        <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot}`} aria-hidden="true" />
+        <span className={`w-1 h-1 rounded-full ${stageStyle.dot}`} aria-hidden="true" />
       )}
       {label}
       <span className={`tabular-nums ${isActive ? 'opacity-100' : 'opacity-70'}`}>{count}</span>
@@ -238,19 +247,52 @@ export function DayWeekToggle({ value, onChange }: { value: 'Day' | 'Week'; onCh
 }
 
 export function CompletedToggle({ show, onToggle }: { show: boolean; onToggle: () => void }) {
+  // PR #37 — icon-only. The label is redundant once the eye /
+  // eye-off state telegraphs "currently hiding" vs "currently
+  // showing" completed. `title` surfaces the full text on hover
+  // for accessibility.
   return (
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-1.5 text-[11px] text-text-light hover:text-text transition-colors py-1"
+      aria-label={show ? 'Hide completed tasks' : 'Show completed tasks'}
+      title={show ? 'Hide completed' : 'Show completed'}
+      className={`shrink-0 inline-flex items-center justify-center p-1.5 rounded-md transition-colors ${
+        show ? 'text-gold hover:bg-gold/10' : 'text-text-light hover:text-text hover:bg-white/[0.04]'
+      }`}
     >
-      {show ? <EyeOff size={11} /> : <Eye size={11} />}
-      {show ? 'Hide' : 'Show'} completed
+      {show ? <EyeOff size={13} /> : <Eye size={13} />}
     </button>
   )
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
+
+// Map a stored task category to a canonical flywheel stage. DB stores
+// these title-cased ("Deliver", "Capture", …); we normalise to
+// lowercase so the STAGE union type is the single source of truth.
+// Returns null for tasks that aren't flywheel-tagged.
+export function taskStage(category: string | null | undefined): Stage | null {
+  if (!category) return null
+  const key = category.toLowerCase().trim()
+  return (STAGES as readonly string[]).includes(key) ? (key as Stage) : null
+}
+
+// Short, at-a-glance due-date label for the right-side task column.
+// "Today" when due today, short "Mon 22" format otherwise, null when
+// no due date set.
+export function formatDueShort(dueDate: string | null | undefined): string | null {
+  if (!dueDate) return null
+  const d = new Date(dueDate)
+  if (Number.isNaN(d.getTime())) return null
+  const today = new Date()
+  const isToday =
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate()
+  if (isToday) return 'Today'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
 
 export function countByStage(
   tasks: { stage: Stage; done: boolean }[],

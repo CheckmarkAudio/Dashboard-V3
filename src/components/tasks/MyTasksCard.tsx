@@ -10,7 +10,13 @@ import {
 } from '../../lib/queries/taskRequests'
 import { supabase } from '../../lib/supabase'
 import type { AssignedTask } from '../../types/assignments'
-import { Card, CardHeader, CompletedToggle } from './shared'
+import {
+  CompletedToggle,
+  StagePillRow,
+  formatDueShort,
+  taskStage,
+  type Stage,
+} from './shared'
 import TaskRequestModal from './requests/TaskRequestModal'
 import TaskDetailModal from './TaskDetailModal'
 
@@ -28,6 +34,9 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [requestModalOpen, setRequestModalOpen] = useState(false)
   const [requestsExpanded, setRequestsExpanded] = useState(false)
+  // PR #36 — flywheel stage filter. 'all' = no filter; otherwise the
+  // active stage. The pill row renders above the task list.
+  const [stageFilter, setStageFilter] = useState<'all' | Stage>('all')
   // PR #25 — click task body (not checkbox) opens this detail modal
   const [detailTask, setDetailTask] = useState<AssignedTask | null>(null)
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -148,64 +157,40 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     return { openTasks: open, doneTasks: done }
   }, [tasksQuery.data])
 
-  const visibleTasks = showCompleted ? [...openTasks, ...doneTasks] : openTasks
+  // Stage counts — always computed against OPEN tasks (not completed)
+  // so the "All" count matches the "N open" line in the header and
+  // filtering by stage only reveals work that's still needed.
+  const stageCounts = useMemo(() => {
+    const c: Record<'all' | Stage, number> = {
+      all: openTasks.length,
+      deliver: 0, capture: 0, share: 0, attract: 0, book: 0,
+    }
+    for (const t of openTasks) {
+      const s = taskStage(t.category)
+      if (s) c[s]++
+    }
+    return c
+  }, [openTasks])
 
-  // PR #17 — header no longer carries the "+ Task" chip. The button
-  // lives as an inline link at the bottom of the list (monday-style)
-  // so it reads as "the next row you'd add." Header keeps count +
-  // pending chip + completed toggle.
-  const header = embedded ? (
-    <div className="flex items-center justify-between gap-3 pb-2.5 mb-2 border-b border-white/5 shrink-0">
-      <p className="text-[11px] font-semibold tracking-[0.06em] text-text-light">
-        {openTasks.length} open
-        {doneTasks.length > 0 && <span className="ml-2 text-text-light/70">· {doneTasks.length} done</span>}
-        {pendingRequests.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setRequestsExpanded((v) => !v)}
-            className="ml-2 inline-flex items-center gap-1 text-amber-300 hover:text-amber-200 font-bold"
-            aria-expanded={requestsExpanded}
-          >
-            <Hourglass size={10} aria-hidden="true" />
-            {pendingRequests.length} pending
-          </button>
-        )}
-      </p>
-      <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-    </div>
-  ) : (
-    <CardHeader>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[16px] font-bold tracking-tight text-text">My Tasks</h2>
-        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-      </div>
-      <p className="mt-1 text-[11px] font-semibold tracking-[0.06em] text-text-light">
-        {openTasks.length} open
-        {doneTasks.length > 0 && <span className="ml-2 text-text-light/70">· {doneTasks.length} done</span>}
-        {pendingRequests.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setRequestsExpanded((v) => !v)}
-            className="ml-2 inline-flex items-center gap-1 text-amber-300 hover:text-amber-200 font-bold"
-            aria-expanded={requestsExpanded}
-          >
-            <Hourglass size={10} aria-hidden="true" />
-            {pendingRequests.length} pending approval
-          </button>
-        )}
-      </p>
-    </CardHeader>
-  )
+  const preFilterVisible = showCompleted ? [...openTasks, ...doneTasks] : openTasks
+  const visibleTasks =
+    stageFilter === 'all'
+      ? preFilterVisible
+      : preFilterVisible.filter((t) => taskStage(t.category) === stageFilter)
 
-  // Inline "+ Task" row that sits at the bottom of the task list —
-  // monday's "+ Add item" pattern. Reads as the next row you'd add.
+  // PR #37 — no header strip. The widget frame already shows "My
+  // Tasks" up top; the "N open · M done" counter + completed toggle
+  // were extra noise inside the card. Pending-request chip + eye
+  // toggle now live in the footer alongside the + Task button.
+
+  // Inline "+ Task" row. Sits inside the empty-state call-to-action;
+  // the real footer below the list carries the same button at the
+  // bottom of a populated widget.
   const addTaskRow = (
     <button
       type="button"
       onClick={() => setRequestModalOpen(true)}
-      className={`w-full inline-flex items-center gap-2 ${
-        embedded ? 'px-2 py-1.5' : 'px-2.5 py-2'
-      } rounded-[14px] text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/5 transition-colors text-left`}
+      className="w-full inline-flex items-center gap-2 px-2 py-1.5 rounded-[14px] text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/5 transition-colors text-left"
       aria-label="Request a new task"
     >
       <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
@@ -213,9 +198,44 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     </button>
   )
 
+  // Sticky bottom footer: + Task · pending-requests chip (if any) ·
+  // Show-completed eye. Stays below the scroll area so the eye is
+  // always visible regardless of list length.
+  const footerBar = (
+    <div className="shrink-0 flex items-center gap-1.5 pt-1.5 mt-1 border-t border-white/5">
+      <button
+        type="button"
+        onClick={() => setRequestModalOpen(true)}
+        className="flex-1 inline-flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/5 transition-colors text-left"
+        aria-label="Request a new task"
+      >
+        <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
+        Task
+      </button>
+      {pendingRequests.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setRequestsExpanded((v) => !v)}
+          className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 transition-colors"
+          aria-expanded={requestsExpanded}
+          title={`${pendingRequests.length} pending approval`}
+        >
+          <Hourglass size={11} aria-hidden="true" />
+          {pendingRequests.length}
+        </button>
+      )}
+      <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+    </div>
+  )
+
   const body = (
     <>
-      {header}
+      {/* PR #36 — flywheel stage filter. Sits at the TOP of the widget
+          body (below the widget-frame title), reads as "filter bar"
+          for the list below. */}
+      <div className="shrink-0 mb-2">
+        <StagePillRow counts={stageCounts} active={stageFilter} onChange={setStageFilter} />
+      </div>
 
       {/* PR #16 — pending-request strip. Collapsed by default; the
           "N pending" chip in the header toggles it. Shows title +
@@ -225,7 +245,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         <PendingRequestsList requests={myRequests} />
       )}
 
-      <div className={`flex-1 min-h-0 overflow-y-auto space-y-1.5 ${embedded ? '' : 'px-3 py-2'}`}>
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
         {tasksQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light py-6">
             <Loader2 size={18} className="animate-spin" />
@@ -279,29 +299,23 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             )
           })
         )}
-        {/* "+ Task" row sits at the END of the task list — monday's
-            "+ Add item" pattern. Only render after the list (not in
-            the empty state, which already includes it above). */}
-        {visibleTasks.length > 0 && <div className="pt-1">{addTaskRow}</div>}
       </div>
+
+      {/* PR #37 — sticky footer with + Task, pending-requests chip
+          (if any), and the show-completed eye. Stays below the scroll
+          area so the eye is always reachable. */}
+      {footerBar}
     </>
   )
 
-  if (embedded) {
-    return (
-      <>
-        <div className="flex flex-col h-full min-h-0">{body}</div>
-        {requestModalOpen && <TaskRequestModal onClose={() => setRequestModalOpen(false)} />}
-        {detailTask && (
-          <TaskDetailModal task={detailTask} onClose={() => setDetailTask(null)} />
-        )}
-      </>
-    )
-  }
-
+  // MyTasksCard is only ever mounted inside a DashboardWidgetFrame
+  // (team_tasks widget on Overview + Tasks). The `embedded` prop used
+  // to switch between a standalone `<Card>` chrome vs widget-embedded
+  // body; no caller uses the non-embedded path anymore so we drop it.
+  void embedded
   return (
     <>
-      <Card className="h-full">{body}</Card>
+      <div className="flex flex-col h-full min-h-0">{body}</div>
       {requestModalOpen && <TaskRequestModal onClose={() => setRequestModalOpen(false)} />}
       {detailTask && (
         <TaskDetailModal task={detailTask} onClose={() => setDetailTask(null)} />
@@ -377,9 +391,7 @@ function AssignedTaskRow({
   rowRef: (node: HTMLDivElement | null) => void
 }) {
   const done = task.is_completed
-  const dueLabel = task.due_date
-    ? new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : null
+  const dueLabel = formatDueShort(task.due_date)
   const isNew =
     !done &&
     Boolean(task.batch?.created_at) &&
@@ -395,6 +407,10 @@ function AssignedTaskRow({
   // PR #25 — split click surfaces. Checkbox toggles completion;
   // body-click opens the detail modal. Keyboard: Space toggles
   // (monday convention), Enter opens detail.
+  //
+  // PR #36 — layout is a 3-col grid so the due-date label sits
+  // right-aligned inline with the title (not buried in the sub-meta
+  // line). Empty right column when no due date.
   return (
     <div
       ref={rowRef}
@@ -410,7 +426,7 @@ function AssignedTaskRow({
           onToggle(task)
         }
       }}
-      className={`group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left cursor-pointer ${
+      className={`group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left cursor-pointer ${
         highlighted
           ? 'bg-gold/20 ring-2 ring-gold animate-[pulse_0.8s_ease-in-out_2]'
           : done
@@ -440,7 +456,7 @@ function AssignedTaskRow({
         {done && <Check size={12} strokeWidth={3} aria-hidden="true" />}
       </button>
 
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className={`text-[13px] truncate ${done ? 'line-through text-text-muted' : 'font-semibold text-text'}`}>
             {task.title}
@@ -468,10 +484,20 @@ function AssignedTaskRow({
           {task.category && <span>{task.category}</span>}
           {(originLabel || task.category) && task.assigned_to_name && <span aria-hidden="true">·</span>}
           {task.assigned_to_name && <span>{task.assigned_to_name}</span>}
-          {(originLabel || task.category || task.assigned_to_name) && dueLabel && <span aria-hidden="true">·</span>}
-          {dueLabel && <span>Due {dueLabel}</span>}
         </div>
       </div>
+
+      {/* Due date — right column of the grid, vertically top-aligned
+          with the title. Em-dash-style empty state keeps rows aligned
+          when there's no date set. */}
+      <span
+        className={`shrink-0 text-[12px] tabular-nums whitespace-nowrap mt-[2px] ${
+          dueLabel ? 'text-text-light' : 'text-text-light/30'
+        }`}
+        title={dueLabel ? `Due ${dueLabel}` : 'No due date'}
+      >
+        {dueLabel ?? '—'}
+      </span>
     </div>
   )
 }
