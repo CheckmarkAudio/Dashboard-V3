@@ -92,9 +92,15 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
 
   const invalidate = () => {
     // Admin-side queue + member-side history + the notifications widget
-    // all care when a request resolves.
+    // all care when a request resolves. PR #28: ALSO invalidate the
+    // team + studio task caches because the Flywheel widget reads
+    // from `team-assigned-tasks` — without this invalidation, an
+    // approved task tagged to a flywheel stage wouldn't light up the
+    // Flywheel widget until the 30s staleTime expired.
     void queryClient.invalidateQueries({ queryKey: taskRequestKeys.all })
     void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+    void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
+    void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
     void queryClient.invalidateQueries({ queryKey: ['overview-assignment-notifications'] })
   }
 

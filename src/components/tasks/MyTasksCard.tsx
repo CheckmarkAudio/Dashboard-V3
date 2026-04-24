@@ -119,6 +119,13 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         )
       })
     },
+    onSuccess: () => {
+      // PR #28 — refresh team + studio caches so the Flywheel widget
+      // picks up completion state changes. Without this the widget
+      // only updates when its 30s staleTime expires.
+      void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
+    },
     onError: () => {
       void queryClient.invalidateQueries({ queryKey: cacheKey })
     },
