@@ -11,6 +11,7 @@ import type { AssignedTask } from '../../types/assignments'
 import {
   CompletedToggle,
   StagePillRow,
+  SubmitBar,
   formatDueShort,
   taskStage,
   type Stage,
@@ -76,9 +77,27 @@ function AssignmentBoardBody({
     refetchInterval: 60_000,
   })
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ taskId, next }: { taskId: string; next: boolean }) => completeAssignedTask(taskId, next),
+  // PR #37 — pending → Submit pattern. Checking a row adds its id to
+  // `pendingIds`; Submit Completed commits all queued toggles at once.
+  const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set())
+
+  const togglePending = (taskId: string) => {
+    setPendingIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+      return next
+    })
+  }
+
+  const submitMutation = useMutation({
+    mutationFn: async (toggles: { taskId: string; next: boolean }[]) => {
+      await Promise.all(
+        toggles.map((t) => completeAssignedTask(t.taskId, t.next)),
+      )
+    },
     onSuccess: () => {
+      setPendingIds(new Set())
       void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix, profile?.id ?? 'none'] })
       void queryClient.invalidateQueries({ queryKey: ['assigned-tasks', profile?.id ?? 'none'] })
     },
@@ -150,24 +169,32 @@ function AssignmentBoardBody({
         ) : (
           visibleTasks.map((task) => {
             const dueLabel = formatDueShort(task.due_date)
+            const isPending = pendingIds.has(task.id)
+            const checkVisual = task.is_completed !== isPending // XOR
             return (
               <button
                 key={task.id}
                 type="button"
-                disabled={!task.can_complete || toggleMutation.isPending}
-                onClick={() => toggleMutation.mutate({ taskId: task.id, next: !task.is_completed })}
-                className={`w-full text-left grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2.5 py-2 rounded-[14px] border border-transparent bg-white/[0.018] hover:bg-white/[0.03] hover:border-white/[0.08] transition-all ${
-                  task.is_completed ? 'opacity-40' : ''
-                } ${!task.can_complete ? 'cursor-default' : ''}`}
+                disabled={!task.can_complete || submitMutation.isPending}
+                onClick={() => togglePending(task.id)}
+                className={`w-full text-left grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2.5 py-2 rounded-[14px] border transition-all ${
+                  isPending
+                    ? 'bg-gold/8 border-gold/30'
+                    : 'bg-white/[0.018] border-transparent hover:bg-white/[0.03] hover:border-white/[0.08]'
+                } ${task.is_completed && !isPending ? 'opacity-40' : ''} ${
+                  !task.can_complete ? 'cursor-default opacity-60' : ''
+                }`}
               >
                 <span
                   className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-[5px] border-[1.5px] flex items-center justify-center ${
-                    task.is_completed
-                      ? 'bg-gold/30 border-gold/40'
-                      : 'border-white/20'
+                    isPending
+                      ? 'bg-gold/30 border-gold'
+                      : task.is_completed
+                        ? 'bg-gold/30 border-gold/40'
+                        : 'border-white/20'
                   }`}
                 >
-                  {task.is_completed && <Check size={11} className="text-gold" strokeWidth={3} />}
+                  {checkVisual && <Check size={11} className="text-gold" strokeWidth={3} />}
                 </span>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -203,11 +230,27 @@ function AssignmentBoardBody({
         )}
       </div>
 
-      {/* PR #37 — sticky footer: show-completed eye, right-aligned.
-          No +Task button here (these boards don't support self-
-          requesting), so the eye sits alone on the right. */}
-      <div className="shrink-0 flex items-center justify-end pt-1.5 mt-1 border-t border-white/5">
-        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+      {/* PR #37 — sticky footer: Submit Completed bar (greyed until
+          user queues at least one pending toggle) + show-completed
+          eye. No +Task button here since these boards don't support
+          self-requesting. */}
+      <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t border-white/5">
+        <SubmitBar
+          count={pendingIds.size}
+          isSubmitting={submitMutation.isPending}
+          onClick={() => {
+            if (pendingIds.size === 0) return
+            const tasks = tasksQuery.data ?? []
+            const toggles = Array.from(pendingIds).map((id) => {
+              const t = tasks.find((x) => x.id === id)
+              return { taskId: id, next: !(t?.is_completed ?? false) }
+            })
+            submitMutation.mutate(toggles)
+          }}
+        />
+        <div className="flex items-center justify-end">
+          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+        </div>
       </div>
     </div>
   )

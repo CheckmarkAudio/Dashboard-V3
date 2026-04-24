@@ -13,6 +13,7 @@ import type { AssignedTask } from '../../types/assignments'
 import {
   CompletedToggle,
   StagePillRow,
+  SubmitBar,
   formatDueShort,
   taskStage,
   type Stage,
@@ -37,6 +38,10 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   // PR #36 — flywheel stage filter. 'all' = no filter; otherwise the
   // active stage. The pill row renders above the task list.
   const [stageFilter, setStageFilter] = useState<'all' | Stage>('all')
+  // PR #37 — pending → Submit pattern. Checking a box adds the task
+  // id to this set (visual state only, no RPC). Submit Completed
+  // button commits all queued ids in parallel.
+  const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set())
   // PR #25 — click task body (not checkbox) opens this detail modal
   const [detailTask, setDetailTask] = useState<AssignedTask | null>(null)
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -116,22 +121,38 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     return () => window.removeEventListener('expand-task-requests', handler)
   }, [])
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ taskId, next }: { taskId: string; next: boolean }) => completeAssignedTask(taskId, next),
-    onMutate: ({ taskId, next }) => {
+  // PR #37 — batch-submit mutation. Takes an array of {id, next}
+  // pairs and fires completeAssignedTask for each in parallel.
+  // Triggered by the Submit Completed button when pendingIds is
+  // non-empty. Individual checkbox clicks no longer fire an RPC —
+  // they just toggle membership in `pendingIds`.
+  const submitMutation = useMutation({
+    mutationFn: async (toggles: { taskId: string; next: boolean }[]) => {
+      await Promise.all(
+        toggles.map((t) => completeAssignedTask(t.taskId, t.next)),
+      )
+    },
+    onMutate: (toggles) => {
+      // Optimistic cache update so rows flip immediately.
       queryClient.setQueryData<AssignedTask[]>(cacheKey, (previous) => {
         if (!previous) return previous
+        const byId = new Map(toggles.map((t) => [t.taskId, t.next]))
         return previous.map((task) =>
-          task.id === taskId
-            ? { ...task, is_completed: next, completed_at: next ? new Date().toISOString() : null }
+          byId.has(task.id)
+            ? {
+                ...task,
+                is_completed: byId.get(task.id)!,
+                completed_at: byId.get(task.id) ? new Date().toISOString() : null,
+              }
             : task,
         )
       })
     },
     onSuccess: () => {
+      setPendingIds(new Set())
       // PR #28 — refresh team + studio caches so the Flywheel widget
-      // picks up completion state changes. Without this the widget
-      // only updates when its 30s staleTime expires.
+      // picks up completion state changes.
+      void queryClient.invalidateQueries({ queryKey: cacheKey })
       void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
       void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
     },
@@ -198,33 +219,65 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     </button>
   )
 
-  // Sticky bottom footer: + Task · pending-requests chip (if any) ·
-  // Show-completed eye. Stays below the scroll area so the eye is
-  // always visible regardless of list length.
+  // PR #37 — pending toggle. Adding the id to the set flips the row's
+  // visual check state; removing it unqueues. No RPC until Submit.
+  const togglePending = (taskId: string) => {
+    setPendingIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+      return next
+    })
+  }
+
+  // Commit all queued completions. For each pending id, target state
+  // is the opposite of the current is_completed (so a user can queue
+  // un-completes too if they check off a done row with show-completed
+  // on).
+  const submitPending = () => {
+    if (pendingIds.size === 0) return
+    const currentTasks = tasksQuery.data ?? []
+    const toggles = Array.from(pendingIds).map((id) => {
+      const t = currentTasks.find((x) => x.id === id)
+      return { taskId: id, next: !(t?.is_completed ?? false) }
+    })
+    submitMutation.mutate(toggles)
+  }
+
+  // Sticky bottom footer — two rows:
+  //   - SubmitBar (greyed when pendingIds empty, gold when queued)
+  //   - + Task · pending-requests chip · Show-completed eye
   const footerBar = (
-    <div className="shrink-0 flex items-center gap-1.5 pt-1.5 mt-1 border-t border-white/5">
-      <button
-        type="button"
-        onClick={() => setRequestModalOpen(true)}
-        className="flex-1 inline-flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/5 transition-colors text-left"
-        aria-label="Request a new task"
-      >
-        <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
-        Task
-      </button>
-      {pendingRequests.length > 0 && (
+    <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t border-white/5">
+      <SubmitBar
+        count={pendingIds.size}
+        isSubmitting={submitMutation.isPending}
+        onClick={submitPending}
+      />
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
-          onClick={() => setRequestsExpanded((v) => !v)}
-          className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 transition-colors"
-          aria-expanded={requestsExpanded}
-          title={`${pendingRequests.length} pending approval`}
+          onClick={() => setRequestModalOpen(true)}
+          className="flex-1 inline-flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/5 transition-colors text-left"
+          aria-label="Request a new task"
         >
-          <Hourglass size={11} aria-hidden="true" />
-          {pendingRequests.length}
+          <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
+          Task
         </button>
-      )}
-      <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+        {pendingRequests.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setRequestsExpanded((v) => !v)}
+            className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 transition-colors"
+            aria-expanded={requestsExpanded}
+            title={`${pendingRequests.length} pending approval`}
+          >
+            <Hourglass size={11} aria-hidden="true" />
+            {pendingRequests.length}
+          </button>
+        )}
+        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+      </div>
     </div>
   )
 
@@ -288,7 +341,8 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
                 <AssignedTaskRow
                   task={task}
                   highlighted={highlightedId === task.id}
-                  onToggle={(nextTask) => toggleMutation.mutate({ taskId: nextTask.id, next: !nextTask.is_completed })}
+                  isPending={pendingIds.has(task.id)}
+                  onToggle={(nextTask) => togglePending(nextTask.id)}
                   onOpenDetail={(nextTask) => setDetailTask(nextTask)}
                   rowRef={(node) => {
                     if (node) rowRefs.current.set(task.id, node)
@@ -380,17 +434,23 @@ function RequestRow({ request }: { request: MyTaskRequest }) {
 function AssignedTaskRow({
   task,
   highlighted,
+  isPending,
   onToggle,
   onOpenDetail,
   rowRef,
 }: {
   task: AssignedTask
   highlighted: boolean
+  isPending: boolean
   onToggle: (task: AssignedTask) => void
   onOpenDetail: (task: AssignedTask) => void
   rowRef: (node: HTMLDivElement | null) => void
 }) {
   const done = task.is_completed
+  // Checkbox shows the pending-but-not-submitted state distinctly so
+  // the user knows what they've queued. `checkVisual` is the visual
+  // truth: true when either completed OR pending, false otherwise.
+  const checkVisual = done !== isPending  // XOR: pending flips the visual
   const dueLabel = formatDueShort(task.due_date)
   const isNew =
     !done &&
@@ -437,7 +497,9 @@ function AssignedTaskRow({
       }`}
     >
       {/* Checkbox — independent click target. stopPropagation so the
-          body's onClick doesn't also open the detail modal. */}
+          body's onClick doesn't also open the detail modal. PR #37
+          adds a gold "pending submit" state: click queues the toggle,
+          Submit Completed commits it. */}
       <button
         type="button"
         onClick={(event) => {
@@ -446,14 +508,16 @@ function AssignedTaskRow({
         }}
         disabled={!task.can_complete}
         aria-label={done ? 'Mark incomplete' : 'Mark complete'}
-        aria-pressed={done}
+        aria-pressed={checkVisual}
         className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md flex items-center justify-center transition-colors ${
-          done
-            ? 'bg-emerald-500/80 border border-emerald-500/80 text-white'
-            : 'bg-surface-alt border border-border-light group-hover:border-gold/50'
+          isPending
+            ? 'bg-gold/30 border border-gold text-gold'
+            : done
+              ? 'bg-emerald-500/80 border border-emerald-500/80 text-white'
+              : 'bg-surface-alt border border-border-light group-hover:border-gold/50'
         } ${task.can_complete ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
       >
-        {done && <Check size={12} strokeWidth={3} aria-hidden="true" />}
+        {checkVisual && <Check size={12} strokeWidth={3} aria-hidden="true" />}
       </button>
 
       <div className="min-w-0">
