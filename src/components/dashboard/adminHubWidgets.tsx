@@ -352,8 +352,11 @@ export function AdminFlywheelWidget() {
     enabled: Boolean(profile?.id),
   })
 
-  const loading = defsQuery.isLoading || entriesQuery.isLoading
-  const error = defsQuery.error ?? entriesQuery.error
+  // PR #28 — include tasksQuery in the loading + error surface so
+  // the widget doesn't silently show "no tasks tagged" while the
+  // team task RPC is still in flight or has failed.
+  const loading = defsQuery.isLoading || entriesQuery.isLoading || tasksQuery.isLoading
+  const error = defsQuery.error ?? entriesQuery.error ?? tasksQuery.error
 
   const stages = useMemo(() => {
     const defs = defsQuery.data ?? []
