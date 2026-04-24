@@ -10,7 +10,6 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
 import {
@@ -235,68 +234,45 @@ export default function WorkspacePanel({
     setActiveId(event.active.id as WorkspaceWidgetId)
   }
 
-  // onDragOver fires continuously as the cursor moves. Three cases:
-  //   1. Over an empty-column droppable (`col-N`) in a different column
-  //      → move active into that column's end.
-  //   2. Over another widget in a different column → DIRECT SWAP (PR
-  //      #34). A takes B's slot and B takes A's old slot in one atomic
-  //      move — no cascading push-down, no "stacking" feel.
-  //   3. Over another widget in the SAME column → no state change;
-  //      useSortable's transform preview handles intra-column reorder
-  //      (final commit happens in onDragEnd).
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const activeWidgetId = active.id as WorkspaceWidgetId
-    const overId = over.id as string
-
-    const currentWidget = visibleWidgets.find((w) => w.id === activeWidgetId)
-    if (!currentWidget) return
-
-    // (1) Column droppable
-    const colMatch = /^col-(\d+)$/.exec(overId)
-    if (colMatch) {
-      const targetCol = Number(colMatch[1])
-      if (targetCol !== currentWidget.col) {
-        moveWidgetByDropTarget(activeWidgetId, overId)
-      }
-      return
-    }
-
-    // (2) / (3) Another widget
-    const overWidget = visibleWidgets.find((w) => w.id === overId)
-    if (!overWidget) return
-
-    if (overWidget.col !== currentWidget.col) {
-      // Cross-column → direct swap
-      swapWidgets(activeWidgetId, overId as WorkspaceWidgetId)
-    }
-    // Same column → let the sortable strategy preview the shift;
-    // onDragEnd finalizes.
-  }
-
-  // onDragEnd finalizes. Cross-column drops are ALREADY correct from
-  // the swap/move in onDragOver, so we only commit for same-column
-  // reorders onto another widget (the sortable-style insert + shift).
+  // onDragEnd is the SINGLE commit point for cross-column moves. We
+  // deliberately do NOT update state in onDragOver — updating live as
+  // the cursor passes over multiple widgets caused cascading swaps
+  // (every widget the cursor brushed got swapped with the active one,
+  // piling up in whichever column the cursor ended in). By committing
+  // only on drop, exactly one swap/move happens per drag.
+  //
+  // Three drop targets:
+  //   - Column droppable (`col-N`) → move active into that column.
+  //   - Widget in SAME column → insert + shift (list-reorder feel,
+  //     handled by useSortable's live transforms during drag).
+  //   - Widget in DIFFERENT column → DIRECT SWAP: active takes over's
+  //     slot, over takes active's old slot. One atomic exchange.
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
 
+    const activeId = active.id as WorkspaceWidgetId
     const overIdStr = typeof over.id === 'string' ? over.id : String(over.id)
-    if (/^col-\d+$/.test(overIdStr)) return // column drops handled in onDragOver
 
-    const activeWidget = visibleWidgets.find((w) => w.id === active.id)
+    // Column droppable → move to that column's end.
+    if (/^col-\d+$/.test(overIdStr)) {
+      moveWidgetByDropTarget(activeId, overIdStr)
+      return
+    }
+
+    // Over another widget.
+    const activeWidget = visibleWidgets.find((w) => w.id === activeId)
     const overWidget = visibleWidgets.find((w) => w.id === over.id)
     if (!activeWidget || !overWidget) return
 
-    // Cross-column drop on a widget → swap already fired in
-    // onDragOver; nothing to do.
-    if (activeWidget.col !== overWidget.col) return
-
-    // Same-column reorder → insert active at over's position.
-    moveWidgetByDropTarget(active.id as WorkspaceWidgetId, over.id as string)
+    if (activeWidget.col === overWidget.col) {
+      // Same column → sortable insert + shift.
+      moveWidgetByDropTarget(activeId, overIdStr)
+    } else {
+      // Different column → direct 1-for-1 swap.
+      swapWidgets(activeId, over.id as WorkspaceWidgetId)
+    }
   }
 
   const handleDragCancel = () => {
@@ -368,7 +344,6 @@ export default function WorkspacePanel({
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
