@@ -411,19 +411,24 @@ Everything depends on this layer. Start here.
 
 ### In progress — UI design refresh
 
-Matching `/Users/bridges/GITHUB/Checkmark Workspace-UI-Draft/`
-mockups across the three highest-impact surfaces:
+All 4 highest-impact surfaces now share the same grammar:
+`WorkspacePanel` + equal-width 3-column grid + `DashboardWidgetFrame`
+(drag grip + expand-to-modal). Controls card hidden; widgets are
+visible-by-default and non-removable for now.
 
-- ✅ **Overview (`/`)** — 4 widgets: Tasks / Notifications /
-  Calendar / Booking. Shell + gradient + widget-card styling done.
-  Click title → floating modal with full content. Drag-to-reorder.
-- ✅ **Admin Hub (`/admin`)** — 5 widgets (+ 1 promoted from bank):
-  Assign / Notifications / Flywheel / Team / Approvals /
-  Shortcuts. Same grid rhythm as Overview.
-- 🟡 **Assign (`/admin/templates`)** — hero header + filter search +
-  bubble-card template grid + click-to-preview modal. Cards
-  currently match mockup: 4-task preview + "…" overflow indicator,
-  h-[290px] uniform, 2-line title wrap.
+- ✅ **Overview (`/`)** — 3-col grid: Tasks / Today's Calendar /
+  Forum Notifications / Booking Snapshot. Shared `CalendarDayCard`
+  with `/calendar`.
+- ✅ **Admin Hub (`/admin`)** — 3-col grid: Quick Assign + Approvals ·
+  Flywheel (real `assigned_tasks` data, dual-opacity bars) ·
+  Notifications + Team.
+- ✅ **Tasks (`/daily`)** — 3-col grid: My Tasks · Studio · Team Board.
+  Bottom-of-list "+ Task" add pattern; click body → `TaskDetailModal`,
+  click checkbox → complete.
+- ✅ **Assign (`/admin/templates`)** — 3-col grid: Assign (tiles) ·
+  Task Requests · Templates library. Canonical filter pills with
+  counts; pinned-tile pattern; unified Quick Assign modal covers
+  all admin task-assign flows.
 
 ### Deferred
 
@@ -548,7 +553,18 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
-- **Monday-style task system completed — 6 PRs, 2026-04-22 session.** PRs #11–#16 all merged to main this session, taking the assignment system from MVP to near-complete.
+- **Layout + task-surface consolidation — 15 PRs, 2026-04-23/24 session.** PRs #17–#31 all merged to main. Overview / Hub / Tasks / Assign now share one grammar: `WorkspacePanel` + equal-width 3-column grid + `DashboardWidgetFrame` (drag grip + expand-to-modal). Controls card hidden site-wide.
+  - **PR #17 `a13dbe4`** — Rich `+Task` modal (Monday.com "+ Add item" bottom-of-list pattern) with title + description + flywheel stage picker + due-date. Tags carry through request → approval → materialized task.
+  - **PRs #18–#19 `148257a` · `c07a7ea`** — Unified admin task modal (consolidated 3 overlapping admin modals into one Hub-owned Quick Assign). Hub's Assign widget reordered to lead with Quick Assign.
+  - **PRs #20–#21 `0054dea` · `6924b41`** — Assign Trello-style 3-column layout (Assign / Approve / Templates) + pinned-tile pattern + canonical Ableton-style filter pills with counts.
+  - **PRs #22–#23 `371a547` · `e789f33`** — Overview 3-column layout + new shared `CalendarDayCard` (same day-view on Overview widget and `/calendar` page). Tasks + Booking split into standalone widgets so drag-reorder treats them independently.
+  - **PR #24 `7f03e7e`** — Hub 3-column layout (Quick Assign+Approvals · Flywheel · Notifications+Team).
+  - **PRs #25–#26 `f9b4279` · `ac8615d`** — `TaskDetailModal` + split click surfaces (checkbox = complete, body = detail modal). Notification click routing branches by status (`task_request_submitted` → Hub approval queue; `task_request_approved` → highlight the materialized task).
+  - **PRs #27–#28 `b594b2b` · `ebd833e`** — Hub Flywheel widget wired to real `assigned_tasks` data with dual-opacity bars (opaque = done, translucent = assigned-open). PR #28 fixed a cache-invalidation miss — approving a tagged request now invalidates `['team-assigned-tasks']` + `['studio-assigned-tasks']` so the flywheel updates without refresh.
+  - **PRs #29–#30 `c266640` · `334e55f`** — `WorkspacePanel` restored across all 4 pages with equal columns + drag-reorder. PR #30 regression-fixed: `TASKS_WIDGET_DEFINITIONS` + `ASSIGN_WIDGET_DEFINITIONS` exported with scope filtering so each page gets the right widgets; row-spans restored (Overview col-1 stacks Tasks+Booking under a 2-row Calendar/Notifications). `WORKSPACE_LAYOUT_VERSION` 11→14.
+  - **PR #31 `76884fa`** — Hide workspace controls bar site-wide (`showControls={false}`). With widgets visible-by-default + non-removable, the "Arrange your …" card did nothing the widget frames didn't already do. Drag + expand still work.
+  - **Net**: 4 pages share one grammar; task-assign flows all unified through a single modal path; flywheel shows real momentum; task clicks open rich detail; nothing decorative remains in the controls strip.
+- **Monday-style task system completed — 6 PRs, 2026-04-22 session.** PRs #11–#16 all merged to main, taking the assignment system from MVP to near-complete.
   - **PR #11 `ec8d3b7`** — Unified MyTasks (retired `AssignedTasksWidget`, MyTasksCard reads real data + click-to-highlight).
   - **PR #12 `0b09313`** — Scope foundation: `assigned_tasks.scope` column + member/studio CHECK + two new RPCs (`get_team_assigned_tasks`, `get_studio_assigned_tasks`). `/daily` rebuilt around three columns (My · Studio · Team).
   - **PR #13 `9cf9bf5`** — Assign page redesign: Quick Assign inline compose + Assign-a-Session tile + Templates grid. Session-assign RPC (`assign_session`) + notifications table extended with `session_id` (XOR with `batch_id`). Notification click routes by subject. **Also shipped preview auto-login**: `Login.tsx` checks `VITE_PREVIEW_LOGIN_*` env vars + hostname pattern; production alias hardcoded excluded. Env vars live in Vercel Preview scope only. No more re-login per PR.
