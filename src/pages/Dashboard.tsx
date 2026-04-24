@@ -41,9 +41,11 @@ export default function Dashboard() {
           userId={profile?.id ?? 'guest'}
           scope={MEMBER_SCOPE}
           definitions={MEMBER_WIDGET_DEFINITIONS}
-          controlsTitle="Arrange your Overview"
-          controlsDescription="Drag a widget's grip to reorder · click title to expand · hide widgets you don't need."
-          showControls
+          // PR #31 — controls bar hidden. Drag-reorder + expand-to-modal
+          // still work via each widget's frame. All widgets stay visible
+          // by default until we want a hide-surface again.
+          controlsDescription=""
+          showControls={false}
         />
       </MemberOverviewProvider>
     </div>

@@ -46,9 +46,10 @@ export default function AdminHub() {
           userId={profile?.id ?? 'guest'}
           scope={ADMIN_SCOPE}
           definitions={ADMIN_WIDGET_DEFINITIONS}
-          controlsTitle="Arrange the Hub"
-          controlsDescription="Drag a widget's grip to reorder · click title to expand · hide widgets you don't need."
-          showControls
+          // PR #31 — controls bar hidden; drag-reorder + expand-to-modal
+          // still work via each widget's frame.
+          controlsDescription=""
+          showControls={false}
         />
       </div>
     </AdminOverviewProvider>

@@ -35,9 +35,9 @@ export default function DailyChecklist() {
           userId={profile?.id ?? 'guest'}
           scope={TASKS_SCOPE}
           definitions={TASKS_WIDGET_DEFINITIONS}
-          controlsTitle="Arrange your Tasks view"
-          controlsDescription="Drag a widget's grip to reorder · click title to expand · hide widgets you don't need."
-          showControls
+          // PR #31 — controls bar hidden; drag + expand still work.
+          controlsDescription=""
+          showControls={false}
         />
       </MemberOverviewProvider>
     </div>
