@@ -69,10 +69,20 @@ export type DataScope =
 
 // Where a widget renders by default. A widget may list multiple placements
 // within its side (e.g. on both member_overview and member_tasks).
+//
+// PR #32 — column-snap model. Each placement declares which column
+// (`col` in [1..3]) the widget lives in. Within a column, widgets
+// auto-stack vertically in registration order; drag-to-reorder
+// controls the intra-column order after that. There is no global
+// `row` coord — columns are three independent vertical stacks, so
+// dropping a widget into col 3 keeps it in col 3 even if col 1 is
+// empty. `rowSpan` still controls widget HEIGHT within its column
+// stack (rowSpan=2 renders twice as tall).
 export interface WidgetPlacement<Scope extends WorkspaceScope = WorkspaceScope> {
   scope: Scope
   span: WidgetSpan
   rowSpan?: WidgetRowSpan
+  col: number
 }
 
 // Widgets that appear ONLY on member pages. NEVER add an admin-specific
@@ -156,10 +166,16 @@ export interface WorkspaceWidgetDefinition<
 
 export interface WorkspaceWidgetState {
   id: WorkspaceWidgetId
+  // Position within the widget's column. Drag-to-reorder sets this;
+  // values are always 0..N-1 within a given column (no global meaning).
   order: number
   visible: boolean
   span: WidgetSpan
   rowSpan?: WidgetRowSpan
+  // PR #32 — column assignment (1..3). Within-column stacking falls
+  // out of `order` above. Missing on pre-v15 saved layouts;
+  // `sanitizeLayout` backfills from registry defaults.
+  col: number
 }
 
 export interface WorkspaceLayout {
