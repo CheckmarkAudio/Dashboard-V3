@@ -98,6 +98,15 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     return () => window.removeEventListener(HIGHLIGHT_EVENT, handler)
   }, [tasksQuery.data])
 
+  // PR #26 — dispatched when the user clicks a task_request_rejected
+  // notification. Open the pending-requests strip so the reviewer
+  // note is immediately visible.
+  useEffect(() => {
+    const handler = () => setRequestsExpanded(true)
+    window.addEventListener('expand-task-requests', handler)
+    return () => window.removeEventListener('expand-task-requests', handler)
+  }, [])
+
   const toggleMutation = useMutation({
     mutationFn: ({ taskId, next }: { taskId: string; next: boolean }) => completeAssignedTask(taskId, next),
     onMutate: ({ taskId, next }) => {

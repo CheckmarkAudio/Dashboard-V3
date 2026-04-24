@@ -568,7 +568,10 @@ export function AdminNotificationsWidget() {
     void markAssignmentNotificationRead(n.id).catch(() => {
       void queryClient.invalidateQueries({ queryKey: cacheKey })
     })
-    // PR #13 — route by notification subject.
+    // ─── Route by notification subject ─────────────────────────────
+    // PR #13: session_id  → /sessions + highlight-session
+    // PR #26: task_request_id 'submitted' → Hub approvals queue
+    // PR #11: batch_id    → highlight-task in MyTasksCard
     if (n.session_id) {
       window.dispatchEvent(
         new CustomEvent('highlight-session', { detail: { sessionId: n.session_id } }),
@@ -576,7 +579,29 @@ export function AdminNotificationsWidget() {
       window.location.href = '/sessions'
       return
     }
-    // PR #11 — highlight the task from this batch in MyTasksCard.
+    if (n.task_request_id && n.notification_type === 'task_request_submitted') {
+      // Admin clicks a "new task request" notification → jump to the
+      // Hub where the Approvals column renders the pending queue.
+      if (window.location.pathname !== '/admin') {
+        window.location.href = '/admin'
+      }
+      return
+    }
+    if (n.task_request_id) {
+      // Admin viewing their own approved/rejected notification (rare,
+      // but possible if an admin submitted their own request). Use
+      // the member routing logic.
+      if (n.notification_type === 'task_request_approved' && n.task_request?.approved_task_id) {
+        window.dispatchEvent(
+          new CustomEvent('highlight-task', {
+            detail: { taskId: n.task_request.approved_task_id },
+          }),
+        )
+        return
+      }
+      return
+    }
+    // Task-assign notification — highlight the task from this batch.
     window.dispatchEvent(
       new CustomEvent('highlight-task', { detail: { batchId: n.batch_id } }),
     )

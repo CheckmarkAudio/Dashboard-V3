@@ -617,14 +617,43 @@ export function ForumNotificationsWidget() {
       void queryClient.invalidateQueries({ queryKey: cacheKey })
     })
 
+    // ─── Route by notification subject (PR #26) ────────────────────
+    // Three subject families, routed distinctly:
+    //   1. session_id set       — jump to /sessions, flash the row
+    //   2. task_request_id set  — branch on status:
+    //        - approved  → highlight the materialized task in My Tasks
+    //        - rejected  → expand the pending strip so the member sees
+    //                      the reviewer_note inline
+    //        - submitted → (admin-side, handled in adminHubWidgets)
+    //   3. batch_id set         — original task-assign flow (PR #11)
+
     if (n.session_id) {
-      // Session-assign notification — jump to the Sessions page and
-      // let it surface the row. The Sessions page can later listen
-      // for a highlight-session event if we want ring-flash parity.
       window.dispatchEvent(
         new CustomEvent('highlight-session', { detail: { sessionId: n.session_id } }),
       )
       window.location.href = '/sessions'
+      return
+    }
+
+    if (n.task_request_id) {
+      if (n.notification_type === 'task_request_approved' && n.task_request?.approved_task_id) {
+        // The request was approved → a real assigned_tasks row now
+        // exists. Highlight that specific task, not a batch.
+        window.dispatchEvent(
+          new CustomEvent('highlight-task', {
+            detail: { taskId: n.task_request.approved_task_id },
+          }),
+        )
+        return
+      }
+      if (n.notification_type === 'task_request_rejected') {
+        // Open the member's pending-requests strip so the rejection
+        // note is visible inline.
+        window.dispatchEvent(new CustomEvent('expand-task-requests'))
+        return
+      }
+      // submitted/unknown → no-op on the member side (admin handler
+      // covers the submitted case from their own notifications widget).
       return
     }
 
