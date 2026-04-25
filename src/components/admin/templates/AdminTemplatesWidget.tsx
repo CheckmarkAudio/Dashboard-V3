@@ -1,6 +1,23 @@
 import { useMemo, useState } from 'react'
+import type { ComponentType, SVGProps } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownAZ, ArrowUpDown, Calendar, FileText, FolderKanban, Loader2, Plus, Search, Tag } from 'lucide-react'
+import {
+  ArrowDownAZ,
+  ArrowUpDown,
+  Briefcase,
+  Calendar,
+  Code2,
+  FileText,
+  FolderKanban,
+  GraduationCap,
+  Headphones,
+  Loader2,
+  Megaphone,
+  Plus,
+  Search,
+  Settings,
+  Tag,
+} from 'lucide-react'
 import {
   fetchTaskTemplateLibrary,
   taskTemplateKeys,
@@ -8,6 +25,26 @@ import {
 import type { TaskTemplateLibraryEntry } from '../../../types/assignments'
 import TemplatePreviewModal from './TemplatePreviewModal'
 import TemplateEditorModal from './TemplateEditorModal'
+
+// Per-role icon mapping. Each canonical job category gets a distinct
+// glyph so a row of thumbnails reads as a varied set of categories
+// rather than a wall of identical file icons. Unknown / "no role" tags
+// fall through to the generic FileText icon.
+type LucideIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>
+
+const ROLE_ICONS: Record<string, LucideIcon> = {
+  engineer:  Headphones,
+  marketing: Megaphone,
+  intern:    GraduationCap,
+  dev:       Code2,
+  admin:     Briefcase,
+  ops:       Settings,
+}
+
+function iconForRole(roleTag: string | null): LucideIcon {
+  if (!roleTag) return FileText
+  return ROLE_ICONS[roleTag] ?? FileText
+}
 
 /**
  * AdminTemplatesWidget — the Templates library surfaced as a
@@ -261,7 +298,7 @@ export default function AdminTemplatesWidget() {
                   </span>
                   <div className="flex-1 h-px bg-border/60" aria-hidden="true" />
                 </div>
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-2 gap-2">
                   {g.items.map((t) => (
                     <Thumbnail
                       key={t.id}
@@ -274,7 +311,7 @@ export default function AdminTemplatesWidget() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-2 gap-2">
             {templates.map((t) => (
               <Thumbnail
                 key={t.id}
@@ -350,9 +387,13 @@ function Pill({
   )
 }
 
-// File-system-style thumbnail tile. Uniform 3-per-row grid inside the
-// widget. Whole tile is the click target → opens TemplatePreviewModal.
-// Archived templates render slightly muted but stay clickable.
+// Friendly thumbnail tile (PR #46-rev2). 2-per-row grid inside the
+// widget. Each tile reads as a category card: a circular icon bubble
+// keyed off the template's role-tag, the template name on two lines,
+// and a small task-count footer. Whole tile opens the
+// TemplatePreviewModal. Archived templates render slightly muted but
+// stay clickable. Onboarding templates get a tiny emerald dot on the
+// icon corner so they're identifiable without an extra row of pills.
 function Thumbnail({
   template,
   onClick,
@@ -360,32 +401,36 @@ function Thumbnail({
   template: TaskTemplateLibraryEntry
   onClick: () => void
 }) {
-  const { name, item_count, is_active, is_onboarding } = template
+  const { name, item_count, is_active, is_onboarding, role_tag } = template
   const muted = !is_active
+  const Icon = iconForRole(role_tag)
   return (
     <button
       type="button"
       onClick={onClick}
       title={name}
-      className={`group relative flex flex-col items-center gap-1 p-1.5 rounded-lg bg-surface/60 ring-1 ring-border/60 hover:bg-surface-hover hover:ring-gold/40 transition-colors focus-ring ${
+      className={`group relative flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-b from-surface/80 to-surface/50 ring-1 ring-border/70 hover:ring-gold/50 hover:from-surface hover:to-surface/70 transition-all focus-ring ${
         muted ? 'opacity-60 hover:opacity-100' : ''
       }`}
     >
-      <div className="relative inline-flex items-center justify-center w-8 h-8 rounded-md bg-gold/10 ring-1 ring-gold/20 group-hover:bg-gold/15">
-        <FileText size={14} className="text-gold" aria-hidden="true" />
+      <div className="relative inline-flex items-center justify-center w-12 h-12 rounded-full bg-gold/10 ring-1 ring-gold/25 group-hover:bg-gold/15">
+        <Icon size={20} className="text-gold" aria-hidden="true" />
         {is_onboarding && (
           <span
             aria-hidden="true"
             title="Onboarding"
-            className="absolute -top-1 -right-1 inline-block w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-emerald-500/40"
-          />
+            className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-400 ring-2 ring-[rgb(19,22,28)]"
+          >
+            <GraduationCap size={8} className="text-emerald-950" aria-hidden="true" />
+          </span>
         )}
       </div>
-      <span className="text-[10px] font-semibold text-text leading-tight text-center line-clamp-2 w-full">
+      <span className="text-[12px] font-semibold text-text leading-tight text-center line-clamp-2 w-full">
         {name}
       </span>
-      <span className="tabular-nums text-[9px] text-text-light/80">
-        {item_count}
+      <span className="inline-flex items-center gap-1 tabular-nums text-[10px] font-bold text-text-light/80">
+        <FileText size={9} aria-hidden="true" />
+        {item_count} {item_count === 1 ? 'task' : 'tasks'}
       </span>
     </button>
   )

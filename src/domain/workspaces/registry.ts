@@ -154,7 +154,7 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 // Templates thumbnails + arrange-by in PR #46):
 //   col 1: admin_task_requests · admin_approval_log · admin_edit_tasks
 //   col 2: admin_assign · admin_assign_log
-//   col 3: admin_templates (rs3, full column — file-system thumbnails)
+//   col 3: admin_templates (rs2 — friendly thumbnails with per-role icons)
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
     id: 'admin_quick_assign',
@@ -269,17 +269,16 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // PR #46: rowSpan 2 → 3 so Templates fills the full col-3 height.
-    // The widget now renders file-system-style thumbnails in a 3-per-
-    // row grid with the search / filters / Arrange-by row pinned at
-    // the top — search controls stay visible while the thumbnail grid
-    // scrolls. The standalone admin_template_preview widget folded
-    // back into this one (per user feedback after the first PR #46
-    // pass), so no second widget needs to share col 3.
+    // PR #46: thumbnail grid replaces big-card preview; search /
+    // filters / Arrange-by row stays pinned at top while the grid
+    // scrolls. Standalone admin_template_preview widget folded into
+    // this one. PR #46-rev2: rowSpan returned to 2 so col 3 isn't
+    // disproportionately tall vs cols 1-2; thumbnails sized up so
+    // each tile reads as friendly content, not a tiny file icon.
     id: 'admin_templates',
     title: 'Templates',
     description: 'Reusable blueprints for onboarding + repeat work.',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 3, col: 3 }],
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 2, col: 3 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -444,7 +443,11 @@ function buildDefaultWidgetStateForScope(
 // widget removed; Templates rowSpan 2 → 3 so it fills col 3. Saved
 // v22 layouts that referenced `admin_template_preview` get sanitized
 // away by the version bump.
-export const WORKSPACE_LAYOUT_VERSION = 23
+// v24 (2026-04-25, PR #46-rev2): Templates rowSpan 3 → 2 so col 3
+// isn't disproportionately taller than cols 1-2; thumbnails sized up
+// (2-per-row grid, larger icon bubble, per-role icon) so tiles read
+// as friendly content tiles instead of tiny file icons.
+export const WORKSPACE_LAYOUT_VERSION = 24
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
