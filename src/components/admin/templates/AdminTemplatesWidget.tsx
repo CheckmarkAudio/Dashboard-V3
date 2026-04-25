@@ -1,23 +1,15 @@
 import { useMemo, useState } from 'react'
-import type { ComponentType, SVGProps } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowDownAZ,
   ArrowUpDown,
-  Briefcase,
   Calendar,
-  Camera,
-  Code2,
   FileText,
   FolderKanban,
   GraduationCap,
-  Headphones,
   Loader2,
-  Megaphone,
   Plus,
   Search,
-  Settings,
-  Sprout,
   Tag,
 } from 'lucide-react'
 import {
@@ -27,31 +19,7 @@ import {
 import type { TaskTemplateLibraryEntry } from '../../../types/assignments'
 import TemplatePreviewModal from './TemplatePreviewModal'
 import TemplateEditorModal from './TemplateEditorModal'
-
-// Per-role icon mapping. Each canonical job category gets a distinct
-// glyph so a row of thumbnails reads as a varied set of categories
-// rather than a wall of identical file icons. Unknown / "no role" tags
-// fall through to the generic FileText icon.
-type LucideIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>
-
-// NOTE: GraduationCap is reserved for the future "education" category
-// (the studio's education program — a separate branch of the app per
-// SESSION_CONTEXT). Interns get Sprout (growth / learner) so the two
-// don't compete for the same glyph when education templates ship.
-const ROLE_ICONS: Record<string, LucideIcon> = {
-  engineer:  Headphones,
-  marketing: Megaphone,
-  media:     Camera,
-  intern:    Sprout,
-  dev:       Code2,
-  admin:     Briefcase,
-  ops:       Settings,
-}
-
-function iconForRole(roleTag: string | null): LucideIcon {
-  if (!roleTag) return FileText
-  return ROLE_ICONS[roleTag] ?? FileText
-}
+import { CANONICAL_ROLE_TAGS, iconForRole } from './roleTags'
 
 /**
  * AdminTemplatesWidget — the Templates library surfaced as a
@@ -68,18 +36,6 @@ function iconForRole(roleTag: string | null): LucideIcon {
  * sit at top; grid scrolls inside the widget body (the outer widget
  * frame already handles overflow).
  */
-
-// Canonical business-section pills — same list as the old page-level
-// Templates column (PR #21). Edit here to rename / reorder.
-const CANONICAL_ROLE_TAGS = [
-  { value: 'engineer',  label: 'Engineer'  },
-  { value: 'marketing', label: 'Marketing' },
-  { value: 'media',     label: 'Media'     },
-  { value: 'intern',    label: 'Intern'    },
-  { value: 'dev',       label: 'Dev'       },
-  { value: 'admin',     label: 'Admin'     },
-  { value: 'ops',       label: 'Ops'       },
-] as const
 
 // Arrange-by sort options (PR #46). 'role' groups with section
 // dividers; the others render a flat list. Default: alphabetical.
