@@ -102,7 +102,7 @@ export default function AdminEditSessionsModal({ onClose }: { onClose: () => voi
             onChange={(e) => setEngineerFilter(e.target.value)}
             className="px-2 py-1.5 rounded-lg bg-surface-alt border border-border text-[12px] text-text focus:outline-none focus:border-gold/50"
           >
-            <option value="all">All engineers</option>
+            <option value="all">All assignees</option>
             {engineerOptions.map((o) => (
               <option key={o.id} value={o.id}>{o.name}</option>
             ))}
