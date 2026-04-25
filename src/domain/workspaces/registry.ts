@@ -152,9 +152,9 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 //
 // Assign stacks (PR #41 reorg per sketch, logs in PRs #44 + #45,
 // Templates thumbnails + arrange-by in PR #46, Assign compacted to
-// match Edit in PR #47):
-//   col 1: admin_task_requests · admin_approval_log · admin_edit_tasks
-//   col 2: admin_assign (rs0.5) · admin_assign_log
+// match Edit + reorder per user drag layout in PR #47):
+//   col 1: admin_assign_log · admin_approval_log
+//   col 2: admin_assign (rs0.5) · admin_edit_tasks (rs0.5) · admin_task_requests
 //   col 3: admin_templates (rs2 — friendly thumbnails with per-role icons)
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
@@ -203,28 +203,24 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
-    id: 'admin_task_requests',
-    title: 'Task Requests',
-    description: 'Members asking for tasks to be added to their queue.',
-    // Hub col 1 (stacks under Quick Assign). Assign col 1 anchor —
-    // Task Requests is at the TOP of col 1 per the user sketch. The
-    // Edit widget below registers AFTER this so within-column order
-    // resolves to: Task Requests (order 0) → Edit (order 1).
-    defaultPlacements: [
-      { scope: 'admin_overview', span: 1, rowSpan: 1, col: 1 },
-      { scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 },
-    ],
+    // PR #44 — Assign Log. PR #47-rev2: moved from col 2 → col 1
+    // (top) per the user's drag layout — col 1 reads Assign Log on
+    // top of Approval Log; col 2 leads with the action widgets
+    // (Assign / Edit / Task Requests). Registered AHEAD of
+    // admin_approval_log so col 1 resolves Assign Log first.
+    id: 'admin_assign_log',
+    title: 'Assign Log',
+    description: '',
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // PR #45 — Approval Log. Sits in col 1 between Task Requests
-    // (top) and Edit (bottom) per the user sketch. Lists recent
-    // resolved task_requests (approved + declined). rowSpan 1.
-    // Registered AFTER admin_task_requests but BEFORE
-    // admin_edit_tasks so the col-1 order resolves to:
-    // Task Requests → Approval Log → Edit.
+    // PR #45 — Approval Log. PR #47-rev2: now sits at the BOTTOM of
+    // col 1 under Assign Log (per user drag layout). Registered
+    // AFTER admin_assign_log so col 1 resolves Assign Log → Approval
+    // Log.
     id: 'admin_approval_log',
     title: 'Approval Log',
     description: '',
@@ -235,32 +231,34 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   },
   {
     // PR #40: single-button Edit Tasks widget.
-    // PR #41: moved to col 1 under Task Requests.
-    // PR #43: twin-button Edit widget (Edit Task + Edit Booking)
-    // per the user sketch. Compact rowSpan 0.5 (~170px). Widget id
-    // kept stable so saved layouts keep resolving even though the
-    // display title is now just "Edit".
-    // PR #43-fix: registered AFTER admin_task_requests so col 1
-    // resolves Task Requests on top, Edit beneath.
-    // PR #45: now sits BELOW Approval Log in col 1.
+    // PR #43: twin-button Edit widget (Edit Task + Edit Booking).
+    // Widget id kept stable so saved layouts keep resolving even
+    // though the display title is now just "Edit".
+    // PR #47-rev2: moved from col 1 → col 2 (middle). Per user drag
+    // layout col 2 stacks Assign (rs0.5) → Edit (rs0.5) → Task
+    // Requests (rs1). Registered AFTER admin_assign and BEFORE
+    // admin_task_requests so col 2 resolves Assign → Edit → Task
+    // Requests.
     id: 'admin_edit_tasks',
     title: 'Edit',
     description: '',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 0.5, col: 1 }],
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 0.5, col: 2 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // PR #44 — Assign Log. Sits in col 2 of the Assign page under
-    // admin_assign. Lists recent task + session assignments
-    // interleaved by recency (server-side via
-    // admin_recent_assignments). rowSpan 1 keeps the widget at
-    // the standard 340px so the scroll has breathing room.
-    id: 'admin_assign_log',
-    title: 'Assign Log',
-    description: '',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 2 }],
+    id: 'admin_task_requests',
+    title: 'Task Requests',
+    description: 'Members asking for tasks to be added to their queue.',
+    // Hub overview col 1 (stacks under Quick Assign — unchanged).
+    // PR #47-rev2: Assign-page placement moves col 1 → col 2 per
+    // user drag layout. Registered AFTER admin_edit_tasks so col 2
+    // of admin_assign resolves Assign → Edit → Task Requests.
+    defaultPlacements: [
+      { scope: 'admin_overview', span: 1, rowSpan: 1, col: 1 },
+      { scope: 'admin_assign', span: 1, rowSpan: 1, col: 2 },
+    ],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -455,9 +453,13 @@ function buildDefaultWidgetStateForScope(
 // as friendly content tiles instead of tiny file icons.
 // v25 (2026-04-25, PR #47): Assign rowSpan 1 → 0.5 so it matches
 // the Edit widget's compact height — the two read as a visually
-// consistent twin-button pair, and Task Requests / Approval Log
-// in col 1 slide up tighter against the top.
-export const WORKSPACE_LAYOUT_VERSION = 25
+// consistent twin-button pair.
+// v26 (2026-04-25, PR #47-rev2): default Assign-page widget order
+// updated to match the user's drag layout. Col 1 stacks Assign Log
+// → Approval Log; col 2 stacks Assign → Edit → Task Requests; col 3
+// keeps Templates. Saved v25 layouts get reset so the new defaults
+// apply on next load.
+export const WORKSPACE_LAYOUT_VERSION = 26
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
