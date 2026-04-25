@@ -150,14 +150,14 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 //   col 2: admin_flywheel (rs2)
 //   col 3: admin_notifications · admin_team
 //
-// Assign stacks (PR #41 reorg per sketch):
-//   col 1: admin_task_requests · admin_edit_tasks
-//   col 2: admin_assign (2 tiles only)
+// Assign stacks (PR #41 reorg per sketch, with logs landing in
+// PRs #44 + #45):
+//   col 1: admin_task_requests · admin_approval_log · admin_edit_tasks
+//   col 2: admin_assign · admin_assign_log
 //   col 3: admin_templates (rs2)
 //
-// Approval Log + Assign Log + Preview widgets are queued for
-// follow-up PRs and slot beside the existing widgets in cols 1/2/3
-// when they ship.
+// Preview widget queued for PR #46 to slot under admin_templates
+// in col 3.
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
     id: 'admin_quick_assign',
@@ -216,6 +216,21 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
+    // PR #45 — Approval Log. Sits in col 1 between Task Requests
+    // (top) and Edit (bottom) per the user sketch. Lists recent
+    // resolved task_requests (approved + declined). rowSpan 1.
+    // Registered AFTER admin_task_requests but BEFORE
+    // admin_edit_tasks so the col-1 order resolves to:
+    // Task Requests → Approval Log → Edit.
+    id: 'admin_approval_log',
+    title: 'Approval Log',
+    description: '',
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
     // PR #40: single-button Edit Tasks widget.
     // PR #41: moved to col 1 under Task Requests.
     // PR #43: twin-button Edit widget (Edit Task + Edit Booking)
@@ -224,6 +239,7 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     // display title is now just "Edit".
     // PR #43-fix: registered AFTER admin_task_requests so col 1
     // resolves Task Requests on top, Edit beneath.
+    // PR #45: now sits BELOW Approval Log in col 1.
     id: 'admin_edit_tasks',
     title: 'Edit',
     description: '',
@@ -417,7 +433,9 @@ function buildDefaultWidgetStateForScope(
 // inverted; the bump forces a fresh default.
 // v21 (2026-04-25, PR #44): new `admin_assign_log` widget on the
 // Assign page col 2 under admin_assign.
-export const WORKSPACE_LAYOUT_VERSION = 21
+// v22 (2026-04-25, PR #45): new `admin_approval_log` widget on the
+// Assign page col 1, between Task Requests (top) and Edit (bottom).
+export const WORKSPACE_LAYOUT_VERSION = 22
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

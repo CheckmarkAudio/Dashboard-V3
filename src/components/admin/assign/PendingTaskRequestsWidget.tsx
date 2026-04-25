@@ -102,6 +102,9 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
     void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
     void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
     void queryClient.invalidateQueries({ queryKey: ['overview-assignment-notifications'] })
+    // PR #45 — Approval Log feed reads under this prefix; refresh
+    // it so the just-resolved request appears in the log.
+    void queryClient.invalidateQueries({ queryKey: ['admin-log'] })
   }
 
   const approveMutation = useMutation({
