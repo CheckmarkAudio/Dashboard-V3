@@ -95,26 +95,22 @@ export function AdminAssignWidget() {
   }
 
   return (
-    <div className="flex flex-col">
-      {/* Three primary CTAs — always visible, no internal scroll.
-          Each tile opens a focused modal (Session → booking create,
-          Task → unified AdminTaskCreateModal, Group → apply a
-          template). The old "Recently assigned" inline feed that
-          shared this widget's scroll region was removed in PR #21
-          per user feedback: the tiles must be always visible, and
-          the page-level RecentAssignmentsSection below the board
-          already covers assignment history. */}
-      <div className="grid grid-cols-2 gap-2.5">
+    <div className="flex flex-col h-full justify-center">
+      {/* Two primary CTAs — always visible, no internal scroll.
+          PR #47: compacted to a twin-button row matching the Edit
+          widget's pattern so the two widgets read as a visually
+          consistent pair in col 2 (Assign on top of Edit) at the
+          same rowSpan 0.5 height. Hint text dropped — Members /
+          Studio toggle is discoverable once the modal opens. */}
+      <div className="grid grid-cols-2 gap-2">
         <AssignTile
           icon={CheckSquare}
           label="+Task"
-          hint="One-off task or studio task — toggle inside"
           onClick={() => setFlow('task')}
         />
         <AssignTile
           icon={CalendarPlus}
           label="+Booking"
-          hint="Book a studio session"
           onClick={() => setFlow('session')}
         />
       </div>
@@ -128,41 +124,27 @@ export function AdminAssignWidget() {
   )
 }
 
-// Inline tip row — mirrors the kind-icon styling of the tile row so
-// empty-state hints feel like "here's what each tile does" rather
-// than generic tutorial copy.
-// AssignTile — unified gold treatment. The icon does the work of
-// telling the three CTAs apart; color stays consistent with the
-// brand rather than pulling in flywheel stage hues.
+// AssignTile — PR #47: compact twin-button form matching the Edit
+// widget's `EditButton` so Assign + Edit stack as a visually
+// consistent pair in col 2 of the Assign page. Icon + label inline,
+// no hint text. Same gradient + ring treatment as EditButton.
 function AssignTile({
   icon: Icon,
   label,
-  hint,
-  count,
   onClick,
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>
   label: string
-  hint: string
-  count?: number
   onClick: () => void
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group relative text-left p-3.5 rounded-xl ring-1 ring-gold/30 bg-gradient-to-b from-gold/12 to-gold/5 hover:from-gold/18 hover:to-gold/10 transition-colors focus-ring"
+      className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-bold bg-gradient-to-b from-gold/15 to-gold/5 text-gold ring-1 ring-gold/30 hover:from-gold/20 hover:to-gold/10 transition-colors focus-ring"
     >
-      <div className="flex items-start justify-between">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg text-gold bg-surface/70 ring-1 ring-gold/15">
-          <Icon size={22} />
-        </div>
-        {count !== undefined && count > 0 && (
-          <span className="text-[11px] font-bold text-gold tabular-nums">{count}</span>
-        )}
-      </div>
-      <p className="mt-2 text-[15px] font-bold text-gold leading-tight">{label}</p>
-      <p className="text-[11px] text-text-light leading-snug mt-0.5">{hint}</p>
+      <Icon size={14} />
+      {label}
     </button>
   )
 }

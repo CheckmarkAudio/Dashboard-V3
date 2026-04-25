@@ -151,9 +151,10 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 //   col 3: admin_notifications · admin_team
 //
 // Assign stacks (PR #41 reorg per sketch, logs in PRs #44 + #45,
-// Templates thumbnails + arrange-by in PR #46):
+// Templates thumbnails + arrange-by in PR #46, Assign compacted to
+// match Edit in PR #47):
 //   col 1: admin_task_requests · admin_approval_log · admin_edit_tasks
-//   col 2: admin_assign · admin_assign_log
+//   col 2: admin_assign (rs0.5) · admin_assign_log
 //   col 3: admin_templates (rs2 — friendly thumbnails with per-role icons)
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
@@ -188,10 +189,15 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     // shrunk from 4 to 2 (Task + Session). Studio Task is reachable
     // via the Task modal's scope toggle; Task Group is folded into
     // PR #42's Add-from-template flow.
+    // PR #47: rowSpan 1 → 0.5 so Assign matches Edit (col 1 rs 0.5)
+    // — the two read as a visually consistent twin-button pair, and
+    // Task Requests / Approval Log can slide up tighter in col 1.
+    // Tile body compacted to a twin-button row (icon + label, no
+    // hint text) so it fits the smaller height.
     id: 'admin_assign',
     title: 'Assign',
     description: 'Send out sessions, tasks, or task groups.',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 2 }],
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 0.5, col: 2 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -447,7 +453,11 @@ function buildDefaultWidgetStateForScope(
 // isn't disproportionately taller than cols 1-2; thumbnails sized up
 // (2-per-row grid, larger icon bubble, per-role icon) so tiles read
 // as friendly content tiles instead of tiny file icons.
-export const WORKSPACE_LAYOUT_VERSION = 24
+// v25 (2026-04-25, PR #47): Assign rowSpan 1 → 0.5 so it matches
+// the Edit widget's compact height — the two read as a visually
+// consistent twin-button pair, and Task Requests / Approval Log
+// in col 1 slide up tighter against the top.
+export const WORKSPACE_LAYOUT_VERSION = 25
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
