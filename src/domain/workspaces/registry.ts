@@ -150,11 +150,11 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 //   col 2: admin_flywheel (rs2)
 //   col 3: admin_notifications · admin_team
 //
-// Assign stacks (PR #41 reorg per sketch, with logs landing in
-// PRs #44 + #45 and the Preview widget in PR #46):
+// Assign stacks (PR #41 reorg per sketch, logs in PRs #44 + #45,
+// Templates thumbnails + arrange-by in PR #46):
 //   col 1: admin_task_requests · admin_approval_log · admin_edit_tasks
 //   col 2: admin_assign · admin_assign_log
-//   col 3: admin_templates (rs2) · admin_template_preview
+//   col 3: admin_templates (rs3, full column — file-system thumbnails)
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
     id: 'admin_quick_assign',
@@ -269,24 +269,17 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
+    // PR #46: rowSpan 2 → 3 so Templates fills the full col-3 height.
+    // The widget now renders file-system-style thumbnails in a 3-per-
+    // row grid with the search / filters / Arrange-by row pinned at
+    // the top — search controls stay visible while the thumbnail grid
+    // scrolls. The standalone admin_template_preview widget folded
+    // back into this one (per user feedback after the first PR #46
+    // pass), so no second widget needs to share col 3.
     id: 'admin_templates',
     title: 'Templates',
     description: 'Reusable blueprints for onboarding + repeat work.',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 2, col: 3 }],
-    accessVisibility: 'admin',
-    dataScope: 'team',
-    allowedRoles: ['admin', 'owner'],
-  },
-  {
-    // PR #46 — Templates Preview. Slots in col 3 directly below the
-    // Templates library widget. File-system-style thumbnails grouped
-    // under role-tag dividers; clicking opens the same preview modal
-    // the Templates list uses. Registered AFTER admin_templates so
-    // col 3 resolves Templates on top, Preview beneath.
-    id: 'admin_template_preview',
-    title: 'Preview',
-    description: '',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 3 }],
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 3, col: 3 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -446,9 +439,11 @@ function buildDefaultWidgetStateForScope(
 // Assign page col 2 under admin_assign.
 // v22 (2026-04-25, PR #45): new `admin_approval_log` widget on the
 // Assign page col 1, between Task Requests (top) and Edit (bottom).
-// v23 (2026-04-25, PR #46): new `admin_template_preview` widget on
-// the Assign page col 3, directly under `admin_templates`. Closes
-// out the user-sketched Assign-page redesign.
+// v23 (2026-04-25, PR #46-rev1): file-system-style thumbnail grid
+// folded into `admin_templates`; standalone `admin_template_preview`
+// widget removed; Templates rowSpan 2 → 3 so it fills col 3. Saved
+// v22 layouts that referenced `admin_template_preview` get sanitized
+// away by the version bump.
 export const WORKSPACE_LAYOUT_VERSION = 23
 
 // Default layouts per scope. Each scope picks its widgets from the

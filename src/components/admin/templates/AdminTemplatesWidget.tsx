@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownAZ, ArrowUpDown, Calendar, FolderKanban, Loader2, Plus, Search, Tag } from 'lucide-react'
+import { ArrowDownAZ, ArrowUpDown, Calendar, FileText, FolderKanban, Loader2, Plus, Search, Tag } from 'lucide-react'
 import {
   fetchTaskTemplateLibrary,
   taskTemplateKeys,
 } from '../../../lib/queries/taskTemplates'
-import TemplateCard from './TemplateCard'
+import type { TaskTemplateLibraryEntry } from '../../../types/assignments'
 import TemplatePreviewModal from './TemplatePreviewModal'
 import TemplateEditorModal from './TemplateEditorModal'
 
@@ -261,9 +261,9 @@ export default function AdminTemplatesWidget() {
                   </span>
                   <div className="flex-1 h-px bg-border/60" aria-hidden="true" />
                 </div>
-                <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-1.5">
                   {g.items.map((t) => (
-                    <TemplateCard
+                    <Thumbnail
                       key={t.id}
                       template={t}
                       onClick={() => setPreviewId(t.id)}
@@ -274,9 +274,9 @@ export default function AdminTemplatesWidget() {
             ))}
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {templates.map((t) => (
-              <TemplateCard
+              <Thumbnail
                 key={t.id}
                 template={t}
                 onClick={() => setPreviewId(t.id)}
@@ -345,6 +345,47 @@ function Pill({
         }`}
       >
         {count}
+      </span>
+    </button>
+  )
+}
+
+// File-system-style thumbnail tile. Uniform 3-per-row grid inside the
+// widget. Whole tile is the click target → opens TemplatePreviewModal.
+// Archived templates render slightly muted but stay clickable.
+function Thumbnail({
+  template,
+  onClick,
+}: {
+  template: TaskTemplateLibraryEntry
+  onClick: () => void
+}) {
+  const { name, item_count, is_active, is_onboarding } = template
+  const muted = !is_active
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={name}
+      className={`group relative flex flex-col items-center gap-1 p-1.5 rounded-lg bg-surface/60 ring-1 ring-border/60 hover:bg-surface-hover hover:ring-gold/40 transition-colors focus-ring ${
+        muted ? 'opacity-60 hover:opacity-100' : ''
+      }`}
+    >
+      <div className="relative inline-flex items-center justify-center w-8 h-8 rounded-md bg-gold/10 ring-1 ring-gold/20 group-hover:bg-gold/15">
+        <FileText size={14} className="text-gold" aria-hidden="true" />
+        {is_onboarding && (
+          <span
+            aria-hidden="true"
+            title="Onboarding"
+            className="absolute -top-1 -right-1 inline-block w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-emerald-500/40"
+          />
+        )}
+      </div>
+      <span className="text-[10px] font-semibold text-text leading-tight text-center line-clamp-2 w-full">
+        {name}
+      </span>
+      <span className="tabular-nums text-[9px] text-text-light/80">
+        {item_count}
       </span>
     </button>
   )

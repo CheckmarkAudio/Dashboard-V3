@@ -442,14 +442,17 @@ hidden; widgets are visible-by-default and non-removable for now.
       (Edit Task + Edit Booking, rs 0.5).
     - Col 2: Assign (2 tiles: +Task / +Booking with row-by-row
       modal + Add-from-template) · Assign Log.
-    - Col 3: Templates (rs 2) · Preview (file-system thumbnails
-      grouped by role-tag).
+    - Col 3: Templates (rs 3, full column — file-system thumbnails).
   PR #46 ships: existing Templates "Include archived" toggle renamed
   to "Show archived"; new Arrange-by selector (A–Z / Newest / Role)
-  with Role grouping under section dividers; brand-new
-  `admin_template_preview` widget with a 3-col thumbnail grid
-  grouped under role-tag dividers — each tile clickable into the
-  same `TemplatePreviewModal` the Templates list uses.
+  with Role grouping under section dividers; the big-card grid is
+  replaced with a 3-per-row file-system-style thumbnail grid (small
+  uniform tiles → file icon + name + item count, opens the shared
+  `TemplatePreviewModal`). Search / filters / Arrange row stays
+  pinned while the grid scrolls beneath. (First pass also added a
+  separate `admin_template_preview` widget below Templates; user
+  asked for the thumbnails inside Templates instead, so that widget
+  was removed and Templates' rowSpan went 2 → 3.)
 
 ### Deferred
 
@@ -574,11 +577,13 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
-- **PR #46 — Templates enhancements + Preview widget — 2026-04-25 evening (in flight).** Closes out the user-sketched Assign-page redesign (the last of the seven sketch decisions). Two slices:
-  - **`AdminTemplatesWidget` enhancements**: the existing "Include archived" toggle is renamed to **"Show archived"** to match the sketch. New **Arrange-by selector** (A–Z / Newest / Role) sits to the right of the toggles in a small segmented pill — gold-on-dark for the active option. Role arrangement groups templates under role-tag section dividers (Engineer / Marketing / Intern / Dev / Admin / Ops, then any extra tags alphabetically, then a "No role" bucket last). The flat A–Z and Newest arrangements render the previous single-column card list as before.
-  - **New `admin_template_preview` widget**: registered into `AdminWidgetId` + `ADMIN_WIDGET_REGISTRATIONS` + `adminWidgetComponents` map. Slots into Assign col 3 directly under `admin_templates` (rowSpan 1). 3-column thumbnail grid grouped under the same role-tag dividers as the Templates Role arrangement. Each thumbnail is a small file-icon tile + name (line-clamp 2) + item count, clickable into the same `TemplatePreviewModal` the Templates list uses. Reads from the same `get_task_template_library` RPC so react-query reuses the cached payload — no extra round-trip. Archived templates are hidden by default (Templates widget owns the "Show archived" toggle for the page; Preview always renders the active set so it reads like a clean menu).
-  - `WORKSPACE_LAYOUT_VERSION` 22 → 23 so saved Assign layouts pick up the new col-3 widget on first load.
-  - Verified: `tsc --noEmit` clean, `npm run build` 2.99s, dev preview confirms all 7 Assign-page widgets mount in the correct order (Task Requests · Approval Log · Edit · Assign · Assign Log · Templates · Preview).
+- **PR #46 — Templates Arrange-by + file-system thumbnails — 2026-04-25 evening (in flight).** Closes out the user-sketched Assign-page redesign (the last of the seven sketch decisions). Shipped in one consolidated widget:
+  - **`AdminTemplatesWidget` enhancements**: the existing "Include archived" toggle is renamed to **"Show archived"** to match the sketch. New **Arrange-by selector** (A–Z / Newest / Role) sits to the right of the toggles in a small segmented pill — gold-on-dark for the active option. Role arrangement groups templates under role-tag section dividers (Engineer / Marketing / Intern / Dev / Admin / Ops, then any extra tags alphabetically, then a "No role" bucket last).
+  - **File-system thumbnail grid**: replaced the previous big-card preview with a 3-per-row thumbnail grid. Each tile is a small file-icon + name (line-clamp 2) + item count; archived items render at 60% opacity; onboarding templates get a tiny emerald dot on the icon corner. Whole tile is the click target → opens the shared `TemplatePreviewModal`.
+  - **Pinned controls + scrolling grid**: search / filter pills / toggles / Arrange-by all sit in `shrink-0` rows at the top; the thumbnail grid lives in a `flex-1 overflow-y-auto` body so the controls stay visible while the grid scrolls. Templates rowSpan 2 → 3 so it fills col 3 (after the standalone Preview widget was removed — see below).
+  - **First pass had a separate `admin_template_preview` widget** below Templates. User feedback was to fold those small thumbnails INTO the Templates widget instead so search/filters/arrange stay attached. We deleted `AdminTemplatePreviewWidget.tsx`, the `admin_template_preview` id, and the now-unused `TemplateCard.tsx`; bumped Templates rs2 → 3.
+  - `WORKSPACE_LAYOUT_VERSION` 22 → 23 so saved Assign layouts pick up the new col-3 layout (and any v22 layouts that referenced `admin_template_preview` get sanitized away).
+  - Verified: `tsc --noEmit` clean, `npm run build` 2.67s, dev preview confirms 6 Assign-page widgets mount in the correct order (Task Requests · Approval Log · Edit · Assign · Assign Log · Templates).
 - **Assign-page redesign per user sketch — PRs #41–#45, 2026-04-25.** User hand-drew the Assign page they wanted (col 1: Task Requests + Approval Log + Edit · col 2: Assign + Assign Log · col 3: Templates + Preview). Locked answers to 7 design questions then ran the rebuild as 5 small PRs. Five of six landed; **PR #46 (Templates enhancements + Preview widget) is queued and is the only remaining piece**.
   - **PR #41 `3fcb2ab`** — Column reorg + Assign widget shrunk from 4 tiles → 2 (+Task / +Booking). Studio Task reachable via Task modal scope toggle; Task Group folded into PR #42's Add-from-template. `AssignGroupModal` deleted. `WORKSPACE_LAYOUT_VERSION` 17 → 18.
   - **PR #42 `6541f32`** — Row-by-row +Task modal. Members/Studio toggle at top. "+ Add task" / "+ Add from template" sub-flow that pulls template items into editable rows. New `assign_custom_tasks_to_members` (plural) RPC: ONE batch + N×M tasks + ONE notification per recipient ("3 new tasks"). Hub Quick Assign keeps the simpler single-task `AdminTaskCreateModal`.
