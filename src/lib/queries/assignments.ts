@@ -417,3 +417,36 @@ export async function assignCustomTaskToMembers(
   }
   return data as AssignmentBatchSummary
 }
+
+/**
+ * PR #42 — multi-task variant. The new row-by-row +Task modal
+ * submits a list of task drafts (custom rows + items pulled from a
+ * template) as ONE batch via this RPC. Each recipient gets a single
+ * "N new tasks" notification instead of N separate ones.
+ */
+export interface CustomTaskDraft {
+  title: string
+  description?: string | null
+  category?: string | null
+  due_date?: string | null
+  is_required?: boolean
+  show_on_overview?: boolean
+}
+
+export async function assignCustomTasksToMembers(
+  memberIds: string[],
+  tasks: CustomTaskDraft[],
+  opts: { scope?: 'member' | 'studio'; batchTitle?: string | null } = {},
+): Promise<AssignmentBatchSummary & { batch_title: string }> {
+  const { data, error } = await supabase.rpc('assign_custom_tasks_to_members', {
+    p_member_ids: memberIds,
+    p_tasks: tasks,
+    p_batch_title: opts.batchTitle ?? null,
+    p_scope: opts.scope ?? 'member',
+  })
+  if (error) {
+    console.error('[queries/assignments] assignCustomTasksToMembers failed:', error)
+    throw new Error(error.message)
+  }
+  return data as AssignmentBatchSummary & { batch_title: string }
+}
