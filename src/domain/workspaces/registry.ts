@@ -25,10 +25,10 @@ import type {
 // HEIGHT within its column (rs=2 renders 2× tall). Within-column order
 // falls out of registration order here; users reorder via drag.
 //
-// Overview stacks:
-//   col 1: team_tasks (rs1)
-//   col 2: booking_snapshot (rs0.5 — compact Book-a-Session button) · today_calendar (rs2)
-//   col 3: forum_notifications (rs2)
+// Overview stacks (PR #47-rev3 layout, rev4 sized col 3 to flush):
+//   col 1: team_tasks (rs2)
+//   col 2: today_calendar (rs2)
+//   col 3: booking_snapshot (rs0.5 — compact Book-a-Session button) · forum_notifications (rs1.5)
 //
 // Tasks stacks (all rs2 so each column shows a long queue at a glance):
 //   col 1: team_tasks   |   col 2: studio_tasks   |   col 3: team_board
@@ -38,9 +38,12 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     title: 'My Tasks',
     // PR #37 — description intentionally blank; the title alone is
     // self-explanatory and the subtitle strip cluttered the widget.
+    // PR #47-rev3: Overview rowSpan 1 → 2 so My Tasks matches the
+    // Calendar widget height, giving col 1 the same vertical weight
+    // as col 2 on the Overview grid.
     description: '',
     defaultPlacements: [
-      { scope: 'member_overview', span: 1, rowSpan: 1, col: 1 },
+      { scope: 'member_overview', span: 1, rowSpan: 2, col: 1 },
       { scope: 'member_tasks', span: 1, rowSpan: 2, col: 1 },
     ],
     accessVisibility: 'personal',
@@ -48,12 +51,15 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
-    // Compact Book-a-Session action — registered BEFORE today_calendar
-    // so it stacks on top in col 2's default order. rowSpan 0.5 ≈ 170px.
+    // Compact Book-a-Session action. rowSpan 0.5 ≈ 170px.
+    // PR #47-rev3: moved col 2 → col 3 (top) per user drag layout.
+    // Calendar (rs2) now fills col 2 alone; Booking sits on top of
+    // Notifications in col 3. Still registered BEFORE
+    // forum_notifications so col 3 resolves Booking → Notifications.
     id: 'booking_snapshot',
     title: 'Booking',
     description: 'Quick-book a studio session.',
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 0.5, col: 2 }],
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 0.5, col: 3 }],
     accessVisibility: 'personal',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -68,10 +74,16 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
+    // PR #47-rev3: rowSpan 2 → 1 so col 3 reads as a balanced stack.
+    // PR #47-rev4: rowSpan 1 → 1.5 to fill the remaining vertical
+    // space — Booking rs0.5 (170px) + gap (16) + Notifications rs1.5
+    // (518px) = 704px, near-flush with cols 1-2 at rs2 (696px).
+    // Within-column order: registered AFTER booking_snapshot so col 3
+    // resolves Booking on top.
     id: 'forum_notifications',
     title: 'Notifications',
     description: 'Unread messages across channels and new assignments.',
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 2, col: 3 }],
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 1.5, col: 3 }],
     accessVisibility: 'shared',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -151,9 +163,10 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 //   col 3: admin_notifications · admin_team
 //
 // Assign stacks (PR #41 reorg per sketch, logs in PRs #44 + #45,
-// Templates thumbnails + arrange-by in PR #46):
-//   col 1: admin_task_requests · admin_approval_log · admin_edit_tasks
-//   col 2: admin_assign · admin_assign_log
+// Templates thumbnails + arrange-by in PR #46, Assign compacted to
+// match Edit + reorder per user drag layout in PR #47):
+//   col 1: admin_assign_log · admin_approval_log
+//   col 2: admin_assign (rs0.5) · admin_edit_tasks (rs0.5) · admin_task_requests
 //   col 3: admin_templates (rs2 — friendly thumbnails with per-role icons)
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
@@ -188,37 +201,38 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     // shrunk from 4 to 2 (Task + Session). Studio Task is reachable
     // via the Task modal's scope toggle; Task Group is folded into
     // PR #42's Add-from-template flow.
+    // PR #47: rowSpan 1 → 0.5 so Assign matches Edit (col 1 rs 0.5)
+    // — the two read as a visually consistent twin-button pair, and
+    // Task Requests / Approval Log can slide up tighter in col 1.
+    // Tile body compacted to a twin-button row (icon + label, no
+    // hint text) so it fits the smaller height.
     id: 'admin_assign',
     title: 'Assign',
     description: 'Send out sessions, tasks, or task groups.',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 2 }],
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 0.5, col: 2 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
-    id: 'admin_task_requests',
-    title: 'Task Requests',
-    description: 'Members asking for tasks to be added to their queue.',
-    // Hub col 1 (stacks under Quick Assign). Assign col 1 anchor —
-    // Task Requests is at the TOP of col 1 per the user sketch. The
-    // Edit widget below registers AFTER this so within-column order
-    // resolves to: Task Requests (order 0) → Edit (order 1).
-    defaultPlacements: [
-      { scope: 'admin_overview', span: 1, rowSpan: 1, col: 1 },
-      { scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 },
-    ],
+    // PR #44 — Assign Log. PR #47-rev2: moved from col 2 → col 1
+    // (top) per the user's drag layout — col 1 reads Assign Log on
+    // top of Approval Log; col 2 leads with the action widgets
+    // (Assign / Edit / Task Requests). Registered AHEAD of
+    // admin_approval_log so col 1 resolves Assign Log first.
+    id: 'admin_assign_log',
+    title: 'Assign Log',
+    description: '',
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // PR #45 — Approval Log. Sits in col 1 between Task Requests
-    // (top) and Edit (bottom) per the user sketch. Lists recent
-    // resolved task_requests (approved + declined). rowSpan 1.
-    // Registered AFTER admin_task_requests but BEFORE
-    // admin_edit_tasks so the col-1 order resolves to:
-    // Task Requests → Approval Log → Edit.
+    // PR #45 — Approval Log. PR #47-rev2: now sits at the BOTTOM of
+    // col 1 under Assign Log (per user drag layout). Registered
+    // AFTER admin_assign_log so col 1 resolves Assign Log → Approval
+    // Log.
     id: 'admin_approval_log',
     title: 'Approval Log',
     description: '',
@@ -229,32 +243,34 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   },
   {
     // PR #40: single-button Edit Tasks widget.
-    // PR #41: moved to col 1 under Task Requests.
-    // PR #43: twin-button Edit widget (Edit Task + Edit Booking)
-    // per the user sketch. Compact rowSpan 0.5 (~170px). Widget id
-    // kept stable so saved layouts keep resolving even though the
-    // display title is now just "Edit".
-    // PR #43-fix: registered AFTER admin_task_requests so col 1
-    // resolves Task Requests on top, Edit beneath.
-    // PR #45: now sits BELOW Approval Log in col 1.
+    // PR #43: twin-button Edit widget (Edit Task + Edit Booking).
+    // Widget id kept stable so saved layouts keep resolving even
+    // though the display title is now just "Edit".
+    // PR #47-rev2: moved from col 1 → col 2 (middle). Per user drag
+    // layout col 2 stacks Assign (rs0.5) → Edit (rs0.5) → Task
+    // Requests (rs1). Registered AFTER admin_assign and BEFORE
+    // admin_task_requests so col 2 resolves Assign → Edit → Task
+    // Requests.
     id: 'admin_edit_tasks',
     title: 'Edit',
     description: '',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 0.5, col: 1 }],
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 0.5, col: 2 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // PR #44 — Assign Log. Sits in col 2 of the Assign page under
-    // admin_assign. Lists recent task + session assignments
-    // interleaved by recency (server-side via
-    // admin_recent_assignments). rowSpan 1 keeps the widget at
-    // the standard 340px so the scroll has breathing room.
-    id: 'admin_assign_log',
-    title: 'Assign Log',
-    description: '',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 2 }],
+    id: 'admin_task_requests',
+    title: 'Task Requests',
+    description: 'Members asking for tasks to be added to their queue.',
+    // Hub overview col 1 (stacks under Quick Assign — unchanged).
+    // PR #47-rev2: Assign-page placement moves col 1 → col 2 per
+    // user drag layout. Registered AFTER admin_edit_tasks so col 2
+    // of admin_assign resolves Assign → Edit → Task Requests.
+    defaultPlacements: [
+      { scope: 'admin_overview', span: 1, rowSpan: 1, col: 1 },
+      { scope: 'admin_assign', span: 1, rowSpan: 1, col: 2 },
+    ],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -447,7 +463,26 @@ function buildDefaultWidgetStateForScope(
 // isn't disproportionately taller than cols 1-2; thumbnails sized up
 // (2-per-row grid, larger icon bubble, per-role icon) so tiles read
 // as friendly content tiles instead of tiny file icons.
-export const WORKSPACE_LAYOUT_VERSION = 24
+// v25 (2026-04-25, PR #47): Assign rowSpan 1 → 0.5 so it matches
+// the Edit widget's compact height — the two read as a visually
+// consistent twin-button pair.
+// v26 (2026-04-25, PR #47-rev2): default Assign-page widget order
+// updated to match the user's drag layout. Col 1 stacks Assign Log
+// → Approval Log; col 2 stacks Assign → Edit → Task Requests; col 3
+// keeps Templates. Saved v25 layouts get reset so the new defaults
+// apply on next load.
+// v27 (2026-04-25, PR #47-rev3): default Overview-page widget order
+// updated to match the user's drag layout. Col 1 = team_tasks (rs2);
+// col 2 = today_calendar (rs2 — alone now); col 3 = booking_snapshot
+// (rs0.5) on top of forum_notifications (rs1). Notifications shrunk
+// from rs2 → rs1 so col 3 reads as a balanced stack alongside the
+// rs2 widgets in cols 1-2.
+// v28 (2026-04-25, PR #47-rev4): added rs1.5 to WidgetRowSpan and
+// bumped forum_notifications rs1 → rs1.5 so col 3 (Booking 170 +
+// gap 16 + Notifications 518 = 704px) sits near-flush with cols
+// 1-2 at rs2 (696px), filling the previously-empty space below
+// Notifications.
+export const WORKSPACE_LAYOUT_VERSION = 28
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
