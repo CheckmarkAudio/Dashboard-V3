@@ -233,6 +233,20 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
+    // PR #44 — Assign Log. Sits in col 2 of the Assign page under
+    // admin_assign. Lists recent task + session assignments
+    // interleaved by recency (server-side via
+    // admin_recent_assignments). rowSpan 1 keeps the widget at
+    // the standard 340px so the scroll has breathing room.
+    id: 'admin_assign_log',
+    title: 'Assign Log',
+    description: '',
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 2 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
     id: 'admin_team',
     title: 'Team',
     description: 'Your crew at a glance.',
@@ -401,7 +415,9 @@ function buildDefaultWidgetStateForScope(
 // of the Assign page resolves Task Requests on top, Edit beneath
 // (matches the user sketch). Saved v19 layouts had the widgets
 // inverted; the bump forces a fresh default.
-export const WORKSPACE_LAYOUT_VERSION = 20
+// v21 (2026-04-25, PR #44): new `admin_assign_log` widget on the
+// Assign page col 2 under admin_assign.
+export const WORKSPACE_LAYOUT_VERSION = 21
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
