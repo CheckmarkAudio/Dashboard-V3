@@ -1,5 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Calendar as CalendarIcon, CheckSquare, Inbox, Loader2 } from 'lucide-react'
+import {
+  AlertCircle,
+  Building2,
+  Calendar as CalendarIcon,
+  CheckSquare,
+  Inbox,
+  Loader2,
+} from 'lucide-react'
 import {
   adminLogKeys,
   fetchRecentAssignments,
@@ -58,19 +65,23 @@ export default function AdminAssignLogWidget() {
 }
 
 function LogRow({ row }: { row: RecentAssignmentRow }) {
-  const Icon = row.kind === 'task' ? CheckSquare : CalendarIcon
-  const initialed = formatAssigneeName(row.assignee_name)
+  const Icon =
+    row.kind === 'session' ? CalendarIcon : row.kind === 'studio' ? Building2 : CheckSquare
+  const iconClass =
+    row.kind === 'session'
+      ? 'text-cyan-400/70 shrink-0'
+      : row.kind === 'studio'
+        ? 'text-violet-300/70 shrink-0'
+        : 'text-gold/60 shrink-0'
+  const recipientLabel =
+    row.kind === 'studio' ? 'Studio pool' : formatAssigneeName(row.assignee_name)
   const due = formatTargetDate(row.target_date)
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.025] transition-colors">
-      <Icon
-        size={12}
-        className={row.kind === 'task' ? 'text-gold/60 shrink-0' : 'text-cyan-400/70 shrink-0'}
-        aria-hidden="true"
-      />
+      <Icon size={12} className={iconClass} aria-hidden="true" />
       <p className="text-[12px] text-text truncate">{row.title}</p>
-      <span className="text-[11px] text-text-light whitespace-nowrap tabular-nums">
-        {initialed}
+      <span className="text-[11px] text-text-light whitespace-nowrap">
+        {recipientLabel}
       </span>
       <span
         className={`text-[11px] tabular-nums whitespace-nowrap ${

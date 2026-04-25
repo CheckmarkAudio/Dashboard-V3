@@ -4,10 +4,13 @@
 import { supabase } from '../supabase'
 
 export interface RecentAssignmentRow {
-  kind: 'task' | 'session'
+  // 'task'    — member-scope, has individual assignee
+  // 'studio'  — studio-pool, no assignee
+  // 'session' — session booking with engineer
+  kind: 'task' | 'studio' | 'session'
   ref_id: string
   title: string
-  assignee_id: string
+  assignee_id: string | null
   assignee_name: string | null
   target_date: string | null  // YYYY-MM-DD (due_date or session_date)
   created_at: string
