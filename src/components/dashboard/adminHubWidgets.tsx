@@ -32,7 +32,7 @@ import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { fetchKPIDefinitions, fetchKPIEntries, kpiKeys } from '../../lib/queries/kpi'
 import { useToast } from '../Toast'
 import CreateBookingModal from '../CreateBookingModal'
-import AdminTaskCreateModal from '../tasks/requests/AdminTaskCreateModal'
+import MultiTaskCreateModal from '../tasks/requests/MultiTaskCreateModal'
 import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
 import type { TeamMember } from '../../types'
 import type { AssignmentNotification } from '../../types/assignments'
@@ -119,9 +119,11 @@ export function AdminAssignWidget() {
         />
       </div>
 
-      {/* Flow modals */}
+      {/* Flow modals — Session uses the existing booking flow; Task
+          opens the new row-by-row MultiTaskCreateModal (PR #42) with
+          a Members/Studio toggle + Add-from-template sub-flow. */}
       {flow === 'session' && <CreateBookingModal onClose={handleClose} />}
-      {flow === 'task' && <AdminTaskCreateModal onClose={handleClose} />}
+      {flow === 'task' && <MultiTaskCreateModal onClose={handleClose} />}
     </div>
   )
 }
