@@ -25,10 +25,10 @@ import type {
 // HEIGHT within its column (rs=2 renders 2× tall). Within-column order
 // falls out of registration order here; users reorder via drag.
 //
-// Overview stacks:
-//   col 1: team_tasks (rs1)
-//   col 2: booking_snapshot (rs0.5 — compact Book-a-Session button) · today_calendar (rs2)
-//   col 3: forum_notifications (rs2)
+// Overview stacks (PR #47-rev3 layout):
+//   col 1: team_tasks (rs2)
+//   col 2: today_calendar (rs2)
+//   col 3: booking_snapshot (rs0.5 — compact Book-a-Session button) · forum_notifications (rs1)
 //
 // Tasks stacks (all rs2 so each column shows a long queue at a glance):
 //   col 1: team_tasks   |   col 2: studio_tasks   |   col 3: team_board
@@ -38,9 +38,12 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     title: 'My Tasks',
     // PR #37 — description intentionally blank; the title alone is
     // self-explanatory and the subtitle strip cluttered the widget.
+    // PR #47-rev3: Overview rowSpan 1 → 2 so My Tasks matches the
+    // Calendar widget height, giving col 1 the same vertical weight
+    // as col 2 on the Overview grid.
     description: '',
     defaultPlacements: [
-      { scope: 'member_overview', span: 1, rowSpan: 1, col: 1 },
+      { scope: 'member_overview', span: 1, rowSpan: 2, col: 1 },
       { scope: 'member_tasks', span: 1, rowSpan: 2, col: 1 },
     ],
     accessVisibility: 'personal',
@@ -48,12 +51,15 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
-    // Compact Book-a-Session action — registered BEFORE today_calendar
-    // so it stacks on top in col 2's default order. rowSpan 0.5 ≈ 170px.
+    // Compact Book-a-Session action. rowSpan 0.5 ≈ 170px.
+    // PR #47-rev3: moved col 2 → col 3 (top) per user drag layout.
+    // Calendar (rs2) now fills col 2 alone; Booking sits on top of
+    // Notifications in col 3. Still registered BEFORE
+    // forum_notifications so col 3 resolves Booking → Notifications.
     id: 'booking_snapshot',
     title: 'Booking',
     description: 'Quick-book a studio session.',
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 0.5, col: 2 }],
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 0.5, col: 3 }],
     accessVisibility: 'personal',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -68,10 +74,14 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
+    // PR #47-rev3: rowSpan 2 → 1 so col 3 (Booking rs0.5 + Notifications
+    // rs1) reads as a balanced stack alongside Calendar / My Tasks at
+    // rs2 in cols 1-2. Within-column order: registered AFTER
+    // booking_snapshot so col 3 resolves Booking on top.
     id: 'forum_notifications',
     title: 'Notifications',
     description: 'Unread messages across channels and new assignments.',
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 2, col: 3 }],
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 1, col: 3 }],
     accessVisibility: 'shared',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -459,7 +469,13 @@ function buildDefaultWidgetStateForScope(
 // → Approval Log; col 2 stacks Assign → Edit → Task Requests; col 3
 // keeps Templates. Saved v25 layouts get reset so the new defaults
 // apply on next load.
-export const WORKSPACE_LAYOUT_VERSION = 26
+// v27 (2026-04-25, PR #47-rev3): default Overview-page widget order
+// updated to match the user's drag layout. Col 1 = team_tasks (rs2);
+// col 2 = today_calendar (rs2 — alone now); col 3 = booking_snapshot
+// (rs0.5) on top of forum_notifications (rs1). Notifications shrunk
+// from rs2 → rs1 so col 3 reads as a balanced stack alongside the
+// rs2 widgets in cols 1-2.
+export const WORKSPACE_LAYOUT_VERSION = 27
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
