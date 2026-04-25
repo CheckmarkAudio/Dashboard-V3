@@ -6,6 +6,7 @@ import {
   ArrowUpDown,
   Briefcase,
   Calendar,
+  Camera,
   Code2,
   FileText,
   FolderKanban,
@@ -16,6 +17,7 @@ import {
   Plus,
   Search,
   Settings,
+  Sprout,
   Tag,
 } from 'lucide-react'
 import {
@@ -32,10 +34,15 @@ import TemplateEditorModal from './TemplateEditorModal'
 // fall through to the generic FileText icon.
 type LucideIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>
 
+// NOTE: GraduationCap is reserved for the future "education" category
+// (the studio's education program — a separate branch of the app per
+// SESSION_CONTEXT). Interns get Sprout (growth / learner) so the two
+// don't compete for the same glyph when education templates ship.
 const ROLE_ICONS: Record<string, LucideIcon> = {
   engineer:  Headphones,
   marketing: Megaphone,
-  intern:    GraduationCap,
+  media:     Camera,
+  intern:    Sprout,
   dev:       Code2,
   admin:     Briefcase,
   ops:       Settings,
@@ -67,6 +74,7 @@ function iconForRole(roleTag: string | null): LucideIcon {
 const CANONICAL_ROLE_TAGS = [
   { value: 'engineer',  label: 'Engineer'  },
   { value: 'marketing', label: 'Marketing' },
+  { value: 'media',     label: 'Media'     },
   { value: 'intern',    label: 'Intern'    },
   { value: 'dev',       label: 'Dev'       },
   { value: 'admin',     label: 'Admin'     },
