@@ -200,31 +200,34 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // PR #40: single-button Edit Tasks widget.
-    // PR #41: moved to col 1 under Task Requests.
-    // PR #43: twin-button Edit widget (Edit Task + Edit Session)
-    // per the user sketch. Compact rowSpan 0.5 (~170px). Widget id
-    // kept stable so saved layouts keep resolving even though the
-    // display title is now just "Edit".
-    id: 'admin_edit_tasks',
-    title: 'Edit',
-    description: '',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 0.5, col: 1 }],
+    id: 'admin_task_requests',
+    title: 'Task Requests',
+    description: 'Members asking for tasks to be added to their queue.',
+    // Hub col 1 (stacks under Quick Assign). Assign col 1 anchor —
+    // Task Requests is at the TOP of col 1 per the user sketch. The
+    // Edit widget below registers AFTER this so within-column order
+    // resolves to: Task Requests (order 0) → Edit (order 1).
+    defaultPlacements: [
+      { scope: 'admin_overview', span: 1, rowSpan: 1, col: 1 },
+      { scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 },
+    ],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
-    id: 'admin_task_requests',
-    title: 'Task Requests',
-    description: 'Members asking for tasks to be added to their queue.',
-    // Hub col 1 (stacks under Quick Assign). Assign col 1 (PR #41
-    // reorg — was col 2; per sketch Task Requests anchors col 1
-    // and Assign moves to col 2).
-    defaultPlacements: [
-      { scope: 'admin_overview', span: 1, rowSpan: 1, col: 1 },
-      { scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 },
-    ],
+    // PR #40: single-button Edit Tasks widget.
+    // PR #41: moved to col 1 under Task Requests.
+    // PR #43: twin-button Edit widget (Edit Task + Edit Booking)
+    // per the user sketch. Compact rowSpan 0.5 (~170px). Widget id
+    // kept stable so saved layouts keep resolving even though the
+    // display title is now just "Edit".
+    // PR #43-fix: registered AFTER admin_task_requests so col 1
+    // resolves Task Requests on top, Edit beneath.
+    id: 'admin_edit_tasks',
+    title: 'Edit',
+    description: '',
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 0.5, col: 1 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -392,9 +395,13 @@ function buildDefaultWidgetStateForScope(
 // Col 1: Task Requests + Edit Tasks. Col 2: Assign. Col 3:
 // Templates. Assign widget itself shrinks from 4 tiles to 2.
 // v19 (2026-04-25, PR #43): Edit widget becomes twin-button (Edit
-// Task + Edit Session) and shrinks to rowSpan 0.5 (~170px). Widget
+// Task + Edit Booking) and shrinks to rowSpan 0.5 (~170px). Widget
 // id unchanged; display title renamed to "Edit".
-export const WORKSPACE_LAYOUT_VERSION = 19
+// v20 (2026-04-25, PR #43-fix): swap registration order so col 1
+// of the Assign page resolves Task Requests on top, Edit beneath
+// (matches the user sketch). Saved v19 layouts had the widgets
+// inverted; the bump forces a fresh default.
+export const WORKSPACE_LAYOUT_VERSION = 20
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
