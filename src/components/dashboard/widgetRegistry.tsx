@@ -79,7 +79,11 @@ const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
   admin_approvals: AdminApprovalsWidget,
   admin_task_requests: PendingTaskRequestsWidget,
   // PR #29 — Templates library as a widget so the Assign page runs
-  // on WorkspacePanel like the other surfaces.
+  // on WorkspacePanel like the other surfaces. PR #46: file-system-
+  // style thumbnail grid replaces the big-card preview, and the
+  // standalone Preview widget was folded back into this one so the
+  // search / filters / arrange controls stay pinned above a single
+  // scrolling thumbnail grid.
   admin_templates: AdminTemplatesWidget,
   // PR #40 — admin Edit Tasks library. Opens a modal listing every
   // in-flight task with click-to-edit rows.

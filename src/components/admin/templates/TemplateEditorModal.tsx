@@ -17,6 +17,7 @@ import type {
   TaskTemplateItem,
   UpdateTemplateItemInput,
 } from '../../../types/assignments'
+import { CANONICAL_ROLE_TAGS, labelForRole } from './roleTags'
 
 /**
  * TemplateEditorModal — create OR edit flow for a task_template.
@@ -201,13 +202,27 @@ export default function TemplateEditorModal({
             <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">
               Role tag <span className="normal-case text-text-light">(optional)</span>
             </span>
-            <input
-              type="text"
+            <select
               value={roleTag}
               onChange={(e) => setRoleTag(e.target.value)}
-              placeholder="marketing · engineer · intern"
-              className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-            />
+              className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring appearance-none bg-no-repeat bg-[right_0.75rem_center] pr-8"
+              style={{
+                backgroundImage:
+                  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23999'><path d='M4 6l4 4 4-4'/></svg>\")",
+                backgroundSize: '14px',
+              }}
+            >
+              <option value="">No role</option>
+              {CANONICAL_ROLE_TAGS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+              {/* Preserve any legacy non-canonical tag the template was
+                  saved with, so editing an old template doesn't silently
+                  reset its role to "No role". */}
+              {roleTag && !CANONICAL_ROLE_TAGS.some((r) => r.value === roleTag) && (
+                <option value={roleTag}>{labelForRole(roleTag)}</option>
+              )}
+            </select>
           </label>
           <label className="flex items-end gap-2 cursor-pointer pb-2">
             <input

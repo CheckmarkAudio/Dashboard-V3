@@ -1,4 +1,3 @@
-export { default as TemplateCard } from './TemplateCard'
 export { default as TemplatePreviewModal } from './TemplatePreviewModal'
 export { default as TemplateEditorModal } from './TemplateEditorModal'
 export { default as TemplateDuplicateModal } from './TemplateDuplicateModal'
