@@ -435,10 +435,16 @@ hidden; widgets are visible-by-default and non-removable for now.
 - ✅ **Tasks (`/daily`)** — 3-col grid: My Tasks · Studio · Team Board.
   Bottom-of-list "+ Task" add pattern; click body → `TaskDetailModal`,
   click checkbox → complete.
-- ✅ **Assign (`/admin/templates`)** — 3-col grid: Assign (tiles) ·
-  Task Requests · Templates library. Canonical filter pills with
-  counts; pinned-tile pattern; unified Quick Assign modal covers
-  all admin task-assign flows.
+- 🟡 **Assign (`/admin/templates`)** — rebuilt from scratch per the
+  user's hand-drawn sketch (PRs #41–#45 landed; **PR #46 queued**):
+    - Col 1: Task Requests · Approval Log · Edit twin-button
+      (Edit Task + Edit Booking, rs 0.5).
+    - Col 2: Assign (2 tiles: +Task / +Booking with row-by-row
+      modal + Add-from-template) · Assign Log.
+    - Col 3: Templates (rs 2) · **Preview widget — PR #46**.
+  PR #46 brings: role-tag pills + Show-archived toggle + Arrange-by
+  sort on Templates, plus a new Preview widget grouped by role-tag
+  with file-system-style clickable thumbnails.
 
 ### Deferred
 
@@ -563,6 +569,28 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
+- **Assign-page redesign per user sketch — PRs #41–#45, 2026-04-25.** User hand-drew the Assign page they wanted (col 1: Task Requests + Approval Log + Edit · col 2: Assign + Assign Log · col 3: Templates + Preview). Locked answers to 7 design questions then ran the rebuild as 5 small PRs. Five of six landed; **PR #46 (Templates enhancements + Preview widget) is queued and is the only remaining piece**.
+  - **PR #41 `3fcb2ab`** — Column reorg + Assign widget shrunk from 4 tiles → 2 (+Task / +Booking). Studio Task reachable via Task modal scope toggle; Task Group folded into PR #42's Add-from-template. `AssignGroupModal` deleted. `WORKSPACE_LAYOUT_VERSION` 17 → 18.
+  - **PR #42 `6541f32`** — Row-by-row +Task modal. Members/Studio toggle at top. "+ Add task" / "+ Add from template" sub-flow that pulls template items into editable rows. New `assign_custom_tasks_to_members` (plural) RPC: ONE batch + N×M tasks + ONE notification per recipient ("3 new tasks"). Hub Quick Assign keeps the simpler single-task `AdminTaskCreateModal`.
+  - **PR #43 `132afc7`** — Edit widget split into compact twin-button (Edit Task + Edit Booking, rs 0.5). Three new RPCs for sessions: `admin_list_all_sessions`, `admin_update_session` (fires `session_reassigned` on engineer change), `admin_delete_session`. New `AdminEditSessionsModal` mirrors AdminEditTasksModal — search by client, assignee filter, include-past toggle, click-to-expand inline edit + soft overlap warning + delete-with-confirm. Copy: "Session"→"Booking", "All engineers"→"All assignees". Col 1 registration order swapped so Task Requests sits above Edit per the sketch. v18 → 20.
+  - **PR #44 `b75f7de`** — Assign Log widget (col 2 under Assign). 3-column rows: title / "First L." / "Today"|"Apr 25". New `admin_recent_assignments` RPC interleaves member + studio + session rows by recency. **Mid-PR DB structural fix**: studio tasks were silently invisible because both the studio + team fetcher RPCs INNER-JOINed the recipient chain (which is NULL for studio rows) to scope by team. Solution: denormalize `team_id` directly onto `assigned_tasks` (new column + backfill). Both insert RPCs set it via `get_my_team_id()`; both fetchers filter by `t.team_id`. Also: switched the Assign Log's projection from `row_to_jsonb(r)` (broken on anonymous-record subqueries) to explicit `jsonb_build_object`. v20 → 21.
+  - **PR #45 `8c863dc`** — Approval Log widget (col 1 between Task Requests and Edit). Surfaces BOTH approved + declined task_requests, labelled by outcome (green ✓ / rose ✕ + title + requester "First L." + relative time, decline rows show note italic on 2nd line). New `admin_recent_approvals` RPC. Approve/decline mutations invalidate `['admin-log']` so new entries appear immediately. Note: `task_requests` column is `reviewed_at` not `resolved_at` — JSON key kept as `resolved_at` for the client. v21 → 22.
+  - **Sketch decisions captured (memory for future PRs)**:
+    - Approval Log: BOTH approved + declined, labelled by outcome.
+    - Assign Log row format: title / "First L." (e.g. "Bridget R") / "Today" or "Apr 25".
+    - Templates "Arrange by" = role tag, with role-name dividers in the Preview thumbnail section.
+    - Templates "Show archived" = on/off pill, stays on while other filters are picked.
+    - Preview widget = file-system-style thumbnails grouped by role tag, clickable to the same template-detail modal.
+    - +Task modal: row-by-row format with Members/Studio toggle + "Add from template" sub-flow that picks template items via checkboxes and populates them as editable rows.
+    - Edit Booking modal must support: change details, change assignee, delete, reschedule. Soft overlap warning on engineer conflicts.
+- **Tier 1 closeout + Edit Tasks library — PRs #37–#40, 2026-04-25 morning.** Closed the loose ends from the task-system rework + shipped the admin Edit Tasks library.
+  - **PR #37 `5634e94`** — `get_member_assigned_tasks` was missing `can_complete` etc. → My Tasks checkboxes were disabled. RPC recreated. Team Tasks `can_complete` tightened (drop admin-override). Restored pending→Submit Completed flow on all 3 task widgets.
+  - **PR #38 `da916e8`** — Peer "Request to take" reassignment end-to-end. New `task_reassign_requests` table + 3 enum values + 4 RPCs + Approve/Decline modal. Hover overlay on team members' rows in Team Tasks.
+  - **PR #39 `683199c`** — Studio Task tile on Assign widget (4th, before #41 shrunk it again), AdminNotificationsWidget reassign parity, approve_task_reassignment race safety (auto-cancels if assignee changed since the request).
+  - **PR #40 `c8f617e`** — Edit Tasks library widget on Assign page. `admin_list_all_assigned_tasks` + `admin_update_assigned_task` RPCs. New `task_edited` notification type. Modal with search / assignee filter / include-completed + click-to-expand inline edit form.
+- **Layout polish + task UI cleanup — PRs #35–#36, 2026-04-24 afternoon.**
+  - **PR #35 `46c140a`** — Studio + Team Tasks on /daily had nested widget-card chrome inside DashboardWidgetFrame (visible "double box"). Stripped inner Card/Header.
+  - **PR #36 `d602c67`** — Flywheel stage pills + right-aligned due date back on My Tasks + Team Tasks. Widget descriptions cleared on team_tasks/studio_tasks/team_board. Header N-open line removed. Show-completed becomes an icon-only eye toggle in a sticky footer beside +Task. Pending-request chip moved to same footer. Helpers: `taskStage(category)` + `formatDueShort(dueDate)`.
 - **Column-snap grid + smooth drag + direct swap — 3 PRs, 2026-04-24 afternoon.** PRs #32–#34 reworked the widget grid's interaction model.
   - **PR #32 `a48b081`** — `WorkspacePanel` moved from implicit row-major flow to 3 independent column stacks (`col` + per-column `order`). Drag feel made Monday.com-smooth via `DragOverlay` (widget-shaped gold-outlined ghost following the cursor above the grid) + live cross-column move in `onDragOver` so siblings shift out of the way. `closestCorners` collision detection for multi-container drag. Empty column drops supported via `col-N` droppable wrappers. `WORKSPACE_LAYOUT_VERSION` 14 → 15.
   - **PR #33 `dd105b0`** — three focused polish items: (1) Tasks-page widgets all bumped to rowSpan 2 (~696px) so long queues are visible at a glance. (2) Booking widget compacted to rowSpan 0.5 (~170px) as a pure "+ Book a Session" action chip — upcoming-today counter + next-session detail removed. Repositioned from col 1 under My Tasks to col 2 above Calendar. New fractional rowSpan supported by `WidgetRowSpan` type + `widgetHeight()`. (3) Fixed `column assignee.name does not exist` on /daily Team Tasks — `get_team_assigned_tasks` RPC recreated with `assignee.display_name` instead of `.name` (intern_users has no `name` col). Migration applied to prod Supabase. `WORKSPACE_LAYOUT_VERSION` 15 → 16.
@@ -774,23 +802,31 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Probably next
 
+- **PR #46 — Templates enhancements + Preview widget (THE NEXT THING).**
+  Last piece of the Assign-page redesign sketched by the user. Templates
+  widget gains: role-tag pills (engineer / marketing / etc), "Show archived"
+  toggle (stays on while other filters are picked), "Arrange by" sort
+  (alphabetical / date added / role tag — with role-name dividers in the
+  Preview thumbnail section). New Preview widget below Templates in col 3
+  showing template thumbnails grouped by role-tag dividers, file-system-style
+  (sleek + small + uniform), clickable to the same template detail modal as
+  the Templates list. **Start here when the new session boots.**
 - **Polish pass — notification click routing for the 3 task-request types.**
   Currently `task_request_approved` falls through to the existing highlight-task
   handler (harmless but not useful — `batch_id` is null). Target: approved →
   highlight the newly-materialized task via `approved_task_id`; admin's
   `task_request_submitted` click → jump to Hub approval widget. Small PR.
-- **Template RPCs accept `p_scope`** — studio templates. Deferred until a concrete
-  use case surfaces; Quick Assign covers the member-level studio flow today.
-- **Admin Hub `AssignCustomTaskModal` parity** — the legacy Hub modal is still
-  member-scope-only. Canonical scope-toggle surface is Quick Assign on the
-  Assign page, so this is cosmetic cleanup.
-- **Cloudflare migration** queued — this six-PR session settles for a day or
-  two, then Vercel → Cloudflare Pages as a single-concern PR per
-  `feedback_cloudflare_migration_timing.md`.
-- **Phase 3**: assignment history UI, `mark_all_read`, fold assigned-tasks into
-  `member_overview_snapshot`, daily-checklist fold-in (`source_type='daily_checklist'`
-  is already reserved in the enum — cron writes that shape), unify
-  `report_templates` into `task_templates`, then the flywheel event ledger.
+- **Tier 2 operational maturity** (per the strategic check-in):
+  - **Clock in/out logging** — table + RPC + small UI. Required for the
+    "trackable" north-star outcome; admin needs to see "who's on the clock."
+  - **Booking + session reminders via EmailJS** — client confirmation email,
+    24h reminder, non-annoying 5-star review ask. Templates + cancel flow.
+  - **Mark-all-read** for notifications + bulk actions.
+- **Cloudflare migration** queued for once the dust settles.
+- **Phase 3 deeper**: flywheel event ledger (the highest-leverage future work),
+  daily-checklist fold-in (`source_type='daily_checklist'` is already reserved
+  in the enum — cron writes that shape), unify `report_templates` into
+  `task_templates`, contract ledger.
 
 ### Small stragglers worth knowing about
 
