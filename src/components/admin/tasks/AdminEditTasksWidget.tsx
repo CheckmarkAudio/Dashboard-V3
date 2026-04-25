@@ -27,7 +27,7 @@ export default function AdminEditTasksWidget() {
         />
         <EditButton
           icon={<Calendar size={14} strokeWidth={2.5} />}
-          label="Edit Session"
+          label="Edit Booking"
           onClick={() => setMode('sessions')}
         />
       </div>

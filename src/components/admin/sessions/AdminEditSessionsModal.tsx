@@ -79,7 +79,7 @@ export default function AdminEditSessionsModal({ onClose }: { onClose: () => voi
 
   return (
     <FloatingDetailModal
-      title="Edit sessions"
+      title="Edit bookings"
       eyebrow={`${sessions.length} scheduled · click a row to edit`}
       onClose={onClose}
       maxWidth={720}
