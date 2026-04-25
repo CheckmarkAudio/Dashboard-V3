@@ -140,6 +140,10 @@ export type AdminWidgetId =
   // Requests on top and Edit at bottom). Recent resolved
   // task_requests, both approved and declined.
   | 'admin_approval_log'
+  // PR #46 — Templates Preview (Assign page col 3, under
+  // admin_templates). File-system-style thumbnails grouped under
+  // role-tag dividers; click opens the same TemplatePreviewModal.
+  | 'admin_template_preview'
   // Admin-side widget bank — registered but not on the page yet.
   | 'team_focus'
   | 'approval_queue'

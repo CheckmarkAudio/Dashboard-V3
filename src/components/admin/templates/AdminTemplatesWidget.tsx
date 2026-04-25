@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FolderKanban, Loader2, Plus, Search } from 'lucide-react'
+import { ArrowDownAZ, ArrowUpDown, Calendar, FolderKanban, Loader2, Plus, Search, Tag } from 'lucide-react'
 import {
   fetchTaskTemplateLibrary,
   taskTemplateKeys,
@@ -36,11 +36,22 @@ const CANONICAL_ROLE_TAGS = [
   { value: 'ops',       label: 'Ops'       },
 ] as const
 
+// Arrange-by sort options (PR #46). 'role' groups with section
+// dividers; the others render a flat list. Default: alphabetical.
+type ArrangeBy = 'alpha' | 'date' | 'role'
+
+const ARRANGE_OPTIONS: { value: ArrangeBy; label: string; icon: typeof ArrowDownAZ }[] = [
+  { value: 'alpha', label: 'A–Z',   icon: ArrowDownAZ },
+  { value: 'date',  label: 'Newest',icon: Calendar    },
+  { value: 'role',  label: 'Role',  icon: Tag         },
+]
+
 export default function AdminTemplatesWidget() {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string | null>(null)
   const [includeInactive, setIncludeInactive] = useState(false)
   const [onboardingOnly, setOnboardingOnly] = useState(false)
+  const [arrangeBy, setArrangeBy] = useState<ArrangeBy>('alpha')
   const [editorOpen, setEditorOpen] = useState(false)
   const [previewId, setPreviewId] = useState<string | null>(null)
 
@@ -75,7 +86,7 @@ export default function AdminTemplatesWidget() {
   const templates = useMemo(() => {
     const all = libraryQuery.data ?? []
     const needle = search.trim().toLowerCase()
-    return all.filter((t) => {
+    const filtered = all.filter((t) => {
       if (onboardingOnly && !t.is_onboarding) return false
       if (!needle) return true
       return (
@@ -84,7 +95,48 @@ export default function AdminTemplatesWidget() {
         (t.role_tag ?? '').toLowerCase().includes(needle)
       )
     })
-  }, [libraryQuery.data, search, onboardingOnly])
+    // Arrange-by sort. Stable sort via slice — preserves insertion
+    // order for ties (e.g. two templates created the same second).
+    const sorted = filtered.slice()
+    if (arrangeBy === 'alpha') {
+      sorted.sort((a, b) => a.name.localeCompare(b.name))
+    } else if (arrangeBy === 'date') {
+      sorted.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+    } else if (arrangeBy === 'role') {
+      // Role grouping: untagged falls to the bottom; within each
+      // tag, alphabetical by name so the section is scannable.
+      sorted.sort((a, b) => {
+        const ar = a.role_tag ?? ''
+        const br = b.role_tag ?? ''
+        if (ar === br) return a.name.localeCompare(b.name)
+        if (!ar) return 1
+        if (!br) return -1
+        return ar.localeCompare(br)
+      })
+    }
+    return sorted
+  }, [libraryQuery.data, search, onboardingOnly, arrangeBy])
+
+  // Group templates under role-tag dividers when Arrange-by is 'role'.
+  // Returned as an ordered array so the render walks groups top-to-bottom.
+  const grouped = useMemo(() => {
+    if (arrangeBy !== 'role') return null
+    const groups = new Map<string, typeof templates>()
+    for (const t of templates) {
+      const key = t.role_tag ?? '__none__'
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(t)
+    }
+    return Array.from(groups.entries()).map(([key, items]) => ({
+      key,
+      label:
+        key === '__none__'
+          ? 'No role'
+          : (CANONICAL_ROLE_TAGS.find((r) => r.value === key)?.label
+            ?? key.charAt(0).toUpperCase() + key.slice(1)),
+      items,
+    }))
+  }, [arrangeBy, templates])
 
   const total = poolQuery.data?.length ?? 0
 
@@ -141,7 +193,37 @@ export default function AdminTemplatesWidget() {
       </div>
       <div className="flex flex-wrap items-center gap-1.5 shrink-0">
         <Toggle label="Onboarding" active={onboardingOnly} onClick={() => setOnboardingOnly((v) => !v)} />
-        <Toggle label="Include archived" active={includeInactive} onClick={() => setIncludeInactive((v) => !v)} />
+        <Toggle label="Show archived" active={includeInactive} onClick={() => setIncludeInactive((v) => !v)} />
+        {/* Arrange-by selector — sticky next to the toggles so the
+            sort control sits with the other view controls. */}
+        <div className="ml-auto inline-flex items-center gap-1 shrink-0">
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold text-text-light">
+            <ArrowUpDown size={10} aria-hidden="true" />
+            Arrange
+          </span>
+          <div className="inline-flex rounded-full bg-surface ring-1 ring-border overflow-hidden">
+            {ARRANGE_OPTIONS.map((opt) => {
+              const Icon = opt.icon
+              const active = arrangeBy === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setArrangeBy(opt.value)}
+                  aria-pressed={active}
+                  className={`inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                    active
+                      ? 'bg-gold/20 text-gold'
+                      : 'text-text-muted hover:text-text hover:bg-surface-hover'
+                  }`}
+                >
+                  <Icon size={10} aria-hidden="true" />
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* ─── Grid (single-column inside a widget-width card) ── */}
@@ -165,6 +247,31 @@ export default function AdminTemplatesWidget() {
             <p className="text-[11px] text-text-light mt-0.5 max-w-[24ch]">
               {total === 0 ? 'Your first reusable blueprint.' : 'Try clearing filters.'}
             </p>
+          </div>
+        ) : grouped ? (
+          <div className="space-y-3">
+            {grouped.map((g) => (
+              <div key={g.key}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-gold/80">
+                    {g.label}
+                  </span>
+                  <span className="tabular-nums text-[10px] font-bold text-text-light/70">
+                    {g.items.length}
+                  </span>
+                  <div className="flex-1 h-px bg-border/60" aria-hidden="true" />
+                </div>
+                <div className="space-y-2">
+                  {g.items.map((t) => (
+                    <TemplateCard
+                      key={t.id}
+                      template={t}
+                      onClick={() => setPreviewId(t.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="space-y-2">

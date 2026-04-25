@@ -151,13 +151,10 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 //   col 3: admin_notifications · admin_team
 //
 // Assign stacks (PR #41 reorg per sketch, with logs landing in
-// PRs #44 + #45):
+// PRs #44 + #45 and the Preview widget in PR #46):
 //   col 1: admin_task_requests · admin_approval_log · admin_edit_tasks
 //   col 2: admin_assign · admin_assign_log
-//   col 3: admin_templates (rs2)
-//
-// Preview widget queued for PR #46 to slot under admin_templates
-// in col 3.
+//   col 3: admin_templates (rs2) · admin_template_preview
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
     id: 'admin_quick_assign',
@@ -276,6 +273,20 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     title: 'Templates',
     description: 'Reusable blueprints for onboarding + repeat work.',
     defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 2, col: 3 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
+    // PR #46 — Templates Preview. Slots in col 3 directly below the
+    // Templates library widget. File-system-style thumbnails grouped
+    // under role-tag dividers; clicking opens the same preview modal
+    // the Templates list uses. Registered AFTER admin_templates so
+    // col 3 resolves Templates on top, Preview beneath.
+    id: 'admin_template_preview',
+    title: 'Preview',
+    description: '',
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 3 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -435,7 +446,10 @@ function buildDefaultWidgetStateForScope(
 // Assign page col 2 under admin_assign.
 // v22 (2026-04-25, PR #45): new `admin_approval_log` widget on the
 // Assign page col 1, between Task Requests (top) and Edit (bottom).
-export const WORKSPACE_LAYOUT_VERSION = 22
+// v23 (2026-04-25, PR #46): new `admin_template_preview` widget on
+// the Assign page col 3, directly under `admin_templates`. Closes
+// out the user-sketched Assign-page redesign.
+export const WORKSPACE_LAYOUT_VERSION = 23
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

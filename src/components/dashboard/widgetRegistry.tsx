@@ -44,6 +44,7 @@ import {
   TeamAssignedTasksCard,
 } from '../tasks/AssignedTaskBoards'
 import AdminTemplatesWidget from '../admin/templates/AdminTemplatesWidget'
+import AdminTemplatePreviewWidget from '../admin/templates/AdminTemplatePreviewWidget'
 import AdminEditTasksWidget from '../admin/tasks/AdminEditTasksWidget'
 
 // ═════════════════════════════════════════════════════════════════════
@@ -81,6 +82,9 @@ const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
   // PR #29 — Templates library as a widget so the Assign page runs
   // on WorkspacePanel like the other surfaces.
   admin_templates: AdminTemplatesWidget,
+  // PR #46 — Templates Preview. File-system-style thumbnails under
+  // admin_templates, grouped by role-tag with section dividers.
+  admin_template_preview: AdminTemplatePreviewWidget,
   // PR #40 — admin Edit Tasks library. Opens a modal listing every
   // in-flight task with click-to-edit rows.
   admin_edit_tasks: AdminEditTasksWidget,
