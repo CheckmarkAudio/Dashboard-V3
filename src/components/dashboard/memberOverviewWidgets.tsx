@@ -6,6 +6,7 @@ import {
   AlertCircle,
   Bell,
   Check,
+  CheckCheck,
   ChevronRight,
   FileText,
   Flame,
@@ -25,6 +26,7 @@ import CalendarDayCard from '../calendar/CalendarDayCard'
 import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
 import {
   fetchAssignmentNotifications,
+  markAllAssignmentNotificationsRead,
   markAssignmentNotificationRead,
 } from '../../lib/queries/assignments'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
@@ -277,6 +279,15 @@ async function markChannelRead(channelId: string): Promise<void> {
   if (error) throw error
 }
 
+// PR #48 — bulk-acknowledge every channel for the caller. The RPC
+// upserts a `chat_channel_reads` row per channel with `last_read_at =
+// now()`, so any unread count derived from that timestamp returns 0.
+async function markAllChannelsRead(): Promise<{ channels_marked: number }> {
+  const { data, error } = await supabase.rpc('mark_all_channels_read')
+  if (error) throw error
+  return data as { channels_marked: number }
+}
+
 export function ForumNotificationsWidget() {
   const queryClient = useQueryClient()
   const { profile } = useAuth()
@@ -351,6 +362,29 @@ export function ForumNotificationsWidget() {
   const assignments = assignmentsQuery.data ?? []
   const assignmentUnread = assignments.filter((n) => !n.is_read).length
   const totalUnread = channelUnread + assignmentUnread
+
+  // PR #48 — bulk-acknowledge both sections in one click. Fires the
+  // two RPCs in parallel; cache is updated optimistically so the
+  // unread badge clears instantly. On any error, invalidate so the
+  // server-truth values flow back.
+  const handleMarkAllRead = () => {
+    if (totalUnread === 0) return
+    const assignmentsCacheKey = ['overview-assignment-notifications', profile?.id] as const
+    const nowIso = new Date().toISOString()
+    queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) =>
+      prev?.map((c) => ({ ...c, unread_count: 0, last_read_at: nowIso })) ?? prev,
+    )
+    queryClient.setQueryData<AssignmentNotification[]>([...assignmentsCacheKey], (prev) =>
+      prev?.map((row) => ({ ...row, is_read: true, read_at: row.read_at ?? nowIso })) ?? prev,
+    )
+    void Promise.all([
+      markAllChannelsRead(),
+      markAllAssignmentNotificationsRead(),
+    ]).catch(() => {
+      void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
+      void queryClient.invalidateQueries({ queryKey: assignmentsCacheKey })
+    })
+  }
 
   // Optimistic mark-read — update cache before RPC returns so the badge
   // clears on click with no visible delay.
@@ -469,12 +503,26 @@ export function ForumNotificationsWidget() {
         <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
           TODAY · {todayLabel}
         </p>
-        {totalUnread > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 ring-1 ring-rose-500/40 text-rose-300 text-[10px] font-bold tracking-wider uppercase">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" aria-hidden="true" />
-            {totalUnread} New
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {/* PR #48 — Mark-all-read. Hidden when nothing is unread. */}
+          {totalUnread > 0 && (
+            <button
+              type="button"
+              onClick={handleMarkAllRead}
+              title="Mark all as read"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface text-text-muted ring-1 ring-border text-[10px] font-bold tracking-wider uppercase hover:text-gold hover:ring-gold/40 transition-colors focus-ring"
+            >
+              <CheckCheck size={11} aria-hidden="true" />
+              Mark all read
+            </button>
+          )}
+          {totalUnread > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 ring-1 ring-rose-500/40 text-rose-300 text-[10px] font-bold tracking-wider uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" aria-hidden="true" />
+              {totalUnread} New
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Channel rows — internal scroll keeps the page non-scrolling. */}

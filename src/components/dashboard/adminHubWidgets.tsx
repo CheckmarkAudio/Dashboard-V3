@@ -6,6 +6,7 @@ import {
   Bell,
   CalendarPlus,
   Check,
+  CheckCheck,
   CheckCircle2,
   CheckSquare,
   Clock,
@@ -26,6 +27,7 @@ import { supabase } from '../../lib/supabase'
 import {
   fetchAssignmentNotifications,
   fetchTeamAssignedTasks,
+  markAllAssignmentNotificationsRead,
   markAssignmentNotificationRead,
 } from '../../lib/queries/assignments'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
@@ -411,6 +413,16 @@ async function markChannelRead(channelId: string): Promise<void> {
   if (error) throw error
 }
 
+// PR #48 — bulk-acknowledge every channel for the caller. Mirrors the
+// helper in memberOverviewWidgets; both widgets share the underlying
+// RPC and the same react-query cache keys so a single click on either
+// page invalidates both.
+async function markAllChannelsRead(): Promise<{ channels_marked: number }> {
+  const { data, error } = await supabase.rpc('mark_all_channels_read')
+  if (error) throw error
+  return data as { channels_marked: number }
+}
+
 export function AdminNotificationsWidget() {
   const queryClient = useQueryClient()
   const { profile } = useAuth()
@@ -476,6 +488,28 @@ export function AdminNotificationsWidget() {
   const assignments = assignmentsQuery.data ?? []
   const assignmentUnread = assignments.filter((n) => !n.is_read).length
   const totalUnread = channelUnread + assignmentUnread
+
+  // PR #48 — bulk-acknowledge both sections in one click. Mirrors the
+  // member-side handler; the cache keys are shared so a click on
+  // either widget clears the other's badge too.
+  const handleMarkAllRead = () => {
+    if (totalUnread === 0) return
+    const assignmentsCacheKey = ['overview-assignment-notifications', profile?.id] as const
+    const nowIso = new Date().toISOString()
+    queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) =>
+      prev?.map((c) => ({ ...c, unread_count: 0, last_read_at: nowIso })) ?? prev,
+    )
+    queryClient.setQueryData<AssignmentNotification[]>([...assignmentsCacheKey], (prev) =>
+      prev?.map((row) => ({ ...row, is_read: true, read_at: row.read_at ?? nowIso })) ?? prev,
+    )
+    void Promise.all([
+      markAllChannelsRead(),
+      markAllAssignmentNotificationsRead(),
+    ]).catch(() => {
+      void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
+      void queryClient.invalidateQueries({ queryKey: assignmentsCacheKey })
+    })
+  }
 
   const handleChannelClick = (channelId: string) => {
     queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) =>
@@ -553,10 +587,22 @@ export function AdminNotificationsWidget() {
       <TodayAnchor
         right={
           totalUnread > 0 ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 ring-1 ring-rose-500/40 text-rose-300 text-[10px] font-bold tracking-wider uppercase">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" aria-hidden="true" />
-              {totalUnread} New
-            </span>
+            <div className="flex items-center gap-1.5">
+              {/* PR #48 — Mark-all-read. */}
+              <button
+                type="button"
+                onClick={handleMarkAllRead}
+                title="Mark all as read"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface text-text-muted ring-1 ring-border text-[10px] font-bold tracking-wider uppercase hover:text-gold hover:ring-gold/40 transition-colors focus-ring"
+              >
+                <CheckCheck size={11} aria-hidden="true" />
+                Mark all read
+              </button>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 ring-1 ring-rose-500/40 text-rose-300 text-[10px] font-bold tracking-wider uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" aria-hidden="true" />
+                {totalUnread} New
+              </span>
+            </div>
           ) : null
         }
       />
