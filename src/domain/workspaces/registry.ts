@@ -25,10 +25,10 @@ import type {
 // HEIGHT within its column (rs=2 renders 2× tall). Within-column order
 // falls out of registration order here; users reorder via drag.
 //
-// Overview stacks (PR #47-rev3 layout):
+// Overview stacks (PR #47-rev3 layout, rev4 sized col 3 to flush):
 //   col 1: team_tasks (rs2)
 //   col 2: today_calendar (rs2)
-//   col 3: booking_snapshot (rs0.5 — compact Book-a-Session button) · forum_notifications (rs1)
+//   col 3: booking_snapshot (rs0.5 — compact Book-a-Session button) · forum_notifications (rs1.5)
 //
 // Tasks stacks (all rs2 so each column shows a long queue at a glance):
 //   col 1: team_tasks   |   col 2: studio_tasks   |   col 3: team_board
@@ -74,14 +74,16 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
-    // PR #47-rev3: rowSpan 2 → 1 so col 3 (Booking rs0.5 + Notifications
-    // rs1) reads as a balanced stack alongside Calendar / My Tasks at
-    // rs2 in cols 1-2. Within-column order: registered AFTER
-    // booking_snapshot so col 3 resolves Booking on top.
+    // PR #47-rev3: rowSpan 2 → 1 so col 3 reads as a balanced stack.
+    // PR #47-rev4: rowSpan 1 → 1.5 to fill the remaining vertical
+    // space — Booking rs0.5 (170px) + gap (16) + Notifications rs1.5
+    // (518px) = 704px, near-flush with cols 1-2 at rs2 (696px).
+    // Within-column order: registered AFTER booking_snapshot so col 3
+    // resolves Booking on top.
     id: 'forum_notifications',
     title: 'Notifications',
     description: 'Unread messages across channels and new assignments.',
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 1, col: 3 }],
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 1.5, col: 3 }],
     accessVisibility: 'shared',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -475,7 +477,12 @@ function buildDefaultWidgetStateForScope(
 // (rs0.5) on top of forum_notifications (rs1). Notifications shrunk
 // from rs2 → rs1 so col 3 reads as a balanced stack alongside the
 // rs2 widgets in cols 1-2.
-export const WORKSPACE_LAYOUT_VERSION = 27
+// v28 (2026-04-25, PR #47-rev4): added rs1.5 to WidgetRowSpan and
+// bumped forum_notifications rs1 → rs1.5 so col 3 (Booking 170 +
+// gap 16 + Notifications 518 = 704px) sits near-flush with cols
+// 1-2 at rs2 (696px), filling the previously-empty space below
+// Notifications.
+export const WORKSPACE_LAYOUT_VERSION = 28
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

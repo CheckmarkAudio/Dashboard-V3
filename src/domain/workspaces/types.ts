@@ -47,7 +47,13 @@ export type WidgetSpan = 1 | 2 | 3
 // `0.5` is the half-height slot used for compact action widgets (e.g.
 // a Book-a-Session button stacked above the Calendar). Renders at
 // ~170px instead of the default 340px.
-export type WidgetRowSpan = 0.5 | 1 | 2 | 3
+// Fractional row spans (0.5, 1.5) let mixed-height columns balance
+// against rs2 columns. Heights at ROW_HEIGHT_PX=340, ROW_GAP_PX=16:
+//   0.5 → 170px   1 → 340px   1.5 → 518px   2 → 696px   3 → 1052px
+// 1.5 was added in PR #47-rev4 so col 3 of Overview (Booking rs0.5 +
+// gap + Notifications rs1.5 = 704px) reads near-flush with cols 1-2
+// at rs2 (696px).
+export type WidgetRowSpan = 0.5 | 1 | 1.5 | 2 | 3
 
 // ── Widget visibility model (PR #7) ──────────────────────────────────
 // Two orthogonal axes per widget:
