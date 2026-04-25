@@ -143,7 +143,10 @@ export default function MultiTaskCreateModal({
       void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
       void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
       void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-recent-assignments'] })
+      // PR #44 — Assign Log widget reads under this prefix.
+      void queryClient.invalidateQueries({ queryKey: ['admin-log'] })
+      // Edit Tasks widget shares this prefix.
+      void queryClient.invalidateQueries({ queryKey: ['admin-assigned-tasks'] })
       onClose()
     },
     onError: (err: Error) => {

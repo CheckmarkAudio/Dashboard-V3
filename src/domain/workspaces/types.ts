@@ -132,6 +132,10 @@ export type AdminWidgetId =
   // Assign widget). Opens a modal listing every in-flight team task
   // with click-to-edit rows.
   | 'admin_edit_tasks'
+  // PR #44 — Assign Log feed (Assign page col 2, under the Assign
+  // widget). Recent task + session assignments, interleaved by
+  // recency.
+  | 'admin_assign_log'
   // Admin-side widget bank — registered but not on the page yet.
   | 'team_focus'
   | 'approval_queue'

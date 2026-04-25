@@ -37,6 +37,7 @@ import {
 } from './adminHubWidgets'
 import PendingTaskRequestsWidget from '../admin/assign/PendingTaskRequestsWidget'
 import AdminQuickAssignWidget from '../admin/assign/AdminQuickAssignWidget'
+import AdminAssignLogWidget from '../admin/assign/AdminAssignLogWidget'
 import {
   StudioAssignedTasksCard,
   TeamAssignedTasksCard,
@@ -82,6 +83,9 @@ const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
   // PR #40 — admin Edit Tasks library. Opens a modal listing every
   // in-flight task with click-to-edit rows.
   admin_edit_tasks: AdminEditTasksWidget,
+  // PR #44 — Assign Log. Recent task + session assignments
+  // interleaved by recency.
+  admin_assign_log: AdminAssignLogWidget,
   team_focus: TeamFocusWidget,
   approval_queue: ApprovalQueueWidget,
   admin_schedule: AdminScheduleWidget,
