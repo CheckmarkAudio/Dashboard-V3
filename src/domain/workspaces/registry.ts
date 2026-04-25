@@ -200,13 +200,16 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // PR #40 — Edit Tasks library. PR #41 moves it to col 1 below
-    // Task Requests (per sketch). PR #43 will gain a sibling Edit
-    // Session button.
+    // PR #40: single-button Edit Tasks widget.
+    // PR #41: moved to col 1 under Task Requests.
+    // PR #43: twin-button Edit widget (Edit Task + Edit Session)
+    // per the user sketch. Compact rowSpan 0.5 (~170px). Widget id
+    // kept stable so saved layouts keep resolving even though the
+    // display title is now just "Edit".
     id: 'admin_edit_tasks',
-    title: 'Edit Tasks',
+    title: 'Edit',
     description: '',
-    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 1, col: 1 }],
+    defaultPlacements: [{ scope: 'admin_assign', span: 1, rowSpan: 0.5, col: 1 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -388,7 +391,10 @@ function buildDefaultWidgetStateForScope(
 // v18 (2026-04-25, PR #41): Assign-page reorg per user sketch.
 // Col 1: Task Requests + Edit Tasks. Col 2: Assign. Col 3:
 // Templates. Assign widget itself shrinks from 4 tiles to 2.
-export const WORKSPACE_LAYOUT_VERSION = 18
+// v19 (2026-04-25, PR #43): Edit widget becomes twin-button (Edit
+// Task + Edit Session) and shrinks to rowSpan 0.5 (~170px). Widget
+// id unchanged; display title renamed to "Edit".
+export const WORKSPACE_LAYOUT_VERSION = 19
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

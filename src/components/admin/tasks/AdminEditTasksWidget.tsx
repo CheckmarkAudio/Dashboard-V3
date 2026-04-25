@@ -1,57 +1,60 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { ArrowRight, Pencil } from 'lucide-react'
-import { adminTaskKeys, fetchAllAssignedTasks } from '../../../lib/queries/adminTasks'
+import { Calendar, Pencil } from 'lucide-react'
 import AdminEditTasksModal from './AdminEditTasksModal'
+import AdminEditSessionsModal from '../sessions/AdminEditSessionsModal'
 
 /**
- * AdminEditTasksWidget — PR #40.
+ * AdminEditWidget (widget id `admin_edit_tasks`) — PR #43.
  *
- * Placed under the Assign widget on /admin/templates. Shows a count of
- * in-flight tasks + a button to open the full Edit Tasks modal. The
- * modal lists every team task with click-to-edit rows (title,
- * description, stage, due date). Edits fire `admin_update_assigned_task`
- * and the assignee gets a `task_edited` notification.
+ * Compact "Edit" surface on the Assign page. Two buttons side by
+ * side: Edit Task (PR #40 modal) and Edit Session (PR #43 modal).
+ * Widget id kept stable so saved layouts keep resolving; the
+ * display title in the registry is just "Edit" now.
+ *
+ * PR #40 shipped this as a single-button count-widget; PR #43
+ * upgrades it to a twin-button chip per the user sketch.
  */
 export default function AdminEditTasksWidget() {
-  const [open, setOpen] = useState(false)
-  // Fetch just the count on widget body; modal does its own fetch
-  // with includeCompleted controls.
-  const countQuery = useQuery({
-    queryKey: adminTaskKeys.list(false),
-    queryFn: () => fetchAllAssignedTasks({ includeCompleted: false }),
-    // Widget is only rendered on the Assign page — no need for
-    // aggressive refetch. Modal will refetch on open anyway.
-    staleTime: 30_000,
-  })
-  const openCount = countQuery.data?.length ?? 0
+  const [mode, setMode] = useState<'tasks' | 'sessions' | null>(null)
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 flex flex-col items-start justify-center gap-3 px-2">
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.08em] text-gold/70 uppercase">
-            In flight
-          </p>
-          <p className="mt-1 text-[36px] leading-none font-light tracking-[-0.03em] text-text tabular-nums">
-            {countQuery.isLoading ? '–' : openCount}
-          </p>
-          <p className="mt-1 text-[12px] text-text-muted">
-            {openCount === 1 ? 'open task across the team' : 'open tasks across the team'}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-bold bg-gradient-to-b from-gold to-gold-muted text-black hover:brightness-105 transition-all shadow-[0_6px_14px_rgba(214,170,55,0.25)]"
-        >
-          <Pencil size={14} strokeWidth={2.5} />
-          Edit Tasks
-          <ArrowRight size={14} strokeWidth={2.5} />
-        </button>
+    <div className="flex flex-col h-full justify-center">
+      <div className="grid grid-cols-2 gap-2">
+        <EditButton
+          icon={<Pencil size={14} strokeWidth={2.5} />}
+          label="Edit Task"
+          onClick={() => setMode('tasks')}
+        />
+        <EditButton
+          icon={<Calendar size={14} strokeWidth={2.5} />}
+          label="Edit Session"
+          onClick={() => setMode('sessions')}
+        />
       </div>
 
-      {open && <AdminEditTasksModal onClose={() => setOpen(false)} />}
+      {mode === 'tasks' && <AdminEditTasksModal onClose={() => setMode(null)} />}
+      {mode === 'sessions' && <AdminEditSessionsModal onClose={() => setMode(null)} />}
     </div>
+  )
+}
+
+function EditButton({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-bold bg-gradient-to-b from-gold/15 to-gold/5 text-gold ring-1 ring-gold/30 hover:from-gold/20 hover:to-gold/10 transition-colors"
+    >
+      {icon}
+      {label}
+    </button>
   )
 }
