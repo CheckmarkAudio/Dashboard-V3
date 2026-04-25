@@ -1,9 +1,12 @@
 -- PR #45 — Approval Log widget feed.
 --
 -- Returns recent resolved task_requests (both approved and declined)
--- for the admin's team, ordered by resolution recency. Both
--- requester + reviewer team scopes match so resolutions across team
--- members surface to all admins.
+-- for the admin's team, ordered by review recency. Both requester +
+-- reviewer team scopes match so resolutions across team members
+-- surface to all admins.
+--
+-- The DB column is `reviewed_at`; the JSON key is `resolved_at` to
+-- read more naturally on the client.
 
 CREATE OR REPLACE FUNCTION public.admin_recent_approvals(
   p_limit integer DEFAULT 30
@@ -34,10 +37,10 @@ BEGIN
         'requester_id',   tr.requester_id,
         'requester_name', requester.display_name,
         'reviewer_note',  tr.reviewer_note,
-        'resolved_at',    tr.resolved_at,
+        'resolved_at',    tr.reviewed_at,
         'created_at',     tr.created_at
       )
-      ORDER BY tr.resolved_at DESC NULLS LAST
+      ORDER BY tr.reviewed_at DESC NULLS LAST
     )
     FROM public.task_requests tr
     LEFT JOIN public.team_members requester ON requester.id = tr.requester_id
