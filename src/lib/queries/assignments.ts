@@ -387,6 +387,22 @@ export async function markAssignmentNotificationRead(
   return data as { success: boolean; notification_id: string; is_read: boolean; read_at: string | null }
 }
 
+/** PR #48 — bulk-acknowledge every unread assignment notification for
+ *  the caller in one shot. Server-side filter is `recipient_id =
+ *  auth.uid() AND is_read = false`, so the call is purely self-service
+ *  and never touches another user's rows. */
+export async function markAllAssignmentNotificationsRead(): Promise<{
+  success: boolean
+  notifications_marked: number
+}> {
+  const { data, error } = await supabase.rpc('mark_all_assignment_notifications_read')
+  if (error) {
+    console.error('[queries/assignments] markAllAssignmentNotificationsRead failed:', error)
+    throw new Error(error.message)
+  }
+  return data as { success: boolean; notifications_marked: number }
+}
+
 /**
  * Admin assigns a custom task. Atomic (batch + recipients + tasks +
  * notifications in one transaction).
