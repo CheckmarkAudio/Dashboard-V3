@@ -136,6 +136,10 @@ export type AdminWidgetId =
   // widget). Recent task + session assignments, interleaved by
   // recency.
   | 'admin_assign_log'
+  // PR #45 — Approval Log (Assign page col 1, between Task
+  // Requests on top and Edit at bottom). Recent resolved
+  // task_requests, both approved and declined.
+  | 'admin_approval_log'
   // Admin-side widget bank — registered but not on the page yet.
   | 'team_focus'
   | 'approval_queue'

@@ -38,6 +38,7 @@ import {
 import PendingTaskRequestsWidget from '../admin/assign/PendingTaskRequestsWidget'
 import AdminQuickAssignWidget from '../admin/assign/AdminQuickAssignWidget'
 import AdminAssignLogWidget from '../admin/assign/AdminAssignLogWidget'
+import AdminApprovalLogWidget from '../admin/assign/AdminApprovalLogWidget'
 import {
   StudioAssignedTasksCard,
   TeamAssignedTasksCard,
@@ -86,6 +87,9 @@ const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
   // PR #44 — Assign Log. Recent task + session assignments
   // interleaved by recency.
   admin_assign_log: AdminAssignLogWidget,
+  // PR #45 — Approval Log. Recent resolved task_requests
+  // (approved + declined), labelled by outcome.
+  admin_approval_log: AdminApprovalLogWidget,
   team_focus: TeamFocusWidget,
   approval_queue: ApprovalQueueWidget,
   admin_schedule: AdminScheduleWidget,

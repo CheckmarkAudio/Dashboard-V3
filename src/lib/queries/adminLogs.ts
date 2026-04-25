@@ -18,6 +18,18 @@ export interface RecentAssignmentRow {
 
 export const adminLogKeys = {
   recentAssignments: (limit: number) => ['admin-log', 'assignments', limit] as const,
+  recentApprovals: (limit: number) => ['admin-log', 'approvals', limit] as const,
+}
+
+export interface RecentApprovalRow {
+  id: string
+  status: 'approved' | 'rejected'
+  title: string
+  requester_id: string
+  requester_name: string | null
+  reviewer_note: string | null
+  resolved_at: string | null
+  created_at: string
 }
 
 export async function fetchRecentAssignments(
@@ -32,4 +44,18 @@ export async function fetchRecentAssignments(
   }
   if (!Array.isArray(data)) return []
   return data as RecentAssignmentRow[]
+}
+
+export async function fetchRecentApprovals(
+  limit = 30,
+): Promise<RecentApprovalRow[]> {
+  const { data, error } = await supabase.rpc('admin_recent_approvals', {
+    p_limit: limit,
+  })
+  if (error) {
+    console.error('[queries/adminLogs] fetchRecentApprovals failed:', error)
+    throw new Error(error.message)
+  }
+  if (!Array.isArray(data)) return []
+  return data as RecentApprovalRow[]
 }
