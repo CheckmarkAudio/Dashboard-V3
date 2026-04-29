@@ -372,30 +372,49 @@ export default function CreateBookingModal({
                   placeholder="Search clients or type a new name..."
                   className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-text-light focus:border-gold focus:outline-none"
                 />
-                {clientDropdownOpen && (matches.length > 0 || showAddNewOption) && (
-                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-surface-alt border border-border rounded-xl overflow-hidden shadow-lg">
-                    {matches.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedClient(c)
-                          setClientQuery(c.name)
-                          setClientDropdownOpen(false)
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2"
-                      >
-                        <div className="w-6 h-6 rounded-full bg-surface text-text-muted flex items-center justify-center text-[10px] font-bold shrink-0">
-                          {c.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-medium text-text truncate">{c.name}</p>
-                          {c.email && (
-                            <p className="text-[11px] text-text-light truncate">{c.email}</p>
-                          )}
-                        </div>
-                      </button>
-                    ))}
+                {clientDropdownOpen && (
+                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-surface-alt border border-border rounded-xl overflow-hidden shadow-lg max-h-72 overflow-y-auto">
+                    {clientResults.isLoading ? (
+                      <div className="px-3 py-3 flex items-center gap-2 text-text-muted text-[12px]">
+                        <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                        Searching…
+                      </div>
+                    ) : matches.length > 0 ? (
+                      matches.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedClient(c)
+                            setClientQuery(c.name)
+                            setClientDropdownOpen(false)
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2"
+                        >
+                          <div className="w-6 h-6 rounded-full bg-surface text-text-muted flex items-center justify-center text-[10px] font-bold shrink-0">
+                            {c.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-medium text-text truncate">{c.name}</p>
+                            {c.email && (
+                              <p className="text-[11px] text-text-light truncate">{c.email}</p>
+                            )}
+                          </div>
+                        </button>
+                      ))
+                    ) : clientQuery.trim().length === 0 ? (
+                      // No matches AND empty query → empty-state hint.
+                      // Common when the studio is just starting out and
+                      // hasn't added any clients yet.
+                      <div className="px-3 py-3 text-[12px] text-text-light">
+                        <p className="mb-1">No clients yet.</p>
+                        <p className="text-text-muted">Type a name to add your first one.</p>
+                      </div>
+                    ) : null}
+
+                    {/* "Add new client: {query}" — visible whenever the
+                        admin has typed a non-empty name that doesn't
+                        exactly match an existing client. */}
                     {showAddNewOption && (
                       <button
                         type="button"
@@ -403,7 +422,9 @@ export default function CreateBookingModal({
                           setShowInlineAddForm(true)
                           setClientDropdownOpen(false)
                         }}
-                        className="w-full text-left px-3 py-2 border-t border-border hover:bg-surface-hover transition-colors flex items-center gap-2 text-gold"
+                        className={`w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2 text-gold ${
+                          matches.length > 0 ? 'border-t border-border' : ''
+                        }`}
                       >
                         <Plus size={14} aria-hidden="true" />
                         <span className="text-[13px] font-semibold">
