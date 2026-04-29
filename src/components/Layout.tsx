@@ -13,7 +13,7 @@ import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
 import type { LucideProps } from 'lucide-react'
 import {
-  LayoutDashboard, Users, Calendar, Settings, Gauge,
+  LayoutDashboard, Users, UserSquare, Calendar, Settings, Gauge,
   LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
   BarChart3, Briefcase, MessageSquare, Clock, Sun, Moon,
   Loader2, MoreHorizontal,
@@ -373,6 +373,9 @@ const adminLinks: NavLinkDef[] = [
   // bookmarks still work — the route just renders the new
   // table-styled interactive Members admin page.
   { to: APP_ROUTES.admin.members, icon: Users, label: 'Members' },
+  // PR #51 — Clients admin page. Sits next to Members so the two
+  // people-management surfaces stay visually grouped in the nav.
+  { to: APP_ROUTES.admin.clients, icon: UserSquare, label: 'Clients' },
   { to: APP_ROUTES.admin.analytics, icon: BarChart3, label: 'Analytics' },
 ]
 const settingsLink: NavLinkDef = { to: APP_ROUTES.admin.settings, icon: Settings, label: 'Settings' }
