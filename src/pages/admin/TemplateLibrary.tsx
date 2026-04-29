@@ -6,7 +6,6 @@ import {
   Calendar,
   FileText,
   FolderKanban,
-  GraduationCap,
   Layers,
   Loader2,
   Plus,
@@ -425,7 +424,7 @@ function BigThumbnail({
   template: TaskTemplateLibraryEntry
   onClick: () => void
 }) {
-  const { name, description, item_count, is_active, is_onboarding, role_tag } = template
+  const { name, description, item_count, is_active, role_tag } = template
   const muted = !is_active
   const Icon = iconForRole(role_tag)
   return (
@@ -437,17 +436,12 @@ function BigThumbnail({
         muted ? 'opacity-60 hover:opacity-100' : ''
       }`}
     >
+      {/* PR #56 — onboarding corner badge removed per user feedback.
+          Onboarding state is still filterable via the toolbar toggle;
+          the role-tag (visible in the footer + reflected in the icon
+          choice) is the primary categorisation. */}
       <div className="relative inline-flex items-center justify-center w-16 h-16 rounded-full bg-gold/10 ring-1 ring-gold/25 group-hover:bg-gold/15 transition-colors">
         <Icon size={26} className="text-gold" aria-hidden="true" />
-        {is_onboarding && (
-          <span
-            aria-hidden="true"
-            title="Onboarding"
-            className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-400 ring-2 ring-[rgb(19,22,28)]"
-          >
-            <GraduationCap size={9} className="text-emerald-950" aria-hidden="true" />
-          </span>
-        )}
       </div>
       <span className="text-[14px] font-bold text-text leading-tight text-center line-clamp-2 w-full">
         {name}
