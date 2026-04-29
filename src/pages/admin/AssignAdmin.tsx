@@ -26,9 +26,16 @@ import type { TeamMember } from '../../types'
 import type { AssignedTask } from '../../types/assignments'
 
 /**
- * Assign — member-centric task editor (PR #52).
+ * Assign — member-centric task editor.
  *
- * Layout per the boss's sketch (2026-04-29):
+ * Replaces the legacy widget-grid Assign page (PRs #41–#46) with a
+ * sidebar+main pattern per the boss's sketch (2026-04-29). The
+ * legacy page (Task Requests / Approval Log / Edit Tasks / Assign /
+ * Assign Log / Templates) lives at /admin/assign-classic so the data
+ * + components stay reachable for the planned "tabs" integration on
+ * this page.
+ *
+ * Layout:
  *   - Left sidebar (260px): Members list · Templates link · Other
  *   - Main content: Settings · Save as Template · Templates ▾ bar;
  *     "All Tasks for {selected member}" title; two-column task list
@@ -41,21 +48,21 @@ import type { AssignedTask } from '../../types/assignments'
  *   - Edit row → small inline edit modal hitting
  *     `admin_update_assigned_task`.
  *   - "Add Task" → reuses `MultiTaskCreateModal` with the selected
- *     member pre-filled (new `defaultRecipientIds` prop).
+ *     member pre-filled (`defaultRecipientIds` prop).
  *   - "Templates ▾" → applies via `assign_template_to_members` to
  *     the selected member only.
- *   - "Save as Template" → opens a small modal asking for name +
- *     role tag, creates a `task_template`, then loops
- *     `add_task_template_item` for each of the selected member's
- *     current tasks (copies title / description / category, drops
- *     completion state).
- *   - "Settings for Tasks" → coming soon (disabled placeholder).
+ *   - "Save as Template" → name + role tag prompt, creates a
+ *     `task_template`, then loops `add_task_template_item` for each
+ *     of the selected member's current tasks.
+ *   - "Settings for Tasks" → reserved for future global task
+ *     settings (currently disabled).
  *
- * Lives at /admin/assign-mockup during the visual pass; once signed
- * off, the route promotion happens in a follow-up.
+ * Mounted at the canonical Assign route (`/admin/templates`) and
+ * also at `/admin/assign-mockup` for any saved bookmark from the
+ * preview phase.
  */
 
-export default function AssignMockup() {
+export default function AssignAdmin() {
   useDocumentTitle('Assign - Checkmark Workspace')
   const queryClient = useQueryClient()
   const { toast } = useToast()
