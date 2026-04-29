@@ -323,8 +323,10 @@ export default function TeamManager() {
       start_date: member.start_date ?? '',
       status: (member.status ?? 'active') as 'active' | 'inactive',
       managed_by: member.managed_by ?? '',
-      // default_password is only meaningful for new-member creation; not editable here.
+      // default_password + send_setup_email are only meaningful for
+      // new-member creation; not editable here.
       default_password: '',
+      send_setup_email: true,
     })
     if (!knownPosition) setCustomPosition(member.position ?? '')
     setShowForm(true)
