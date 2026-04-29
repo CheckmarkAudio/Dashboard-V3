@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { normalizeEmail } from '../../lib/email'
 import { useAuth } from '../../contexts/AuthContext'
@@ -15,7 +16,7 @@ import {
 import type { TeamMember, ReportTemplate } from '../../types'
 import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck,
-  Mail, Phone, Calendar as CalendarIcon, Save, ChevronRight, ChevronLeft,
+  Mail, Phone, Save, ChevronRight, ChevronLeft,
   MoreVertical, UserPlus, Filter, Check, ClipboardList,
 } from 'lucide-react'
 
@@ -35,12 +36,20 @@ type MemberForm = {
   position: string; phone: string; start_date: string; status: 'active' | 'inactive'
   managed_by: string
   default_password: string
+  // PR #49 — when true (default), the admin enters NO password; the
+  // edge function generates a strong random one server-side and we
+  // fire `auth.resetPasswordForEmail()` after creation so the new
+  // member receives a setup link and picks their own password.
+  // When false, the admin enters a temp password to share manually
+  // (offline / walk-in adds).
+  send_setup_email: boolean
 }
 
 const EMPTY_MEMBER: MemberForm = {
   display_name: '', email: '', role: 'intern', position: 'intern',
   phone: '', start_date: '', status: 'active', managed_by: '',
   default_password: '',
+  send_setup_email: true,
 }
 
 export default function TeamManager() {
@@ -103,8 +112,13 @@ export default function TeamManager() {
     if (!editingMember) {
       const email = normalizeEmail(formData.email)
       if (!email) return 'Email is required'
-      if (formData.default_password.length < 8) {
-        return 'Default password must be at least 8 characters'
+      // PR #49 — when send_setup_email is on (default), the edge
+      // function generates a strong random password server-side and
+      // we email a reset link, so admin doesn't need to enter one.
+      // Only require a password when the admin opted into manual
+      // share mode (offline / walk-in adds).
+      if (!formData.send_setup_email && formData.default_password.length < 8) {
+        return 'Temporary password must be at least 8 characters'
       }
     }
     if (formData.position === 'custom' && !customPosition.trim()) {
@@ -172,13 +186,28 @@ export default function TeamManager() {
     const email = normalizeEmail(formData.email)
 
     // 1) Create the auth user + team_members row atomically via the Edge Function.
+    //    PR #49 — when send_setup_email is on, we omit `default_password`
+    //    entirely; the edge function generates one server-side. The plaintext
+    //    is never returned to the client. We then trigger the recovery email
+    //    below so the member can pick their own password.
     const { data: result, error } = await supabase.functions.invoke<
-      { ok: boolean; profile?: TeamMember; error?: string; where?: string }
+      {
+        ok: boolean
+        profile?: TeamMember
+        error?: string
+        where?: string
+        password_was_generated?: boolean
+      }
     >('admin-create-member', {
       body: {
         email,
         display_name: formData.display_name.trim(),
-        default_password: formData.default_password,
+        // Only send a password when the admin opted into manual share
+        // mode. Omitting the field cleanly triggers the server-side
+        // random-generation path.
+        ...(formData.send_setup_email
+          ? {}
+          : { default_password: formData.default_password }),
         role: formData.role,
         position,
         phone: formData.phone.trim() || null,
@@ -244,7 +273,44 @@ export default function TeamManager() {
       // is fine.
     }
 
-    toast(`Member added — share the default password with them`)
+    // 4) PR #49 — when the admin chose "Email a setup link", trigger
+    //    Supabase's standard recovery email so the new member receives
+    //    a single-use link to set their own password. The link lands
+    //    on the app with `type=recovery`, RecoveryGate intercepts and
+    //    shows the password-set form. Non-fatal — the member account
+    //    still exists if this fails; admin can re-send via
+    //    AccountAccessPanel afterwards.
+    let setupEmailSent = false
+    if (formData.send_setup_email) {
+      try {
+        const redirectTo =
+          typeof window !== 'undefined'
+            ? window.location.origin + import.meta.env.BASE_URL
+            : undefined
+        const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
+          email,
+          redirectTo ? { redirectTo } : undefined,
+        )
+        if (resetErr) {
+          console.error('[TeamManager] resetPasswordForEmail failed:', resetErr)
+        } else {
+          setupEmailSent = true
+        }
+      } catch (resetErr) {
+        console.error('[TeamManager] resetPasswordForEmail threw:', resetErr)
+      }
+    }
+
+    if (formData.send_setup_email) {
+      toast(
+        setupEmailSent
+          ? `Member added — setup email sent to ${email}`
+          : `Member added — couldn't send setup email. Resend from Account Access.`,
+        setupEmailSent ? 'success' : 'error',
+      )
+    } else {
+      toast(`Member added — share the temporary password with them`)
+    }
     closeForm()
     setSubmitting(false)
     loadMembers()
@@ -315,8 +381,10 @@ export default function TeamManager() {
       start_date: member.start_date ?? '',
       status: (member.status ?? 'active') as 'active' | 'inactive',
       managed_by: member.managed_by ?? '',
-      // default_password is only meaningful for new-member creation; not editable here.
+      // default_password + send_setup_email are only meaningful for
+      // new-member creation; not editable here.
       default_password: '',
+      send_setup_email: true,
     })
     if (!knownPosition) setCustomPosition(member.position ?? '')
     setShowForm(true)
@@ -359,6 +427,42 @@ export default function TeamManager() {
     loadMembers()
   }
 
+  /**
+   * PR #49 — re-send the password-setup email to an existing member.
+   * Same `auth.resetPasswordForEmail()` call AccountAccessPanel uses;
+   * Supabase delivers a single-use recovery link, the member clicks
+   * it, lands on `RecoveryGate`, picks their own password.
+   *
+   * Useful when:
+   *   - Admin originally created the member with a manual temp pw and
+   *     wants to switch them to the email-setup path instead.
+   *   - The original setup email expired (1-hour TTL).
+   *   - Member forgot their password and the admin is helping.
+   */
+  const handleSendSetupEmail = async (member: TeamMember) => {
+    setOpenMenuId(null)
+    if (!member.email) {
+      toast('Member has no email on file', 'error')
+      return
+    }
+    setActionLoadingId(member.id)
+    const redirectTo =
+      typeof window !== 'undefined'
+        ? window.location.origin + import.meta.env.BASE_URL
+        : undefined
+    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
+      member.email,
+      redirectTo ? { redirectTo } : undefined,
+    )
+    setActionLoadingId(null)
+    if (resetErr) {
+      console.error('[TeamManager] handleSendSetupEmail failed:', resetErr)
+      toast(`Couldn't send setup email: ${resetErr.message}`, 'error')
+      return
+    }
+    toast(`Setup email sent to ${member.email}`)
+  }
+
   const getPositionVariant = (pos: string): BadgeVariant =>
     POSITIONS.find(p => p.value === pos)?.badge ?? 'neutral'
 
@@ -370,20 +474,10 @@ export default function TeamManager() {
     return members.find(m => m.id === managedBy)?.display_name ?? null
   }
 
-  const getReportChain = (member: TeamMember): string[] => {
-    const chain: string[] = []
-    let current = member.managed_by
-    const visited = new Set<string>()
-    while (current && !visited.has(current)) {
-      visited.add(current)
-      const mgr = members.find(m => m.id === current)
-      if (mgr) {
-        chain.push(mgr.display_name)
-        current = mgr.managed_by
-      } else break
-    }
-    return chain
-  }
+  // PR #49 — `getReportChain` was used by the old card grid to show a
+  // multi-hop reporting chain. The table layout doesn't render the
+  // chain (manager column shows direct manager only). If the chain
+  // ever becomes useful again, restore from git history.
 
   const adminsAndOwners = members.filter(m => m.role === 'admin' || m.position === 'owner')
 
@@ -522,133 +616,183 @@ export default function TeamManager() {
           />
         )
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(member => {
-            const managerName = getManagerName(member.managed_by)
-            const chain = getReportChain(member)
-            const isLoading = actionLoadingId === member.id
-
-            return (
-              <div key={member.id}
-                className={`bg-surface rounded-2xl border border-border p-5 transition-all hover:shadow-lg hover:border-border-light group ${
-                  isLoading ? 'opacity-70 pointer-events-none' : ''
-                }`}>
-                {isLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center z-10">
-                    <Loader2 size={20} className="animate-spin text-gold" aria-hidden="true" />
-                  </div>
-                )}
-
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-11 h-11 rounded-full bg-gold/15 text-gold flex items-center justify-center text-sm font-bold shrink-0">
-                      {member.display_name?.charAt(0)?.toUpperCase() ?? '?'}
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-sm truncate">{member.display_name}</h3>
-                      <Badge
-                        variant={getPositionVariant(member.position ?? 'intern')}
-                        size="sm"
-                        className="mt-0.5"
-                      >
-                        {getPositionLabel(member.position ?? 'intern')}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className={`w-2.5 h-2.5 rounded-full ${member.status === 'active' ? 'bg-emerald-400' : 'bg-text-light'}`}
-                      title={member.status === 'active' ? 'Active' : 'Inactive'}
-                      aria-hidden="true" />
-
-                    <div className="relative" ref={openMenuId === member.id ? menuRef : undefined}>
-                      <button onClick={() => setOpenMenuId(openMenuId === member.id ? null : member.id)}
-                        className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        aria-label={`Actions for ${member.display_name}`}
-                        aria-expanded={openMenuId === member.id}
-                        aria-haspopup="menu">
-                        <MoreVertical size={14} aria-hidden="true" />
-                      </button>
-
-                      {openMenuId === member.id && (
-                        <div className="absolute right-0 top-full mt-1 w-44 bg-surface border border-border rounded-xl shadow-xl z-20 py-1 animate-fade-in" role="menu">
-                          <button role="menuitem" onClick={() => handleEdit(member)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors">
-                            <Edit2 size={12} aria-hidden="true" /> Edit Member
-                          </button>
-                          <button role="menuitem" onClick={() => toggleRole(member)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-surface-hover transition-colors">
-                            <Shield size={12} aria-hidden="true" /> {member.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
-                          </button>
-                          <button role="menuitem" onClick={() => toggleStatus(member)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-hover transition-colors">
-                            <UserCheck size={12} aria-hidden="true" /> {member.status === 'active' ? 'Deactivate' : 'Activate'}
-                          </button>
-                          <div className="my-1 border-t border-border" />
-                          <button role="menuitem" onClick={() => requestDelete(member)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors">
-                            <Trash2 size={12} aria-hidden="true" /> Remove Member
-                          </button>
+        // PR #49 — table layout (replaces the previous card grid).
+        // Mirrors the read-only MyTeam look the user signed off on
+        // visually, but every row has a 3-dot action menu (Edit /
+        // Send setup email / Toggle role / Toggle status / Delete)
+        // so the page is the single canonical Members management
+        // surface — Add up top, manage per-row.
+        <div className="widget-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/5">
+                  <TmHeaderCell>Member</TmHeaderCell>
+                  <TmHeaderCell>Job Title</TmHeaderCell>
+                  <TmHeaderCell>Department</TmHeaderCell>
+                  <TmHeaderCell>Term</TmHeaderCell>
+                  <TmHeaderCell>Status</TmHeaderCell>
+                  <TmHeaderCell>Access</TmHeaderCell>
+                  <TmHeaderCell>Contact</TmHeaderCell>
+                  <TmHeaderCell><span className="sr-only">Actions</span></TmHeaderCell>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(member => {
+                  const isInactive = member.status === 'inactive'
+                  const isLoading = actionLoadingId === member.id
+                  const initial = member.display_name?.charAt(0)?.toUpperCase() ?? '?'
+                  return (
+                    <tr
+                      key={member.id}
+                      className={`border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors group ${
+                        isInactive ? 'opacity-50' : ''
+                      } ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}
+                    >
+                      {/* Member: avatar + name + email → profile link */}
+                      <td className="px-5 py-4">
+                        <Link
+                          to={`/profile/${member.id}`}
+                          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-surface-alt border-[2px] border-white/12 text-gold flex items-center justify-center text-[14px] font-bold shrink-0">
+                            {initial}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[14px] font-medium text-text tracking-tight truncate">
+                              {member.display_name}
+                            </p>
+                            <p className="text-[11px] text-text-light truncate">{member.email}</p>
+                          </div>
+                        </Link>
+                      </td>
+                      {/* Job Title */}
+                      <td className="px-5 py-4">
+                        <span className="text-[13px] text-text-muted">
+                          {member.position
+                            ? getPositionLabel(member.position).toLowerCase().replace(/\s+/g, '_')
+                            : '—'}
+                        </span>
+                      </td>
+                      {/* Department (free-text column on team_members) */}
+                      <td className="px-5 py-4">
+                        <span className="text-[13px] text-text-muted">{member.department || '—'}</span>
+                      </td>
+                      {/* Term: start – end (or "present") */}
+                      <td className="px-5 py-4">
+                        <span className="text-[13px] text-text-muted whitespace-nowrap">
+                          {formatTerm(member)}
+                        </span>
+                      </td>
+                      {/* Status dot */}
+                      <td className="px-5 py-4">
+                        <span className="flex items-center gap-1.5 text-[12px] text-text-muted">
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              isInactive ? 'bg-text-light' : 'bg-emerald-400'
+                            }`}
+                            aria-hidden="true"
+                          />
+                          {isInactive ? 'Inactive' : 'Active'}
+                        </span>
+                      </td>
+                      {/* Access pill (Admin / Standard) */}
+                      <td className="px-5 py-4">
+                        <TmAccessBadge role={member.role} />
+                      </td>
+                      {/* Contact icons */}
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          {member.email && (
+                            <a
+                              href={`mailto:${member.email}`}
+                              className="text-text-light hover:text-gold transition-colors"
+                              title={member.email}
+                              aria-label={`Email ${member.display_name}`}
+                            >
+                              <Mail size={14} />
+                            </a>
+                          )}
+                          {member.phone && (
+                            <a
+                              href={`tel:${member.phone}`}
+                              className="text-text-light hover:text-gold transition-colors"
+                              title={member.phone}
+                              aria-label={`Call ${member.display_name}`}
+                            >
+                              <Phone size={14} />
+                            </a>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-text-muted mb-3">
-                  <p className="flex items-center gap-1.5 truncate"><Mail size={12} className="shrink-0" aria-hidden="true" /> {member.email}</p>
-                  {member.phone && <p className="flex items-center gap-1.5"><Phone size={12} className="shrink-0" aria-hidden="true" /> {member.phone}</p>}
-                  {member.start_date && <p className="flex items-center gap-1.5"><CalendarIcon size={12} className="shrink-0" aria-hidden="true" /> Started {member.start_date}</p>}
-                </div>
-
-                <div className="flex items-center gap-2 text-xs mb-3">
-                  {member.role === 'admin' ? (
-                    <Badge variant="gold" icon={<Shield size={10} aria-hidden="true" />}>Admin</Badge>
-                  ) : (
-                    <Badge variant="neutral" icon={<UserCheck size={10} aria-hidden="true" />}>Member</Badge>
-                  )}
-                  {member.status === 'inactive' && (
-                    <Badge variant="danger" size="sm">Inactive</Badge>
-                  )}
-                </div>
-
-                {managerName && (
-                  <div className="pt-2 border-t border-border">
-                    <div className="flex items-center gap-1 text-xs">
-                      <Users size={12} className="text-violet-400 shrink-0" aria-hidden="true" />
-                      <span className="text-text-light">Reports to</span>
-                      <span className="font-medium text-text">{managerName}</span>
-                    </div>
-                    {chain.length > 1 && (
-                      <div className="flex items-center gap-0.5 flex-wrap pl-4 mt-1">
-                        {[...chain].reverse().map((name, i) => (
-                          <span key={i} className="flex items-center gap-0.5 text-[10px] text-text-light">
-                            {i > 0 && <ChevronRight size={8} aria-hidden="true" />}
-                            {name}
-                          </span>
-                        ))}
-                        <ChevronRight size={8} className="text-text-light" aria-hidden="true" />
-                        <span className="text-[10px] text-gold font-medium">{member.display_name}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="mt-3 pt-3 border-t border-border">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    block
-                    onClick={() => handleEdit(member)}
-                    iconLeft={<Edit2 size={12} aria-hidden="true" />}
-                    className="text-gold hover:text-gold hover:bg-gold/10"
-                  >
-                    Edit Details
-                  </Button>
-                </div>
-              </div>
-            )
-          })}
+                      </td>
+                      {/* Action menu — 3-dot, hover-revealed, popover */}
+                      <td className="px-5 py-4 text-right relative">
+                        <div className="relative inline-block" ref={openMenuId === member.id ? menuRef : undefined}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenMenuId(openMenuId === member.id ? null : member.id)
+                            }
+                            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text transition-colors opacity-60 group-hover:opacity-100 focus:opacity-100 focus-ring"
+                            aria-label={`Actions for ${member.display_name}`}
+                            aria-expanded={openMenuId === member.id}
+                            aria-haspopup="menu"
+                          >
+                            <MoreVertical size={14} aria-hidden="true" />
+                          </button>
+                          {openMenuId === member.id && (
+                            <div
+                              className="absolute right-0 top-full mt-1 w-52 bg-surface border border-border rounded-xl shadow-xl z-20 py-1 animate-fade-in"
+                              role="menu"
+                            >
+                              <button
+                                role="menuitem"
+                                onClick={() => handleEdit(member)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors"
+                              >
+                                <Edit2 size={12} aria-hidden="true" /> Edit member
+                              </button>
+                              <button
+                                role="menuitem"
+                                onClick={() => handleSendSetupEmail(member)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors"
+                              >
+                                <Mail size={12} aria-hidden="true" /> Send setup email
+                              </button>
+                              <button
+                                role="menuitem"
+                                onClick={() => toggleRole(member)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-surface-hover transition-colors"
+                              >
+                                <Shield size={12} aria-hidden="true" />{' '}
+                                {member.role === 'admin' ? 'Remove admin' : 'Make admin'}
+                              </button>
+                              <button
+                                role="menuitem"
+                                onClick={() => toggleStatus(member)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-hover transition-colors"
+                              >
+                                <UserCheck size={12} aria-hidden="true" />{' '}
+                                {member.status === 'active' ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <div className="my-1 border-t border-border" />
+                              <button
+                                role="menuitem"
+                                onClick={() => requestDelete(member)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                              >
+                                <Trash2 size={12} aria-hidden="true" /> Remove member
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -745,18 +889,65 @@ export default function TeamManager() {
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
                 />
 
+                {/* PR #49 — Send-setup-email toggle replaces the
+                    always-visible password input. When on (default),
+                    no password is collected: the edge function
+                    generates a random one server-side and we email a
+                    setup link via Supabase's native recovery flow.
+                    When off, the password input returns for offline
+                    adds. */}
                 {!editingMember && (
-                  <Input
-                    id="team-member-default-password"
-                    label="Default Password"
-                    type="text"
-                    required
-                    minLength={8}
-                    placeholder="Min 8 characters"
-                    hint="Share this with the member. They'll be prompted to change it on first sign-in."
-                    value={formData.default_password}
-                    onChange={e => setFormData({ ...formData, default_password: e.target.value })}
-                  />
+                  <div className="space-y-3">
+                    <label
+                      className="flex items-start gap-3 px-3 py-3 rounded-xl border border-border bg-surface-alt/50 hover:bg-surface-alt cursor-pointer transition-colors"
+                      htmlFor="team-member-send-setup-email"
+                    >
+                      <input
+                        id="team-member-send-setup-email"
+                        type="checkbox"
+                        checked={formData.send_setup_email}
+                        onChange={e =>
+                          setFormData({ ...formData, send_setup_email: e.target.checked })
+                        }
+                        className="mt-1 w-4 h-4 rounded border-border accent-gold shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-text flex items-center gap-1.5">
+                          <Mail size={13} className="text-gold shrink-0" aria-hidden="true" />
+                          Email a setup link to the new member
+                        </p>
+                        <p className="text-[12px] text-text-muted mt-0.5">
+                          {formData.send_setup_email ? (
+                            <>
+                              They'll get a secure link at{' '}
+                              <span className="font-medium text-text">
+                                {normalizeEmail(formData.email) || 'their email'}
+                              </span>{' '}
+                              to choose their own password. Recommended.
+                            </>
+                          ) : (
+                            "You'll set a temporary password below to share with them manually."
+                          )}
+                        </p>
+                      </div>
+                    </label>
+
+                    {!formData.send_setup_email && (
+                      <Input
+                        id="team-member-default-password"
+                        label="Temporary password"
+                        type="text"
+                        required
+                        minLength={8}
+                        placeholder="Min 8 characters"
+                        hint="Share this with the member. They'll be prompted to change it on first sign-in."
+                        value={formData.default_password}
+                        onChange={e =>
+                          setFormData({ ...formData, default_password: e.target.value })
+                        }
+                      />
+                    )}
+                  </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
@@ -900,8 +1091,18 @@ export default function TeamManager() {
                         Review &amp; create
                       </h3>
                       <p className="text-xs text-text-muted mt-1">
-                        Confirm everything below. The default password will need to be shared with
-                        the new member directly — they'll be required to change it on first sign-in.
+                        {formData.send_setup_email ? (
+                          <>
+                            Confirm everything below. After creation, a setup-link email will be sent to{' '}
+                            <span className="font-semibold text-text">{normalizeEmail(formData.email)}</span>{' '}
+                            so the new member can pick their own password.
+                          </>
+                        ) : (
+                          <>
+                            Confirm everything below. The temporary password will need to be shared with
+                            the new member directly — they'll be required to change it on first sign-in.
+                          </>
+                        )}
                       </p>
                     </div>
 
@@ -916,7 +1117,9 @@ export default function TeamManager() {
                         ['Phone', formData.phone || '—'],
                         ['Start date', formData.start_date || '—'],
                         ['Status', formData.status],
-                        ['Default password', formData.default_password],
+                        formData.send_setup_email
+                          ? ['Setup', 'Email link to member']
+                          : ['Temp password', formData.default_password],
                       ]}
                     />
 
@@ -1088,4 +1291,47 @@ function ReviewSummary({
       </dl>
     </div>
   )
+}
+
+// PR #49 — table helpers ported from MyTeam.tsx so this file is the
+// canonical Members admin surface. `Tm` prefix avoids any future
+// collision with similarly-named atoms in other files.
+
+function TmHeaderCell({ children }: { children: React.ReactNode }) {
+  return <th className="px-5 py-3 text-left text-label">{children}</th>
+}
+
+function TmAccessBadge({ role }: { role?: string }) {
+  const isAdmin = role === 'admin' || role === 'owner'
+  if (isAdmin) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-gold bg-gold/10 border border-gold/25 px-2 py-0.5 rounded">
+        <Shield size={10} aria-hidden="true" />
+        Admin
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center text-[10px] font-semibold text-text-muted bg-surface-alt border border-border px-2 py-0.5 rounded">
+      Standard
+    </span>
+  )
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+/**
+ * Term cell — "Jan 15, 2024 – present" when end_date is absent,
+ * otherwise "Jan 15, 2024 – Jun 30, 2024". Em-dash if no start_date.
+ */
+function formatTerm(m: TeamMember): string {
+  const start = m.start_date ? formatDate(m.start_date) : null
+  if (!start || start === '—') return '—'
+  const end = m.end_date ? formatDate(m.end_date) : 'present'
+  return `${start} – ${end}`
 }

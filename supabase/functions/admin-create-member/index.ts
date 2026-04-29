@@ -28,7 +28,12 @@ import { createClient } from "jsr:@supabase/supabase-js@2"
 interface CreateMemberBody {
   email: string
   display_name: string
-  default_password: string
+  // PR #49 — `default_password` is now optional. When omitted, the
+  // function generates a strong random password server-side and the
+  // client triggers the standard email-recovery flow afterwards so
+  // the new member sets their own password. The plaintext is never
+  // returned to the client when this path is used.
+  default_password?: string
   role?: "admin" | "member"
   position?: string | null
   phone?: string | null
@@ -52,6 +57,26 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function normalizeEmail(raw: string | null | undefined): string {
   return (raw ?? "").trim().toLowerCase()
+}
+
+// PR #49 — generate a 32-character cryptographically-random password
+// using Deno's WebCrypto. Used when the admin opts for the
+// email-setup-link flow instead of sharing a temp password manually.
+// Includes mixed case + digits + symbols so it satisfies any future
+// Supabase password complexity rule without the admin tuning input.
+function generateRandomPassword(): string {
+  const ALPHABET =
+    "ABCDEFGHJKLMNPQRSTUVWXYZ" +              // upper, no I/O for readability
+    "abcdefghjkmnpqrstuvwxyz" +                // lower, no i/l/o
+    "23456789" +                               // digits, no 0/1
+    "!@#$%^&*-_=+"                             // common safe symbols
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  let out = ""
+  for (let i = 0; i < bytes.length; i++) {
+    out += ALPHABET[bytes[i] % ALPHABET.length]
+  }
+  return out
 }
 
 Deno.serve(async (req: Request) => {
@@ -84,11 +109,18 @@ Deno.serve(async (req: Request) => {
 
   const email = normalizeEmail(body.email)
   const display_name = body.display_name?.trim() ?? ""
-  const default_password = body.default_password ?? ""
+  const adminProvidedPassword = (body.default_password ?? "").trim()
+  // PR #49 — pick the password source. If the admin supplied one
+  // (manual share path), use it. Otherwise generate a strong random
+  // string and let the client trigger the email-setup-link flow.
+  const passwordWasGenerated = adminProvidedPassword.length === 0
+  const passwordToUse = passwordWasGenerated
+    ? generateRandomPassword()
+    : adminProvidedPassword
 
   if (!email) return jsonResponse({ ok: false, error: "Email is required" }, 400)
   if (!display_name) return jsonResponse({ ok: false, error: "Display name is required" }, 400)
-  if (default_password.length < 8) {
+  if (!passwordWasGenerated && adminProvidedPassword.length < 8) {
     return jsonResponse(
       { ok: false, error: "Default password must be at least 8 characters" },
       400,
@@ -125,10 +157,12 @@ Deno.serve(async (req: Request) => {
 
   const teamId = callerProfile.team_id
 
-  // 2) Create the auth user with the admin-supplied password.
+  // 2) Create the auth user. Password is either admin-supplied or
+  //    server-generated. `requires_password_change` is set in either
+  //    case so first-login forces a real password regardless of path.
   const { data: createdAuth, error: createAuthErr } = await admin.auth.admin.createUser({
     email,
-    password: default_password,
+    password: passwordToUse,
     email_confirm: true, // skip the email-verification step; admin vouches for them
     user_metadata: {
       display_name,
@@ -169,5 +203,14 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ ok: false, error: msg }, 400)
   }
 
-  return jsonResponse({ ok: true, profile: inserted })
+  // PR #49 — surface `password_was_generated` so the client knows
+  // whether to trigger `auth.resetPasswordForEmail()` afterwards.
+  // Random password is NEVER returned to the client; the admin
+  // doesn't need it (the new member will pick their own via the
+  // email recovery link).
+  return jsonResponse({
+    ok: true,
+    profile: inserted,
+    password_was_generated: passwordWasGenerated,
+  })
 })

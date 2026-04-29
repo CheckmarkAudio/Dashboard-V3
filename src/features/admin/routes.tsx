@@ -9,7 +9,11 @@ import { APP_ROUTES } from '../../app/routes'
 const AdminHub       = lazy(() => import('../../pages/admin/Hub'))
 const TeamManager    = lazy(() => import('../../pages/admin/TeamManager'))
 const Templates      = lazy(() => import('../../pages/admin/Templates'))
-const MyTeam         = lazy(() => import('../../pages/admin/MyTeam'))
+// PR #49 — MyTeam.tsx retired. The read-only roster table got merged
+// into TeamManager (now table-styled) so we have ONE canonical
+// Members admin surface. Both `/admin/team` and `/admin/my-team`
+// resolve to TeamManager so any saved bookmark / nav link still
+// works.
 const BusinessHealth = lazy(() => import('../../pages/admin/BusinessHealth'))
 const AdminSettings  = lazy(() => import('../../pages/admin/AdminSettings'))
 
@@ -23,7 +27,7 @@ export const ADMIN_ROUTES: FeatureRouteDef[] = [
   { path: APP_ROUTES.admin.hub,       element: <AdminHub /> },
   { path: APP_ROUTES.admin.team,      element: <TeamManager /> },
   { path: APP_ROUTES.admin.templates, element: <Templates /> },
-  { path: APP_ROUTES.admin.members,   element: <MyTeam /> },
+  { path: APP_ROUTES.admin.members,   element: <TeamManager /> },
   // Analytics now owns every chart + flywheel drill-down (was two
   // routes: /admin/health and /admin/flywheel). The mockup page is
   // deleted and its route removed — see notes in app/routes.ts.
