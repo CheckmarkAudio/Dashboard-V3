@@ -195,6 +195,12 @@ export default function AssignAdmin() {
 
   return (
     <div className="max-w-[1400px] mx-auto animate-fade-in">
+      {/* Page header — mirrors Settings page rhythm so headers align across admin */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Assign</h1>
+        <p className="text-text-muted mt-1">Assign tasks to your team members</p>
+      </div>
+
       {/* Two-column shell: Sidebar | Main content */}
       <div className="grid grid-cols-[260px_1fr] gap-4">
         {/* ─── Sidebar ───────────────────────────────────────────── */}
