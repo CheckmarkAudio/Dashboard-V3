@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle, Calendar as CalendarIcon, ChevronDown, ChevronRight,
@@ -16,11 +16,15 @@ import {
 import { adminUpdateAssignedTask } from '../../lib/queries/adminTasks'
 import {
   addTaskTemplateItem,
-  assignTemplateToMembers,
+  assignTemplateItemsToMembers,
   createTaskTemplate,
+  fetchTaskTemplateDetail,
   fetchTaskTemplateLibrary,
   taskTemplateKeys,
 } from '../../lib/queries/taskTemplates'
+import type {
+  TaskTemplateLibraryEntry,
+} from '../../types/assignments'
 import MultiTaskCreateModal from '../../components/tasks/requests/MultiTaskCreateModal'
 import type { TeamMember } from '../../types'
 import type { AssignedTask } from '../../types/assignments'
@@ -123,6 +127,10 @@ export default function AssignAdmin() {
   const [editTask, setEditTask] = useState<AssignedTask | null>(null)
   const [addTaskOpen, setAddTaskOpen] = useState(false)
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false)
+  // PR #53 — selected template opens a confirmation modal where the
+  // admin can uncheck items before applying. Replaces the prior
+  // "click template = instantly assign" behaviour.
+  const [previewTemplate, setPreviewTemplate] = useState<TaskTemplateLibraryEntry | null>(null)
   const tplDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -164,23 +172,22 @@ export default function AssignAdmin() {
     },
   })
 
-  const applyTemplateMutation = useMutation({
-    mutationFn: (templateId: string) => {
-      if (!selectedMember) throw new Error('No member selected')
-      return assignTemplateToMembers(templateId, [selectedMember.id])
+  // PR #53 — stable callbacks for the task row so React.memo on
+  // TaskRow can skip re-renders for unchanged rows. Without these,
+  // every parent render created brand-new arrow functions for
+  // onToggle / onEdit, defeating the memo and causing every
+  // checkbox in the list to re-paint when one task toggled (the
+  // "all checkmarks blink yellow" symptom).
+  const completeMutate = completeMutation.mutate
+  const handleToggle = useCallback(
+    (task: AssignedTask) => {
+      completeMutate({ taskId: task.id, isCompleted: !task.completed_at })
     },
-    onSuccess: (summary) => {
-      const n = summary.task_count
-      toast(`Added ${n} task${n === 1 ? '' : 's'} to ${selectedMember?.display_name}`)
-      setTemplatesDropdownOpen(false)
-      void queryClient.invalidateQueries({
-        queryKey: ['assign-page-member-tasks', selectedMember?.id],
-      })
-      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-log'] })
-    },
-    onError: (err: Error) => toast(err.message, 'error'),
-  })
+    [completeMutate],
+  )
+  const handleEdit = useCallback((task: AssignedTask) => {
+    setEditTask(task)
+  }, [])
 
   const memberHasNoTasks = !tasksQuery.isLoading && tasks.length === 0
   const completedCount = tasks.filter((t) => t.completed_at).length
@@ -353,9 +360,15 @@ export default function AssignAdmin() {
                         <li key={t.id}>
                           <button
                             type="button"
-                            disabled={applyTemplateMutation.isPending}
-                            onClick={() => applyTemplateMutation.mutate(t.id)}
-                            className="w-full text-left px-3 py-2.5 hover:bg-surface-hover transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => {
+                              // PR #53 — open the preview modal
+                              // instead of applying immediately, so
+                              // the admin can uncheck items they
+                              // don't want.
+                              setPreviewTemplate(t)
+                              setTemplatesDropdownOpen(false)
+                            }}
+                            className="w-full text-left px-3 py-2.5 hover:bg-surface-hover transition-colors flex items-center gap-2"
                           >
                             <Layers size={12} className="text-gold/70 shrink-0" aria-hidden="true" />
                             <span className="flex-1 min-w-0">
@@ -367,11 +380,7 @@ export default function AssignAdmin() {
                                 {t.role_tag ? ` · ${t.role_tag}` : ''}
                               </span>
                             </span>
-                            {applyTemplateMutation.isPending ? (
-                              <Loader2 size={12} className="animate-spin text-gold shrink-0" />
-                            ) : (
-                              <Plus size={12} className="text-gold shrink-0" aria-hidden="true" />
-                            )}
+                            <ChevronRight size={12} className="text-text-light shrink-0" aria-hidden="true" />
                           </button>
                         </li>
                       ))}
@@ -440,14 +449,8 @@ export default function AssignAdmin() {
                   <TaskRow
                     key={t.id}
                     task={t}
-                    busy={completeMutation.isPending}
-                    onToggle={() =>
-                      completeMutation.mutate({
-                        taskId: t.id,
-                        isCompleted: !t.completed_at,
-                      })
-                    }
-                    onEdit={() => setEditTask(t)}
+                    onToggle={handleToggle}
+                    onEdit={handleEdit}
                   />
                 ))}
               </div>
@@ -495,22 +498,47 @@ export default function AssignAdmin() {
           }}
         />
       )}
+
+      {previewTemplate && selectedMember && (
+        <TemplatePreviewBeforeApplyModal
+          template={previewTemplate}
+          memberId={selectedMember.id}
+          memberName={selectedMember.display_name}
+          onClose={() => setPreviewTemplate(null)}
+          onApplied={(taskCount) => {
+            toast(
+              `Added ${taskCount} task${taskCount === 1 ? '' : 's'} to ${selectedMember.display_name}`,
+            )
+            setPreviewTemplate(null)
+            void queryClient.invalidateQueries({
+              queryKey: ['assign-page-member-tasks', selectedMember.id],
+            })
+            void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+            void queryClient.invalidateQueries({ queryKey: ['admin-log'] })
+          }}
+        />
+      )}
     </div>
   )
 }
 
 // ─── Task row atom ──────────────────────────────────────────────────
+//
+// PR #53 — wrapped in `memo` so toggling a single task doesn't re-
+// render every other row. Combined with stable handlers in the
+// parent (handleToggle / handleEdit captured via useCallback), this
+// kills the "all checkmarks blink yellow" symptom that happened
+// because every checkbox re-rendered when one task changed and the
+// browser briefly re-painted the gold accent on each.
 
-function TaskRow({
+const TaskRow = memo(function TaskRow({
   task,
-  busy,
   onToggle,
   onEdit,
 }: {
   task: AssignedTask
-  busy: boolean
-  onToggle: () => void
-  onEdit: () => void
+  onToggle: (task: AssignedTask) => void
+  onEdit: (task: AssignedTask) => void
 }) {
   const done = Boolean(task.completed_at)
   return (
@@ -518,8 +546,7 @@ function TaskRow({
       <input
         type="checkbox"
         checked={done}
-        onChange={onToggle}
-        disabled={busy}
+        onChange={() => onToggle(task)}
         aria-label={`${done ? 'Completed' : 'Open'} — ${task.title}`}
         className="w-4 h-4 rounded border-border accent-gold cursor-pointer"
       />
@@ -538,7 +565,7 @@ function TaskRow({
       )}
       <button
         type="button"
-        onClick={onEdit}
+        onClick={() => onEdit(task)}
         title={`Edit "${task.title}"`}
         aria-label={`Edit ${task.title}`}
         className="p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface hover:text-gold transition-all focus-ring"
@@ -547,7 +574,7 @@ function TaskRow({
       </button>
     </div>
   )
-}
+})
 
 function formatDueShort(iso: string): string {
   const d = new Date(iso)
@@ -840,6 +867,197 @@ function SaveAsTemplateModal({
             Save template
           </Button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Template-preview-before-apply modal (PR #53) ──────────────────
+//
+// Opens when the admin picks a template from the "Templates ▾"
+// dropdown. Shows every item in the template with a checkbox so the
+// admin can uncheck items they don't want to assign. Defaults to all
+// checked. Submit calls `assignTemplateItemsToMembers` with the
+// selected subset, scoped to the currently-selected member.
+
+function TemplatePreviewBeforeApplyModal({
+  template,
+  memberId,
+  memberName,
+  onClose,
+  onApplied,
+}: {
+  template: TaskTemplateLibraryEntry
+  memberId: string
+  memberName: string
+  onClose: () => void
+  onApplied: (taskCount: number) => void
+}) {
+  const { toast } = useToast()
+  const detailQuery = useQuery({
+    queryKey: taskTemplateKeys.detail(template.id),
+    queryFn: () => fetchTaskTemplateDetail(template.id),
+  })
+  const items = detailQuery.data?.items ?? []
+  // Default: all items checked. Admin unchecks what they don't want.
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set())
+  // Once the items load, populate the selection set with all of them.
+  useEffect(() => {
+    if (items.length === 0) return
+    setSelectedItemIds((prev) =>
+      prev.size === 0 ? new Set(items.map((i) => i.id)) : prev,
+    )
+  }, [items])
+
+  const toggleItem = (id: string) => {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const selectAll = () => setSelectedItemIds(new Set(items.map((i) => i.id)))
+  const selectNone = () => setSelectedItemIds(new Set())
+
+  const applyMutation = useMutation({
+    mutationFn: () =>
+      assignTemplateItemsToMembers(
+        template.id,
+        Array.from(selectedItemIds),
+        [memberId],
+      ),
+    onSuccess: (summary) => {
+      onApplied(summary.task_count)
+    },
+    onError: (err: Error) => toast(err.message, 'error'),
+  })
+
+  const allChecked = items.length > 0 && selectedItemIds.size === items.length
+  const noneChecked = selectedItemIds.size === 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="relative bg-surface rounded-2xl border border-border w-full max-w-lg mx-4 shadow-2xl animate-fade-in flex flex-col max-h-[85vh]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="template-preview-title"
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-border shrink-0">
+          <div className="min-w-0">
+            <h2 id="template-preview-title" className="text-lg font-bold text-text">
+              {template.name}
+            </h2>
+            <p className="text-[12px] text-text-muted mt-0.5">
+              Pick which tasks to add to{' '}
+              <span className="font-semibold text-text">{memberName}</span>.
+              {template.role_tag && (
+                <span> Tagged <span className="text-gold">{template.role_tag}</span>.</span>
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted shrink-0"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Items list */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-2 py-3">
+          {detailQuery.isLoading ? (
+            <div className="py-10 flex items-center justify-center text-text-light">
+              <Loader2 size={18} className="animate-spin mr-2" />
+              Loading template…
+            </div>
+          ) : detailQuery.error ? (
+            <div className="py-6 px-4 flex items-start gap-2 text-amber-300">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Could not load template</p>
+                <p className="text-xs text-text-light mt-0.5">
+                  {(detailQuery.error as Error).message}
+                </p>
+              </div>
+            </div>
+          ) : items.length === 0 ? (
+            <p className="text-[13px] text-text-light italic px-4 py-8 text-center">
+              This template has no items yet.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {items.map((it) => {
+                const selected = selectedItemIds.has(it.id)
+                return (
+                  <li key={it.id}>
+                    <label className="flex items-start gap-3 px-3 py-2 rounded-xl hover:bg-surface-hover transition-colors cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleItem(it.id)}
+                        className="mt-0.5 w-4 h-4 rounded border-border accent-gold cursor-pointer shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[13px] ${selected ? 'text-text font-medium' : 'text-text-light line-through'}`}>
+                          {it.title}
+                        </p>
+                        {it.description && (
+                          <p className="text-[11px] text-text-light mt-0.5 line-clamp-2">
+                            {it.description}
+                          </p>
+                        )}
+                        {it.category && (
+                          <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-surface text-[10px] text-text-muted">
+                            <Tag size={9} aria-hidden="true" />
+                            {it.category}
+                          </span>
+                        )}
+                      </div>
+                    </label>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Footer */}
+        {items.length > 0 && (
+          <div className="px-6 py-4 border-t border-border shrink-0 flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-text-muted">
+              {selectedItemIds.size} of {items.length} selected
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              {allChecked ? (
+                <Button variant="ghost" size="sm" onClick={selectNone}>
+                  Uncheck all
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={selectAll}>
+                  Check all
+                </Button>
+              )}
+              <Button variant="ghost" onClick={onClose} disabled={applyMutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => applyMutation.mutate()}
+                loading={applyMutation.isPending}
+                disabled={noneChecked}
+                iconLeft={!applyMutation.isPending ? <Plus size={14} aria-hidden="true" /> : undefined}
+              >
+                {`Apply ${selectedItemIds.size} task${selectedItemIds.size === 1 ? '' : 's'}`}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
