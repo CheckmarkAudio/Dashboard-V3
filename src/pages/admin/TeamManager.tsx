@@ -111,8 +111,13 @@ export default function TeamManager() {
     if (!editingMember) {
       const email = normalizeEmail(formData.email)
       if (!email) return 'Email is required'
-      if (formData.default_password.length < 8) {
-        return 'Default password must be at least 8 characters'
+      // PR #49 — when send_setup_email is on (default), the edge
+      // function generates a strong random password server-side and
+      // we email a reset link, so admin doesn't need to enter one.
+      // Only require a password when the admin opted into manual
+      // share mode (offline / walk-in adds).
+      if (!formData.send_setup_email && formData.default_password.length < 8) {
+        return 'Temporary password must be at least 8 characters'
       }
     }
     if (formData.position === 'custom' && !customPosition.trim()) {
@@ -180,13 +185,28 @@ export default function TeamManager() {
     const email = normalizeEmail(formData.email)
 
     // 1) Create the auth user + team_members row atomically via the Edge Function.
+    //    PR #49 — when send_setup_email is on, we omit `default_password`
+    //    entirely; the edge function generates one server-side. The plaintext
+    //    is never returned to the client. We then trigger the recovery email
+    //    below so the member can pick their own password.
     const { data: result, error } = await supabase.functions.invoke<
-      { ok: boolean; profile?: TeamMember; error?: string; where?: string }
+      {
+        ok: boolean
+        profile?: TeamMember
+        error?: string
+        where?: string
+        password_was_generated?: boolean
+      }
     >('admin-create-member', {
       body: {
         email,
         display_name: formData.display_name.trim(),
-        default_password: formData.default_password,
+        // Only send a password when the admin opted into manual share
+        // mode. Omitting the field cleanly triggers the server-side
+        // random-generation path.
+        ...(formData.send_setup_email
+          ? {}
+          : { default_password: formData.default_password }),
         role: formData.role,
         position,
         phone: formData.phone.trim() || null,
@@ -252,7 +272,44 @@ export default function TeamManager() {
       // is fine.
     }
 
-    toast(`Member added — share the default password with them`)
+    // 4) PR #49 — when the admin chose "Email a setup link", trigger
+    //    Supabase's standard recovery email so the new member receives
+    //    a single-use link to set their own password. The link lands
+    //    on the app with `type=recovery`, RecoveryGate intercepts and
+    //    shows the password-set form. Non-fatal — the member account
+    //    still exists if this fails; admin can re-send via
+    //    AccountAccessPanel afterwards.
+    let setupEmailSent = false
+    if (formData.send_setup_email) {
+      try {
+        const redirectTo =
+          typeof window !== 'undefined'
+            ? window.location.origin + import.meta.env.BASE_URL
+            : undefined
+        const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
+          email,
+          redirectTo ? { redirectTo } : undefined,
+        )
+        if (resetErr) {
+          console.error('[TeamManager] resetPasswordForEmail failed:', resetErr)
+        } else {
+          setupEmailSent = true
+        }
+      } catch (resetErr) {
+        console.error('[TeamManager] resetPasswordForEmail threw:', resetErr)
+      }
+    }
+
+    if (formData.send_setup_email) {
+      toast(
+        setupEmailSent
+          ? `Member added — setup email sent to ${email}`
+          : `Member added — couldn't send setup email. Resend from Account Access.`,
+        setupEmailSent ? 'success' : 'error',
+      )
+    } else {
+      toast(`Member added — share the temporary password with them`)
+    }
     closeForm()
     setSubmitting(false)
     loadMembers()
@@ -755,18 +812,65 @@ export default function TeamManager() {
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
                 />
 
+                {/* PR #49 — Send-setup-email toggle replaces the
+                    always-visible password input. When on (default),
+                    no password is collected: the edge function
+                    generates a random one server-side and we email a
+                    setup link via Supabase's native recovery flow.
+                    When off, the password input returns for offline
+                    adds. */}
                 {!editingMember && (
-                  <Input
-                    id="team-member-default-password"
-                    label="Default Password"
-                    type="text"
-                    required
-                    minLength={8}
-                    placeholder="Min 8 characters"
-                    hint="Share this with the member. They'll be prompted to change it on first sign-in."
-                    value={formData.default_password}
-                    onChange={e => setFormData({ ...formData, default_password: e.target.value })}
-                  />
+                  <div className="space-y-3">
+                    <label
+                      className="flex items-start gap-3 px-3 py-3 rounded-xl border border-border bg-surface-alt/50 hover:bg-surface-alt cursor-pointer transition-colors"
+                      htmlFor="team-member-send-setup-email"
+                    >
+                      <input
+                        id="team-member-send-setup-email"
+                        type="checkbox"
+                        checked={formData.send_setup_email}
+                        onChange={e =>
+                          setFormData({ ...formData, send_setup_email: e.target.checked })
+                        }
+                        className="mt-1 w-4 h-4 rounded border-border accent-gold shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-text flex items-center gap-1.5">
+                          <Mail size={13} className="text-gold shrink-0" aria-hidden="true" />
+                          Email a setup link to the new member
+                        </p>
+                        <p className="text-[12px] text-text-muted mt-0.5">
+                          {formData.send_setup_email ? (
+                            <>
+                              They'll get a secure link at{' '}
+                              <span className="font-medium text-text">
+                                {normalizeEmail(formData.email) || 'their email'}
+                              </span>{' '}
+                              to choose their own password. Recommended.
+                            </>
+                          ) : (
+                            "You'll set a temporary password below to share with them manually."
+                          )}
+                        </p>
+                      </div>
+                    </label>
+
+                    {!formData.send_setup_email && (
+                      <Input
+                        id="team-member-default-password"
+                        label="Temporary password"
+                        type="text"
+                        required
+                        minLength={8}
+                        placeholder="Min 8 characters"
+                        hint="Share this with the member. They'll be prompted to change it on first sign-in."
+                        value={formData.default_password}
+                        onChange={e =>
+                          setFormData({ ...formData, default_password: e.target.value })
+                        }
+                      />
+                    )}
+                  </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
@@ -910,8 +1014,18 @@ export default function TeamManager() {
                         Review &amp; create
                       </h3>
                       <p className="text-xs text-text-muted mt-1">
-                        Confirm everything below. The default password will need to be shared with
-                        the new member directly — they'll be required to change it on first sign-in.
+                        {formData.send_setup_email ? (
+                          <>
+                            Confirm everything below. After creation, a setup-link email will be sent to{' '}
+                            <span className="font-semibold text-text">{normalizeEmail(formData.email)}</span>{' '}
+                            so the new member can pick their own password.
+                          </>
+                        ) : (
+                          <>
+                            Confirm everything below. The temporary password will need to be shared with
+                            the new member directly — they'll be required to change it on first sign-in.
+                          </>
+                        )}
                       </p>
                     </div>
 
@@ -926,7 +1040,9 @@ export default function TeamManager() {
                         ['Phone', formData.phone || '—'],
                         ['Start date', formData.start_date || '—'],
                         ['Status', formData.status],
-                        ['Default password', formData.default_password],
+                        formData.send_setup_email
+                          ? ['Setup', 'Email link to member']
+                          : ['Temp password', formData.default_password],
                       ]}
                     />
 
