@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertCircle, Calendar as CalendarIcon, ChevronDown, ChevronRight,
+  AlertCircle, Archive, Calendar as CalendarIcon, ChevronDown, ChevronRight,
   ClipboardList, Edit2, Layers, Loader2, Plus, Save, Settings,
   Sparkles, Tag, Users, X,
 } from 'lucide-react'
@@ -280,16 +280,29 @@ export default function AssignAdmin() {
             </a>
           </div>
 
-          {/* Other — placeholder */}
+          {/* Other — gives the admin a click-only path to the
+              preserved legacy widget grid (Task Requests / Approval
+              Log / Edit / Assign / Assign Log / Templates). PR #54
+              made this a real link instead of a placeholder so the
+              admin can compare layouts side-by-side without typing
+              a URL. */}
           <div className="mt-3 pt-3 border-t border-border/60">
             <p className="px-2 text-[10px] uppercase tracking-wider text-text-light/70 font-semibold">
               Other
             </p>
             <ul className="mt-1 space-y-0.5">
               <li>
-                <span className="block px-2 py-1.5 text-[11px] text-text-light italic">
-                  (Reserved for future assign pages)
-                </span>
+                <a
+                  href="/admin/assign-classic"
+                  className="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-surface-hover transition-colors group"
+                >
+                  <Archive size={14} className="text-amber-300/70 group-hover:text-amber-300 shrink-0" aria-hidden="true" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-text">Legacy Assign</p>
+                    <p className="text-[10px] text-text-light">Old widget-grid view</p>
+                  </div>
+                  <ChevronRight size={12} className="text-text-light shrink-0" aria-hidden="true" />
+                </a>
               </li>
             </ul>
           </div>
