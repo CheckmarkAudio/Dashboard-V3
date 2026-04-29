@@ -24,6 +24,10 @@ export const APP_ROUTES = {
     // Legacy preview-phase URL — kept so any saved bookmark still
     // works. Renders the same component as `templates`.
     assignMockup: '/admin/assign-mockup',
+    // PR #56 — full-page Templates manager. Reachable from the new
+    // Assign page sidebar's "Templates" link. The legacy widget is
+    // still rendered inside `/admin/assign-classic` for reference.
+    templateLibrary: '/admin/template-library',
     members: '/admin/my-team',
     // PR #51 — Clients admin page. Manages the studio's client list
     // — bookings link to a `clients` row so confirmations + reminders

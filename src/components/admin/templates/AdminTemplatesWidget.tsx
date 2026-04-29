@@ -6,7 +6,6 @@ import {
   Calendar,
   FileText,
   FolderKanban,
-  GraduationCap,
   Loader2,
   Plus,
   Search,
@@ -365,7 +364,7 @@ function Thumbnail({
   template: TaskTemplateLibraryEntry
   onClick: () => void
 }) {
-  const { name, item_count, is_active, is_onboarding, role_tag } = template
+  const { name, item_count, is_active, role_tag } = template
   const muted = !is_active
   const Icon = iconForRole(role_tag)
   return (
@@ -377,17 +376,10 @@ function Thumbnail({
         muted ? 'opacity-60 hover:opacity-100' : ''
       }`}
     >
+      {/* PR #56 — onboarding corner badge removed per user feedback.
+          Onboarding remains filterable via the toolbar toggle. */}
       <div className="relative inline-flex items-center justify-center w-12 h-12 rounded-full bg-gold/10 ring-1 ring-gold/25 group-hover:bg-gold/15">
         <Icon size={20} className="text-gold" aria-hidden="true" />
-        {is_onboarding && (
-          <span
-            aria-hidden="true"
-            title="Onboarding"
-            className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-400 ring-2 ring-[rgb(19,22,28)]"
-          >
-            <GraduationCap size={8} className="text-emerald-950" aria-hidden="true" />
-          </span>
-        )}
       </div>
       <span className="text-[12px] font-semibold text-text leading-tight text-center line-clamp-2 w-full">
         {name}

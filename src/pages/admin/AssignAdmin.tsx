@@ -266,22 +266,21 @@ export default function AssignAdmin() {
             )}
           </div>
 
-          {/* Templates link — points at the legacy widget grid where
-              the Templates management UI (search, filters, role-tag
-              pills, thumbnails, editor) actually lives. PR #55:
-              switched from `<a>` to React Router `<Link>` for client-
-              side navigation so we don't trigger a full-page reload
-              + auth re-bootstrap (which was redirecting the user to
-              Overview instead of the destination). */}
+          {/* Templates link — PR #56 points at the dedicated full-
+              page Templates manager (`/admin/template-library`).
+              Same functionality as the legacy widget but with more
+              breathing room. The legacy widget version is still
+              reachable via the "Legacy Assign" link below for
+              reference. */}
           <div className="mt-4 pt-3 border-t border-border/60">
             <Link
-              to="/admin/assign-classic"
+              to="/admin/template-library"
               className="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-surface-hover transition-colors group"
             >
               <Layers size={14} className="text-gold/70 group-hover:text-gold" aria-hidden="true" />
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-semibold text-text">Templates</p>
-                <p className="text-[10px] text-text-light">On the Legacy Assign page</p>
+                <p className="text-[10px] text-text-light">Manage on dedicated page</p>
               </div>
               <ChevronRight size={12} className="text-text-light shrink-0" aria-hidden="true" />
             </Link>
