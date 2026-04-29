@@ -35,12 +35,20 @@ type MemberForm = {
   position: string; phone: string; start_date: string; status: 'active' | 'inactive'
   managed_by: string
   default_password: string
+  // PR #49 — when true (default), the admin enters NO password; the
+  // edge function generates a strong random one server-side and we
+  // fire `auth.resetPasswordForEmail()` after creation so the new
+  // member receives a setup link and picks their own password.
+  // When false, the admin enters a temp password to share manually
+  // (offline / walk-in adds).
+  send_setup_email: boolean
 }
 
 const EMPTY_MEMBER: MemberForm = {
   display_name: '', email: '', role: 'intern', position: 'intern',
   phone: '', start_date: '', status: 'active', managed_by: '',
   default_password: '',
+  send_setup_email: true,
 }
 
 export default function TeamManager() {
