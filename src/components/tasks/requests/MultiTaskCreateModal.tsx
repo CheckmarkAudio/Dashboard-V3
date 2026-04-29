@@ -67,16 +67,24 @@ function emptyRow(): DraftRow {
 export default function MultiTaskCreateModal({
   onClose,
   initialScope = 'member',
+  defaultRecipientIds,
 }: {
   onClose: () => void
   initialScope?: AssignedTaskScope
+  // PR #52 — when the modal opens from a per-member context (the
+  // new member-centric Assign page), pre-select that member as the
+  // recipient. Pass an empty array (or omit) for the default
+  // empty-set behaviour used by the Hub Quick Assign flow.
+  defaultRecipientIds?: string[]
 }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
   const [scope, setScope] = useState<AssignedTaskScope>(initialScope)
   const [drafts, setDrafts] = useState<DraftRow[]>(() => [emptyRow()])
-  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(
+    () => new Set(defaultRecipientIds ?? []),
+  )
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
 
   const updateDraft = (tempId: string, patch: Partial<DraftRow>) => {

@@ -1,68 +1,66 @@
-import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ChevronDown, ChevronRight, ClipboardList, Edit2, Layers, Loader2, Plus,
-  Save, Settings, Sparkles, Users,
+  AlertCircle, Calendar as CalendarIcon, ChevronDown, ChevronRight,
+  ClipboardList, Edit2, Layers, Loader2, Plus, Save, Settings,
+  Sparkles, Tag, Users, X,
 } from 'lucide-react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
+import { useToast } from '../../components/Toast'
+import { Button, Input } from '../../components/ui'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
-import { Button } from '../../components/ui'
+import {
+  completeAssignedTask,
+  fetchMemberAssignedTasks,
+} from '../../lib/queries/assignments'
+import { adminUpdateAssignedTask } from '../../lib/queries/adminTasks'
+import {
+  addTaskTemplateItem,
+  assignTemplateToMembers,
+  createTaskTemplate,
+  fetchTaskTemplateLibrary,
+  taskTemplateKeys,
+} from '../../lib/queries/taskTemplates'
+import MultiTaskCreateModal from '../../components/tasks/requests/MultiTaskCreateModal'
 import type { TeamMember } from '../../types'
+import type { AssignedTask } from '../../types/assignments'
 
 /**
- * AssignMockup (PR #52, draft) — visual mock-up of the new Assign
- * page based on the boss's sketch (2026-04-29). NOT WIRED to real
- * task data yet. Goal: show the layout + interaction model so the
- * user can react before we commit to the full rebuild.
+ * Assign — member-centric task editor (PR #52).
  *
- * Layout per the sketch:
- *   - Left sidebar (260px): Members list · Templates link · "Other"
- *   - Main content: Settings | Save as template | Templates ▾
- *                   "All Tasks for Selected Member"
- *                   Two-column task list with Edit button per row
+ * Layout per the boss's sketch (2026-04-29):
+ *   - Left sidebar (260px): Members list · Templates link · Other
+ *   - Main content: Settings · Save as Template · Templates ▾ bar;
+ *     "All Tasks for {selected member}" title; two-column task list
+ *     with checkbox + label + Edit per row.
  *
- * Real data:
- *   - Members come from `team_members` (real fetch via useQuery)
- *   - Tasks are PLACEHOLDER for now — when the real rebuild starts
- *     we'll wire `get_team_assigned_tasks` filtered by `assigned_to`
+ * Wiring:
+ *   - Members + tasks fetched from real DB (`team_members`,
+ *     `assigned_tasks` via `get_member_assigned_tasks`).
+ *   - Checkbox toggles via `complete_assigned_task` (optimistic).
+ *   - Edit row → small inline edit modal hitting
+ *     `admin_update_assigned_task`.
+ *   - "Add Task" → reuses `MultiTaskCreateModal` with the selected
+ *     member pre-filled (new `defaultRecipientIds` prop).
+ *   - "Templates ▾" → applies via `assign_template_to_members` to
+ *     the selected member only.
+ *   - "Save as Template" → opens a small modal asking for name +
+ *     role tag, creates a `task_template`, then loops
+ *     `add_task_template_item` for each of the selected member's
+ *     current tasks (copies title / description / category, drops
+ *     completion state).
+ *   - "Settings for Tasks" → coming soon (disabled placeholder).
  *
- * The existing /admin/templates page is left intact during this
- * visual pass. This mockup lives at /admin/assign-mockup so both
- * are visitable side-by-side.
+ * Lives at /admin/assign-mockup during the visual pass; once signed
+ * off, the route promotion happens in a follow-up.
  */
 
-interface MockTask {
-  id: string
-  title: string
-  done: boolean
-}
-
-// Placeholder tasks per member — replaced with real `assigned_tasks`
-// fetched by `assigned_to` in the production rebuild.
-const MOCK_TASKS_BY_MEMBER: Record<string, MockTask[]> = {
-  default: [
-    { id: 'm1', title: 'Set up profile photo',         done: true  },
-    { id: 'm2', title: 'Read the brand guide',         done: true  },
-    { id: 'm3', title: 'Connect to content calendar',  done: false },
-    { id: 'm4', title: 'Shadow two client sessions',   done: false },
-    { id: 'm5', title: 'Submit first weekly report',   done: false },
-    { id: 'm6', title: 'Review last quarter KPIs',     done: false },
-    { id: 'm7', title: 'Prep onboarding checklist',    done: false },
-    { id: 'm8', title: 'Sync with manager',            done: false },
-  ],
-}
-
-// Placeholder templates — real ones come from `task_templates`.
-const MOCK_TEMPLATES = [
-  { id: 't1', name: 'Engineer Onboarding',  itemCount: 6 },
-  { id: 't2', name: 'Marketing Onboarding', itemCount: 4 },
-  { id: 't3', name: 'Studio Maintenance',   itemCount: 3 },
-  { id: 't4', name: 'Weekly Review Cycle',  itemCount: 5 },
-]
-
 export default function AssignMockup() {
-  useDocumentTitle('Assign (mockup) - Checkmark Workspace')
+  useDocumentTitle('Assign - Checkmark Workspace')
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
 
+  // ─── Members fetch ─────────────────────────────────────────────
   const teamQuery = useQuery({
     queryKey: teamMemberKeys.list(),
     queryFn: fetchTeamMembers,
@@ -73,25 +71,115 @@ export default function AssignMockup() {
     [members],
   )
 
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
+  // ─── Selected member + persisted-in-URL hash so refresh stays put.
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(
+    () => (typeof window !== 'undefined' ? window.location.hash.slice(1) || null : null),
+  )
+  // Default to first member once the list loads + nothing was hashed.
+  useEffect(() => {
+    if (selectedMemberId) return
+    const first = activeMembers[0]
+    if (!first) return
+    setSelectedMemberId(first.id)
+  }, [selectedMemberId, activeMembers])
+  // Reflect the selection in the URL hash so a deep link works.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!selectedMemberId) return
+    if (window.location.hash !== `#${selectedMemberId}`) {
+      history.replaceState(null, '', `#${selectedMemberId}`)
+    }
+  }, [selectedMemberId])
+
   const selectedMember = activeMembers.find((m) => m.id === selectedMemberId)
     ?? activeMembers[0]
-  const tasks: MockTask[] = MOCK_TASKS_BY_MEMBER.default ?? []
+    ?? null
 
+  // ─── Tasks for the selected member ──────────────────────────────
+  const tasksQuery = useQuery({
+    queryKey: ['assign-page-member-tasks', selectedMember?.id ?? 'none'],
+    queryFn: () =>
+      fetchMemberAssignedTasks(selectedMember!.id, { includeCompleted: true }),
+    enabled: Boolean(selectedMember?.id),
+  })
+  const tasks = tasksQuery.data ?? []
+
+  // ─── Templates (real fetch for the dropdown) ────────────────────
+  const templatesQuery = useQuery({
+    queryKey: taskTemplateKeys.library(null, false),
+    queryFn: () => fetchTaskTemplateLibrary({ roleTag: null, includeInactive: false }),
+  })
+  const templates = templatesQuery.data ?? []
+
+  // ─── Local UI state ─────────────────────────────────────────────
   const [templatesDropdownOpen, setTemplatesDropdownOpen] = useState(false)
+  const [editTask, setEditTask] = useState<AssignedTask | null>(null)
+  const [addTaskOpen, setAddTaskOpen] = useState(false)
+  const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false)
+  const tplDropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!templatesDropdownOpen) return
+    const handle = (e: MouseEvent) => {
+      if (tplDropdownRef.current && !tplDropdownRef.current.contains(e.target as Node)) {
+        setTemplatesDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [templatesDropdownOpen])
+
+  // ─── Mutations ──────────────────────────────────────────────────
+  const completeMutation = useMutation({
+    mutationFn: ({ taskId, isCompleted }: { taskId: string; isCompleted: boolean }) =>
+      completeAssignedTask(taskId, isCompleted),
+    // Optimistic — flip the row's completed_at right away; rollback
+    // on error by invalidating.
+    onMutate: async ({ taskId, isCompleted }) => {
+      const key = ['assign-page-member-tasks', selectedMember?.id ?? 'none'] as const
+      await queryClient.cancelQueries({ queryKey: key })
+      const prev = queryClient.getQueryData<AssignedTask[]>(key)
+      queryClient.setQueryData<AssignedTask[]>(key, (rows) =>
+        rows?.map((r) =>
+          r.id === taskId
+            ? { ...r, completed_at: isCompleted ? new Date().toISOString() : null }
+            : r,
+        ) ?? rows,
+      )
+      return { prev, key }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev && ctx?.key) queryClient.setQueryData(ctx.key, ctx.prev)
+      toast('Failed to update task', 'error')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+    },
+  })
+
+  const applyTemplateMutation = useMutation({
+    mutationFn: (templateId: string) => {
+      if (!selectedMember) throw new Error('No member selected')
+      return assignTemplateToMembers(templateId, [selectedMember.id])
+    },
+    onSuccess: (summary) => {
+      const n = summary.task_count
+      toast(`Added ${n} task${n === 1 ? '' : 's'} to ${selectedMember?.display_name}`)
+      setTemplatesDropdownOpen(false)
+      void queryClient.invalidateQueries({
+        queryKey: ['assign-page-member-tasks', selectedMember?.id],
+      })
+      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin-log'] })
+    },
+    onError: (err: Error) => toast(err.message, 'error'),
+  })
+
+  const memberHasNoTasks = !tasksQuery.isLoading && tasks.length === 0
+  const completedCount = tasks.filter((t) => t.completed_at).length
 
   return (
     <div className="max-w-[1400px] mx-auto animate-fade-in">
-      {/* Mockup banner — clearly marks this as a draft surface. */}
-      <div className="mb-4 px-4 py-2 rounded-xl bg-gold/10 border border-gold/30 text-[12px] text-gold flex items-center gap-2">
-        <Sparkles size={14} aria-hidden="true" />
-        <span className="font-semibold">Visual mock-up</span>
-        <span className="text-text-muted">·</span>
-        <span className="text-text-muted">
-          Per boss's sketch (2026-04-29). Tasks are placeholder data — react to the layout, then we'll wire it up for real.
-        </span>
-      </div>
-
       {/* Two-column shell: Sidebar | Main content */}
       <div className="grid grid-cols-[260px_1fr] gap-4">
         {/* ─── Sidebar ───────────────────────────────────────────── */}
@@ -115,7 +203,7 @@ export default function AssignMockup() {
             ) : (
               <ul className="space-y-1">
                 {activeMembers.map((m) => {
-                  const isSelected = (selectedMember?.id ?? activeMembers[0]?.id) === m.id
+                  const isSelected = selectedMember?.id === m.id
                   const initial = m.display_name?.charAt(0)?.toUpperCase() ?? '?'
                   return (
                     <li key={m.id}>
@@ -178,7 +266,7 @@ export default function AssignMockup() {
             </a>
           </div>
 
-          {/* Other assign pages — placeholder per sketch */}
+          {/* Other — placeholder */}
           <div className="mt-3 pt-3 border-t border-border/60">
             <p className="px-2 text-[10px] uppercase tracking-wider text-text-light/70 font-semibold">
               Other
@@ -195,7 +283,7 @@ export default function AssignMockup() {
 
         {/* ─── Main content ──────────────────────────────────────── */}
         <main>
-          {/* Top action bar — Settings · Save as template · Templates ▾ */}
+          {/* Top action bar — Settings · Save as Template · Templates ▾ */}
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <Button
               variant="ghost"
@@ -210,18 +298,26 @@ export default function AssignMockup() {
               variant="ghost"
               size="sm"
               iconLeft={<Save size={14} aria-hidden="true" />}
-              disabled
-              title="Coming soon"
+              onClick={() => setSaveAsTemplateOpen(true)}
+              disabled={!selectedMember || tasks.length === 0}
+              title={
+                !selectedMember
+                  ? 'Pick a member first'
+                  : tasks.length === 0
+                    ? 'No tasks to save as a template'
+                    : 'Save these tasks as a new template'
+              }
             >
               Save as Template
             </Button>
 
-            <div className="ml-auto relative">
+            <div className="ml-auto relative" ref={tplDropdownRef}>
               <Button
                 variant="primary"
                 size="sm"
                 iconLeft={<ClipboardList size={14} aria-hidden="true" />}
                 onClick={() => setTemplatesDropdownOpen((v) => !v)}
+                disabled={!selectedMember}
               >
                 Templates
                 <ChevronDown
@@ -231,32 +327,49 @@ export default function AssignMockup() {
                 />
               </Button>
               {templatesDropdownOpen && (
-                <div className="absolute right-0 top-full mt-1.5 w-72 bg-surface border border-border rounded-xl shadow-xl z-20 overflow-hidden">
+                <div className="absolute right-0 top-full mt-1.5 w-80 bg-surface border border-border rounded-xl shadow-xl z-20 overflow-hidden">
                   <p className="px-3 py-2 border-b border-border text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Add a template's tasks
+                    Add a template's tasks to {selectedMember?.display_name}
                   </p>
-                  <ul>
-                    {MOCK_TEMPLATES.map((t) => (
-                      <li key={t.id}>
-                        <button
-                          type="button"
-                          onClick={() => setTemplatesDropdownOpen(false)}
-                          className="w-full text-left px-3 py-2.5 hover:bg-surface-hover transition-colors flex items-center gap-2"
-                        >
-                          <Layers size={12} className="text-gold/70" aria-hidden="true" />
-                          <span className="flex-1 min-w-0">
-                            <span className="block text-[13px] font-semibold text-text truncate">
-                              {t.name}
+                  {templatesQuery.isLoading ? (
+                    <div className="px-3 py-4 text-text-light flex items-center gap-2 text-[12px]">
+                      <Loader2 size={14} className="animate-spin" />
+                      Loading templates…
+                    </div>
+                  ) : templates.length === 0 ? (
+                    <p className="px-3 py-4 text-[12px] text-text-light italic">
+                      No templates yet. Build one on the Templates page.
+                    </p>
+                  ) : (
+                    <ul className="max-h-80 overflow-y-auto">
+                      {templates.map((t) => (
+                        <li key={t.id}>
+                          <button
+                            type="button"
+                            disabled={applyTemplateMutation.isPending}
+                            onClick={() => applyTemplateMutation.mutate(t.id)}
+                            className="w-full text-left px-3 py-2.5 hover:bg-surface-hover transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Layers size={12} className="text-gold/70 shrink-0" aria-hidden="true" />
+                            <span className="flex-1 min-w-0">
+                              <span className="block text-[13px] font-semibold text-text truncate">
+                                {t.name}
+                              </span>
+                              <span className="block text-[10px] text-text-light truncate">
+                                {t.item_count} task{t.item_count === 1 ? '' : 's'}
+                                {t.role_tag ? ` · ${t.role_tag}` : ''}
+                              </span>
                             </span>
-                            <span className="block text-[10px] text-text-light">
-                              {t.itemCount} tasks · adds to {selectedMember?.display_name ?? 'selected member'}
-                            </span>
-                          </span>
-                          <Plus size={12} className="text-gold shrink-0" aria-hidden="true" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                            {applyTemplateMutation.isPending ? (
+                              <Loader2 size={12} className="animate-spin text-gold shrink-0" />
+                            ) : (
+                              <Plus size={12} className="text-gold shrink-0" aria-hidden="true" />
+                            )}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>
@@ -265,68 +378,462 @@ export default function AssignMockup() {
           {/* Title row */}
           <div className="rounded-2xl border border-border bg-surface p-5">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-              <div>
-                <h1 className="text-xl font-bold text-text">
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold text-text truncate">
                   All Tasks for {selectedMember?.display_name ?? 'Selected Member'}
                 </h1>
                 <p className="text-[12px] text-text-muted mt-0.5">
-                  {tasks.length} tasks · {tasks.filter((t) => t.done).length} complete
+                  {tasks.length} task{tasks.length === 1 ? '' : 's'} · {completedCount} complete
                 </p>
               </div>
-              <Button variant="secondary" size="sm" iconLeft={<Plus size={14} aria-hidden="true" />}>
+              <Button
+                variant="secondary"
+                size="sm"
+                iconLeft={<Plus size={14} aria-hidden="true" />}
+                onClick={() => setAddTaskOpen(true)}
+                disabled={!selectedMember}
+              >
                 Add Task
               </Button>
             </div>
 
-            {/* Two-column task list */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 relative">
-              {/* Vertical divider — matches the sketch */}
-              <div
-                className="absolute left-1/2 top-0 bottom-0 w-px bg-border/60 -translate-x-1/2"
-                aria-hidden="true"
-              />
-              {tasks.map((t) => (
-                <TaskRow key={t.id} task={t} />
-              ))}
-            </div>
+            {tasksQuery.isLoading ? (
+              <div className="py-10 flex items-center justify-center text-text-light">
+                <Loader2 size={18} className="animate-spin mr-2" />
+                Loading tasks…
+              </div>
+            ) : tasksQuery.error ? (
+              <div className="py-6 flex items-start gap-2 text-amber-300">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Could not load tasks</p>
+                  <p className="text-xs text-text-light mt-0.5">
+                    {(tasksQuery.error as Error).message}
+                  </p>
+                </div>
+              </div>
+            ) : memberHasNoTasks ? (
+              <div className="py-10 text-center">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
+                  <Sparkles size={16} className="text-gold" aria-hidden="true" />
+                </div>
+                <p className="text-[14px] font-semibold text-text">No tasks yet.</p>
+                <p className="text-[12px] text-text-light mt-1">
+                  Add a task or apply a template to get started.
+                </p>
+              </div>
+            ) : (
+              // Two-column task list with vertical divider per sketch.
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 relative">
+                <div
+                  className="absolute left-1/2 top-0 bottom-0 w-px bg-border/60 -translate-x-1/2"
+                  aria-hidden="true"
+                />
+                {tasks.map((t) => (
+                  <TaskRow
+                    key={t.id}
+                    task={t}
+                    busy={completeMutation.isPending}
+                    onToggle={() =>
+                      completeMutation.mutate({
+                        taskId: t.id,
+                        isCompleted: !t.completed_at,
+                      })
+                    }
+                    onEdit={() => setEditTask(t)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-
-          {/* Footer note — clarifies what's mock + what comes next */}
-          <p className="mt-4 px-1 text-[11px] text-text-light italic">
-            Placeholder tasks. The real version will fetch <code className="px-1 py-0.5 rounded bg-surface-alt text-[10px]">assigned_tasks</code> filtered by <code className="px-1 py-0.5 rounded bg-surface-alt text-[10px]">assigned_to = selectedMember.id</code> and wire the Edit button to the existing AdminEditTasksModal.
-          </p>
         </main>
       </div>
+
+      {/* ─── Modals ─────────────────────────────────────────────── */}
+      {addTaskOpen && selectedMember && (
+        <MultiTaskCreateModal
+          onClose={() => {
+            setAddTaskOpen(false)
+            void queryClient.invalidateQueries({
+              queryKey: ['assign-page-member-tasks', selectedMember.id],
+            })
+          }}
+          initialScope="member"
+          defaultRecipientIds={[selectedMember.id]}
+        />
+      )}
+
+      {editTask && (
+        <SingleTaskEditModal
+          task={editTask}
+          onClose={() => setEditTask(null)}
+          onSaved={() => {
+            setEditTask(null)
+            void queryClient.invalidateQueries({
+              queryKey: ['assign-page-member-tasks', selectedMember?.id],
+            })
+          }}
+        />
+      )}
+
+      {saveAsTemplateOpen && selectedMember && (
+        <SaveAsTemplateModal
+          tasks={tasks}
+          memberName={selectedMember.display_name}
+          onClose={() => setSaveAsTemplateOpen(false)}
+          onSaved={(name) => {
+            toast(`Saved "${name}" as a new template`)
+            setSaveAsTemplateOpen(false)
+            void queryClient.invalidateQueries({ queryKey: taskTemplateKeys.all })
+          }}
+        />
+      )}
     </div>
   )
 }
 
 // ─── Task row atom ──────────────────────────────────────────────────
 
-function TaskRow({ task }: { task: MockTask }) {
+function TaskRow({
+  task,
+  busy,
+  onToggle,
+  onEdit,
+}: {
+  task: AssignedTask
+  busy: boolean
+  onToggle: () => void
+  onEdit: () => void
+}) {
+  const done = Boolean(task.completed_at)
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-hover transition-colors group">
       <input
         type="checkbox"
-        checked={task.done}
-        readOnly
-        className="w-4 h-4 rounded border-border accent-gold cursor-not-allowed"
-        aria-label={`${task.done ? 'Completed' : 'Open'} — ${task.title}`}
+        checked={done}
+        onChange={onToggle}
+        disabled={busy}
+        aria-label={`${done ? 'Completed' : 'Open'} — ${task.title}`}
+        className="w-4 h-4 rounded border-border accent-gold cursor-pointer"
       />
       <span
         className={`flex-1 min-w-0 text-[13px] truncate ${
-          task.done ? 'line-through text-text-light' : 'text-text'
+          done ? 'line-through text-text-light' : 'text-text'
         }`}
       >
         {task.title}
       </span>
+      {task.due_date && (
+        <span className="text-[10px] text-text-light tabular-nums shrink-0 inline-flex items-center gap-1">
+          <CalendarIcon size={10} aria-hidden="true" />
+          {formatDueShort(task.due_date)}
+        </span>
+      )}
       <button
         type="button"
-        title="Edit task (mockup — not wired)"
+        onClick={onEdit}
+        title={`Edit "${task.title}"`}
+        aria-label={`Edit ${task.title}`}
         className="p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface hover:text-gold transition-all focus-ring"
       >
         <Edit2 size={12} aria-hidden="true" />
       </button>
+    </div>
+  )
+}
+
+function formatDueShort(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(d)
+  due.setHours(0, 0, 0, 0)
+  if (due.getTime() === today.getTime()) return 'Today'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// ─── Single-task edit modal ─────────────────────────────────────────
+//
+// Smaller than AdminEditTasksModal — opens scoped to ONE task. Hits
+// `admin_update_assigned_task` directly. Title / description /
+// category / due date are the editable fields, matching the admin
+// RPC's payload shape.
+
+function SingleTaskEditModal({
+  task,
+  onClose,
+  onSaved,
+}: {
+  task: AssignedTask
+  onClose: () => void
+  onSaved: (updated: AssignedTask) => void
+}) {
+  const { toast } = useToast()
+  const [title, setTitle] = useState(task.title)
+  const [description, setDescription] = useState(task.description ?? '')
+  const [category, setCategory] = useState<string>(task.category ?? '')
+  const [dueDate, setDueDate] = useState(task.due_date ?? '')
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const payload: Parameters<typeof adminUpdateAssignedTask>[1] = {}
+      if (title.trim() !== task.title) {
+        payload.title = title.trim()
+      }
+      const trimmedDesc = description.trim()
+      const currentDesc = task.description ?? ''
+      if (trimmedDesc !== currentDesc) {
+        if (trimmedDesc) payload.description = trimmedDesc
+        else payload.clearDescription = true
+      }
+      const currentCategory = task.category ?? ''
+      if (category !== currentCategory) {
+        if (category) payload.category = category
+        else payload.clearCategory = true
+      }
+      const currentDue = task.due_date ?? ''
+      if (dueDate !== currentDue) {
+        if (dueDate) payload.due_date = dueDate
+        else payload.clearDue = true
+      }
+      return adminUpdateAssignedTask(task.id, payload)
+    },
+    onSuccess: (updated) => {
+      toast('Task updated')
+      onSaved(updated)
+    },
+    onError: (err: Error) => toast(err.message, 'error'),
+  })
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="relative bg-surface rounded-2xl border border-border w-full max-w-lg mx-4 p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-bold text-text">Edit task</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <Input
+            id="edit-task-title"
+            label="Title"
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <div>
+            <label
+              htmlFor="edit-task-description"
+              className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5"
+            >
+              Description
+            </label>
+            <textarea
+              id="edit-task-description"
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-text-light focus:border-gold focus:outline-none resize-y"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="edit-task-category"
+                className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5"
+              >
+                Flywheel stage
+              </label>
+              <select
+                id="edit-task-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2.5 text-sm focus:border-gold focus:outline-none"
+              >
+                <option value="">—</option>
+                <option value="deliver">Deliver</option>
+                <option value="capture">Capture</option>
+                <option value="share">Share</option>
+                <option value="attract">Attract</option>
+                <option value="book">Book</option>
+              </select>
+            </div>
+            <Input
+              id="edit-task-due"
+              label="Due date"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-5 mt-5 border-t border-border">
+          <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => mutation.mutate()}
+            loading={mutation.isPending}
+            disabled={!title.trim()}
+          >
+            Save changes
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Save-as-Template modal ─────────────────────────────────────────
+//
+// Take the selected member's CURRENT tasks and crystallise them as
+// a new `task_template`. Loops `add_task_template_item` for each
+// task, copying title / description / category. Completion state +
+// task ids don't carry over (templates are blueprints, not state).
+
+function SaveAsTemplateModal({
+  tasks,
+  memberName,
+  onClose,
+  onSaved,
+}: {
+  tasks: AssignedTask[]
+  memberName: string
+  onClose: () => void
+  onSaved: (templateName: string) => void
+}) {
+  const { toast } = useToast()
+  const [name, setName] = useState(`${memberName}'s tasks`)
+  const [description, setDescription] = useState('')
+  const [roleTag, setRoleTag] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!name.trim() || tasks.length === 0) return
+    setSubmitting(true)
+    try {
+      const tpl = await createTaskTemplate({
+        name: name.trim(),
+        description: description.trim() || null,
+        role_tag: roleTag.trim() || null,
+      })
+      // Iterate the source tasks; preserve order via sort_order.
+      for (let i = 0; i < tasks.length; i++) {
+        const t = tasks[i]
+        if (!t) continue
+        await addTaskTemplateItem(tpl.id, {
+          title: t.title,
+          description: t.description ?? null,
+          category: t.category ?? null,
+          sort_order: i,
+          is_required: t.is_required ?? false,
+        })
+      }
+      onSaved(name.trim())
+    } catch (err) {
+      toast(`Save failed: ${(err as Error).message}`, 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="relative bg-surface rounded-2xl border border-border w-full max-w-lg mx-4 p-6 shadow-2xl animate-fade-in"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold text-text">Save as Template</h2>
+            <p className="text-[12px] text-text-muted mt-0.5">
+              Snapshots {tasks.length} task{tasks.length === 1 ? '' : 's'} into a reusable
+              template.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <Input
+            id="sat-name"
+            label="Template name"
+            required
+            placeholder="e.g. Engineer Onboarding"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Input
+            id="sat-description"
+            label="Description"
+            placeholder="Optional"
+            value={description ?? ''}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <div>
+            <label
+              htmlFor="sat-role"
+              className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5"
+            >
+              <Tag size={11} className="inline-block mr-1" aria-hidden="true" />
+              Role tag
+            </label>
+            <select
+              id="sat-role"
+              value={roleTag}
+              onChange={(e) => setRoleTag(e.target.value)}
+              className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2.5 text-sm focus:border-gold focus:outline-none"
+            >
+              <option value="">No role</option>
+              <option value="engineer">Engineer</option>
+              <option value="marketing">Marketing</option>
+              <option value="media">Media</option>
+              <option value="intern">Intern</option>
+              <option value="dev">Dev</option>
+              <option value="admin">Admin</option>
+              <option value="ops">Ops</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-5 mt-5 border-t border-border">
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => void handleSubmit()}
+            loading={submitting}
+            disabled={!name.trim()}
+          >
+            Save template
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
