@@ -365,14 +365,14 @@ const adminLinks: NavLinkDef[] = [
   // so the two don't look identical in the top nav.
   { to: APP_ROUTES.admin.hub, icon: Gauge, label: 'Dashboard' },
   { to: APP_ROUTES.admin.templates, icon: ClipboardList, label: 'Assign' },
-  // PR #49 — Members nav link repointed from `admin.members`
-  // (`/admin/my-team`, the legacy read-only roster table) to
-  // `admin.team` (`/admin/team`, TeamManager) so the visible
-  // "Members" page is the interactive management surface (Add /
-  // Edit / role toggle / search / filter / status / templates).
-  // The legacy `/admin/my-team` route still resolves for any saved
-  // bookmark; it's just no longer linked from the top nav.
-  { to: APP_ROUTES.admin.team, icon: Users, label: 'Members' },
+  // PR #49 — Members nav link points at `admin.members`
+  // (`/admin/my-team`). Both `/admin/team` and `/admin/my-team`
+  // now render the same TeamManager component (the legacy
+  // read-only MyTeam.tsx was retired in this PR). Keeping the
+  // friendlier `/admin/my-team` URL as the canonical link so saved
+  // bookmarks still work — the route just renders the new
+  // table-styled interactive Members admin page.
+  { to: APP_ROUTES.admin.members, icon: Users, label: 'Members' },
   { to: APP_ROUTES.admin.analytics, icon: BarChart3, label: 'Analytics' },
 ]
 const settingsLink: NavLinkDef = { to: APP_ROUTES.admin.settings, icon: Settings, label: 'Settings' }
