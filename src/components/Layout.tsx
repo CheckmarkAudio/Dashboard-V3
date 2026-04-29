@@ -1,6 +1,7 @@
 import { Suspense, useState, useRef, useEffect, useLayoutEffect, useMemo, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -11,6 +12,12 @@ import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
+import {
+  clockIn,
+  clockOut,
+  fetchMyOpenClockEntry,
+  timeClockKeys,
+} from '../lib/queries/timeClock'
 import type { LucideProps } from 'lucide-react'
 import {
   LayoutDashboard, Users, UserSquare, Calendar, Settings, Gauge,
@@ -383,11 +390,47 @@ const settingsLink: NavLinkDef = { to: APP_ROUTES.admin.settings, icon: Settings
 export default function Layout() {
   const { profile, canAccessAdmin, appRole, signOut } = useAuth()
   const { resolved: resolvedTheme, toggle: toggleTheme } = useTheme()
+  const queryClient = useQueryClient()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [clockedIn, setClockedIn] = useState(false)
-  const [clockInTime, setClockInTime] = useState('')
   const [showSelfReport, setShowSelfReport] = useState(false)
   const [adminExpanded, setAdminExpanded] = useState(true)
+
+  // PR #50 — Clock In/Out is now DB-backed. The header button reads
+  // the user's currently-open shift on mount and toggles based on
+  // its presence. `clockInTime` (display string) is derived from the
+  // open shift's `clocked_in_at` so reloads / multi-tab show the
+  // same state.
+  const openShiftQuery = useQuery({
+    queryKey: timeClockKeys.myOpen(),
+    queryFn: fetchMyOpenClockEntry,
+    enabled: Boolean(profile?.id),
+    // Refetch on focus so a clock-out done in another tab shows up.
+    refetchOnWindowFocus: true,
+  })
+  const openShift = openShiftQuery.data ?? null
+  const clockedIn = Boolean(openShift)
+  const clockInTime = openShift
+    ? new Date(openShift.clocked_in_at).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : ''
+
+  const clockInMutation = useMutation({
+    mutationFn: clockIn,
+    onSuccess: (row) => {
+      queryClient.setQueryData(timeClockKeys.myOpen(), row)
+      void queryClient.invalidateQueries({ queryKey: timeClockKeys.currentlyClockedIn() })
+    },
+  })
+  const clockOutMutation = useMutation({
+    mutationFn: () => clockOut(),
+    onSuccess: () => {
+      queryClient.setQueryData(timeClockKeys.myOpen(), null)
+      void queryClient.invalidateQueries({ queryKey: timeClockKeys.currentlyClockedIn() })
+    },
+  })
   const navigate = useNavigate()
   const location = useLocation()
   const drawerRef = useRef<HTMLDivElement>(null)
@@ -503,14 +546,23 @@ export default function Layout() {
               {resolvedTheme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
             </button>
 
-            {/* Clock In / Clock Out — gold gradient pill with soft
-                drop shadow, matching the mockup's clock-btn. */}
+            {/* Clock In / Clock Out — DB-backed (PR #50). Click "Clock
+                In" → fires the clock_in RPC. Click "Clock Out" →
+                opens SelfReportModal where the user can either close
+                their shift (clock_out RPC) or "Log Out" (signs out
+                AND closes the shift). Live timer updates every 30s
+                while the shift is open. */}
             {!clockedIn ? (
               <button
-                onClick={() => { setClockedIn(true); setClockInTime(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })) }}
-                className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold hover:brightness-105 transition-all shadow-[0_14px_28px_rgba(214,170,55,0.22)]"
+                onClick={() => clockInMutation.mutate()}
+                disabled={clockInMutation.isPending || openShiftQuery.isLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold hover:brightness-105 transition-all shadow-[0_14px_28px_rgba(214,170,55,0.22)] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Clock size={14} strokeWidth={2} />
+                {clockInMutation.isPending ? (
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <Clock size={14} strokeWidth={2} aria-hidden="true" />
+                )}
                 Clock In
               </button>
             ) : (
@@ -518,17 +570,17 @@ export default function Layout() {
                 {showSelfReport && (
                   <SelfReportModal
                     clockInTime={clockInTime}
-                    onClose={() => { setShowSelfReport(false); setClockedIn(false); setClockInTime('') }}
-                    // Log Out must actually end the Supabase session — the
-                    // previous version only navigated to /login, which
-                    // bounced right back to / because the session was
-                    // still active. Reuse handleSignOut so the session is
-                    // destroyed locally (and best-effort server-side)
-                    // before we reset clock-in state and navigate.
+                    onClose={() => {
+                      setShowSelfReport(false)
+                      clockOutMutation.mutate()
+                    }}
+                    // Log Out path — close the shift AND end the
+                    // Supabase session. Mutation runs in parallel with
+                    // signOut so we don't block the redirect on the
+                    // clock_out RPC.
                     onLogout={async () => {
                       setShowSelfReport(false)
-                      setClockedIn(false)
-                      setClockInTime('')
+                      clockOutMutation.mutate()
                       await handleSignOut()
                     }}
                   />
@@ -536,6 +588,7 @@ export default function Layout() {
                 <button
                   onClick={() => setShowSelfReport(true)}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all"
+                  title={`On the clock since ${clockInTime}`}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
                   {clockInTime} · Clock Out
