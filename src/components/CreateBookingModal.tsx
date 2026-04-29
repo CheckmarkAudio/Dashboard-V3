@@ -5,14 +5,20 @@
 // notes on the Recurring section below.
 
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
-import { EXISTING_CLIENTS, type BookingType, type StudioSpace } from '../contexts/TaskContext'
+import { type BookingType, type StudioSpace } from '../contexts/TaskContext'
 import { supabase } from '../lib/supabase'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
+import {
+  clientKeys,
+  createClient as createClientRpc,
+  searchClients,
+  type Client,
+} from '../lib/queries/clients'
 import { findSessionConflict } from '../domain/sessions/queries'
 import type { Session, TeamMember } from '../types'
-import { X, AlertTriangle, Loader2 } from 'lucide-react'
+import { X, AlertTriangle, Loader2, Plus, Mail } from 'lucide-react'
 
 const BOOKING_TYPES: { key: BookingType; label: string }[] = [
   { key: 'engineering', label: 'Engineering' },
@@ -82,6 +88,7 @@ export default function CreateBookingModal({
   prefillTime?: string
 }) {
   const { profile } = useAuth()
+  const queryClient = useQueryClient()
 
   // Team members populate the Assigned To dropdown. Shared react-query
   // cache with the rest of the app so opening the booking modal after
@@ -98,8 +105,37 @@ export default function CreateBookingModal({
   )
 
   const [description, setDescription] = useState('')
-  const [client, setClient] = useState('')
+
+  // PR #51 — clients live in the DB now. The picker shows real
+  // clients via a typeahead query and supports inline-create when the
+  // admin types a brand-new name. `selectedClient` is the row that
+  // ends up linked on the booking via `client_id`; `clientQuery` is
+  // the input string used for the typeahead.
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [clientQuery, setClientQuery] = useState('')
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
+  // Optional inline email + phone capture when adding a brand-new
+  // client. Admin can leave both blank and fill in later via the
+  // Clients admin page; capturing them here is just a courtesy so
+  // the booking confirmation email (PR #52) has somewhere to go.
+  const [showInlineAddForm, setShowInlineAddForm] = useState(false)
+  const [newClientEmail, setNewClientEmail] = useState('')
+  const [newClientPhone, setNewClientPhone] = useState('')
+
+  const clientResults = useQuery({
+    queryKey: clientKeys.search(clientQuery),
+    queryFn: () => searchClients(clientQuery),
+    // Run on every input change. Server caps at 12 rows; this is a
+    // cheap RPC.
+    enabled: clientDropdownOpen,
+  })
+  const matches = clientResults.data ?? []
+  const exactMatch = matches.find(
+    (c) => c.name.trim().toLowerCase() === clientQuery.trim().toLowerCase(),
+  )
+  const showAddNewOption =
+    clientQuery.trim().length > 0 && !exactMatch && !selectedClient
+
   const [bookingType, setBookingType] = useState<BookingType>('engineering')
   const [date, setDate] = useState(prefillDate ?? '')
   const [startTime, setStartTime] = useState(prefillTime || '10:00')
@@ -157,19 +193,19 @@ export default function CreateBookingModal({
     return () => { cancelled = true }
   }, [date, startTime, endTime, studio])
 
+  // PR #51 — must have either a selected existing client OR a
+  // non-empty typed name (which we'll auto-create on submit).
+  const hasClient = Boolean(selectedClient) || clientQuery.trim().length > 0
+
   const canSubmit =
     description.trim() &&
-    client.trim() &&
+    hasClient &&
     date &&
     startTime &&
     endTime &&
     studio &&
     assignedTo &&
     !submitting
-
-  const filteredClients = EXISTING_CLIENTS.filter((c) =>
-    c.toLowerCase().includes(client.toLowerCase()),
-  )
 
   const handleSubmit = async () => {
     if (!canSubmit) return
@@ -200,8 +236,36 @@ export default function CreateBookingModal({
 
     setSubmitting(true)
 
+    // PR #51 — resolve the client. If the admin selected an existing
+    // row, use it. Otherwise create one inline (with optional email +
+    // phone if they were captured in the inline-add form). Either way
+    // we end up with `clientToLink` populated.
+    let clientToLink: Client | null = selectedClient
+    if (!clientToLink && clientQuery.trim()) {
+      try {
+        clientToLink = await createClientRpc({
+          name: clientQuery.trim(),
+          email: newClientEmail.trim() || null,
+          phone: newClientPhone.trim() || null,
+        })
+        // Invalidate so the Clients admin page + booking-modal
+        // typeahead reflect the new row immediately.
+        void queryClient.invalidateQueries({ queryKey: clientKeys.all })
+      } catch (err) {
+        setSubmitting(false)
+        setSubmitError(
+          `Failed to create client "${clientQuery.trim()}": ${(err as Error).message}`,
+        )
+        return
+      }
+    }
+
     const payload = {
-      client_name: client.trim() || null,
+      client_id: clientToLink?.id ?? null,
+      // Keep `client_name` populated for read-path simplicity until
+      // the rest of the app has been swept to read from `clients` via
+      // `client_id`. Future PR will reconcile.
+      client_name: clientToLink?.name ?? (clientQuery.trim() || null),
       session_date: date,
       start_time: startTime.length === 5 ? `${startTime}:00` : startTime,
       end_time: endTime.length === 5 ? `${endTime}:00` : endTime,
@@ -254,34 +318,128 @@ export default function CreateBookingModal({
             />
           </div>
 
-          {/* Client dropdown */}
+          {/* Client picker (PR #51) — typeahead against the real
+              `clients` table. Shows matching clients + an "Add new"
+              option when the typed name doesn't match. Picking an
+              existing client populates `selectedClient`; "Add new"
+              expands an optional email + phone form before save. */}
           <div className="relative">
             <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5">
               Client
             </label>
-            <input
-              type="text"
-              value={client}
-              onChange={(e) => { setClient(e.target.value); setClientDropdownOpen(true) }}
-              onFocus={() => setClientDropdownOpen(true)}
-              placeholder="Select existing or type new client name"
-              className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-text-light focus:border-gold"
-            />
-            {clientDropdownOpen && client && filteredClients.length > 0 && (
-              <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-surface-alt border border-border rounded-xl overflow-hidden shadow-lg">
-                {filteredClients.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => { setClient(c); setClientDropdownOpen(false) }}
-                    className="w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-hover transition-colors"
-                  >
-                    {c}
-                  </button>
-                ))}
+            {selectedClient ? (
+              // Selected state: show the chosen client as a chip with
+              // a clear button so the admin can swap.
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gold/10 border border-gold/30">
+                <div className="w-7 h-7 rounded-full bg-gold/20 text-gold flex items-center justify-center text-[12px] font-bold shrink-0">
+                  {selectedClient.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-semibold text-text truncate">
+                    {selectedClient.name}
+                  </p>
+                  {selectedClient.email && (
+                    <p className="text-[11px] text-text-muted truncate inline-flex items-center gap-1">
+                      <Mail size={10} aria-hidden="true" />
+                      {selectedClient.email}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedClient(null)
+                    setClientQuery('')
+                    setShowInlineAddForm(false)
+                  }}
+                  className="p-1 rounded-lg hover:bg-surface-hover text-text-muted"
+                  aria-label="Change client"
+                >
+                  <X size={14} />
+                </button>
               </div>
-            )}
-            {client && !EXISTING_CLIENTS.includes(client) && (
-              <p className="text-[10px] text-gold mt-1">New client — will be added on booking</p>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  value={clientQuery}
+                  onChange={(e) => {
+                    setClientQuery(e.target.value)
+                    setClientDropdownOpen(true)
+                    setShowInlineAddForm(false)
+                  }}
+                  onFocus={() => setClientDropdownOpen(true)}
+                  placeholder="Search clients or type a new name..."
+                  className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-text-light focus:border-gold focus:outline-none"
+                />
+                {clientDropdownOpen && (matches.length > 0 || showAddNewOption) && (
+                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-surface-alt border border-border rounded-xl overflow-hidden shadow-lg">
+                    {matches.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedClient(c)
+                          setClientQuery(c.name)
+                          setClientDropdownOpen(false)
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2"
+                      >
+                        <div className="w-6 h-6 rounded-full bg-surface text-text-muted flex items-center justify-center text-[10px] font-bold shrink-0">
+                          {c.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-medium text-text truncate">{c.name}</p>
+                          {c.email && (
+                            <p className="text-[11px] text-text-light truncate">{c.email}</p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                    {showAddNewOption && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowInlineAddForm(true)
+                          setClientDropdownOpen(false)
+                        }}
+                        className="w-full text-left px-3 py-2 border-t border-border hover:bg-surface-hover transition-colors flex items-center gap-2 text-gold"
+                      >
+                        <Plus size={14} aria-hidden="true" />
+                        <span className="text-[13px] font-semibold">
+                          Add new client: <span className="font-bold">{clientQuery.trim()}</span>
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                )}
+                {showInlineAddForm && (
+                  <div className="mt-2 p-3 rounded-xl bg-gold/5 border border-gold/20 space-y-2">
+                    <p className="text-[11px] text-gold font-semibold uppercase tracking-wide">
+                      New client: {clientQuery.trim()}
+                    </p>
+                    <p className="text-[11px] text-text-muted">
+                      Optional — add their email + phone now so we can send booking
+                      confirmations and reminders. You can fill these in later from{' '}
+                      <span className="font-semibold text-text">Clients</span>.
+                    </p>
+                    <input
+                      type="email"
+                      value={newClientEmail}
+                      onChange={(e) => setNewClientEmail(e.target.value)}
+                      placeholder="client@example.com"
+                      className="w-full bg-surface-alt border border-border rounded-lg px-3 py-2 text-sm placeholder:text-text-light focus:border-gold focus:outline-none"
+                    />
+                    <input
+                      type="tel"
+                      value={newClientPhone}
+                      onChange={(e) => setNewClientPhone(e.target.value)}
+                      placeholder="(555) 123-4567"
+                      className="w-full bg-surface-alt border border-border rounded-lg px-3 py-2 text-sm placeholder:text-text-light focus:border-gold focus:outline-none"
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
 
