@@ -14,6 +14,11 @@ export const APP_ROUTES = {
     hub: '/admin',
     team: '/admin/team',
     templates: '/admin/templates',
+    // PR #52 (draft) — visual mock-up of the new Assign page per
+    // boss's sketch. Lives alongside `/admin/templates` during the
+    // visual pass; once the rebuild ships for real this likely
+    // takes over the `templates` route.
+    assignMockup: '/admin/assign-mockup',
     members: '/admin/my-team',
     // PR #51 — Clients admin page. Manages the studio's client list
     // — bookings link to a `clients` row so confirmations + reminders

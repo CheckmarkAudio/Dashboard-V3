@@ -17,6 +17,10 @@ const Templates      = lazy(() => import('../../pages/admin/Templates'))
 // PR #51 — Clients admin page. Foundation for Tier 2 / EmailJS
 // (booking confirmations + reminders need a real client w/ email).
 const ClientsAdmin   = lazy(() => import('../../pages/admin/ClientsAdmin'))
+// PR #52 (draft) — visual mockup of the new Assign page per boss's
+// sketch. Lives at /admin/assign-mockup alongside the existing
+// Templates page during the visual pass.
+const AssignMockup   = lazy(() => import('../../pages/admin/AssignMockup'))
 const BusinessHealth = lazy(() => import('../../pages/admin/BusinessHealth'))
 const AdminSettings  = lazy(() => import('../../pages/admin/AdminSettings'))
 
@@ -32,6 +36,7 @@ export const ADMIN_ROUTES: FeatureRouteDef[] = [
   { path: APP_ROUTES.admin.templates, element: <Templates /> },
   { path: APP_ROUTES.admin.members,   element: <TeamManager /> },
   { path: APP_ROUTES.admin.clients,   element: <ClientsAdmin /> },
+  { path: APP_ROUTES.admin.assignMockup, element: <AssignMockup /> },
   // Analytics now owns every chart + flywheel drill-down (was two
   // routes: /admin/health and /admin/flywheel). The mockup page is
   // deleted and its route removed — see notes in app/routes.ts.
