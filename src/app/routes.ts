@@ -13,7 +13,17 @@ export const APP_ROUTES = {
   admin: {
     hub: '/admin',
     team: '/admin/team',
+    // PR #52 — `/admin/templates` (the canonical Assign route the
+    // top-nav points at) now renders the member-centric Assign
+    // editor. The legacy widget-grid Assign page (Task Requests /
+    // Approval Log / Edit Tasks / Assign / Assign Log / Templates)
+    // moved to `/admin/assign-classic` so the data + components
+    // stay reachable for the planned "tabs" integration.
     templates: '/admin/templates',
+    assignClassic: '/admin/assign-classic',
+    // Legacy preview-phase URL — kept so any saved bookmark still
+    // works. Renders the same component as `templates`.
+    assignMockup: '/admin/assign-mockup',
     members: '/admin/my-team',
     // PR #51 — Clients admin page. Manages the studio's client list
     // — bookings link to a `clients` row so confirmations + reminders

@@ -8,7 +8,14 @@ import { APP_ROUTES } from '../../app/routes'
 // a regular employee who never visits /admin never downloads any of it.
 const AdminHub       = lazy(() => import('../../pages/admin/Hub'))
 const TeamManager    = lazy(() => import('../../pages/admin/TeamManager'))
-const Templates      = lazy(() => import('../../pages/admin/Templates'))
+// PR #52 — Assign page redesign. The new member-centric editor
+// (`AssignAdmin`) takes over the `/admin/templates` route (which is
+// what the top-nav "Assign" link points at). The old widget-grid
+// page (`Templates.tsx`) moves to `/admin/assign-classic` so the
+// data + components stay reachable for the planned "tabs"
+// integration on the new page.
+const AssignAdmin    = lazy(() => import('../../pages/admin/AssignAdmin'))
+const TemplatesClassic = lazy(() => import('../../pages/admin/Templates'))
 // PR #49 — MyTeam.tsx retired. The read-only roster table got merged
 // into TeamManager (now table-styled) so we have ONE canonical
 // Members admin surface. Both `/admin/team` and `/admin/my-team`
@@ -29,7 +36,12 @@ export interface FeatureRouteDef {
 export const ADMIN_ROUTES: FeatureRouteDef[] = [
   { path: APP_ROUTES.admin.hub,       element: <AdminHub /> },
   { path: APP_ROUTES.admin.team,      element: <TeamManager /> },
-  { path: APP_ROUTES.admin.templates, element: <Templates /> },
+  // PR #52 — canonical Assign route now renders the new member-
+  // centric editor. The legacy widget-grid page is preserved at
+  // /admin/assign-classic.
+  { path: APP_ROUTES.admin.templates,     element: <AssignAdmin /> },
+  { path: APP_ROUTES.admin.assignClassic, element: <TemplatesClassic /> },
+  { path: APP_ROUTES.admin.assignMockup,  element: <AssignAdmin /> },
   { path: APP_ROUTES.admin.members,   element: <TeamManager /> },
   { path: APP_ROUTES.admin.clients,   element: <ClientsAdmin /> },
   // Analytics now owns every chart + flywheel drill-down (was two
