@@ -544,8 +544,12 @@ export default function TeamManager() {
         </Button>
       </div>
 
-      {/* Two-pane layout: left section nav + right pane content. Mirrors AdminSettings.tsx. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
+      {/* Two-pane layout: left section nav + right pane content.
+          PR #63 (revision) — `items-stretch` so the sidebar grows to the
+          same height as the right pane and the bottom borders are flush.
+          (User asked for this even though the rail only has 2 entries
+          today — more sections coming.) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
         {/* ── Left: section nav ── */}
         <aside className="bg-surface rounded-xl border border-border p-2 space-y-1" aria-label="Members sections">
           <p className="px-3 pt-3 pb-2 text-label">Members</p>
@@ -559,8 +563,15 @@ export default function TeamManager() {
           ))}
         </aside>
 
-        {/* ── Right: active section content ── */}
-        <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px]">
+        {/* ── Right: active section content ──
+            PR #63 — `min-w-0` lets the grid 1fr column actually obey its
+            track (CSS Grid's default `min-width: auto` would expand to
+            fit the widest descendant — the 8-column member table — and
+            push the rounded border past the viewport on narrower screens).
+            `overflow-hidden` keeps anything inside clipped at the rounded
+            border. Settings doesn't need this because its content is short
+            text + simple form rows. */}
+        <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px] min-w-0 overflow-hidden">
 
       {activeSection === 'roster' && (<>
       {/* Toolbar: search + filters */}
