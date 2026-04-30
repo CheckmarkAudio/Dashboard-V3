@@ -201,10 +201,12 @@ export default function AssignAdmin() {
         <p className="text-text-muted mt-1">Assign tasks to your team members</p>
       </div>
 
-      {/* Two-column shell: Sidebar | Main content */}
-      <div className="grid grid-cols-[260px_1fr] gap-4">
+      {/* Two-column shell: Sidebar | Main content. items-start keeps both
+          columns aligned to the top of the grid so the cards line up — same
+          rhythm as the Settings page. */}
+      <div className="grid grid-cols-[260px_1fr] gap-6 items-start">
         {/* ─── Sidebar ───────────────────────────────────────────── */}
-        <aside className="rounded-2xl border border-border bg-surface p-3 h-fit sticky top-4">
+        <aside className="rounded-xl border border-border bg-surface p-3 h-fit sticky top-4">
           {/* Members */}
           <div>
             <div className="flex items-center gap-2 px-2 pb-2 mb-2 border-b border-border/60">
@@ -320,9 +322,11 @@ export default function AssignAdmin() {
         </aside>
 
         {/* ─── Main content ──────────────────────────────────────── */}
-        <main>
-          {/* Top action bar — Settings · Save as Template · Templates ▾ */}
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <main className="rounded-xl border border-border bg-surface p-5">
+          {/* Top action bar — Settings · Save as Template · Templates ▾.
+              Lives INSIDE the main card so the right pane starts at the same
+              Y as the sidebar (mirrors Settings page rhythm). */}
+          <div className="flex items-center gap-2 mb-4 flex-wrap pb-4 border-b border-border/60">
             <Button
               variant="ghost"
               size="sm"
@@ -415,8 +419,9 @@ export default function AssignAdmin() {
             </div>
           </div>
 
-          {/* Title row */}
-          <div className="rounded-2xl border border-border bg-surface p-5">
+          {/* Title row — chrome stripped since this lives inside the main
+              card now (was a double-box otherwise). */}
+          <div>
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <div className="min-w-0">
                 <h1 className="text-xl font-bold text-text truncate">
