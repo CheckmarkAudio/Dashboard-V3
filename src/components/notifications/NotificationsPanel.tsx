@@ -410,11 +410,15 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                     <MessageSquare size={13} aria-hidden="true" />
                   </button>
 
-                  {/* Title + preview = navigation to the full Forum view. */}
-                  <Link
-                    to={channelHref}
-                    onClick={() => handleChannelClick(c.channel_id)}
-                    className="flex-1 min-w-0 -my-1 py-1 rounded-md hover:bg-white/[0.02] transition-colors focus-ring"
+                  {/* Title + preview = also a quick-reply trigger (same
+                      behavior as the speech-bubble icon). The full-Forum
+                      navigation lives in the small "Open #channel" link
+                      inside the expanded form below. */}
+                  <button
+                    type="button"
+                    onClick={toggleExpand}
+                    aria-expanded={isExpanded}
+                    className="flex-1 min-w-0 text-left -my-1 py-1 rounded-md hover:bg-white/[0.02] transition-colors focus-ring"
                   >
                     <div className="flex items-center gap-2">
                       <p
@@ -441,7 +445,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                     {c.latest_created_at && (
                       <p className="text-[10px] text-text-light mt-0.5">{relativeTime(c.latest_created_at)}</p>
                     )}
-                  </Link>
+                  </button>
                 </div>
 
                 {/* Inline quick-reply. Single-line textarea (rows=1, padding

@@ -24,7 +24,6 @@ import { useToast } from '../Toast'
 import CreateBookingModal from '../CreateBookingModal'
 import MultiTaskCreateModal from '../tasks/requests/MultiTaskCreateModal'
 import NotificationsPanel from '../notifications/NotificationsPanel'
-import NotificationsPostActions from '../notifications/NotificationsPostActions'
 import type { TeamMember } from '../../types'
 import type { EnrichedApprovalRequest } from '../../domain/dashboard/adminOverview'
 
@@ -400,25 +399,17 @@ export function AdminFlywheelWidget() {
  * Overview, and admin Hub.
  */
 export function AdminNotificationsWidget() {
+  // PR #68 final rev: standalone "Post" + "Channel" quick-actions retired.
+  // Posting now happens via the inline reply on each forum row (click
+  // anywhere on a channel notification → expands a textarea + send).
   return (
-    <div className="flex flex-col h-full">
-      {/* Shared "Post" + "Channel" quick-actions. Same component renders
-          on the member Overview widget so anyone can quick-post from
-          their dashboard. */}
-      <NotificationsPostActions />
-
-      {/* Sleek shared panel — channel rows + assignment rows + category
-          badges (forum/task/booking) + ease-out interactions. */}
-      <div className="flex-1 min-h-0">
-        <NotificationsPanel
-          eyebrow={
-            <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
-              TODAY · {todayEyebrow()}
-            </p>
-          }
-        />
-      </div>
-    </div>
+    <NotificationsPanel
+      eyebrow={
+        <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
+          TODAY · {todayEyebrow()}
+        </p>
+      }
+    />
   )
 }
 

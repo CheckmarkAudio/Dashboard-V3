@@ -24,7 +24,6 @@ import type { TeamMember } from '../../types'
 import MyTasksCard from '../tasks/MyTasksCard'
 import CreateBookingModal from '../CreateBookingModal'
 import NotificationsPanel from '../notifications/NotificationsPanel'
-import NotificationsPostActions from '../notifications/NotificationsPostActions'
 
 // Stage tokens shared between the activity feed + status pills.
 // Sourced from the v1.0 design system (Deliver/Capture/Share/Attract/Book).
@@ -211,13 +210,12 @@ export function BookingSnapshotWidget() {
 /**
  * Notifications widget — Overview col-3 widget.
  *
- * PR #65 — moved the panel logic (data fetch, optimistic mark-read,
- * realtime subs, click routing) into a shared `NotificationsPanel`.
- * PR #68 — restored the widget to Overview col-3 (rs2) and added the
- * shared `NotificationsPostActions` (Post + Channel quick-actions)
- * above the panel so anyone can quick-post from their Overview without
- * leaving for the Forum page. Same buttons live on the admin Hub
- * notifications widget.
+ * PR #65 — moved the panel logic into a shared `NotificationsPanel`.
+ * PR #68 — restored the widget to Overview col-3 (rs2). Final rev:
+ * the inline-reply UX on each channel row replaced the standalone
+ * "Post" button entirely (you click any forum row → it expands with
+ * a textarea + send button right there). The Post-button helper
+ * component was deleted alongside this change.
  */
 export function ForumNotificationsWidget() {
   const todayLabel = new Date()
@@ -228,14 +226,7 @@ export function ForumNotificationsWidget() {
       TODAY · {todayLabel}
     </p>
   )
-  return (
-    <div className="flex flex-col h-full">
-      <NotificationsPostActions />
-      <div className="flex-1 min-h-0">
-        <NotificationsPanel eyebrow={eyebrow} />
-      </div>
-    </div>
-  )
+  return <NotificationsPanel eyebrow={eyebrow} />
 }
 
 // PR #65 — old inlined channel/assignment row + RPC helpers retired.
