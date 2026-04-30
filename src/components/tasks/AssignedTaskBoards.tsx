@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, ArrowRightLeft, Check, Inbox, Loader2, Users } from 'lucide-react'
+import { AlertCircle, ArrowRightLeft, Check, Inbox, Loader2 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   completeAssignedTask,
@@ -8,14 +8,15 @@ import {
   fetchTeamAssignedTasks,
 } from '../../lib/queries/assignments'
 import { requestTaskReassignment } from '../../lib/queries/taskReassign'
+import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import type { AssignedTask } from '../../types/assignments'
+import type { TeamMember } from '../../types'
 import {
   CompletedToggle,
-  StagePillRow,
   SubmitBar,
   formatDueShort,
-  taskStage,
-  type Stage,
+  formatShortName,
+  rolePositionFor,
 } from './shared'
 
 // These boards are ONLY rendered inside a `DashboardWidgetFrame`
@@ -33,7 +34,6 @@ export function TeamAssignedTasksCard() {
       emptyBody="Once team-task reads are wired, everyone will show up here."
       queryKeyPrefix="team-assigned-tasks"
       queryFn={fetchTeamAssignedTasks}
-      showStagePills
     />
   )
 }
@@ -54,22 +54,29 @@ function AssignmentBoardBody({
   emptyBody,
   queryKeyPrefix,
   queryFn,
-  showStagePills = false,
 }: {
   emptyTitle: string
   emptyBody: string
   queryKeyPrefix: string
   queryFn: (userId: string, opts?: { includeCompleted?: boolean }) => Promise<AssignedTask[]>
-  // PR #36 — Team Tasks surfaces the flywheel stage filter at the top
-  // like MyTasks. Studio Tasks omits it (studio work isn't
-  // flywheel-tagged today).
-  showStagePills?: boolean
 }) {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
   const [showCompleted, setShowCompleted] = useState(false)
-  const [stageFilter, setStageFilter] = useState<'all' | Stage>('all')
   const cacheKey = [queryKeyPrefix, profile?.id ?? 'none', showCompleted ? 'all' : 'open'] as const
+
+  // PR #69 — team_members lookup so each row can show the assignee's
+  // role tag. Same cache key the rest of the app uses; deduped.
+  const membersQuery = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+    staleTime: 60_000,
+  })
+  const memberMap = useMemo(() => {
+    const m = new Map<string, TeamMember>()
+    for (const member of membersQuery.data ?? []) m.set(member.id, member)
+    return m
+  }, [membersQuery.data])
 
   const tasksQuery = useQuery({
     queryKey: cacheKey,
@@ -123,50 +130,27 @@ function AssignmentBoardBody({
     },
   })
 
-  const openTasks = useMemo(
-    () => (tasksQuery.data ?? []).filter((t) => !t.is_completed),
-    [tasksQuery.data],
-  )
-
-  // Stage counts — computed against OPEN tasks so the pill filter is
-  // actionable (stages with zero open work show count 0 but stay in
-  // the row for visual consistency).
-  const stageCounts = useMemo(() => {
-    const c: Record<'all' | Stage, number> = {
-      all: openTasks.length,
-      deliver: 0, capture: 0, share: 0, attract: 0, book: 0,
-    }
-    for (const t of openTasks) {
-      const s = taskStage(t.category)
-      if (s) c[s]++
-    }
-    return c
-  }, [openTasks])
-
   const visibleTasks = useMemo(() => {
     const tasks = tasksQuery.data ?? []
     const openFiltered = showCompleted ? tasks : tasks.filter((task) => !task.is_completed)
-    const stageFiltered =
-      stageFilter === 'all'
-        ? openFiltered
-        : openFiltered.filter((t) => taskStage(t.category) === stageFilter)
-    return [...stageFiltered].sort((a, b) => {
+    return [...openFiltered].sort((a, b) => {
       const aDue = a.due_date ?? '9999-12-31'
       const bDue = b.due_date ?? '9999-12-31'
       if (aDue !== bDue) return aDue.localeCompare(bDue)
       return a.title.localeCompare(b.title)
     })
-  }, [showCompleted, stageFilter, tasksQuery.data])
+  }, [showCompleted, tasksQuery.data])
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* PR #36 — flywheel stage filter (Team Tasks widget only). Sits
-          at the top as the filter bar for the list below. */}
-      {showStagePills && (
-        <div className="shrink-0 mb-2">
-          <StagePillRow counts={stageCounts} active={stageFilter} onChange={setStageFilter} />
-        </div>
-      )}
+      {/* PR #69 — `Due` column header anchors the right-side date so
+          users know it's the due date, not assignment date. Stage
+          filter (PR #36) deferred to the flywheel-event-ledger PR. */}
+      <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1">
+        <span className="w-[18px]" aria-hidden="true" />
+        <span aria-hidden="true" />
+        <span className="text-[9px] font-bold uppercase tracking-[0.08em] text-text-light/60 whitespace-nowrap">Due</span>
+      </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
         {tasksQuery.isLoading ? (
@@ -216,6 +200,7 @@ function AssignmentBoardBody({
                 disableCheckbox={!task.can_complete || submitMutation.isPending}
                 onTogglePending={() => togglePending(task.id)}
                 onRequestTake={() => reassignMutation.mutate(task.id)}
+                memberMap={memberMap}
               />
             )
           })
@@ -267,6 +252,7 @@ function TeamTaskRow({
   disableCheckbox,
   onTogglePending,
   onRequestTake,
+  memberMap,
 }: {
   task: AssignedTask
   dueLabel: string | null
@@ -278,7 +264,11 @@ function TeamTaskRow({
   disableCheckbox: boolean
   onTogglePending: () => void
   onRequestTake: () => void
+  memberMap: Map<string, TeamMember>
 }) {
+  const assignee = task.assigned_to ? memberMap.get(task.assigned_to) : undefined
+  const roleLabel = rolePositionFor(assignee?.position)
+  const shortName = formatShortName(task.assigned_to_name)
   const rowBase = 'relative w-full text-left grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2.5 py-2 rounded-[14px] border transition-all'
 
   const rowContent = (
@@ -303,14 +293,15 @@ function TeamTaskRow({
             <span className="text-[10px] uppercase tracking-wider text-rose-400 font-bold">Required</span>
           )}
         </div>
-        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-text-light flex-wrap">
-          {task.assigned_to_name && (
-            <span className="inline-flex items-center gap-1">
-              <Users size={10} />
-              {task.assigned_to_name}
+        {/* PR #69 — `[role] · First L.` line; matches MyTasks. */}
+        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-light flex-wrap">
+          {roleLabel && (
+            <span className="inline-flex items-center px-1.5 h-[14px] rounded bg-white/[0.05] text-[10px] tracking-wide text-text-muted lowercase">
+              {roleLabel}
             </span>
           )}
-          {task.category && <span>{task.category}</span>}
+          {roleLabel && shortName && <span aria-hidden="true">·</span>}
+          {shortName && <span>{shortName}</span>}
         </div>
       </div>
       <span

@@ -314,3 +314,119 @@ export function countByStage(
   for (const t of active) counts[t.stage]++
   return counts
 }
+
+// ─── PR #69 — task-row metadata helpers ──────────────────────────────
+
+/**
+ * "Bridget Reinhard" → "Bridget R."
+ * "Madonna"          → "Madonna"
+ * Trims; collapses multiple spaces; preserves single-name inputs.
+ */
+export function formatShortName(name: string | null | undefined): string {
+  if (!name) return ''
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0] ?? ''
+  const first = parts[0] ?? ''
+  const lastInitial = (parts[parts.length - 1] ?? '').charAt(0).toUpperCase()
+  return lastInitial ? `${first} ${lastInitial}.` : first
+}
+
+/**
+ * Map a `team_members.position` slug to a short label suitable for a
+ * bracketed inline tag like `[marketing]`. Falls back to the raw slug
+ * (lowercased, underscores → spaces) for any new positions added later.
+ *
+ * Sourced from the Members admin POSITIONS list in TeamManager.tsx so
+ * the labels stay aligned across surfaces.
+ */
+export function rolePositionFor(position: string | null | undefined): string | null {
+  if (!position) return null
+  const slug = position.trim().toLowerCase()
+  if (!slug) return null
+  const map: Record<string, string> = {
+    owner: 'owner',
+    marketing_admin: 'marketing',
+    artist_development: 'a&r',
+    intern: 'intern',
+    engineer: 'engineer',
+    producer: 'producer',
+  }
+  return map[slug] ?? slug.replace(/_/g, ' ')
+}
+
+/**
+ * Heuristic for "did the user assign this to themselves?" Used by My
+ * Tasks to split the list into Assigned (someone else put it on my
+ * queue) vs Self (I pressed the button myself, or there's no batch).
+ *
+ * Logic:
+ *   - No batch (e.g. daily checklist) → treat as self (no admin action)
+ *   - batch.assigned_by === task.assigned_to → self-assigned
+ *   - otherwise → assigned by someone else
+ *
+ * Imperfect for the task-request flow: when an admin approves a
+ * member's request, the resulting task has `batch.assigned_by = admin`
+ * and `assigned_to = requester`, so it shows as "Assigned" even though
+ * the member initiated it. Acceptable for now — a future PR can add a
+ * `from_request` flag to the schema if the user wants finer detail.
+ */
+export function isSelfAssigned(task: {
+  assigned_to: string | null
+  batch: { assigned_by: string } | null
+}): boolean {
+  if (!task.batch) return true
+  if (!task.assigned_to) return false
+  return task.batch.assigned_by === task.assigned_to
+}
+
+/**
+ * Three-pill segmented control for filtering My Tasks by source. Same
+ * visual rhythm as the existing StagePillRow so the swap doesn't feel
+ * jarring.
+ */
+export function SourceFilterRow({
+  counts,
+  active,
+  onChange,
+}: {
+  counts: { all: number; assigned: number; self: number }
+  active: 'all' | 'assigned' | 'self'
+  onChange: (next: 'all' | 'assigned' | 'self') => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <SourcePill label="All" count={counts.all} active={active === 'all'} onClick={() => onChange('all')} />
+      <SourcePill label="Assigned" count={counts.assigned} active={active === 'assigned'} onClick={() => onChange('assigned')} />
+      <SourcePill label="Self" count={counts.self} active={active === 'self'} onClick={() => onChange('self')} />
+    </div>
+  )
+}
+
+function SourcePill({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string
+  count: number
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors ${
+        active
+          ? 'bg-gold/15 text-gold ring-1 ring-gold/40'
+          : 'bg-white/[0.04] text-text-muted hover:text-text hover:bg-white/[0.08]'
+      }`}
+    >
+      {label}
+      <span className={`tabular-nums ${active ? 'text-gold/80' : 'text-text-light/70'}`}>{count}</span>
+    </button>
+  )
+}
