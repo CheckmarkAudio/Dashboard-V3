@@ -252,11 +252,7 @@ export default function TemplatePreviewModal({
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-medium text-text">
                         {item.title}
-                        {item.is_required && (
-                          <span className="ml-2 text-[10px] uppercase tracking-wider text-rose-400 font-bold">
-                            Required
-                          </span>
-                        )}
+                        {/* PR #70 — `Required` tag retired sitewide. */}
                       </p>
                       {item.description && (
                         <p className="text-[12px] text-text-light mt-0.5">{item.description}</p>

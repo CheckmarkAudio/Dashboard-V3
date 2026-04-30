@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Clock, Flag, Inbox, Loader2, Repeat, UserCircle2, X } from 'lucide-react'
+import { Check, Clock, Inbox, Loader2, Repeat, UserCircle2, X } from 'lucide-react'
 import { useToast } from '../../Toast'
 import {
   approveTaskRequest,
@@ -165,12 +165,8 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
                 </span>
               </>
             )}
-            {request.is_required && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/15 ring-1 ring-rose-500/30 text-rose-200 font-semibold uppercase tracking-wider text-[10px]">
-                <Flag size={9} aria-hidden="true" />
-                Priority
-              </span>
-            )}
+            {/* PR #70 — `Priority` chip retired (urgency mechanic
+                deferred per user note). */}
             {request.recurrence_spec && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gold/15 ring-1 ring-gold/30 text-gold font-semibold uppercase tracking-wider text-[10px]">
                 <Repeat size={9} aria-hidden="true" />

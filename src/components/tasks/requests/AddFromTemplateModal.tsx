@@ -193,14 +193,10 @@ export default function AddFromTemplateModal({
                             {item.description}
                           </p>
                         )}
-                        {(item.category || item.is_required) && (
+                        {item.category && (
                           <div className="flex items-center gap-2 mt-1 text-[10px] text-text-light flex-wrap">
-                            {item.category && <span>{item.category}</span>}
-                            {item.is_required && (
-                              <span className="text-rose-400 font-bold uppercase tracking-wider">
-                                Required
-                              </span>
-                            )}
+                            <span>{item.category}</span>
+                            {/* PR #70 — `Required` tag retired sitewide. */}
                           </div>
                         )}
                       </div>

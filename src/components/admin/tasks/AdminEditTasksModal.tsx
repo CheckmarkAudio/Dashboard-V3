@@ -228,9 +228,7 @@ function EditableRow({
               {task.assigned_to_name ?? (task.scope === 'studio' ? 'Studio' : '—')}
             </span>
             {task.category && <span>{task.category}</span>}
-            {task.is_required && !task.is_completed && (
-              <span className="text-[10px] uppercase tracking-wider text-rose-400 font-bold">Required</span>
-            )}
+            {/* PR #70 — `Required` tag retired sitewide. */}
           </div>
         </div>
         <span className={`shrink-0 text-[12px] tabular-nums mt-[2px] ${formatDueShort(task.due_date) ? 'text-text-light' : 'text-text-light/30'}`}>

@@ -288,11 +288,7 @@ export default function TemplateAssignFlowModal({
                   <span className="flex-1 min-w-0">
                     <span className="block text-[13px] font-medium text-text truncate">
                       {item.title}
-                      {item.is_required && (
-                        <span className="ml-2 text-[10px] uppercase tracking-wider text-rose-400 font-bold">
-                          Required
-                        </span>
-                      )}
+                      {/* PR #70 — `Required` tag retired sitewide. */}
                     </span>
                     {(item.category || item.default_due_offset_days != null) && (
                       <span className="block text-[11px] text-text-light truncate">
