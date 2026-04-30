@@ -537,11 +537,8 @@ function AssignedTaskRow({
             <span className="shrink-0 text-[10px] uppercase tracking-wider text-cyan-300 font-bold">Studio</span>
           )}
         </div>
-        {task.description && (
-          <p className={`text-[12px] mt-0.5 truncate ${done ? 'text-text-light' : 'text-text-muted'}`}>
-            {task.description}
-          </p>
-        )}
+        {/* Task description is intentionally not rendered inline. Notes are
+            shown only when the row is clicked open in TaskDetailModal. */}
         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-light flex-wrap">
           {originLabel && <span>{originLabel}</span>}
           {originLabel && task.category && <span aria-hidden="true">·</span>}
