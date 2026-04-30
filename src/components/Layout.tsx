@@ -23,7 +23,7 @@ import {
 import type { LucideProps } from 'lucide-react'
 import {
   LayoutDashboard, Users, Calendar, Settings, Gauge,
-  LogOut, Menu, X, ChevronDown, ClipboardList, CheckSquare,
+  Menu, X, ChevronDown, ClipboardList, CheckSquare,
   BarChart3, Briefcase, MessageSquare, Clock, Sun, Moon,
   Loader2, MoreHorizontal,
 } from 'lucide-react'
@@ -541,11 +541,6 @@ export default function Layout() {
                 below md so the brand row stays clean on phones. */}
             <SocialLinks />
 
-            {/* PR #65 — Notifications dropdown bell. Replaces the always-
-                mounted Notifications widget on Overview. Click to expand;
-                stays open until X / Escape / outside-click. */}
-            <NotificationsBell />
-
             {/* Theme toggle — light/dark. System preference stays accessible
                 via ThemeContext for anyone who wants a future Settings UI. */}
             <button
@@ -631,15 +626,14 @@ export default function Layout() {
               </div>
             </button>
 
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="shrink-0 p-2 rounded-lg text-text-light hover:bg-surface-hover hover:text-red-400 transition-colors focus-ring"
-              aria-label={`Sign out of ${profile?.email ?? 'this account'}`}
-              title="Sign out"
-            >
-              <LogOut size={16} aria-hidden="true" />
-            </button>
+            {/* PR #67 — Notifications bell moved to the rightmost slot of
+                the top bar, replacing the standalone Sign out button.
+                The Clock Out modal already exposes a Log Out path
+                (lines 593-597) so a dedicated sign-out icon was
+                redundant. The bell's dropdown uses `getBoundingClientRect`
+                to anchor to its actual position, so the panel still
+                opens flush against the right edge. */}
+            <NotificationsBell />
           </div>
         </div>
 
