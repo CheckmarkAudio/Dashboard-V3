@@ -149,7 +149,7 @@ function AssignmentBoardBody({
       <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1">
         <span className="w-[18px]" aria-hidden="true" />
         <span aria-hidden="true" />
-        <span className="text-[9px] font-bold uppercase tracking-[0.08em] text-text-light/60 whitespace-nowrap">Due</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
@@ -295,11 +295,7 @@ function TeamTaskRow({
         </div>
         {/* PR #69 — `[role] · First L.` line; matches MyTasks. */}
         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-light flex-wrap">
-          {roleLabel && (
-            <span className="inline-flex items-center px-1.5 h-[14px] rounded bg-white/[0.05] text-[10px] tracking-wide text-text-muted lowercase">
-              {roleLabel}
-            </span>
-          )}
+          {roleLabel && <span className="lowercase">{roleLabel}</span>}
           {roleLabel && shortName && <span aria-hidden="true">·</span>}
           {shortName && <span>{shortName}</span>}
         </div>

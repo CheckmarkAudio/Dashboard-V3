@@ -344,8 +344,11 @@ export function rolePositionFor(position: string | null | undefined): string | n
   if (!position) return null
   const slug = position.trim().toLowerCase()
   if (!slug) return null
+  // PR #69 (rev) — `owner` is just a permission tier, not a meaningful
+  // role tag for the row metadata. Skip it so the user's name reads
+  // cleanly without a redundant `owner` label.
+  if (slug === 'owner') return null
   const map: Record<string, string> = {
-    owner: 'owner',
     marketing_admin: 'marketing',
     artist_development: 'a&r',
     intern: 'intern',
