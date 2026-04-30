@@ -544,8 +544,12 @@ export default function TeamManager() {
         </Button>
       </div>
 
-      {/* Two-pane layout: left section nav + right pane content. Mirrors AdminSettings.tsx. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
+      {/* Two-pane layout: left section nav + right pane content.
+          PR #63 (revision) — `items-stretch` so the sidebar grows to the
+          same height as the right pane and the bottom borders are flush.
+          (User asked for this even though the rail only has 2 entries
+          today — more sections coming.) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
         {/* ── Left: section nav ── */}
         <aside className="bg-surface rounded-xl border border-border p-2 space-y-1" aria-label="Members sections">
           <p className="px-3 pt-3 pb-2 text-label">Members</p>
