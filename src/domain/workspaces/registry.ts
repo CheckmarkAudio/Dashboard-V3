@@ -75,14 +75,15 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
-    // PR #65: removed from `member_overview` placements — notifications
-    // live in the top-bar dropdown bell (`NotificationsBell`) now. The
-    // widget definition stays so any saved layout that still references
-    // `forum_notifications` doesn't crash; sanitization prunes it.
+    // PR #68: Notifications restored to col 3 (rs2 — flush with My
+    // Tasks + Calendar heights) with the same sleek `NotificationsPanel`
+    // body the top-bar dropdown bell uses. Both surfaces coexist now —
+    // the bell is the always-accessible quick view, the widget is the
+    // dedicated reading surface on Overview.
     id: 'forum_notifications',
     title: 'Notifications',
     description: 'Unread messages across channels and new assignments.',
-    defaultPlacements: [],
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 2, col: 3 }],
     accessVisibility: 'shared',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -508,7 +509,11 @@ function buildDefaultWidgetStateForScope(
 // dropdown bell (`NotificationsBell`) now. `forum_notifications`
 // has no `member_overview` placement; sanitization prunes it from
 // saved layouts.
-export const WORKSPACE_LAYOUT_VERSION = 31
+// v32 (2026-04-30, PR #68): Notifications restored to the Overview
+// grid (col 3, rs2) and the admin Hub widget refactored to render
+// the same shared `NotificationsPanel`. Both surfaces coexist with
+// the always-on top-bar dropdown bell.
+export const WORKSPACE_LAYOUT_VERSION = 32
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

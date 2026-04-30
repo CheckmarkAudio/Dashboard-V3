@@ -208,15 +208,14 @@ export function BookingSnapshotWidget() {
 }
 
 /**
- * Notifications widget — thin wrapper around the shared NotificationsPanel.
+ * Notifications widget — Overview col-3 widget.
  *
- * PR #65 moved all the panel logic (data fetching, optimistic mark-read,
- * realtime subscriptions, click routing) into
- * `src/components/notifications/NotificationsPanel.tsx` so the new top-bar
- * dropdown bell and the Overview widget can share one surface. This widget
- * stays exported for any saved layout that still references
- * `forum_notifications`, but the page no longer places it on Overview by
- * default — see registry.ts (the `defaultPlacements` array is empty).
+ * PR #65 — moved the panel logic into a shared `NotificationsPanel`.
+ * PR #68 — restored the widget to Overview col-3 (rs2). Final rev:
+ * the inline-reply UX on each channel row replaced the standalone
+ * "Post" button entirely (you click any forum row → it expands with
+ * a textarea + send button right there). The Post-button helper
+ * component was deleted alongside this change.
  */
 export function ForumNotificationsWidget() {
   const todayLabel = new Date()
