@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import CreateBookingModal from '../components/CreateBookingModal'
+import ClientsPanel from '../components/clients/ClientsPanel'
 import { loadSessionsWindow, type SessionCategory, type SessionListItem } from '../domain/sessions/queries'
 import { PageHeader } from '../components/ui'
-import { AlertCircle, Briefcase, Loader2, Plus } from 'lucide-react'
+import { AlertCircle, Briefcase, Loader2, Plus, UserSquare } from 'lucide-react'
 
 // PR #15 — matches the highlight-task pattern in MyTasksCard. When a
 // session-assign notification is clicked elsewhere in the app, the
@@ -17,6 +18,8 @@ const CATEGORIES: readonly ('All' | SessionCategory)[] = [
   'All', 'Engineer', 'Consult', 'Trailing', 'Music Lesson', 'Education',
 ] as const
 type CategoryTab = typeof CATEGORIES[number]
+
+type ViewTab = 'bookings' | 'clients'
 
 /* ── Status dot (emerald/amber/red used as status semantics — those
    three hues are reserved for the future priority system, so status
@@ -36,6 +39,22 @@ function StatusLabel({ status }: { status: string }) {
 
 export default function Sessions() {
   useDocumentTitle('Booking Agent - Checkmark Workspace')
+
+  // PR #64 — top-level Bookings ↔ Clients toggle. Replaces the
+  // standalone /admin/clients page (which the user asked to retire).
+  // URL hash drives the initial state so a deep link (or the booking-
+  // modal "Manage clients" hint) can jump straight to the Clients view.
+  const [view, setView] = useState<ViewTab>(() =>
+    typeof window !== 'undefined' && window.location.hash === '#clients' ? 'clients' : 'bookings',
+  )
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const next = view === 'clients' ? '#clients' : ''
+    if (window.location.hash !== next) {
+      history.replaceState(null, '', `${window.location.pathname}${next}`)
+    }
+  }, [view])
+
   const [activeCategory, setActiveCategory] = useState<CategoryTab>('All')
   const [showBooking, setShowBooking] = useState(false)
   const [sessions, setSessions] = useState<SessionListItem[]>([])
@@ -43,12 +62,14 @@ export default function Sessions() {
   const [error, setError] = useState<string | null>(null)
 
   // Highlight-session pipeline: row refs + currently-flashing id.
-  // Clears itself after HIGHLIGHT_DURATION_MS so the ring fades.
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map())
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
-  // Remember a pending highlight if the event fires before sessions
-  // have loaded — otherwise the row isn't in rowRefs yet.
   const pendingHighlightRef = useRef<string | null>(null)
+
+  // PR #64 — opener for the Clients-tab "+ Add Client" header button.
+  // ClientsPanel registers its open-editor function via this ref so
+  // the page-header action button can fire it without prop-drilling.
+  const openAddClientRef = useRef<(() => void) | null>(null)
 
   const refetch = useCallback(async () => {
     setLoading(true)
@@ -67,10 +88,6 @@ export default function Sessions() {
     void refetch()
   }, [refetch])
 
-  // Resolve a pending highlight once sessions land. This covers the
-  // common flow: click notification → navigate to /sessions → page
-  // mounts → event fires → rowRefs still empty → we buffer the id
-  // and flash it once sessions hydrate.
   const applyHighlight = useCallback((sessionId: string) => {
     const node = rowRefs.current.get(sessionId)
     if (!node) {
@@ -87,14 +104,14 @@ export default function Sessions() {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ sessionId?: string }>).detail
       if (!detail?.sessionId) return
+      // Snap to bookings view so the highlight is actually visible.
+      setView('bookings')
       applyHighlight(detail.sessionId)
     }
     window.addEventListener(HIGHLIGHT_EVENT, handler)
     return () => window.removeEventListener(HIGHLIGHT_EVENT, handler)
   }, [applyHighlight])
 
-  // When the sessions list updates, flush any pending highlight that
-  // couldn't resolve earlier (e.g. event fired before data loaded).
   useEffect(() => {
     const pending = pendingHighlightRef.current
     if (pending && rowRefs.current.has(pending)) {
@@ -106,6 +123,25 @@ export default function Sessions() {
     ? sessions
     : sessions.filter((row) => row.category === activeCategory)
 
+  const headerAction =
+    view === 'bookings' ? (
+      <button
+        onClick={() => setShowBooking(true)}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold hover:brightness-105 transition-all shadow-[0_14px_28px_rgba(214,170,55,0.22)]"
+      >
+        <Plus size={14} strokeWidth={2.2} />
+        Book a Session
+      </button>
+    ) : (
+      <button
+        onClick={() => openAddClientRef.current?.()}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold hover:brightness-105 transition-all shadow-[0_14px_28px_rgba(214,170,55,0.22)]"
+      >
+        <Plus size={14} strokeWidth={2.2} />
+        Add Client
+      </button>
+    )
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
       {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); void refetch() }} />}
@@ -113,111 +149,163 @@ export default function Sessions() {
       <PageHeader
         icon={Briefcase}
         title="Booking"
-        actions={
-          <button
-            onClick={() => setShowBooking(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold hover:brightness-105 transition-all shadow-[0_14px_28px_rgba(214,170,55,0.22)]"
-          >
-            <Plus size={14} strokeWidth={2.2} />
-            Book a Session
-          </button>
-        }
+        actions={headerAction}
       >
-        {/* Category pills — same gold-gradient active state as the top nav. */}
-        <div className="flex gap-1.5 flex-wrap">
-          {CATEGORIES.map((cat) => {
-            const active = activeCategory === cat
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setActiveCategory(cat)}
-                className={`inline-flex items-center h-9 px-3.5 rounded-[22px] text-[13px] font-semibold transition-all focus-ring whitespace-nowrap ${
-                  active
-                    ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-                    : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
-                }`}
-              >
-                {cat}
-              </button>
-            )
-          })}
+        {/* View toggle — Bookings / Clients. Sits in the page-header
+            child slot so it stays anchored to the title row, just like
+            the category pills used to. Same gold-gradient active state
+            as the top nav for visual consistency. */}
+        <div
+          role="tablist"
+          aria-label="Booking page view"
+          className="flex gap-1.5"
+        >
+          <ViewToggleButton
+            active={view === 'bookings'}
+            onClick={() => setView('bookings')}
+            icon={<Briefcase size={14} aria-hidden="true" />}
+            label="Bookings"
+          />
+          <ViewToggleButton
+            active={view === 'clients'}
+            onClick={() => setView('clients')}
+            icon={<UserSquare size={14} aria-hidden="true" />}
+            label="Clients"
+          />
         </div>
+
+        {/* Bookings-only sub-row: category pills. */}
+        {view === 'bookings' && (
+          <div className="flex gap-1.5 flex-wrap">
+            {CATEGORIES.map((cat) => {
+              const active = activeCategory === cat
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActiveCategory(cat)}
+                  className={`inline-flex items-center h-9 px-3.5 rounded-[22px] text-[13px] font-semibold transition-all focus-ring whitespace-nowrap ${
+                    active
+                      ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                      : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
+                  }`}
+                >
+                  {cat}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </PageHeader>
 
-      {/* Bookings card — widget-card surface so it matches the rest of the app. */}
-      <div className="widget-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-section text-text">Current bookings</h2>
-          <span className="text-caption">
-            {loading ? '…' : `${filtered.length} result${filtered.length === 1 ? '' : 's'}`}
-          </span>
-        </div>
+      {view === 'bookings' ? (
+        <div className="widget-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="text-section text-text">Current bookings</h2>
+            <span className="text-caption">
+              {loading ? '…' : `${filtered.length} result${filtered.length === 1 ? '' : 's'}`}
+            </span>
+          </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="px-5 py-10 flex items-center justify-center text-text-light">
-              <Loader2 size={18} className="animate-spin" />
-            </div>
-          ) : error ? (
-            <div className="px-5 py-8 flex items-center gap-2 text-sm text-amber-300">
-              <AlertCircle size={16} />
-              <span>{error}</span>
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/5">
-                  <th className="px-5 py-3 text-left text-label">Client</th>
-                  <th className="px-5 py-3 text-left text-label">Date</th>
-                  <th className="px-5 py-3 text-left text-label">Engineer</th>
-                  <th className="px-5 py-3 text-left text-label">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {filtered.map((booking) => (
-                  <tr
-                    key={booking.id}
-                    ref={(node) => {
-                      if (node) rowRefs.current.set(booking.id, node)
-                      else rowRefs.current.delete(booking.id)
-                    }}
-                    className={`hover:bg-white/[0.03] transition-colors ${
-                      highlightedId === booking.id
-                        ? 'ring-2 ring-gold/80 ring-inset bg-gold/5'
-                        : ''
-                    }`}
-                  >
-                    <td className="px-5 py-4">
-                      <p className="text-[14px] font-medium text-text tracking-tight">{booking.client}</p>
-                      <p className="text-[11px] text-text-light">{booking.description}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-[13px] text-text-muted">{booking.date}</p>
-                      <p className="text-[11px] text-text-light">{booking.startTime} – {booking.endTime}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-[13px] text-text-muted">{booking.engineer}</p>
-                      <p className="text-[11px] text-text-light">{booking.studio}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <StatusLabel status={booking.status} />
-                    </td>
+          <div className="overflow-x-auto">
+            {loading ? (
+              <div className="px-5 py-10 flex items-center justify-center text-text-light">
+                <Loader2 size={18} className="animate-spin" />
+              </div>
+            ) : error ? (
+              <div className="px-5 py-8 flex items-center gap-2 text-sm text-amber-300">
+                <AlertCircle size={16} />
+                <span>{error}</span>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/5">
+                    <th className="px-5 py-3 text-left text-label">Client</th>
+                    <th className="px-5 py-3 text-left text-label">Date</th>
+                    <th className="px-5 py-3 text-left text-label">Engineer</th>
+                    <th className="px-5 py-3 text-left text-label">Status</th>
                   </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-10 text-center text-text-muted text-sm">
-                      No bookings {activeCategory === 'All' ? 'yet' : `in ${activeCategory}`}.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filtered.map((booking) => (
+                    <tr
+                      key={booking.id}
+                      ref={(node) => {
+                        if (node) rowRefs.current.set(booking.id, node)
+                        else rowRefs.current.delete(booking.id)
+                      }}
+                      className={`hover:bg-white/[0.03] transition-colors ${
+                        highlightedId === booking.id
+                          ? 'ring-2 ring-gold/80 ring-inset bg-gold/5'
+                          : ''
+                      }`}
+                    >
+                      <td className="px-5 py-4">
+                        <p className="text-[14px] font-medium text-text tracking-tight">{booking.client}</p>
+                        <p className="text-[11px] text-text-light">{booking.description}</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="text-[13px] text-text-muted">{booking.date}</p>
+                        <p className="text-[11px] text-text-light">{booking.startTime} – {booking.endTime}</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="text-[13px] text-text-muted">{booking.engineer}</p>
+                        <p className="text-[11px] text-text-light">{booking.studio}</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <StatusLabel status={booking.status} />
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-10 text-center text-text-muted text-sm">
+                        No bookings {activeCategory === 'All' ? 'yet' : `in ${activeCategory}`}.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <ClientsPanel
+          registerAddClient={(open) => {
+            openAddClientRef.current = open
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+function ViewToggleButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+}) {
+  return (
+    <button
+      role="tab"
+      type="button"
+      aria-selected={active}
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[22px] text-[13px] font-semibold transition-all focus-ring whitespace-nowrap ${
+        active
+          ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+          : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   )
 }

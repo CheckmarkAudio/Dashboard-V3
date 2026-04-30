@@ -29,10 +29,6 @@ export const APP_ROUTES = {
     // still rendered inside `/admin/assign-classic` for reference.
     templateLibrary: '/admin/template-library',
     members: '/admin/my-team',
-    // PR #51 — Clients admin page. Manages the studio's client list
-    // — bookings link to a `clients` row so confirmations + reminders
-    // (Tier 2 / Lean 2) have an email + phone on file.
-    clients: '/admin/clients',
     // Analytics merged the standalone Flywheel page in April 2026.
     // All KPI charts, monthly trends, employee breakdowns, and the
     // stage drill-down live at `/admin/health` under BusinessHealth.
