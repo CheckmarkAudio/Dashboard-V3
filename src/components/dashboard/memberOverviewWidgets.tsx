@@ -24,6 +24,7 @@ import type { TeamMember } from '../../types'
 import MyTasksCard from '../tasks/MyTasksCard'
 import CreateBookingModal from '../CreateBookingModal'
 import NotificationsPanel from '../notifications/NotificationsPanel'
+import NotificationsPostActions from '../notifications/NotificationsPostActions'
 
 // Stage tokens shared between the activity feed + status pills.
 // Sourced from the v1.0 design system (Deliver/Capture/Share/Attract/Book).
@@ -208,15 +209,15 @@ export function BookingSnapshotWidget() {
 }
 
 /**
- * Notifications widget — thin wrapper around the shared NotificationsPanel.
+ * Notifications widget — Overview col-3 widget.
  *
- * PR #65 moved all the panel logic (data fetching, optimistic mark-read,
- * realtime subscriptions, click routing) into
- * `src/components/notifications/NotificationsPanel.tsx` so the new top-bar
- * dropdown bell and the Overview widget can share one surface. This widget
- * stays exported for any saved layout that still references
- * `forum_notifications`, but the page no longer places it on Overview by
- * default — see registry.ts (the `defaultPlacements` array is empty).
+ * PR #65 — moved the panel logic (data fetch, optimistic mark-read,
+ * realtime subs, click routing) into a shared `NotificationsPanel`.
+ * PR #68 — restored the widget to Overview col-3 (rs2) and added the
+ * shared `NotificationsPostActions` (Post + Channel quick-actions)
+ * above the panel so anyone can quick-post from their Overview without
+ * leaving for the Forum page. Same buttons live on the admin Hub
+ * notifications widget.
  */
 export function ForumNotificationsWidget() {
   const todayLabel = new Date()
@@ -227,7 +228,14 @@ export function ForumNotificationsWidget() {
       TODAY · {todayLabel}
     </p>
   )
-  return <NotificationsPanel eyebrow={eyebrow} />
+  return (
+    <div className="flex flex-col h-full">
+      <NotificationsPostActions />
+      <div className="flex-1 min-h-0">
+        <NotificationsPanel eyebrow={eyebrow} />
+      </div>
+    </div>
+  )
 }
 
 // PR #65 — old inlined channel/assignment row + RPC helpers retired.
