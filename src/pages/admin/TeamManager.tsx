@@ -8,6 +8,7 @@ import { useToast } from '../../components/Toast'
 import ConfirmModal from '../../components/ConfirmModal'
 import { Button, Input, Select, Badge, EmptyState } from '../../components/ui'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
+import ClockDataSection from '../../components/admin/ClockDataSection'
 import {
   loadActiveTemplates,
   loadDefaultTemplateIdsForPosition,
@@ -831,18 +832,7 @@ export default function TeamManager() {
       )}
       </>)}
 
-      {activeSection === 'clock-data' && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-14 h-14 rounded-full bg-surface-alt flex items-center justify-center mb-4">
-            <Clock size={24} className="text-text-muted" aria-hidden="true" />
-          </div>
-          <h2 className="text-lg font-bold mb-2">Clock data — coming soon</h2>
-          <p className="text-text-muted text-sm max-w-sm">
-            Per-member shift logs, reflection prompts, and payroll-grade timestamps land in the
-            next PR. The sidebar slot is here so admins can preview the eventual home for this view.
-          </p>
-        </div>
-      )}
+      {activeSection === 'clock-data' && <ClockDataSection members={members} />}
 
         </section>
       </div>
