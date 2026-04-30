@@ -237,16 +237,22 @@ User-delivered list of UI tweaks across login / clock-out modal / theme / widget
 
 **Deferred (post-Tier-3):** Analytics revamp + flywheel event ledger · EmailJS booking confirmations / 24h reminders / 1hr review-asks · reusable `<ExportButtons />`.
 
-**Open questions (user to answer before Lean 1 starts):**
+**Locked answers (user, 2026-04-30):**
 
-1. **Login page** — when/how did it disappear? I don't see it removed in any PR (#62-#70). Could be the Vercel preview auto-login flag from PR #13 leaking into production-aliased URLs. Investigation as part of Lean 1.
-2. **Widget grid** — "one row, left/right/center" — (a) widgets locked to current row, only horizontal swap, OR (b) any column placement allowed but no falling past the visible widget row?
-3. **Studio Tasks rooms** — new `room` column on `assigned_tasks` (enum: `control_room` / `studio_a` / `lobby` / `studio_b`)? Or piggyback on `bookings.room`? Default proposal: new column.
-4. **Booking status RPCs** — do `cancel_session` / `confirm_session` / `reschedule_session` exist? If not, Lean 5 grows.
-5. **"Show completed" default-on (Assign page)** — local-date or 24-hour rolling? Local-date is simpler.
-6. **Mild gradient scope** — site-wide body background, or just page-level chrome under widgets? Default proposal: subtle body-level radial/linear, not on cards.
-7. **Forum presence richness** — heartbeat-based "online when tab is open", or "active in last 5 min"? Default proposal: tab-open.
-8. **Bulk-delete on Assign page** — main pane (per-member task list), or top-level bar across all members?
+1. **Login page** — User: "I don't remember when it disappeared. I manually disabled it for website previews because I had to keep logging in, perhaps that got entangled? It was working though for the live url up until maybe yesterday or the day before." → **Lean 1 investigates** the auto-login env-var leak (likely `VITE_PREVIEW_LOGIN_EMAIL` / `_PASSWORD` ended up in the production Vercel scope). Production must require login; previews stay auto-login per `feedback_preview_no_login_required.md`.
+2. **Widget grid** — **(a) widgets locked to their current row, only horizontal swap allowed.** No vertical drag. No empty slots below.
+3. **Studio Tasks rooms** — **single widget with section dividers** (visual `[Control room] ─────────`, `[Studio A] ─────────`, `[Lobby] ─────────`, `[Studio B] ─────────`). Backend still adds a `room` column on `assigned_tasks` so tasks can be tagged + grouped; UI renders as one widget with grouped rows under each section header.
+4. **Booking status hover** — User: "study Figma + Monday on github for a way to do this seamlessly, easy hover-over and satisfying." Lean 5 = research the pattern (Figma/Monday/Linear-quality hover-popover with smooth transitions), then ship; if `cancel_session` / `confirm_session` / `reschedule_session` RPCs don't exist they get added in the same PR.
+5. **"Show completed" default-on (Assign page)** — **local-date.** Tasks completed today stay visible on Assign page until midnight local; after that they roll off. Add a **task-completion timestamp on the detail modal** so the day is tracked. Older completed tasks land on a new **"Completed Tasks" log page in the Members admin left rail** (new section alongside Roster + Clock Data). User: "Add this feature now or in the best Lean order if it takes you off the UI flow." → folded into **Lean 10** (Assign revamp) since the data plumbing is the same as Show-Completed.
+6. **Gradient scope** — **body level, very subtle.** Just for satisfying vibe. NOT on cards.
+7. **Forum presence** — **online when logged in / site open.** Site-based heartbeat. Richer states ("active 5m ago" etc.) deferred.
+8. **Bulk-delete on Assign page** — **top-level bar at the top of the main pane**, scoped to the **currently-viewed member**. Not across all members at once.
+
+**Refined Lean scopes (post-answers):**
+
+- **Lean 6 (Tasks):** Studio Tasks gets a single widget with grouped section headers (`Control room` / `Studio A` / `Lobby` / `Studio B`); add `room` column on `assigned_tasks` (migration + advisor check); group rows by `room` in the UI.
+- **Lean 10 (Assign revamp) expanded:** also adds the per-member **"Completed Tasks" log page** to TeamManager's left-rail (new section alongside Roster + Clock Data). Drives the same `completed_at` timestamp the Show-Completed default-on uses on the Assign page.
+- **Lean 1 investigation note:** likely culprit is the preview-auto-login env vars bleeding into production. Audit: (a) Vercel env scope (must be **Preview** only, not **Production**), (b) `Login.tsx` hostname guard (must hard-exclude `dashboard-v3-dusky.vercel.app` aka the prod alias), (c) any code changes since 2026-04-28 that touched the login flow.
 
 **Raw user list (preserved verbatim, source of truth for the Leans above):**
 

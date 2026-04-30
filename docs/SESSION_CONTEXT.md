@@ -629,9 +629,20 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
-### Tier 3 — Interface tweaks + page-by-page fixes (planned 2026-04-30)
+### Tier 3 — Interface tweaks + page-by-page fixes (planned 2026-04-30, locked)
 
-User delivered a wide-scope tweaks list. Plan = 10 Leans (small shippable PRs in dependency order). **8 open questions logged in `docs/PROJECT_STATE.md` Active section** — user is answering asynchronously; Lean 1 starts after they're back.
+User delivered a wide-scope tweaks list + answered the 8 open questions. Plan = 10 Leans in dependency order. **Lean 1 cleared to start.**
+
+**Locked decisions** (full answers in `docs/PROJECT_STATE.md` Active section):
+
+1. Login disappeared ~2 days ago; user manually disabled login for previews and suspects entanglement. Lean 1 audits the preview-auto-login env vars + hostname guard.
+2. Widget grid → option (a): widgets **locked to their current row**, horizontal swap only.
+3. Studio Tasks rooms → single widget with **section dividers** (`Control room` / `Studio A` / `Lobby` / `Studio B`); backend adds a `room` column on `assigned_tasks`.
+4. Booking status hover → research Figma + Monday for the smooth pattern; add `cancel_session` / `confirm_session` / `reschedule_session` RPCs if missing.
+5. Show-completed default-on → local-date; tasks roll off at midnight; older completions land on a new **Completed Tasks** log page in the Members admin left rail (folded into Lean 10).
+6. Gradient → body-level, very subtle, not on cards.
+7. Forum presence → online when site open (site-based heartbeat).
+8. Assign bulk-delete → top-level bar in the main pane, scoped to the currently-viewed member.
 
 | # | Lean | One-line scope |
 |--|--|--|
