@@ -37,11 +37,16 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <header className={['flex flex-col gap-4', className].filter(Boolean).join(' ')}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3 min-w-0">
+      {/* PR #72 — outer flex switched to `items-center` so the action
+          button vertically centers with the title block. Was
+          `items-start` which top-aligned the action with the icon
+          chip and the action visually drifted up-right ("floating
+          away" per user). */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
           {Icon && (
             <div
-              className="mt-0.5 flex h-11 w-11 items-center justify-center rounded-xl bg-surface-alt border border-border shrink-0"
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-alt border border-border shrink-0"
               aria-hidden="true"
             >
               <Icon className="h-5 w-5 text-gold" />
