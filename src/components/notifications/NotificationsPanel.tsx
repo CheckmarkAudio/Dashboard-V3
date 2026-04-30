@@ -328,7 +328,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 key={c.channel_id}
                 to={`${APP_ROUTES.member.content}${c.channel_slug ? `?channel=${c.channel_slug}` : ''}`}
                 onClick={() => handleChannelClick(c.channel_id)}
-                className={`group relative flex items-start gap-2.5 ${rowPad} rounded-xl border border-transparent transition-all ${
+                className={`group relative flex items-start gap-2.5 ${rowPad} rounded-xl border border-transparent transition-[background-color,border-color,transform] duration-150 ease-out active:scale-[0.995] ${
                   unread
                     ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
                     : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
@@ -384,7 +384,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                   key={n.id}
                   type="button"
                   onClick={() => handleAssignmentClick(n)}
-                  className={`w-full group relative flex items-start gap-2.5 ${rowPad} rounded-xl border border-transparent transition-all text-left ${
+                  className={`w-full group relative flex items-start gap-2.5 ${rowPad} rounded-xl border border-transparent transition-[background-color,border-color,transform] duration-150 ease-out active:scale-[0.995] text-left ${
                     unread
                       ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
                       : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
