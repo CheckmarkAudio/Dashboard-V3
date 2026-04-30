@@ -96,6 +96,13 @@ function PostToChannelModal({
       })
       if (error) throw error
       toast('Posted', 'success')
+      // Mark this channel read for the sender so their own message
+      // doesn't bump their unread badge. Same fix as the inline-reply
+      // path in NotificationsPanel. Errors here are non-fatal — the
+      // post already succeeded.
+      try {
+        await supabase.rpc('mark_channel_read', { p_channel_id: channelId })
+      } catch { /* noop */ }
       void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
       onClose()
     } catch (err) {

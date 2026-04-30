@@ -361,6 +361,12 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 toast(`Sent to #${c.channel_name}`, 'success')
                 setReplyText('')
                 setExpandedChannelId(null)
+                // PR #68 (rev) — mark this channel read for the SENDER so
+                // their own message doesn't bump their unread badge. Without
+                // this, the realtime INSERT triggers a refetch that counts
+                // the just-sent message as unread for everyone, including
+                // the sender.
+                void markChannelRead(c.channel_id).catch(() => { /* noop */ })
                 void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
               } catch (err) {
                 toast(err instanceof Error ? err.message : 'Send failed', 'error')
@@ -369,25 +375,47 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
               }
             }
 
+            const channelHref = `${APP_ROUTES.member.content}${c.channel_slug ? `?channel=${c.channel_slug}` : ''}`
+
+            // Forum violet (matches CategoryBadge for forum) — used for
+            // expanded-state border + the speech-bubble button hover/active
+            // states so the row reads as a violet-themed entity end to end.
+            const expandedRingClass = isExpanded
+              ? 'bg-violet-500/10 border-violet-500/40'
+              : 'border-transparent ' + (unread
+                  ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
+                  : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10')
+
             return (
               <div
                 key={c.channel_id}
-                className={`relative rounded-xl border transition-[background-color,border-color] duration-150 ease-out ${
-                  isExpanded
-                    ? 'bg-white/[0.04] border-gold/30'
-                    : 'border-transparent ' + (unread
-                        ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
-                        : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10')
-                }`}
+                className={`relative rounded-xl border transition-[background-color,border-color] duration-150 ease-out ${expandedRingClass}`}
               >
-                <button
-                  type="button"
-                  onClick={toggleExpand}
-                  aria-expanded={isExpanded}
-                  className={`w-full text-left flex items-start gap-2.5 ${rowPad} rounded-xl transition-transform duration-150 active:scale-[0.995] focus-ring`}
-                >
-                  <CategoryBadge category="forum" />
-                  <div className="flex-1 min-w-0">
+                <div className={`flex items-start gap-2.5 ${rowPad}`}>
+                  {/* Speech-bubble = the inline-reply trigger. Buttoned
+                      with a hover glow + active push so it reads as
+                      clickable; aria-expanded reflects the row state. */}
+                  <button
+                    type="button"
+                    onClick={toggleExpand}
+                    aria-expanded={isExpanded}
+                    aria-label={isExpanded ? `Close reply to ${c.channel_name}` : `Reply to ${c.channel_name}`}
+                    title={isExpanded ? 'Close' : 'Quick reply'}
+                    className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 transition-all duration-150 active:scale-95 focus-ring ${
+                      isExpanded
+                        ? 'bg-violet-500/30 ring-violet-400/60 text-violet-200 shadow-[0_0_0_3px_rgba(167,139,250,0.18)]'
+                        : 'bg-violet-500/15 ring-violet-500/30 text-violet-300 hover:bg-violet-500/25 hover:ring-violet-400/50 hover:shadow-[0_0_0_3px_rgba(167,139,250,0.12)]'
+                    }`}
+                  >
+                    <MessageSquare size={13} aria-hidden="true" />
+                  </button>
+
+                  {/* Title + preview = navigation to the full Forum view. */}
+                  <Link
+                    to={channelHref}
+                    onClick={() => handleChannelClick(c.channel_id)}
+                    className="flex-1 min-w-0 -my-1 py-1 rounded-md hover:bg-white/[0.02] transition-colors focus-ring"
+                  >
                     <div className="flex items-center gap-2">
                       <p
                         className={`text-[13px] truncate ${
@@ -413,22 +441,23 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                     {c.latest_created_at && (
                       <p className="text-[10px] text-text-light mt-0.5">{relativeTime(c.latest_created_at)}</p>
                     )}
-                  </div>
-                </button>
+                  </Link>
+                </div>
 
-                {/* Inline quick-reply. Same `cubic-bezier(0.16, 1, 0.3, 1)`
-                    ease-out-expo as the dropdown opening so the expansion
-                    feels consistent with the rest of the surface. */}
+                {/* Inline quick-reply. Single-line textarea (rows=1, padding
+                    trimmed) so it doesn't dominate the row. Same
+                    `cubic-bezier(0.16, 1, 0.3, 1)` ease-out-expo as the
+                    dropdown opening so the expansion feels consistent. */}
                 {isExpanded && (
                   <div
-                    className="px-3 pb-3 pt-1 space-y-2"
+                    className="px-3 pb-3 pt-1 space-y-1.5"
                     style={{
                       animation: 'fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1)',
                     }}
                   >
                     <textarea
                       autoFocus
-                      rows={2}
+                      rows={1}
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
                       onKeyDown={(e) => {
@@ -443,12 +472,12 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         }
                       }}
                       placeholder={`Reply to #${c.channel_name}…`}
-                      className="w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-[12px] text-text placeholder:text-text-light focus:border-gold focus:outline-none resize-none"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-violet-500/25 text-[12px] text-text placeholder:text-text-light focus:border-violet-400/60 focus:outline-none resize-none min-h-[34px]"
                     />
                     <div className="flex items-center justify-between gap-2">
                       <Link
-                        to={`${APP_ROUTES.member.content}${c.channel_slug ? `?channel=${c.channel_slug}` : ''}`}
-                        className="inline-flex items-center gap-1 text-[10px] text-text-light hover:text-gold transition-colors"
+                        to={channelHref}
+                        className="inline-flex items-center gap-1 text-[10px] text-text-light hover:text-violet-300 transition-colors"
                         onClick={() => {
                           setExpandedChannelId(null)
                           setReplyText('')
@@ -471,7 +500,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                           type="button"
                           onClick={() => void submitReply()}
                           disabled={!replyText.trim() || replyBusy}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-gold text-black text-[11px] font-bold hover:bg-gold-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring"
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-violet-500 text-white text-[11px] font-bold hover:bg-violet-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring"
                         >
                           <Send size={11} aria-hidden="true" />
                           {replyBusy ? 'Sending…' : 'Send'}
