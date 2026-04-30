@@ -1,10 +1,10 @@
-import { useState, type ComponentType, type ChangeEvent } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useQuickKeys } from '../../hooks/useQuickKeys'
 import AccountAccessPanel from '../../components/admin/AccountAccessPanel'
 import WidgetBank from '../../components/admin/WidgetBank'
-import type { LucideProps } from 'lucide-react'
+import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
 import {
   Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid,
 } from 'lucide-react'
@@ -24,12 +24,7 @@ type SectionKey =
   | 'notifications'
   | 'database'
 
-type Section = {
-  key: SectionKey
-  icon: ComponentType<LucideProps>
-  title: string
-  subtitle: string
-}
+type Section = AdminSection<SectionKey>
 
 const SECTIONS: Section[] = [
   { key: 'account-access', icon: Shield,      title: 'Account Access', subtitle: 'Admin vs employee permissions' },
@@ -41,48 +36,6 @@ const SECTIONS: Section[] = [
   { key: 'notifications',  icon: Bell,        title: 'Notifications',  subtitle: 'Alerts and preferences' },
   { key: 'database',       icon: Database,    title: 'Database',       subtitle: 'Connection and admin' },
 ]
-
-/**
- * Single row in the left Settings nav. Icon sits in a rounded surface tile so
- * the active state reads as a filled card (matching the reference) rather
- * than a pill — subtitle text carries the "what's here" hint.
- */
-function SectionNavItem({
-  section,
-  active,
-  onSelect,
-}: {
-  section: Section
-  active: boolean
-  onSelect: () => void
-}) {
-  const Icon = section.icon
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-current={active ? 'page' : undefined}
-      className={[
-        'w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 focus-ring',
-        active ? 'bg-surface-alt ring-1 ring-border-light' : 'hover:bg-surface-hover',
-      ].join(' ')}
-    >
-      <span
-        className={[
-          'shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-surface',
-          active ? 'text-gold' : 'text-text-muted',
-        ].join(' ')}
-        aria-hidden="true"
-      >
-        <Icon size={16} strokeWidth={2} />
-      </span>
-      <span className="min-w-0 leading-tight">
-        <span className="block text-sm font-semibold text-text">{section.title}</span>
-        <span className="block text-[12px] text-text-muted truncate">{section.subtitle}</span>
-      </span>
-    </button>
-  )
-}
 
 /**
  * Keycap-style input used in the Quick Keys section. Displays the currently
@@ -170,7 +123,7 @@ export default function AdminSettings() {
         <aside className="bg-surface rounded-xl border border-border p-2 space-y-1" aria-label="Settings sections">
           <p className="px-3 pt-3 pb-2 text-label">Settings</p>
           {SECTIONS.map(section => (
-            <SectionNavItem
+            <AdminSectionNavItem
               key={section.key}
               section={section}
               active={activeSection === section.key}

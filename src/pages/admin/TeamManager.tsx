@@ -6,7 +6,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
 import ConfirmModal from '../../components/ConfirmModal'
-import { Button, Input, Select, Badge, EmptyState, PageHeader } from '../../components/ui'
+import { Button, Input, Select, Badge, EmptyState } from '../../components/ui'
+import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
 import {
   loadActiveTemplates,
   loadDefaultTemplateIdsForPosition,
@@ -15,12 +16,23 @@ import {
 } from '../../lib/queries/templates'
 import type { TeamMember, ReportTemplate } from '../../types'
 import {
-  Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck,
+  Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
   Mail, Phone, Save, ChevronRight, ChevronLeft,
   MoreVertical, UserPlus, Filter, Check, ClipboardList,
 } from 'lucide-react'
 
 import type { BadgeVariant } from '../../components/ui'
+
+// PR #58 — left-rail sections for the Members admin page. Mirrors the
+// Settings page pattern (left section nav + right pane). Roster is the
+// existing TeamManager content; Clock Data is a placeholder section
+// that PR #59 (Clock In/Out v2) will populate with shift data.
+type MembersSectionKey = 'roster' | 'clock-data'
+
+const MEMBERS_SECTIONS: AdminSection<MembersSectionKey>[] = [
+  { key: 'roster',     icon: Users, title: 'Roster',     subtitle: 'Active and inactive team members' },
+  { key: 'clock-data', icon: Clock, title: 'Clock Data', subtitle: 'Shifts and reflections' },
+]
 
 const POSITIONS: { value: string; label: string; badge: BadgeVariant }[] = [
   { value: 'owner',              label: 'Owner / Lead Engineer', badge: 'gold' },
@@ -80,6 +92,10 @@ export default function TeamManager() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // PR #58 — left-rail active section (Roster default; Clock Data is a
+  // placeholder until PR #59 lands the shifts table).
+  const [activeSection, setActiveSection] = useState<MembersSectionKey>('roster')
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean; memberId: string; memberName: string; loading: boolean
@@ -507,30 +523,47 @@ export default function TeamManager() {
   )
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5 animate-fade-in">
-      <PageHeader
-        icon={Users}
-        title={
-          <span className="inline-flex items-center gap-2">
-            Team Manager
+    <div className="max-w-6xl mx-auto animate-fade-in">
+      {/* Page header — mirrors Settings/Assign rhythm so admin pages share an opening cadence */}
+      <div className="mb-6 flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            Members
             <span className="text-sm font-medium text-text-muted bg-surface-alt px-2.5 py-0.5 rounded-full">
               {members.length}
             </span>
-          </span>
-        }
-        actions={
-          <Button
-            variant="primary"
-            onClick={openAddForm}
-            iconLeft={<UserPlus size={16} aria-hidden="true" />}
-          >
-            Add Member
-          </Button>
-        }
-      />
+          </h1>
+        </div>
+        <Button
+          variant="primary"
+          onClick={openAddForm}
+          iconLeft={<UserPlus size={16} aria-hidden="true" />}
+        >
+          Add Member
+        </Button>
+      </div>
 
+      {/* Two-pane layout: left section nav + right pane content. Mirrors AdminSettings.tsx. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
+        {/* ── Left: section nav ── */}
+        <aside className="bg-surface rounded-xl border border-border p-2 space-y-1" aria-label="Members sections">
+          <p className="px-3 pt-3 pb-2 text-label">Members</p>
+          {MEMBERS_SECTIONS.map(section => (
+            <AdminSectionNavItem
+              key={section.key}
+              section={section}
+              active={activeSection === section.key}
+              onSelect={() => setActiveSection(section.key)}
+            />
+          ))}
+        </aside>
+
+        {/* ── Right: active section content ── */}
+        <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px]">
+
+      {activeSection === 'roster' && (<>
       {/* Toolbar: search + filters */}
-      <div className="bg-surface rounded-xl border border-border p-4 space-y-3">
+      <div className="space-y-3 mb-5">
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" aria-hidden="true" />
@@ -621,7 +654,9 @@ export default function TeamManager() {
         // Send setup email / Toggle role / Toggle status / Delete)
         // so the page is the single canonical Members management
         // surface — Add up top, manage per-row.
-        <div className="widget-card overflow-hidden">
+        // PR #58: stripped widget-card chrome since the table now lives inside
+        // the right-pane card (would have been a double-box otherwise).
+        <div className="rounded-lg border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -794,6 +829,23 @@ export default function TeamManager() {
           </div>
         </div>
       )}
+      </>)}
+
+      {activeSection === 'clock-data' && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-14 h-14 rounded-full bg-surface-alt flex items-center justify-center mb-4">
+            <Clock size={24} className="text-text-muted" aria-hidden="true" />
+          </div>
+          <h2 className="text-lg font-bold mb-2">Clock data — coming soon</h2>
+          <p className="text-text-muted text-sm max-w-sm">
+            Per-member shift logs, reflection prompts, and payroll-grade timestamps land in the
+            next PR. The sidebar slot is here so admins can preview the eventual home for this view.
+          </p>
+        </div>
+      )}
+
+        </section>
+      </div>
 
       {/* Slide-over form */}
       {showForm && (
