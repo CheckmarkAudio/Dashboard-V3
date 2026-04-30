@@ -102,7 +102,6 @@ export default function ClientsAdmin() {
             </span>
           </span>
         }
-        subtitle="Studio clients — bookings link here for confirmations + reminders."
         actions={
           <Button
             variant="primary"

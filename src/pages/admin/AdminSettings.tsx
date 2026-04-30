@@ -162,7 +162,6 @@ export default function AdminSettings() {
       {/* Page header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-text-muted mt-1">Configure your team dashboard</p>
       </div>
 
       {/* Two-pane layout: left section nav + right content */}

@@ -194,7 +194,6 @@ export default function Pipeline() {
       <PageHeader
         icon={GitBranch}
         title="Artist pipeline"
-        subtitle="Track artists from inquiry through alumni."
         actions={
           <Button
             variant={showAddForm ? 'secondary' : 'primary'}
