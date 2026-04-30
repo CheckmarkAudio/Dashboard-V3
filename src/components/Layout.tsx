@@ -10,6 +10,8 @@ import { useQuickKeyListener } from '../hooks/useQuickKeyListener'
 import { APP_ROUTES } from '../app/routes'
 import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
+import SocialLinks from './SocialLinks'
+import NotificationsBell from './notifications/NotificationsBell'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
 import {
@@ -532,8 +534,18 @@ export default function Layout() {
             </div>
           </div>
 
-          {/* Right section: Theme toggle + Clock + Profile */}
+          {/* Right section: Social + Theme toggle + Clock + Profile */}
           <div className="ml-auto flex items-center gap-3 lg:gap-4 min-w-0">
+            {/* PR #65 — Instagram / TikTok / YouTube link strip. Frontend-
+                only stubs (hrefs unset until the backend wire-up). Hidden
+                below md so the brand row stays clean on phones. */}
+            <SocialLinks />
+
+            {/* PR #65 — Notifications dropdown bell. Replaces the always-
+                mounted Notifications widget on Overview. Click to expand;
+                stays open until X / Escape / outside-click. */}
+            <NotificationsBell />
+
             {/* Theme toggle — light/dark. System preference stays accessible
                 via ThemeContext for anyone who wants a future Settings UI. */}
             <button
@@ -556,7 +568,7 @@ export default function Layout() {
               <button
                 onClick={() => clockInMutation.mutate()}
                 disabled={clockInMutation.isPending || openShiftQuery.isLoading}
-                className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold hover:brightness-105 transition-all shadow-[0_14px_28px_rgba(214,170,55,0.22)] disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold tracking-tight hover:brightness-105 transition-all shadow-[0_6px_14px_rgba(214,170,55,0.18)] focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {clockInMutation.isPending ? (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />

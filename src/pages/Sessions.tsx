@@ -123,21 +123,26 @@ export default function Sessions() {
     ? sessions
     : sessions.filter((row) => row.category === activeCategory)
 
+  // PR #65 — same gold-CTA shape as the Overview Book a Session button.
+  // h-10 / px-4 / rounded-2xl + lighter shadow `0_6px_14px_18%` (was
+  // `0_14px_28px_22%` — way too feathery per user feedback).
   const headerAction =
     view === 'bookings' ? (
       <button
+        type="button"
         onClick={() => setShowBooking(true)}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold hover:brightness-105 transition-all shadow-[0_14px_28px_rgba(214,170,55,0.22)]"
+        className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold tracking-tight hover:brightness-105 transition-all shadow-[0_6px_14px_rgba(214,170,55,0.18)] focus-ring"
       >
-        <Plus size={14} strokeWidth={2.2} />
+        <Plus size={14} strokeWidth={2.4} />
         Book a Session
       </button>
     ) : (
       <button
+        type="button"
         onClick={() => openAddClientRef.current?.()}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold hover:brightness-105 transition-all shadow-[0_14px_28px_rgba(214,170,55,0.22)]"
+        className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold tracking-tight hover:brightness-105 transition-all shadow-[0_6px_14px_rgba(214,170,55,0.18)] focus-ring"
       >
-        <Plus size={14} strokeWidth={2.2} />
+        <Plus size={14} strokeWidth={2.4} />
         Add Client
       </button>
     )

@@ -75,13 +75,14 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
-    // PR #61: rowSpan 1.5 → 2 so col 3 matches My Tasks (col 1) and
-    // Calendar (col 2) heights now that Booking has moved to the
-    // page-header button.
+    // PR #65: removed from `member_overview` placements — notifications
+    // live in the top-bar dropdown bell (`NotificationsBell`) now. The
+    // widget definition stays so any saved layout that still references
+    // `forum_notifications` doesn't crash; sanitization prunes it.
     id: 'forum_notifications',
     title: 'Notifications',
     description: 'Unread messages across channels and new assignments.',
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 2, col: 3 }],
+    defaultPlacements: [],
     accessVisibility: 'shared',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -502,7 +503,12 @@ function buildDefaultWidgetStateForScope(
 // "Book a Session" button in the Overview page header) and
 // `forum_notifications` rowSpan bumped 1.5 → 2 so col 3 matches the
 // height of My Tasks (col 1) and Calendar (col 2).
-export const WORKSPACE_LAYOUT_VERSION = 30
+// v31 (2026-04-30, PR #65): Overview header glow-up. Notifications
+// retired from the Overview grid — they live in the top-bar
+// dropdown bell (`NotificationsBell`) now. `forum_notifications`
+// has no `member_overview` placement; sanitization prunes it from
+// saved layouts.
+export const WORKSPACE_LAYOUT_VERSION = 31
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
