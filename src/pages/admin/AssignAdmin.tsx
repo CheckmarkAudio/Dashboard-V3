@@ -200,12 +200,15 @@ export default function AssignAdmin() {
         <h1 className="text-2xl font-bold">Assign</h1>
       </div>
 
-      {/* Two-column shell: Sidebar | Main content. items-start keeps both
-          columns aligned to the top of the grid so the cards line up — same
-          rhythm as the Settings page. */}
-      <div className="grid grid-cols-[260px_1fr] gap-6 items-start">
+      {/* Two-column shell: Sidebar | Main content.
+          PR #63 — `items-stretch` so the sidebar grows to the same height
+          as the main pane (bottom borders flush). Mirrors the `/calendar`
+          pattern (`grid-cols-[300px_1fr] gap-3 items-stretch`). The aside
+          loses `h-fit sticky top-4` because that pinned the sidebar at
+          its content height and broke the bottom-flush requirement. */}
+      <div className="grid grid-cols-[260px_1fr] gap-6 items-stretch">
         {/* ─── Sidebar ───────────────────────────────────────────── */}
-        <aside className="rounded-xl border border-border bg-surface p-3 h-fit sticky top-4">
+        <aside className="rounded-xl border border-border bg-surface p-3">
           {/* Members */}
           <div>
             <div className="flex items-center gap-2 px-2 pb-2 mb-2 border-b border-border/60">

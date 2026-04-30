@@ -559,8 +559,15 @@ export default function TeamManager() {
           ))}
         </aside>
 
-        {/* ── Right: active section content ── */}
-        <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px]">
+        {/* ── Right: active section content ──
+            PR #63 — `min-w-0` lets the grid 1fr column actually obey its
+            track (CSS Grid's default `min-width: auto` would expand to
+            fit the widest descendant — the 8-column member table — and
+            push the rounded border past the viewport on narrower screens).
+            `overflow-hidden` keeps anything inside clipped at the rounded
+            border. Settings doesn't need this because its content is short
+            text + simple form rows. */}
+        <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px] min-w-0 overflow-hidden">
 
       {activeSection === 'roster' && (<>
       {/* Toolbar: search + filters */}
