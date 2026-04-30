@@ -1,18 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
 import {
   AlertCircle,
-  Bell,
   Check,
-  CheckCheck,
   ChevronRight,
   FileText,
   Flame,
-  Inbox,
   Loader2,
-  MessageSquare,
   Plus,
   Target,
   TrendingDown,
@@ -20,22 +16,14 @@ import {
   Users,
 } from 'lucide-react'
 import { APP_ROUTES } from '../../app/routes'
-import { useAuth } from '../../contexts/AuthContext'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
 import CalendarDayCard from '../calendar/CalendarDayCard'
 import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
-import {
-  fetchAssignmentNotifications,
-  markAllAssignmentNotificationsRead,
-  markAssignmentNotificationRead,
-} from '../../lib/queries/assignments'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
-import { supabase } from '../../lib/supabase'
 import type { TeamMember } from '../../types'
-import type { AssignmentNotification } from '../../types/assignments'
 import MyTasksCard from '../tasks/MyTasksCard'
 import CreateBookingModal from '../CreateBookingModal'
-import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
+import NotificationsPanel from '../notifications/NotificationsPanel'
 
 // Stage tokens shared between the activity feed + status pills.
 // Sourced from the v1.0 design system (Deliver/Capture/Share/Attract/Book).
@@ -220,462 +208,33 @@ export function BookingSnapshotWidget() {
 }
 
 /**
- * Notifications widget — Discord-style per-channel unread tracking.
+ * Notifications widget — thin wrapper around the shared NotificationsPanel.
  *
- * Pulls `get_channel_notifications()` RPC (migration
- * `channel_notifications_rpc`): returns every channel with its latest
- * message preview + unread count for the calling user (computed against
- * their row in `chat_channel_reads`). Channels with unread messages sort
- * first, then most-recently-active, then alphabetical.
- *
- * Clicking a row calls `mark_channel_read(channel_id)` (optimistic update
- * to the react-query cache so the badge clears instantly) and navigates
- * to /content?channel=slug. Opening the Forum page itself will later
- * mark channels read too — that wiring lives on `Content.tsx`.
- *
- * Realtime: subscribes to INSERT on `chat_messages` across all channels
- * and refetches on any change. A single project-wide subscription keeps
- * cost minimal vs. one channel per row.
- *
- * Empty state (no messages anywhere) still shows the full channel list
- * so users understand the widget's structure before activity starts.
+ * PR #65 moved all the panel logic (data fetching, optimistic mark-read,
+ * realtime subscriptions, click routing) into
+ * `src/components/notifications/NotificationsPanel.tsx` so the new top-bar
+ * dropdown bell and the Overview widget can share one surface. This widget
+ * stays exported for any saved layout that still references
+ * `forum_notifications`, but the page no longer places it on Overview by
+ * default — see registry.ts (the `defaultPlacements` array is empty).
  */
-type ChannelNotification = {
-  channel_id: string
-  channel_name: string
-  channel_slug: string
-  unread_count: number
-  latest_id: string | null
-  latest_content: string | null
-  latest_sender: string | null
-  latest_initial: string | null
-  latest_created_at: string | null
-  last_read_at: string | null
-}
-
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime()
-  const now = Date.now()
-  const diffMs = Math.max(0, now - then)
-  const mins = Math.round(diffMs / 60000)
-  if (mins < 1) return 'Just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.round(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.round(hrs / 24)
-  if (days === 1) return 'Yesterday'
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-async function fetchChannelNotifications(): Promise<ChannelNotification[]> {
-  const { data, error } = await supabase.rpc('get_channel_notifications')
-  if (error) throw error
-  return (data ?? []) as ChannelNotification[]
-}
-
-async function markChannelRead(channelId: string): Promise<void> {
-  const { error } = await supabase.rpc('mark_channel_read', { p_channel_id: channelId })
-  if (error) throw error
-}
-
-// PR #48 — bulk-acknowledge every channel for the caller. The RPC
-// upserts a `chat_channel_reads` row per channel with `last_read_at =
-// now()`, so any unread count derived from that timestamp returns 0.
-async function markAllChannelsRead(): Promise<{ channels_marked: number }> {
-  const { data, error } = await supabase.rpc('mark_all_channels_read')
-  if (error) throw error
-  return data as { channels_marked: number }
-}
-
 export function ForumNotificationsWidget() {
-  const queryClient = useQueryClient()
-  const { profile } = useAuth()
-  // PR #38 — reassign-request modal. Opens when the user clicks a
-  // `task_reassign_requested` notification so they can Approve /
-  // Decline the peer's ask without leaving Overview.
-  const [reassignModalOpen, setReassignModalOpen] = useState(false)
   const todayLabel = new Date()
     .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     .toUpperCase()
-
-  const notifQuery = useQuery({
-    queryKey: ['overview-notifications'],
-    queryFn: fetchChannelNotifications,
-    // Refresh every 60s to keep "Xm ago" labels + unread counts fresh
-    // without waiting for realtime to kick (covers missed events too).
-    refetchInterval: 60_000,
-  })
-
-  // PR #7 — parallel fetch for assignment notifications. Only enabled
-  // when we have a profile id; server-side guard enforces caller ==
-  // p_user_id so we never fire it as an unauthed request.
-  const assignmentsQuery = useQuery({
-    queryKey: ['overview-assignment-notifications', profile?.id],
-    queryFn: () => fetchAssignmentNotifications(profile!.id, { unreadOnly: false, limit: 20 }),
-    enabled: Boolean(profile?.id),
-    refetchInterval: 60_000,
-  })
-
-  // Realtime — any new chat_messages insert anywhere triggers a refetch
-  // of channel unread counts. See PR #7 for the parallel subscription
-  // on assignment_notifications below.
-  useEffect(() => {
-    const chatSub = supabase
-      .channel('overview-notifications')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => {
-        void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
-      })
-      .subscribe()
-    return () => {
-      void supabase.removeChannel(chatSub)
-    }
-  }, [queryClient])
-
-  // Realtime — new assignment_notifications for THIS user (filter on
-  // recipient_id) trigger a refetch of the assignments list. Cleanup
-  // mirrors the chat subscription.
-  useEffect(() => {
-    if (!profile?.id) return
-    const sub = supabase
-      .channel(`overview-assignment-notifications:${profile.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'assignment_notifications',
-          filter: `recipient_id=eq.${profile.id}`,
-        },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: ['overview-assignment-notifications', profile.id] })
-        },
-      )
-      .subscribe()
-    return () => {
-      void supabase.removeChannel(sub)
-    }
-  }, [queryClient, profile?.id])
-
-  const channels = notifQuery.data ?? []
-  const channelUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
-  const assignments = assignmentsQuery.data ?? []
-  const assignmentUnread = assignments.filter((n) => !n.is_read).length
-  const totalUnread = channelUnread + assignmentUnread
-
-  // PR #48 — bulk-acknowledge both sections in one click. Fires the
-  // two RPCs in parallel; cache is updated optimistically so the
-  // unread badge clears instantly. On any error, invalidate so the
-  // server-truth values flow back.
-  const handleMarkAllRead = () => {
-    if (totalUnread === 0) return
-    const assignmentsCacheKey = ['overview-assignment-notifications', profile?.id] as const
-    const nowIso = new Date().toISOString()
-    queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) =>
-      prev?.map((c) => ({ ...c, unread_count: 0, last_read_at: nowIso })) ?? prev,
-    )
-    queryClient.setQueryData<AssignmentNotification[]>([...assignmentsCacheKey], (prev) =>
-      prev?.map((row) => ({ ...row, is_read: true, read_at: row.read_at ?? nowIso })) ?? prev,
-    )
-    void Promise.all([
-      markAllChannelsRead(),
-      markAllAssignmentNotificationsRead(),
-    ]).catch(() => {
-      void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
-      void queryClient.invalidateQueries({ queryKey: assignmentsCacheKey })
-    })
-  }
-
-  // Optimistic mark-read — update cache before RPC returns so the badge
-  // clears on click with no visible delay.
-  const handleChannelClick = (channelId: string) => {
-    queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) => {
-      if (!prev) return prev
-      return prev.map((c) =>
-        c.channel_id === channelId
-          ? { ...c, unread_count: 0, last_read_at: new Date().toISOString() }
-          : c,
-      )
-    })
-    void markChannelRead(channelId).catch(() => {
-      // On error, revert by invalidating so the server-truth returns.
-      void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
-    })
-  }
-
-  // PR #7 — optimistic mark-read for assignment notifications. Same
-  // cache-first pattern as channels.
-  //
-  // PR #11 — ALSO dispatches a `highlight-task` CustomEvent so that
-  // MyTasksCard (wherever it's mounted) scrolls the matching row
-  // into view and flashes a gold ring. Click the notification →
-  // "here's where your new task is."
-  //
-  // PR #13 — session notifications (`session_id` set) route to the
-  // Sessions page instead of firing highlight-task. A future polish
-  // pass can wire a `highlight-session` event there too.
-  const handleAssignmentClick = (n: AssignmentNotification) => {
-    if (!profile?.id) return
-    const cacheKey = ['overview-assignment-notifications', profile.id] as const
-    queryClient.setQueryData<AssignmentNotification[]>([...cacheKey], (prev) => {
-      if (!prev) return prev
-      return prev.map((row) =>
-        row.id === n.id ? { ...row, is_read: true, read_at: new Date().toISOString() } : row,
-      )
-    })
-    void markAssignmentNotificationRead(n.id).catch(() => {
-      void queryClient.invalidateQueries({ queryKey: cacheKey })
-    })
-
-    // ─── Route by notification subject (PR #26) ────────────────────
-    // Three subject families, routed distinctly:
-    //   1. session_id set       — jump to /sessions, flash the row
-    //   2. task_request_id set  — branch on status:
-    //        - approved  → highlight the materialized task in My Tasks
-    //        - rejected  → expand the pending strip so the member sees
-    //                      the reviewer_note inline
-    //        - submitted → (admin-side, handled in adminHubWidgets)
-    //   3. batch_id set         — original task-assign flow (PR #11)
-
-    if (n.session_id) {
-      window.dispatchEvent(
-        new CustomEvent('highlight-session', { detail: { sessionId: n.session_id } }),
-      )
-      window.location.href = '/sessions'
-      return
-    }
-
-    if (n.task_request_id) {
-      if (n.notification_type === 'task_request_approved' && n.task_request?.approved_task_id) {
-        // The request was approved → a real assigned_tasks row now
-        // exists. Highlight that specific task, not a batch.
-        window.dispatchEvent(
-          new CustomEvent('highlight-task', {
-            detail: { taskId: n.task_request.approved_task_id },
-          }),
-        )
-        return
-      }
-      if (n.notification_type === 'task_request_rejected') {
-        // Open the member's pending-requests strip so the rejection
-        // note is visible inline.
-        window.dispatchEvent(new CustomEvent('expand-task-requests'))
-        return
-      }
-      // submitted/unknown → no-op on the member side (admin handler
-      // covers the submitted case from their own notifications widget).
-      return
-    }
-
-    // PR #38 — peer-to-peer reassignment notifications.
-    if (n.task_reassign_request_id) {
-      if (n.notification_type === 'task_reassign_requested') {
-        // Current assignee side — open the Approve/Decline modal.
-        setReassignModalOpen(true)
-        return
-      }
-      if (n.notification_type === 'task_reassign_approved') {
-        // Requester side — the task just moved into their queue.
-        // Invalidate My Tasks so the new row appears and flash it.
-        void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
-        return
-      }
-      if (n.notification_type === 'task_reassign_declined') {
-        // Requester side — no-op for now. Title+body already tell the
-        // story; future iteration could pop a small toast.
-        return
-      }
-      return
-    }
-
-    // Task-assign notification — highlight the task(s) from this
-    // batch in MyTasksCard. The card finds the first task whose
-    // `batch.id` matches and flashes it.
-    window.dispatchEvent(
-      new CustomEvent('highlight-task', { detail: { batchId: n.batch_id } }),
-    )
-  }
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* TODAY eyebrow + total unread pill — matches sibling widgets. */}
-      <div className="flex items-center justify-between mb-2 shrink-0">
-        <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
-          TODAY · {todayLabel}
-        </p>
-        <div className="flex items-center gap-1.5">
-          {/* PR #48 — Mark-all-read. Hidden when nothing is unread. */}
-          {totalUnread > 0 && (
-            <button
-              type="button"
-              onClick={handleMarkAllRead}
-              title="Mark all as read"
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface text-text-muted ring-1 ring-border text-[10px] font-bold tracking-wider uppercase hover:text-gold hover:ring-gold/40 transition-colors focus-ring"
-            >
-              <CheckCheck size={11} aria-hidden="true" />
-              Mark all read
-            </button>
-          )}
-          {totalUnread > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 ring-1 ring-rose-500/40 text-rose-300 text-[10px] font-bold tracking-wider uppercase">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" aria-hidden="true" />
-              {totalUnread} New
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Channel rows — internal scroll keeps the page non-scrolling. */}
-      <div className="flex-1 min-h-0 overflow-auto -mx-1">
-        {notifQuery.isLoading ? (
-          <div className="h-full flex items-center justify-center text-text-light">
-            <Loader2 size={18} className="animate-spin" />
-          </div>
-        ) : notifQuery.error ? (
-          <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
-            <AlertCircle size={16} className="shrink-0" />
-            <span className="truncate">Could not load notifications</span>
-          </div>
-        ) : channels.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-4">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
-              <MessageSquare size={18} className="text-gold" aria-hidden="true" />
-            </div>
-            <p className="text-[14px] font-medium text-text">No channels yet</p>
-            <p className="text-[12px] text-text-light mt-0.5">Create one in the Forum.</p>
-          </div>
-        ) : (
-          channels.map((c) => {
-            const hasMessage = !!c.latest_id
-            const unread = c.unread_count > 0
-            const initial = c.latest_initial ?? '#'
-            return (
-              <Link
-                key={c.channel_id}
-                to={`${APP_ROUTES.member.content}${c.channel_slug ? `?channel=${c.channel_slug}` : ''}`}
-                onClick={() => handleChannelClick(c.channel_id)}
-                // Lift on hover — border + brighter bg so the row
-                // reads as clickable. Unread channels stay tinted gold.
-                className={`group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all ${
-                  unread
-                    ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
-                    : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
-                }`}
-              >
-                {/* Avatar — sender initial of latest message, or # if empty. */}
-                <div
-                  className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold transition-colors ${
-                    unread
-                      ? 'bg-gold/20 ring-1 ring-gold/50 text-gold'
-                      : 'bg-surface-alt border border-border-light text-text-muted'
-                  }`}
-                >
-                  {initial}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p
-                      className={`text-[13px] truncate ${
-                        unread ? 'font-bold text-text' : 'font-semibold text-text-muted'
-                      }`}
-                    >
-                      #{c.channel_name}
-                    </p>
-                    {unread && (
-                      <span className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums">
-                        {c.unread_count > 9 ? '9+' : c.unread_count}
-                      </span>
-                    )}
-                  </div>
-                  {hasMessage ? (
-                    <p className={`text-[12px] truncate mt-0.5 ${unread ? 'text-text' : 'text-text-light'}`}>
-                      <span className="font-medium">{c.latest_sender}:</span>{' '}
-                      <span className={unread ? 'text-text' : 'text-text-muted'}>{c.latest_content}</span>
-                    </p>
-                  ) : (
-                    <p className="text-[12px] text-text-light italic mt-0.5">No messages yet</p>
-                  )}
-                  {c.latest_created_at && (
-                    <p className="text-[10px] text-text-light mt-0.5">{relativeTime(c.latest_created_at)}</p>
-                  )}
-                </div>
-              </Link>
-            )
-          })
-        )}
-
-        {/* PR #7 — Assignments section. Renders below channels when the
-            current user has any assignment notifications. Same widget
-            shell, two data sources, one unified unread pill above. */}
-        {assignments.length > 0 && (
-          <>
-            <div className="mx-2 mt-4 mb-2 flex items-center gap-2">
-              <Bell size={11} className="text-gold/70" aria-hidden="true" />
-              <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
-                ASSIGNMENTS
-              </p>
-              <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
-            </div>
-            {assignments.map((n) => {
-              const unread = !n.is_read
-              return (
-                <button
-                  key={n.id}
-                  type="button"
-                  onClick={() => handleAssignmentClick(n)}
-                  className={`w-full group relative flex items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left ${
-                    unread
-                      ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
-                      : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
-                  }`}
-                >
-                  <div
-                    className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                      unread
-                        ? 'bg-gold/20 ring-1 ring-gold/50 text-gold'
-                        : 'bg-surface-alt border border-border-light text-text-muted'
-                    }`}
-                  >
-                    <Inbox size={14} aria-hidden="true" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p
-                        className={`text-[13px] truncate ${
-                          unread ? 'font-bold text-text' : 'font-semibold text-text-muted'
-                        }`}
-                      >
-                        {n.title}
-                      </p>
-                      {unread && (
-                        <span className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums">
-                          NEW
-                        </span>
-                      )}
-                    </div>
-                    {n.body && (
-                      <p className={`text-[12px] truncate mt-0.5 ${unread ? 'text-text' : 'text-text-light'}`}>
-                        {n.body}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-text-light mt-0.5">{relativeTime(n.created_at)}</p>
-                  </div>
-                </button>
-              )
-            })}
-          </>
-        )}
-      </div>
-
-      {/* PR #38 — peer reassignment request modal. Opens when the
-          user clicks a `task_reassign_requested` notification. */}
-      {reassignModalOpen && (
-        <TaskReassignRequestModal onClose={() => setReassignModalOpen(false)} />
-      )}
-    </div>
+  const eyebrow = (
+    <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
+      TODAY · {todayLabel}
+    </p>
   )
+  return <NotificationsPanel eyebrow={eyebrow} />
 }
+
+// PR #65 — old inlined channel/assignment row + RPC helpers retired.
+// Live in NotificationsPanel now. The unused `ChannelNotification` /
+// `relativeTime` / `fetchChannelNotifications` definitions below are
+// gone too — re-import them from the panel module if you ever need
+// them outside the widget.
 
 export function TeamActivityWidget() {
   return (
