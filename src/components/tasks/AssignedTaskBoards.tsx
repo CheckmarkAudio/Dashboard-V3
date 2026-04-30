@@ -289,9 +289,7 @@ function TeamTaskRow({
           <p className={`text-[14px] leading-snug truncate ${task.is_completed ? 'line-through text-text-light' : 'text-text'}`}>
             {task.title}
           </p>
-          {task.is_required && !task.is_completed && (
-            <span className="text-[10px] uppercase tracking-wider text-rose-400 font-bold">Required</span>
-          )}
+          {/* PR #70 — `Required` tag retired (matches MyTasks). */}
         </div>
         {/* PR #69 — `[role] · First L.` line; matches MyTasks. */}
         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-light flex-wrap">

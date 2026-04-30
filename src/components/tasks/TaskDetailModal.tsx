@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Circle,
   Clock,
-  Flag,
   User as UserIcon,
 } from 'lucide-react'
 import FloatingDetailModal from '../FloatingDetailModal'
@@ -119,17 +118,12 @@ export default function TaskDetailModal({
       }
     >
       <div className="space-y-4 px-4 py-3">
-        {/* Badges row — Flywheel stage · Required · Scope · Completed */}
+        {/* Badges row — Flywheel stage · Scope · Completed.
+            PR #70 — `Required` chip retired sitewide; will return as
+            an urgency mechanic later. */}
         <div className="flex flex-wrap items-center gap-1.5">
           {stage && (
             <StagePill stage={stage} />
-          )}
-          {task.is_required && (
-            <Chip
-              icon={<Flag size={10} aria-hidden="true" />}
-              label="Required"
-              tone="rose"
-            />
           )}
           {task.scope === 'studio' && (
             <Chip
