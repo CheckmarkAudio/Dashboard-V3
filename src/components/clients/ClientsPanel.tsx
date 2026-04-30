@@ -4,9 +4,8 @@ import {
   AlertCircle, Archive, ArchiveRestore, Briefcase, Edit2, ExternalLink,
   Loader2, Mail, MoreVertical, Phone, Plus, Search, Star, X,
 } from 'lucide-react'
-import { useDocumentTitle } from '../../hooks/useDocumentTitle'
-import { useToast } from '../../components/Toast'
-import { Button, Input, PageHeader } from '../../components/ui'
+import { useToast } from '../Toast'
+import { Button, Input } from '../ui'
 import {
   archiveClient,
   clientKeys,
@@ -18,19 +17,23 @@ import {
 } from '../../lib/queries/clients'
 
 /**
- * Clients admin page (PR #51) — `/admin/clients`.
+ * ClientsPanel — self-contained clients list + toolbar + editor modal.
  *
- * Mirrors the TeamManager (Members) page's table layout: clean dark
- * table with avatar circles, top-right "Add Client" button, hover-
- * revealed 3-dot per-row action menu. Top-right "Show archived"
- * toggle re-fetches with the archived flag.
- *
- * This is the foundation for Tier 2 / Lean 2 (EmailJS booking
- * confirmations) — the booking modal can now pick a real client and
- * we have an email + phone on file to send to.
+ * Originally lived as the dedicated `/admin/clients` page (PR #51).
+ * PR #64 retired that route and folded the surface into a Bookings ↔
+ * Clients toggle on `/sessions`, so this is the reusable body that
+ * the toggle renders. No PageHeader inside — the parent page owns
+ * the page-level chrome (title, action button) so the toggle can
+ * swap actions cleanly between "Book a Session" and "Add Client".
  */
-export default function ClientsAdmin() {
-  useDocumentTitle('Clients - Checkmark Workspace')
+export interface ClientsPanelProps {
+  /** Override for the "+ Add Client" button. When provided, the panel
+   *  exposes its open-editor handler so the parent can render the
+   *  button in its own page header. */
+  registerAddClient?: (open: () => void) => void
+}
+
+export default function ClientsPanel({ registerAddClient }: ClientsPanelProps) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
@@ -46,6 +49,16 @@ export default function ClientsAdmin() {
     queryFn: () => fetchClients({ includeArchived: showArchived }),
   })
   const clients = listQuery.data ?? []
+
+  // Hand a stable opener to the parent so the page-header "+ Add Client"
+  // button can fire it without prop-drilling state down.
+  useEffect(() => {
+    if (!registerAddClient) return
+    registerAddClient(() => {
+      setEditingClient(null)
+      setEditorOpen(true)
+    })
+  }, [registerAddClient])
 
   // Click-outside to close the action menu.
   useEffect(() => {
@@ -91,31 +104,7 @@ export default function ClientsAdmin() {
   const archivedCount = clients.filter((c) => c.archived).length
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5 animate-fade-in">
-      <PageHeader
-        icon={Briefcase}
-        title={
-          <span className="inline-flex items-center gap-2">
-            Clients
-            <span className="text-sm font-medium text-text-muted bg-surface-alt px-2.5 py-0.5 rounded-full">
-              {clients.length}
-            </span>
-          </span>
-        }
-        actions={
-          <Button
-            variant="primary"
-            iconLeft={<Plus size={16} aria-hidden="true" />}
-            onClick={() => {
-              setEditingClient(null)
-              setEditorOpen(true)
-            }}
-          >
-            Add Client
-          </Button>
-        }
-      />
-
+    <div className="space-y-5">
       {/* Toolbar: search + show-archived toggle */}
       <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[220px]">
@@ -175,6 +164,19 @@ export default function ClientsAdmin() {
               ? 'No clients yet. Add your first one to start sending booking confirmations.'
               : 'No matches for your search.'}
           </p>
+          {clients.length === 0 && (
+            <Button
+              variant="primary"
+              iconLeft={<Plus size={14} aria-hidden="true" />}
+              onClick={() => {
+                setEditingClient(null)
+                setEditorOpen(true)
+              }}
+              className="mt-4"
+            >
+              Add Client
+            </Button>
+          )}
         </div>
       ) : (
         <div className="widget-card overflow-hidden">
@@ -227,7 +229,6 @@ export default function ClientsAdmin() {
                           </div>
                         </div>
                       </td>
-                      {/* Email */}
                       <td className="px-5 py-4">
                         {c.email ? (
                           <a
@@ -241,7 +242,6 @@ export default function ClientsAdmin() {
                           <span className="text-[13px] text-text-light">—</span>
                         )}
                       </td>
-                      {/* Phone */}
                       <td className="px-5 py-4">
                         {c.phone ? (
                           <a
@@ -255,13 +255,11 @@ export default function ClientsAdmin() {
                           <span className="text-[13px] text-text-light">—</span>
                         )}
                       </td>
-                      {/* Notes preview */}
                       <td className="px-5 py-4 max-w-[240px]">
                         <span className="text-[13px] text-text-muted truncate inline-block max-w-full" title={c.notes ?? ''}>
                           {c.notes || '—'}
                         </span>
                       </td>
-                      {/* Review link */}
                       <td className="px-5 py-4">
                         {c.google_review_link ? (
                           <a
@@ -278,7 +276,6 @@ export default function ClientsAdmin() {
                           <span className="text-[13px] text-text-light">—</span>
                         )}
                       </td>
-                      {/* Action menu */}
                       <td className="px-5 py-4 text-right relative">
                         <div
                           className="relative inline-block"
@@ -364,18 +361,10 @@ export default function ClientsAdmin() {
   )
 }
 
-// ─── Helper components ─────────────────────────────────────────────
-
 function ClHeaderCell({ children }: { children: React.ReactNode }) {
   return <th className="px-5 py-3 text-left text-label">{children}</th>
 }
 
-/**
- * Modal for creating + editing a client. Stays simple — name is the
- * only required field; everything else (email, phone, notes, Google
- * review link) is optional but encouraged so the EmailJS reminder
- * flow has something to send to.
- */
 function ClientEditorModal({
   client,
   onClose,
