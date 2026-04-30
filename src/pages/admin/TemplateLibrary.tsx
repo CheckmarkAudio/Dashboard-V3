@@ -154,7 +154,6 @@ export default function TemplateLibrary() {
             </span>
           </span>
         }
-        subtitle="Reusable blueprints for onboarding and repeat work — apply to any member from the Assign page."
         actions={
           <Button
             variant="primary"

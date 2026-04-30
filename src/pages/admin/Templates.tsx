@@ -73,7 +73,6 @@ export default function Templates() {
         <PageHeader
           icon={FolderKanban}
           title="Assign — Legacy view"
-          subtitle="The original 6-widget layout. Preserved for reference while we plan how the data feeds + components fold into the new Assign page."
         />
         <WorkspacePanel
           role={appRole}

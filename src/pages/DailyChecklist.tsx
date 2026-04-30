@@ -27,7 +27,6 @@ export default function DailyChecklist() {
       <PageHeader
         icon={ListChecks}
         title="Tasks"
-        subtitle="My Tasks · Studio · Team — drag to rearrange, click a title to expand."
       />
       <MemberOverviewProvider>
         <WorkspacePanel

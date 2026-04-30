@@ -33,7 +33,6 @@ export default function Dashboard() {
       <PageHeader
         icon={LayoutDashboard}
         title="Overview"
-        subtitle="Your day at a glance: what needs attention, what is booked, and what still needs to be finished today."
       />
       <MemberOverviewProvider>
         <WorkspacePanel

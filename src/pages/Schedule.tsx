@@ -247,7 +247,6 @@ export default function Schedule() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Weekly Schedule</h1>
-          <p className="text-text-muted mt-1">Focus areas for each day</p>
         </div>
         <div className="flex items-center gap-3">
           {isAdmin && allMembers.length > 0 && (

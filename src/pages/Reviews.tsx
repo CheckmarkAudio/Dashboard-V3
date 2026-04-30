@@ -155,7 +155,6 @@ export default function Reviews() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Performance Reviews</h1>
-          <p className="text-text-muted mt-1">{isAdmin ? 'Create and manage performance reviews' : 'View your performance reviews'}</p>
         </div>
         {isAdmin && (
           <button onClick={() => setShowForm(!showForm)}

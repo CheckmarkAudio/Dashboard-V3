@@ -518,7 +518,6 @@ export default function TeamManager() {
             </span>
           </span>
         }
-        subtitle="Manage team members, roles, positions, and reporting structure"
         actions={
           <Button
             variant="primary"

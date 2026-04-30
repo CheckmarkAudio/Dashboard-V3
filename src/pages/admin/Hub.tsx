@@ -39,7 +39,6 @@ export default function AdminHub() {
         <PageHeader
           icon={UsersRound}
           title="Dashboard"
-          subtitle="Assign work, clear approvals, and keep tabs on the studio at a glance."
         />
         <WorkspacePanel
           role={appRole}

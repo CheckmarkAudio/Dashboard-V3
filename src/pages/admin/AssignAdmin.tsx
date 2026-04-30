@@ -198,7 +198,6 @@ export default function AssignAdmin() {
       {/* Page header — mirrors Settings page rhythm so headers align across admin */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Assign</h1>
-        <p className="text-text-muted mt-1">Assign tasks to your team members</p>
       </div>
 
       {/* Two-column shell: Sidebar | Main content. items-start keeps both

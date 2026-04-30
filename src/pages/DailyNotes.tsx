@@ -127,7 +127,6 @@ export default function DailyNotes() {
       <PageHeader
         icon={FileText}
         title="Daily Notes"
-        subtitle="Track your daily progress and accomplishments."
         actions={
           !isAdmin ? (
             <Button

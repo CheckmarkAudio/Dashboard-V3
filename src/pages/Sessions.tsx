@@ -113,7 +113,6 @@ export default function Sessions() {
       <PageHeader
         icon={Briefcase}
         title="Booking"
-        subtitle="Manage studio bookings — recording, mixing, lessons, and consults."
         actions={
           <button
             onClick={() => setShowBooking(true)}

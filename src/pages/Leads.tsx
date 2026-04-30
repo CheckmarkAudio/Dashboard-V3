@@ -150,7 +150,6 @@ export default function Leads() {
       <PageHeader
         icon={Target}
         title="Leads"
-        subtitle="Manage your sales pipeline and contacts."
         actions={
           <Button
             variant="primary"
