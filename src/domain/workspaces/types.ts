@@ -146,6 +146,10 @@ export type AdminWidgetId =
   // Requests on top and Edit at bottom). Recent resolved
   // task_requests, both approved and declined.
   | 'admin_approval_log'
+  // PR #50 — "Who's on the clock" Hub widget. Lists team members
+  // with an open time_clock_entries shift, with a live elapsed
+  // counter per row.
+  | 'admin_clock_in'
   // Admin-side widget bank — registered but not on the page yet.
   | 'team_focus'
   | 'approval_queue'

@@ -45,6 +45,7 @@ import {
 } from '../tasks/AssignedTaskBoards'
 import AdminTemplatesWidget from '../admin/templates/AdminTemplatesWidget'
 import AdminEditTasksWidget from '../admin/tasks/AdminEditTasksWidget'
+import AdminClockInWidget from '../admin/AdminClockInWidget'
 
 // ═════════════════════════════════════════════════════════════════════
 // Component maps — ONE per side.
@@ -94,6 +95,9 @@ const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
   // PR #45 — Approval Log. Recent resolved task_requests
   // (approved + declined), labelled by outcome.
   admin_approval_log: AdminApprovalLogWidget,
+  // PR #50 — "Who's on the clock". Lists team members with an open
+  // time_clock_entries shift, with a live elapsed counter per row.
+  admin_clock_in: AdminClockInWidget,
   team_focus: TeamFocusWidget,
   approval_queue: ApprovalQueueWidget,
   admin_schedule: AdminScheduleWidget,

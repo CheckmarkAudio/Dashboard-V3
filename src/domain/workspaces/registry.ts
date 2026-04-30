@@ -160,7 +160,7 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 // Hub stacks:
 //   col 1: admin_quick_assign · admin_task_requests
 //   col 2: admin_flywheel (rs2)
-//   col 3: admin_notifications · admin_team
+//   col 3: admin_notifications · admin_team · admin_clock_in (PR #50)
 //
 // Assign stacks (PR #41 reorg per sketch, logs in PRs #44 + #45,
 // Templates thumbnails + arrange-by in PR #46, Assign compacted to
@@ -280,6 +280,20 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     title: 'Team',
     description: 'Your crew at a glance.',
     defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 1, col: 3 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
+    // PR #50 — "Who's on the clock" Hub widget. Slots into col 3
+    // below admin_team. Registered AFTER admin_team so col 3 of
+    // admin_overview resolves: Notifications → Team → Clock In.
+    // rowSpan 0.5 keeps it compact — a quick "is anyone working
+    // right now" glance, not a primary surface.
+    id: 'admin_clock_in',
+    title: 'On the Clock',
+    description: '',
+    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 0.5, col: 3 }],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -482,7 +496,10 @@ function buildDefaultWidgetStateForScope(
 // gap 16 + Notifications 518 = 704px) sits near-flush with cols
 // 1-2 at rs2 (696px), filling the previously-empty space below
 // Notifications.
-export const WORKSPACE_LAYOUT_VERSION = 28
+// v29 (2026-04-29, PR #50): new `admin_clock_in` widget on the
+// admin Hub col 3 below `admin_team` (rowSpan 0.5). "Who's on the
+// clock" with live elapsed counters per row. First Tier 2 slice.
+export const WORKSPACE_LAYOUT_VERSION = 29
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
