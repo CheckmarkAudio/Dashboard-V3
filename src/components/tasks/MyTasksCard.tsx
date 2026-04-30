@@ -559,14 +559,10 @@ function AssignedTaskRow({
           <p className={`text-[13px] truncate ${done ? 'line-through text-text-muted' : 'font-semibold text-text'}`}>
             {task.title}
           </p>
-          {isNew && (
-            <span className="shrink-0 inline-flex items-center justify-center px-1.5 h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none uppercase tracking-wide">
-              New
-            </span>
-          )}
-          {task.is_required && !done && (
-            <span className="shrink-0 text-[10px] uppercase tracking-wider text-rose-400 font-bold">Required</span>
-          )}
+          {/* PR #70 — `New` + `Required` tags retired. The new-row gold
+              background tint already signals freshness; required-task
+              context lives in the detail modal. Studio scope still
+              gets a tag since it's a meaningful row-type distinction. */}
           {task.scope === 'studio' && !done && (
             <span className="shrink-0 text-[10px] uppercase tracking-wider text-cyan-300 font-bold">Studio</span>
           )}
