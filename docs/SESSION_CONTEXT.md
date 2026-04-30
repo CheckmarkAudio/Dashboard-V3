@@ -264,6 +264,56 @@ relitigate them unless the user brings them up.**
 - **All checklists render the same way** (14px checkbox, 5px
   radius, rose border for critical, muted border for normal).
 
+#### Canonical chrome dimensions (PR #63, measured 2026-04-30 at 1440×900)
+
+Captured here so the next chrome change has hard numbers, not a vibe.
+
+**Two-pane admin pages** — reference: **Settings** (`/admin/settings`).
+Used by Settings, Members (`/admin/my-team`), Assign (`/admin/templates`).
+
+```
+<div className="max-w-6xl mx-auto animate-fade-in">      // outer
+  <div className="mb-6">…<h1 className="text-2xl font-bold">…</h1></div>
+  <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
+    <aside className="bg-surface rounded-xl border border-border p-2 space-y-1">…</aside>
+    <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px]
+                        min-w-0 overflow-hidden">                 // table-friendly
+      …
+    </section>
+  </div>
+</div>
+```
+
+- `items-stretch` (NOT `items-start`) so sidebar bottom is flush
+  with right-pane bottom even when the rail is short.
+- `min-w-0 overflow-hidden` on the right-pane `<section>` whenever it
+  holds a wide table — without `min-w-0`, CSS Grid's default
+  `min-width: auto` lets the table push the rounded border past the
+  grid track and off-screen.
+- Measured at 1440 viewport: grid `x=144 right=1296 w=1152`; aside
+  `w=280`; right pane `w=848`; gap `24px`.
+
+**Full-width member pages** — reference: **Calendar** (`/calendar`).
+
+```
+<div className="max-w-6xl mx-auto animate-fade-in">
+  <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-3 items-stretch">…</div>
+</div>
+```
+
+Same `max-w-6xl` constraint, slightly wider sidebar (300 vs 280) and
+tighter gap (gap-3 vs gap-6).
+
+**Widget-grid surfaces** — reference: **Overview** (`/`). Three
+column stacks via `WorkspacePanel` + `DashboardWidgetFrame` per widget;
+row-spans `0.5 / 1 / 1.5 / 2 / 3` (340px row × multiplier + 16px gap).
+
+**How to use this:** before claiming a chrome change verified, run the
+attached snippet from `feedback_chrome_reference_check.md` to compare
+`getBoundingClientRect()` numbers between the changed page and the
+canonical reference. The numbers must match. User trigger phrase:
+**"reference-check it"**.
+
 ### User base must remain clickable
 
 - **Every instance of a username / avatar is a clickable
@@ -581,7 +631,7 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ### Just shipped (most recent first)
 
-- **PR #63 — Chrome consistency fixes — Members section overflow + Assign sidebar bottom-flush — 2026-04-30 (in flight).** Two recurring chrome bugs flagged by the user. (1) Members right-pane `<section>` got `min-w-0 overflow-hidden` so the rounded border stays inside the `max-w-6xl` grid track even when the 8-column member table loads — CSS Grid's default `min-width: auto` on `1fr` tracks was the root cause. (2) AssignAdmin grid `items-start` → `items-stretch` and the aside lost `h-fit sticky top-4` so the sidebar grows to match the main pane height (bottoms flush at 552px both, mirroring `/calendar`'s `grid-cols-[300px_1fr] gap-3 items-stretch`). New process memory `feedback_chrome_reference_check.md`: verify chrome via bounding-box measurements (`getBoundingClientRect`) vs the canonical reference page BEFORE claiming verified — not just screenshots. User trigger phrase: "reference-check it".
+- **PR #63 — Chrome consistency fixes — Members section overflow + Members & Assign sidebar bottom-flush — 2026-04-30 (in flight).** Recurring chrome bugs flagged by the user. (1) Members right-pane `<section>` got `min-w-0 overflow-hidden` so the rounded border stays inside the `max-w-6xl` grid track even when the 8-column member table loads — CSS Grid's default `min-width: auto` on `1fr` tracks was the root cause. (2) Both AssignAdmin and TeamManager grids switched `items-start` → `items-stretch`; the Assign aside also lost `h-fit sticky top-4`. Sidebars now grow to match their right-pane heights (Assign: 552/552 flush; Members: 612/612 flush, mirroring `/calendar`'s `grid-cols-[300px_1fr] gap-3 items-stretch`). User explicitly asked for Members stretch even with only 2 rail items today (more sections coming). **Canonical chrome dimensions captured** in `feedback_chrome_reference_check.md` AND in the "Canonical chrome dimensions" subsection of this doc — at 1440×900 the two-pane admin grid is `x=144 right=1296 w=1152`, aside `w=280`, right pane `w=848`, gap `24px`. New process memory: verify chrome via `getBoundingClientRect()` numbers vs the canonical reference BEFORE claiming verified. User trigger phrase: "reference-check it".
 - **PR #62 — Members > Clock Data shift history table — 2026-04-30 (merged just prior).** Closes the loop on PR #50 by populating the Clock Data left-rail slot PR #58 reserved. New SECURITY DEFINER RPC `admin_list_clock_entries(p_member_id?, p_limit?)` returning `{entry_id, member_id, member_name, clocked_in_at, clocked_out_at, duration_minutes, notes}`; admin-guarded via `is_team_admin()`, team-scoped, capped at 500 rows. Migration `20260430000000_admin_list_clock_entries.sql` applied to staging — only the standard SECURITY DEFINER advisor warnings (same shape as PR #50's RPCs). New `fetchAdminClockEntries(memberId?, limit?)` helper + `timeClockKeys.adminEntries(memberId)` cache key. New `ClockDataSection.tsx` renders inside the existing left-rail layout: "Shift history" h2 + Clock icon + "All members" filter `<Select>` + table (member linked to `/profile/{id}`, clocked-in, clocked-out / "ON SHIFT" emerald pill, `Hh Mm` duration, line-clamp-2 notes). Empty / loading / error states match the existing admin chrome.
 - **PR #61 — Overview UI refresh — 2026-04-29 (merged just prior).** Four UI changes the user asked for after running the merged PRs in preview. (1) Booking moved off the Overview grid: `booking_snapshot` widget de-placed (kept in registry, no `member_overview` placement) and replaced with a "+ Book a Session" primary button in the Overview page-header `actions` slot. The button opens the same canonical `CreateBookingModal`; refetch wiring for `MemberOverviewContext` preserved by wrapping the button inside the provider. (2) Notifications widget elongated: `forum_notifications` rowSpan 1.5 → 2 so col 3 height matches My Tasks (col 1) + Calendar (col 2). (3) New `MemberHighlights` component (`src/components/members/MemberHighlights.tsx`) — Instagram-story-style horizontal scroll row of circular member avatars (60px circle, gold gradient ring, first-name label), positioned between the page header and the workspace grid. Reads `team_members.status = 'active'` via `fetchTeamMembers`; each tile is a React Router `<Link>` to `/profile/{id}` honoring the user-entities-clickable rule. Initials fallback when `avatar_url` is null. (4) MyTasksCard no longer renders `task.description` inline under the title — the description is reserved for the expanded `TaskDetailModal` (clicking the row body), so rows stay compact and "notes belong only in the expanded view". Other task surfaces (Studio Tasks, Team Board) already had no inline description, so no change there. `WORKSPACE_LAYOUT_VERSION` 29 → 30 so saved Overview layouts shed `booking_snapshot` and pick up the new Notifications rowSpan.
 - **PR #50 — Persist Clock In/Out + 'On the Clock' Hub widget — 2026-04-29 (merged just prior).** First Tier 2 slice, originally drafted 2026-04-29 morning then rebased on top of PRs #58/#59/#60 before merge. Backend: new `time_clock_entries` table (one open shift per user, partial unique index) + 4 SECURITY DEFINER RPCs (`clock_in()` idempotent, `clock_out(p_notes)`, `get_my_open_clock_entry()`, `admin_currently_clocked_in()`); migration `20260429000000_time_clock_entries.sql` applied to staging, advisors clean. Frontend: header Clock button now React-Query-backed (cache key `['my-open-clock-entry']`) so clock-out in one tab updates the others; SelfReportModal Close + Log Out paths fire `clock_out` alongside existing behavior. New `AdminClockInWidget` ("On the Clock") on admin Hub col 3 below Team (rowSpan 0.5) with live elapsed counter (ticks every minute, refetches every 60s). New `src/lib/queries/timeClock.ts` with the 4 RPC wrappers. `WORKSPACE_LAYOUT_VERSION` 28 → 29 so saved Hub layouts pick up the new col-3 widget. Followup queued: populate Members > Clock Data pane (PR #58 reserved) with shift history table — this PR ships only the live "currently clocked in" view, not historical shifts.
