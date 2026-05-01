@@ -48,10 +48,15 @@ import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
  */
 export type NotificationCategory = 'forum' | 'task' | 'booking'
 
+// Translucent badge styles. rev17: bumped bg/ring opacity so the
+// pills hold up on light backgrounds without losing their dark-bg
+// look. Text colors stay on the light Tailwind shades (violet-300
+// etc.) but auto-darken in light mode via the global accent-text
+// overrides in `src/index.css`.
 const CATEGORY_STYLES: Record<NotificationCategory, { icon: typeof MessageSquare; tint: string; bg: string; ring: string }> = {
-  forum:   { icon: MessageSquare,  tint: 'text-violet-300', bg: 'bg-violet-500/15', ring: 'ring-violet-500/30' },
-  task:    { icon: ClipboardList,  tint: 'text-gold',       bg: 'bg-gold/15',       ring: 'ring-gold/30' },
-  booking: { icon: Calendar,       tint: 'text-sky-300',    bg: 'bg-sky-500/15',    ring: 'ring-sky-500/30' },
+  forum:   { icon: MessageSquare,  tint: 'text-violet-300', bg: 'bg-violet-500/35', ring: 'ring-violet-500/60' },
+  task:    { icon: ClipboardList,  tint: 'text-gold',       bg: 'bg-gold/35',       ring: 'ring-gold/60'       },
+  booking: { icon: Calendar,       tint: 'text-sky-300',    bg: 'bg-sky-500/35',    ring: 'ring-sky-500/60'    },
 }
 
 function categoryFor(n: AssignmentNotification): NotificationCategory {
@@ -301,7 +306,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             </button>
           )}
           {totalUnread > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 ring-1 ring-rose-500/40 text-rose-300 text-[10px] font-bold tracking-wider uppercase">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/35 ring-1 ring-rose-500/60 text-rose-300 text-[10px] font-bold tracking-wider uppercase">
               <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" aria-hidden="true" />
               {totalUnread} New
             </span>

@@ -108,28 +108,171 @@
    utilities (bg-surface, text-text, border-border, etc.) automatically
    flip to light mode. Brand gold, status colors, and flywheel stage hues
    stay constant across both themes for identity consistency.
+
+   Lean 2 (PR #79) — neutrals shifted from warm cream (#f6f5f1, #f0efea
+   etc.) to cool grey so light mode reads as grey/gold/black instead
+   of cream/gold/black. Pure white kept on `surface` so cards still
+   pop against the body bg.
+
+   Lean 2 rev (PR #79 follow-up) — darkened all neutrals one step
+   further per user feedback ("light mode is still blinding"). New
+   bg is `#e7e7eb` (~91% lightness vs prior `#f4f4f6` at ~96%) — a
+   noticeably calmer cool grey. White cards still pop, but the page
+   no longer feels like a flashlight on first load.
+
+   Lean 2 rev2 (PR #79 follow-up) — black-edge editorial pass.
+   Borders went near-black; gold removed from body wash; cards
+   stayed pure white.
+
+   Lean 2 rev3 (PR #79 follow-up) — warm-cream + grey-card editorial
+   pass per user reference (Replit Agent 4 page).
+
+   Lean 2 rev4 (PR #79 follow-up) — first pass at "solid warm grey"
+   landed at #bcb5a8, which user correctly flagged as TAN/khaki, not
+   warm grey.
+
+   Lean 2 rev7 (PR #79 follow-up) — vibrant-amber pass per user
+   feedback: "I still dont like the usage of the gold. lets have
+   every transluscent bubble be a more vibrand orange yellow to
+   simulate gold but more saturated and less murky. everything else
+   needs to be lined in black, almost white background, grey boxes.
+   buttons and transluscent responcive things are that rich orangy
+   yellow".
+
+   Translation:
+     • Body  → almost white (was light grey)
+     • Cards → light grey  (was pure white)  ← swap from rev6
+     • Borders + text → black ink (kept)
+     • Gold token → vibrant orange-yellow (marigold/amber), saturated,
+                    not the muddy brand-700 bronze rev6 used
+
+   Token shifts (light mode only — dark mode untouched):
+
+     --color-bg            #dcdcdc → #f5f5f5  (almost white body)
+     --color-surface       #ffffff → #dcdcdc  (grey cards)
+     --color-surface-alt   #f3f3f3 → #d0d0d0
+     --color-surface-hover #e8e8e8 → #c4c4c4
+
+     --color-gold          #8a6e2f → #f0a623  (HSL 36°, 87%, 54%)
+                                              vibrant marigold/amber
+     --color-gold-muted    #6b5524 → #d08819  (slightly darker for
+                                              hover/disabled states)
+     --color-gold-dim      #4a3b19 → #a8691a  (darker still)
+
+   Why this works:
+     • Body almost-white + grey cards inverts the rev6 high-contrast
+       (grey/white) for low-contrast (white/grey). Editorial /
+       Helperbird-like — the cards are clearly "boxes" against an
+       almost-white sheet but don't visually shout.
+     • New gold #f0a623 is a saturated marigold (87% sat vs the 50%
+       of brand-700 bronze). Reads as RICH orange-yellow on white/grey.
+     • Translucent gold uses (bg-gold/10, bg-gold/15, bg-gold/30) all
+       inherit the vibrant base, so pills, badges, hover backgrounds
+       all become subtle marigold tints instead of murky bronze.
+     • Solid gold buttons (Clock In, etc.) become punchy marigold —
+       still recognizably "gold-family" but vibrant, not muddy.
+
+   Black lining + grey boxes per the user's spec; gold appears only
+   inside contained / bordered visual frames (per the rev6 spec
+   "gold can't be a standalone color without a border of sorts to
+   back it up" — buttons and pills both have implicit framing).
 */
 :root[data-theme='light'] {
-  --color-bg: #f6f5f1;
-  --color-surface: #ffffff;
-  --color-surface-alt: #f0efea;
-  --color-surface-hover: #e7e5dc;
-  --color-border: #d9d7cf;
-  --color-border-light: #b6b3a6;
-  --color-text: #1c1c22;
-  --color-text-muted: #3f3f46;
-  --color-text-light: #6b6b72;
+  /* Lean 2 rev15 — un-reverse the body/card swap per user feedback:
+     "I thought I told you to make the widgets the grey and the box
+     behind them light". Goes back to rev7's almost-white body +
+     grey cards arrangement. Earlier rev8 swap mis-interpreted user
+     intent. */
+  --color-bg:            #f5f5f5; /* almost white — body        */
+  --color-surface:       #dcdcdc; /* light grey — widgets/cards */
+  --color-surface-alt:   #d0d0d0; /* darker grey (nests)        */
+  --color-surface-hover: #c4c4c4; /* hover state                */
+  --color-border:        #1c1c22; /* black ink (unchanged)      */
+  --color-border-light:  #9a9a9a; /* neutral mid-grey dividers  */
+  --color-text:          #1c1c22; /* black (unchanged)          */
+  --color-text-muted:    #3f3f46; /* dark grey (unchanged)      */
+  --color-text-light:    #6b6b72; /* neutral mid-grey           */
+
+  /* Vibrant marigold for backgrounds, buttons, borders, glows.
+     rev10: restored rev8's HSL(36°, 87%, 54%) #f0a623 base after
+     rev9's global darken made buttons murky. The user wants buttons
+     punchy + text readable — accomplished by splitting gold into
+     two CSS layers: this token drives bg/border/glow at full
+     vibrancy; a `text-gold` override below renders text in a
+     darker amber for readability. Hover/dim variants follow. */
+  --color-gold:          #f0a623; /* HSL 36°, 87%, 54° — vibrant marigold */
+  --color-gold-muted:    #d08819; /* darker hover state                   */
+  --color-gold-dim:      #a8691a; /* darker still                         */
 }
 
+/* Light-mode text-gold gets a darker amber so it stays readable on
+   white cards + on translucent marigold pill backgrounds. Doesn't
+   affect bg-gold / border-gold — those stay vibrant for buttons,
+   bubbles, and other contained "gold-on-frame" usages. Specificity
+   (0,2,0) overrides the Tailwind utility (0,1,0).
+   rev11: dropped from 41% L to 28% L per user feedback "darker the
+   font in the transluscent bubble still — its not destink enough".
+   Translucent gold pills (bg-gold/35 with vibrant #f0a623 base) can
+   now host text at solid contrast. */
+:root[data-theme='light'] .text-gold {
+  color: #7a510f; /* HSL 38°, 78%, 27% — deep amber for high contrast */
+}
+
+/* Light-mode accent-text legibility overrides (rev17).
+   Tailwind's default `text-{color}-300/400` palette is tuned for
+   DARK backgrounds — they read fine on charcoal but fade out on
+   the light grey body / white-ish translucent pill backgrounds in
+   light mode (e.g., the violet forum chat icon was "virtually
+   illegible" per user feedback). Each rule below remaps the
+   light-shade Tailwind class to its 700-tier counterpart in light
+   mode only, while leaving the original light shade untouched in
+   dark mode where it works correctly.
+
+   Pattern: same hue family, ~4 shade-stops darker. Selectors at
+   specificity (0,2,0) override the Tailwind utility (0,1,0) without
+   needing `!important`.
+
+   If a class is ever needed to render in its ORIGINAL (light) shade
+   on a colored background (rare — e.g., a colored chip with a
+   colored text), wrap that occurrence in an opt-out class. */
+:root[data-theme='light'] .text-violet-200 { color: #4c1d95; }  /* violet-800 */
+:root[data-theme='light'] .text-violet-300 { color: #6d28d9; }  /* violet-700 */
+:root[data-theme='light'] .text-violet-400 { color: #6d28d9; }
+:root[data-theme='light'] .text-sky-300    { color: #0369a1; }  /* sky-700    */
+:root[data-theme='light'] .text-sky-400    { color: #0369a1; }
+:root[data-theme='light'] .text-emerald-200 { color: #065f46; } /* emerald-800 */
+:root[data-theme='light'] .text-emerald-300 { color: #047857; } /* emerald-700 */
+:root[data-theme='light'] .text-emerald-400 { color: #047857; }
+:root[data-theme='light'] .text-rose-200   { color: #9f1239; }  /* rose-800   */
+:root[data-theme='light'] .text-rose-300   { color: #be123c; }  /* rose-700   */
+:root[data-theme='light'] .text-rose-400   { color: #be123c; }
+:root[data-theme='light'] .text-amber-200  { color: #92400e; }  /* amber-800  */
+:root[data-theme='light'] .text-amber-300  { color: #b45309; }  /* amber-700  */
+:root[data-theme='light'] .text-amber-400  { color: #b45309; }
+:root[data-theme='light'] .text-red-300    { color: #b91c1c; }  /* red-700    */
+:root[data-theme='light'] .text-red-400    { color: #b91c1c; }
+:root[data-theme='light'] .text-cyan-300   { color: #0e7490; }  /* cyan-700   */
+:root[data-theme='light'] .text-cyan-400   { color: #0e7490; }
+:root[data-theme='light'] .text-fuchsia-300 { color: #a21caf; } /* fuchsia-700 */
+:root[data-theme='light'] .text-fuchsia-400 { color: #a21caf; }
+
 body {
-  /* Matches the Workspace-UI-Draft mockup — a subtle gold wash top-left
-     fading into deep charcoal. Gold/white/black only on the chrome; the
-     flywheel stage hues stay untouched on in-widget badges.
+  /* Lean 2 (PR #79) — body-level gradient with three tints, all VERY
+     subtle (<10% alpha). Gold wash top-left = brand identity; pinch
+     of forum violet bottom-right = nods to the forum/notifications
+     accent without polluting cards. Gradient is layered on TOP of a
+     neutral base so cards (`bg-surface`) stay flat and unaffected.
+
+     The `linear-gradient(180deg, #111118 → #0b0b10)` base is the
+     dark-mode charcoal. Light mode overrides the whole stack below
+     with its own cool-grey base + matching radial pinches.
+
      The padding creates the gap around the dashboard-shell. */
   --shell-gap: clamp(8px, 1.6vw, 20px);
   padding: var(--shell-gap);
   background:
-    radial-gradient(circle at top left, rgba(201, 168, 76, 0.10), transparent 30%),
+    radial-gradient(circle at top left,     rgba(201, 168, 76, 0.10), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.05), transparent 36%),
     linear-gradient(180deg, #111118 0%, #0b0b10 58%);
   background-attachment: fixed;
   font-family: var(--font-sans);
@@ -144,6 +287,12 @@ body {
 }
 
 :root[data-theme='light'] body {
+  /* Lean 2 rev3 (PR #79 follow-up) — flat warm-cream body to match
+     the Replit reference. No radial tint: the warm cream + grey-on-
+     cream card contrast + black ink borders do all the work; adding
+     a coloured tint would muddy the editorial look. The dark theme
+     keeps its gold + violet gradient — that's atmospheric depth,
+     not chrome character. */
   background: var(--color-bg);
   color-scheme: light;
 }
@@ -234,7 +383,13 @@ body {
     position: relative;
   }
   :root[data-theme='light'] .dashboard-shell {
-    background: var(--color-surface);
+    /* Lean 2 rev3 (PR #79 follow-up) — shell uses the cream body bg
+       (NOT the grey card surface) so the whole page area reads as
+       one continuous warm cream sheet, with the grey widget cards
+       sitting on top in editorial relief. Mirrors the Replit
+       reference page where the body cream extends edge-to-edge and
+       only the cards drop into a warmer grey. */
+    background: var(--color-bg);
     border-color: var(--color-border);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   }

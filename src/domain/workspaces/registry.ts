@@ -308,24 +308,27 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
+    // Lean 2 rev15 (PR #79) — dropped from admin_overview per user
+    // feedback ("the overview and the dashboard both have unwanted
+    // unecesarry widgets below the first widget collumb"). Kept
+    // registered with no placement so saved layouts sanitize away
+    // cleanly via the LAYOUT_VERSION bump.
     id: 'admin_team',
     title: 'Team',
     description: 'Your crew at a glance.',
-    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 1, col: 3 }],
+    defaultPlacements: [],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
-    // PR #50 — "Who's on the clock" Hub widget. Slots into col 3
-    // below admin_team. Registered AFTER admin_team so col 3 of
-    // admin_overview resolves: Notifications → Team → Clock In.
-    // rowSpan 0.5 keeps it compact — a quick "is anyone working
-    // right now" glance, not a primary surface.
+    // Lean 2 rev15 (PR #79) — dropped from admin_overview alongside
+    // admin_team. Same rationale as above. Re-add a placement here
+    // if "Who's on the clock" returns to the Hub.
     id: 'admin_clock_in',
     title: 'On the Clock',
     description: '',
-    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 0.5, col: 3 }],
+    defaultPlacements: [],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
@@ -551,7 +554,12 @@ function buildDefaultWidgetStateForScope(
 // rs2, admin_notifications col 3 rs1 → rs2. New admin_today_calendar
 // (col 2 rs2) reusing the TodayCalendarWidget component. Saved v32
 // admin Hub layouts get sanitized to the new defaults.
-export const WORKSPACE_LAYOUT_VERSION = 33
+// v34 (2026-05-01, PR #79 Lean 2 rev15): dropped admin_team +
+// admin_clock_in from admin_overview. Hub col 3 is now
+// Notifications-only at rs2. Member overview unchanged at the
+// registry level — version bump still resets any user-customized
+// member layouts that might have dragged bank widgets in.
+export const WORKSPACE_LAYOUT_VERSION = 34
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

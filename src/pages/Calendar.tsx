@@ -267,7 +267,7 @@ export default function Calendar() {
                     return (
                       <div
                         key={b.id}
-                        className="absolute bg-gold/8 border border-gold/20 px-1.5 py-0.5 overflow-hidden cursor-default hover:bg-gold/12 transition-colors z-10"
+                        className="absolute bg-gold/35 border border-gold/70 px-1.5 py-0.5 overflow-hidden cursor-default hover:bg-gold/50 transition-colors z-10"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 18),
