@@ -131,52 +131,70 @@
    landed at #bcb5a8, which user correctly flagged as TAN/khaki, not
    warm grey.
 
-   Lean 2 rev6 (PR #79 follow-up) — pure greyscale chrome per user
-   feedback + reference images (Helperbird, Google Star Wars, Ghacks):
-   "scrap using gold or creams for the background. really everything
-   should be greyscale like this images except for accenting. gold
-   can't be a standalone color without a border of sorts to back it
-   up".
+   Lean 2 rev7 (PR #79 follow-up) — vibrant-amber pass per user
+   feedback: "I still dont like the usage of the gold. lets have
+   every transluscent bubble be a more vibrand orange yellow to
+   simulate gold but more saturated and less murky. everything else
+   needs to be lined in black, almost white background, grey boxes.
+   buttons and transluscent responcive things are that rich orangy
+   yellow".
 
-   Three changes:
+   Translation:
+     • Body  → almost white (was light grey)
+     • Cards → light grey  (was pure white)  ← swap from rev6
+     • Borders + text → black ink (kept)
+     • Gold token → vibrant orange-yellow (marigold/amber), saturated,
+                    not the muddy brand-700 bronze rev6 used
 
-   (1) Drop ALL warm tints from chrome neutrals. Body, cards, surfaces,
-       borders, dividers, text-muted, text-light — every chrome token
-       moves to pure greyscale (0% saturation). Black ink borders +
-       neutral greys do all the visual hierarchy work.
+   Token shifts (light mode only — dark mode untouched):
 
-   (2) Cards become PURE WHITE (was warm grey). High-contrast white
-       cards on a light grey body matches the Helperbird reference
-       and lets the black ink borders read at maximum punch.
+     --color-bg            #dcdcdc → #f5f5f5  (almost white body)
+     --color-surface       #ffffff → #dcdcdc  (grey cards)
+     --color-surface-alt   #f3f3f3 → #d0d0d0
+     --color-surface-hover #e8e8e8 → #c4c4c4
 
-   (3) Override `--color-gold` to brand-700 (#8a6e2f) in light mode.
-       The brand gold (#C9A84C) is gorgeous on dark bg but reads as
-       washed-out / illegible on light bg, especially as standalone
-       eyebrow text ("TODAY", "DUE", "APPROVALS"). Brand-700 is the
-       deep readable bronze that still says "gold accent" without
-       blinding or vanishing. Buttons using `bg-gold` become a
-       deeper gold which actually reads better on light backgrounds.
+     --color-gold          #8a6e2f → #f0a623  (HSL 36°, 87%, 54%)
+                                              vibrant marigold/amber
+     --color-gold-muted    #6b5524 → #d08819  (slightly darker for
+                                              hover/disabled states)
+     --color-gold-dim      #4a3b19 → #a8691a  (darker still)
 
-   Dark mode unchanged — its warm gradient and brand-500 gold remain.
+   Why this works:
+     • Body almost-white + grey cards inverts the rev6 high-contrast
+       (grey/white) for low-contrast (white/grey). Editorial /
+       Helperbird-like — the cards are clearly "boxes" against an
+       almost-white sheet but don't visually shout.
+     • New gold #f0a623 is a saturated marigold (87% sat vs the 50%
+       of brand-700 bronze). Reads as RICH orange-yellow on white/grey.
+     • Translucent gold uses (bg-gold/10, bg-gold/15, bg-gold/30) all
+       inherit the vibrant base, so pills, badges, hover backgrounds
+       all become subtle marigold tints instead of murky bronze.
+     • Solid gold buttons (Clock In, etc.) become punchy marigold —
+       still recognizably "gold-family" but vibrant, not muddy.
+
+   Black lining + grey boxes per the user's spec; gold appears only
+   inside contained / bordered visual frames (per the rev6 spec
+   "gold can't be a standalone color without a border of sorts to
+   back it up" — buttons and pills both have implicit framing).
 */
 :root[data-theme='light'] {
-  --color-bg:            #dcdcdc; /* light neutral grey — body  */
-  --color-surface:       #ffffff; /* pure white — cards         */
-  --color-surface-alt:   #f3f3f3; /* very light grey (nests)    */
-  --color-surface-hover: #e8e8e8; /* hover state                */
+  --color-bg:            #f5f5f5; /* almost white — body        */
+  --color-surface:       #dcdcdc; /* light grey — cards         */
+  --color-surface-alt:   #d0d0d0; /* darker grey (nests)        */
+  --color-surface-hover: #c4c4c4; /* hover state                */
   --color-border:        #1c1c22; /* black ink (unchanged)      */
   --color-border-light:  #9a9a9a; /* neutral mid-grey dividers  */
   --color-text:          #1c1c22; /* black (unchanged)          */
   --color-text-muted:    #3f3f46; /* dark grey (unchanged)      */
   --color-text-light:    #6b6b72; /* neutral mid-grey           */
 
-  /* Gold readability override — brand-500 is illegible as standalone
-     text on light bg; shift to brand-700 (deep bronze) so eyebrow
-     text + accents stay recognizably "gold-warm" without vanishing.
-     Hover variants follow proportionally. */
-  --color-gold:          #8a6e2f; /* brand-700 (was brand-500)  */
-  --color-gold-muted:    #6b5524; /* brand-800 (was brand-600)  */
-  --color-gold-dim:      #4a3b19; /* brand-900 (was brand-700)  */
+  /* Vibrant marigold/amber — replaces the muddy brand-700 bronze.
+     Saturated 87% so translucent uses (bg-gold/10 etc) read as
+     warm orange-yellow tints, and solid buttons punch as rich
+     marigold rather than muted gold. */
+  --color-gold:          #f0a623; /* HSL 36°, 87%, 54% — marigold */
+  --color-gold-muted:    #d08819; /* darker hover state           */
+  --color-gold-dim:      #a8691a; /* darker still                 */
 }
 
 body {
