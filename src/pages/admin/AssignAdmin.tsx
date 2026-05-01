@@ -5,6 +5,7 @@ import {
   AlertCircle, Archive, Calendar as CalendarIcon, ChevronDown, ChevronRight,
   ClipboardList, Edit2, Layers, Loader2, Plus, Save, Settings,
   Sparkles, Tag, Users, X,
+  Trash2,
 } from 'lucide-react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
@@ -14,7 +15,10 @@ import {
   completeAssignedTask,
   fetchMemberAssignedTasks,
 } from '../../lib/queries/assignments'
-import { adminUpdateAssignedTask } from '../../lib/queries/adminTasks'
+import {
+  adminDeleteAssignedTasks,
+  adminUpdateAssignedTask,
+} from '../../lib/queries/adminTasks'
 import {
   addTaskTemplateItem,
   assignTemplateItemsToMembers,
@@ -128,6 +132,7 @@ export default function AssignAdmin() {
   const [editTask, setEditTask] = useState<AssignedTask | null>(null)
   const [addTaskOpen, setAddTaskOpen] = useState(false)
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
   // PR #53 — selected template opens a confirmation modal where the
   // admin can uncheck items before applying. Replaces the prior
   // "click template = instantly assign" behaviour.
@@ -144,6 +149,10 @@ export default function AssignAdmin() {
     document.addEventListener('mousedown', handle)
     return () => document.removeEventListener('mousedown', handle)
   }, [templatesDropdownOpen])
+
+  useEffect(() => {
+    setSelectedTaskIds(new Set())
+  }, [selectedMember?.id])
 
   // ─── Mutations ──────────────────────────────────────────────────
   const completeMutation = useMutation({
@@ -189,6 +198,61 @@ export default function AssignAdmin() {
   const handleEdit = useCallback((task: AssignedTask) => {
     setEditTask(task)
   }, [])
+
+  const visibleTaskIds = useMemo(() => tasks.map((t) => t.id), [tasks])
+  const selectedCount = selectedTaskIds.size
+  const allVisibleSelected =
+    visibleTaskIds.length > 0 && visibleTaskIds.every((id) => selectedTaskIds.has(id))
+
+  const toggleTaskSelected = useCallback((taskId: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+      return next
+    })
+  }, [])
+
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedTaskIds((prev) => {
+      if (visibleTaskIds.length === 0) return prev
+      if (visibleTaskIds.every((id) => prev.has(id))) return new Set()
+      return new Set(visibleTaskIds)
+    })
+  }, [visibleTaskIds])
+
+  const deleteMutation = useMutation({
+    mutationFn: (taskIds: string[]) => adminDeleteAssignedTasks(taskIds),
+    onSuccess: (result, taskIds) => {
+      setSelectedTaskIds((prev) => {
+        const next = new Set(prev)
+        for (const id of taskIds) next.delete(id)
+        return next
+      })
+      toast(
+        `Deleted ${result.deleted_count} task${result.deleted_count === 1 ? '' : 's'}.`,
+        'success',
+      )
+      void queryClient.invalidateQueries({
+        queryKey: ['assign-page-member-tasks', selectedMember?.id],
+      })
+      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
+    },
+    onError: (err: Error) => toast(err.message, 'error'),
+  })
+
+  const deleteTasks = useCallback(
+    (taskIds: string[]) => {
+      const ids = Array.from(new Set(taskIds.filter(Boolean)))
+      if (ids.length === 0 || deleteMutation.isPending) return
+      const label = ids.length === 1 ? 'this task' : `${ids.length} tasks`
+      if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return
+      deleteMutation.mutate(ids)
+    },
+    [deleteMutation.isPending, deleteMutation.mutate],
+  )
 
   const memberHasNoTasks = !tasksQuery.isLoading && tasks.length === 0
   const completedCount = tasks.filter((t) => t.completed_at).length
@@ -444,6 +508,35 @@ export default function AssignAdmin() {
               </Button>
             </div>
 
+            {tasks.length > 0 && (
+              <div className="mb-3 flex items-center gap-3 rounded-xl border border-border/70 bg-surface-alt px-3 py-2">
+                <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-text cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                    aria-label="Select all visible tasks"
+                    className="w-4 h-4 rounded border-border accent-gold cursor-pointer"
+                  />
+                  Select all
+                </label>
+                <span className="text-[11px] text-text-light">
+                  {selectedCount} selected
+                </span>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  iconLeft={<Trash2 size={14} aria-hidden="true" />}
+                  onClick={() => deleteTasks(Array.from(selectedTaskIds))}
+                  disabled={selectedCount === 0 || deleteMutation.isPending}
+                  loading={deleteMutation.isPending}
+                  className="ml-auto"
+                >
+                  Delete selected
+                </Button>
+              </div>
+            )}
+
             {tasksQuery.isLoading ? (
               <div className="py-10 flex items-center justify-center text-text-light">
                 <Loader2 size={18} className="animate-spin mr-2" />
@@ -480,8 +573,12 @@ export default function AssignAdmin() {
                   <TaskRow
                     key={t.id}
                     task={t}
+                    selected={selectedTaskIds.has(t.id)}
                     onToggle={handleToggle}
+                    onSelect={toggleTaskSelected}
                     onEdit={handleEdit}
+                    onDelete={(task) => deleteTasks([task.id])}
+                    deleteDisabled={deleteMutation.isPending}
                   />
                 ))}
               </div>
@@ -564,16 +661,35 @@ export default function AssignAdmin() {
 
 const TaskRow = memo(function TaskRow({
   task,
+  selected,
   onToggle,
+  onSelect,
   onEdit,
+  onDelete,
+  deleteDisabled,
 }: {
   task: AssignedTask
+  selected: boolean
   onToggle: (task: AssignedTask) => void
+  onSelect: (taskId: string) => void
   onEdit: (task: AssignedTask) => void
+  onDelete: (task: AssignedTask) => void
+  deleteDisabled: boolean
 }) {
   const done = Boolean(task.completed_at)
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-hover transition-colors group">
+    <div
+      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-surface-hover transition-colors group ${
+        selected ? 'bg-gold/10 ring-1 ring-gold/25' : ''
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => onSelect(task.id)}
+        aria-label={`Select ${task.title}`}
+        className="w-4 h-4 rounded border-border accent-gold cursor-pointer"
+      />
       <input
         type="checkbox"
         checked={done}
@@ -602,6 +718,16 @@ const TaskRow = memo(function TaskRow({
         className="p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface hover:text-gold transition-all focus-ring"
       >
         <Edit2 size={12} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onDelete(task)}
+        disabled={deleteDisabled}
+        title={`Delete "${task.title}"`}
+        aria-label={`Delete ${task.title}`}
+        className="p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400 transition-all focus-ring disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <Trash2 size={12} aria-hidden="true" />
       </button>
     </div>
   )

@@ -64,3 +64,24 @@ export async function adminUpdateAssignedTask(
   }
   return data as AssignedTask
 }
+
+export interface AdminDeleteTasksResult {
+  deleted_count: number
+  deleted_ids: string[]
+}
+
+export async function adminDeleteAssignedTasks(
+  taskIds: string[],
+): Promise<AdminDeleteTasksResult> {
+  const ids = Array.from(new Set(taskIds.filter(Boolean)))
+  if (ids.length === 0) return { deleted_count: 0, deleted_ids: [] }
+
+  const { data, error } = await supabase.rpc('admin_delete_assigned_tasks', {
+    p_task_ids: ids,
+  })
+  if (error) {
+    console.error('[queries/adminTasks] adminDeleteAssignedTasks failed:', error)
+    throw new Error(error.message)
+  }
+  return data as AdminDeleteTasksResult
+}
