@@ -77,9 +77,38 @@ export async function fetchCurrentlyClockedIn(): Promise<CurrentlyClockedInRow[]
   return (data as CurrentlyClockedInRow[] | null) ?? []
 }
 
+export interface AdminClockEntry {
+  entry_id: string
+  member_id: string
+  member_name: string
+  clocked_in_at: string
+  clocked_out_at: string | null
+  duration_minutes: number | null
+  notes: string | null
+}
+
+/** Admin-only — list recent shifts for the team, optionally filtered
+ *  by a single member. PR #62: powers the Members > Clock Data table. */
+export async function fetchAdminClockEntries(
+  memberId?: string | null,
+  limit = 100,
+): Promise<AdminClockEntry[]> {
+  const { data, error } = await supabase.rpc('admin_list_clock_entries', {
+    p_member_id: memberId ?? null,
+    p_limit: limit,
+  })
+  if (error) {
+    console.error(`${LOG_PREFIX} fetchAdminClockEntries failed:`, error)
+    throw new Error(error.message)
+  }
+  return (data as AdminClockEntry[] | null) ?? []
+}
+
 // React-query key factory for cache coordination across widgets.
 export const timeClockKeys = {
   all: ['time-clock'] as const,
   myOpen: () => ['time-clock', 'my-open'] as const,
   currentlyClockedIn: () => ['time-clock', 'currently-clocked-in'] as const,
+  adminEntries: (memberId?: string | null) =>
+    ['time-clock', 'admin-entries', memberId ?? 'all'] as const,
 }

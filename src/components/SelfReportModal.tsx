@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useTasks } from '../contexts/TaskContext'
 import { Check, X, FileText, ChevronDown } from 'lucide-react'
 
@@ -40,8 +41,15 @@ export default function SelfReportModal({ clockInTime, onClose, onLogout }: { cl
     setSubmitted(true)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+  // PR #72 — portal to document.body to escape the Layout header's
+  // `backdrop-blur-md` stacking context. Without the portal, the
+  // modal's `position: fixed` re-anchored to the header element
+  // (CSS spec quirk: backdrop-filter creates a containing block for
+  // fixed descendants), making the modal appear "jammed at the top
+  // of the website with its first half cut off". Same fix the
+  // NotificationsBell dropdown uses.
+  const modalContent = (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-surface rounded-2xl border border-border w-full max-w-lg mx-4 p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
@@ -172,4 +180,7 @@ export default function SelfReportModal({ clockInTime, onClose, onLogout }: { cl
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined') return modalContent
+  return createPortal(modalContent, document.body)
 }

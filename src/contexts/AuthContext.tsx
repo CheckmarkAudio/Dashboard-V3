@@ -66,10 +66,30 @@ function DevAuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+/**
+ * Production alias — the canonical Live URL. The DevAuthProvider
+ * mock-user bypass below MUST never mount on this hostname, regardless
+ * of any env var, regardless of any stale build. Belt-and-suspenders
+ * with the same guard in ProtectedRoute (PR #72) + supabase.ts.
+ *
+ * PR #72 (rev) — user reported "the login page is gone" on the live
+ * URL even with `VITE_DEMO_MODE` unset on Vercel. Most likely a stale
+ * production deploy serving a build where the env var WAS set at
+ * build time. This hostname guard makes it impossible for production
+ * to ever mount the mock user, no matter what env vars say.
+ */
+function isProductionAlias(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.location.hostname === 'dashboard-v3-dusky.vercel.app'
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // DEV BYPASS
-  // DEMO BYPASS — use mock auth for draft/demo site and local dev
-  if (import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true') return <DevAuthProvider>{children}</DevAuthProvider>
+  // DEMO BYPASS — mock admin for local dev convenience. NEVER fires on
+  // the production hostname. The `VITE_DEMO_MODE` flag is intentionally
+  // only honored on non-production hosts, so even if it leaks back into
+  // a Vercel env scope, production refuses.
+  const bypassEnabled = import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true'
+  if (bypassEnabled && !isProductionAlias()) return <DevAuthProvider>{children}</DevAuthProvider>
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [profile, setProfile] = useState<TeamMember | null>(null)
   const [session, setSession] = useState<Session | null>(null)

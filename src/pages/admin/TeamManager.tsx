@@ -8,6 +8,7 @@ import { useToast } from '../../components/Toast'
 import ConfirmModal from '../../components/ConfirmModal'
 import { Button, Input, Select, Badge, EmptyState } from '../../components/ui'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
+import ClockDataSection from '../../components/admin/ClockDataSection'
 import {
   loadActiveTemplates,
   loadDefaultTemplateIdsForPosition,
@@ -543,8 +544,12 @@ export default function TeamManager() {
         </Button>
       </div>
 
-      {/* Two-pane layout: left section nav + right pane content. Mirrors AdminSettings.tsx. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
+      {/* Two-pane layout: left section nav + right pane content.
+          PR #63 (revision) — `items-stretch` so the sidebar grows to the
+          same height as the right pane and the bottom borders are flush.
+          (User asked for this even though the rail only has 2 entries
+          today — more sections coming.) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
         {/* ── Left: section nav ── */}
         <aside className="bg-surface rounded-xl border border-border p-2 space-y-1" aria-label="Members sections">
           <p className="px-3 pt-3 pb-2 text-label">Members</p>
@@ -558,8 +563,15 @@ export default function TeamManager() {
           ))}
         </aside>
 
-        {/* ── Right: active section content ── */}
-        <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px]">
+        {/* ── Right: active section content ──
+            PR #63 — `min-w-0` lets the grid 1fr column actually obey its
+            track (CSS Grid's default `min-width: auto` would expand to
+            fit the widest descendant — the 8-column member table — and
+            push the rounded border past the viewport on narrower screens).
+            `overflow-hidden` keeps anything inside clipped at the rounded
+            border. Settings doesn't need this because its content is short
+            text + simple form rows. */}
+        <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px] min-w-0 overflow-hidden">
 
       {activeSection === 'roster' && (<>
       {/* Toolbar: search + filters */}
@@ -831,18 +843,7 @@ export default function TeamManager() {
       )}
       </>)}
 
-      {activeSection === 'clock-data' && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-14 h-14 rounded-full bg-surface-alt flex items-center justify-center mb-4">
-            <Clock size={24} className="text-text-muted" aria-hidden="true" />
-          </div>
-          <h2 className="text-lg font-bold mb-2">Clock data — coming soon</h2>
-          <p className="text-text-muted text-sm max-w-sm">
-            Per-member shift logs, reflection prompts, and payroll-grade timestamps land in the
-            next PR. The sidebar slot is here so admins can preview the eventual home for this view.
-          </p>
-        </div>
-      )}
+      {activeSection === 'clock-data' && <ClockDataSection members={members} />}
 
         </section>
       </div>

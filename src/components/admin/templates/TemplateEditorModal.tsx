@@ -343,11 +343,9 @@ function ItemRow({
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-medium text-text truncate">
             {item.title}
-            {item.is_required && (
-              <span className="ml-2 text-[10px] uppercase tracking-wider text-rose-400 font-bold">
-                Required
-              </span>
-            )}
+            {/* PR #70 — display `Required` tag retired. The edit form
+                below still has a `Required` checkbox for setting the
+                flag — that stays since it's actively author-facing. */}
           </p>
           {(item.category || item.default_due_offset_days != null) && (
             <p className="text-[11px] text-text-light truncate">

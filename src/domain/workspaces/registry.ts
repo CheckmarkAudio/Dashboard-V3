@@ -25,10 +25,12 @@ import type {
 // HEIGHT within its column (rs=2 renders 2× tall). Within-column order
 // falls out of registration order here; users reorder via drag.
 //
-// Overview stacks (PR #47-rev3 layout, rev4 sized col 3 to flush):
+// Overview stacks (PR #61: Booking promoted to page-header button +
+// MemberHighlights row above the grid; col 3 is now a single full-
+// height Notifications widget that matches the Tasks/Calendar height):
 //   col 1: team_tasks (rs2)
 //   col 2: today_calendar (rs2)
-//   col 3: booking_snapshot (rs0.5 — compact Book-a-Session button) · forum_notifications (rs1.5)
+//   col 3: forum_notifications (rs2)
 //
 // Tasks stacks (all rs2 so each column shows a long queue at a glance):
 //   col 1: team_tasks   |   col 2: studio_tasks   |   col 3: team_board
@@ -51,15 +53,14 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
-    // Compact Book-a-Session action. rowSpan 0.5 ≈ 170px.
-    // PR #47-rev3: moved col 2 → col 3 (top) per user drag layout.
-    // Calendar (rs2) now fills col 2 alone; Booking sits on top of
-    // Notifications in col 3. Still registered BEFORE
-    // forum_notifications so col 3 resolves Booking → Notifications.
+    // PR #61: Booking promoted from a col-3 widget to a primary action
+    // button in the Overview page header. The widget itself is kept in
+    // the registry (no `member_overview` placement) so /sessions and
+    // /calendar still have access to the same component if needed.
     id: 'booking_snapshot',
     title: 'Booking',
     description: 'Quick-book a studio session.',
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 0.5, col: 3 }],
+    defaultPlacements: [],
     accessVisibility: 'personal',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -74,16 +75,15 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
-    // PR #47-rev3: rowSpan 2 → 1 so col 3 reads as a balanced stack.
-    // PR #47-rev4: rowSpan 1 → 1.5 to fill the remaining vertical
-    // space — Booking rs0.5 (170px) + gap (16) + Notifications rs1.5
-    // (518px) = 704px, near-flush with cols 1-2 at rs2 (696px).
-    // Within-column order: registered AFTER booking_snapshot so col 3
-    // resolves Booking on top.
+    // PR #68: Notifications restored to col 3 (rs2 — flush with My
+    // Tasks + Calendar heights) with the same sleek `NotificationsPanel`
+    // body the top-bar dropdown bell uses. Both surfaces coexist now —
+    // the bell is the always-accessible quick view, the widget is the
+    // dedicated reading surface on Overview.
     id: 'forum_notifications',
     title: 'Notifications',
     description: 'Unread messages across channels and new assignments.',
-    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 1.5, col: 3 }],
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 2, col: 3 }],
     accessVisibility: 'shared',
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -499,7 +499,21 @@ function buildDefaultWidgetStateForScope(
 // v29 (2026-04-29, PR #50): new `admin_clock_in` widget on the
 // admin Hub col 3 below `admin_team` (rowSpan 0.5). "Who's on the
 // clock" with live elapsed counters per row. First Tier 2 slice.
-export const WORKSPACE_LAYOUT_VERSION = 29
+// v30 (2026-04-29, PR #61): Overview UI refresh — `booking_snapshot`
+// removed from `member_overview` placements (the action moved to a
+// "Book a Session" button in the Overview page header) and
+// `forum_notifications` rowSpan bumped 1.5 → 2 so col 3 matches the
+// height of My Tasks (col 1) and Calendar (col 2).
+// v31 (2026-04-30, PR #65): Overview header glow-up. Notifications
+// retired from the Overview grid — they live in the top-bar
+// dropdown bell (`NotificationsBell`) now. `forum_notifications`
+// has no `member_overview` placement; sanitization prunes it from
+// saved layouts.
+// v32 (2026-04-30, PR #68): Notifications restored to the Overview
+// grid (col 3, rs2) and the admin Hub widget refactored to render
+// the same shared `NotificationsPanel`. Both surfaces coexist with
+// the always-on top-bar dropdown bell.
+export const WORKSPACE_LAYOUT_VERSION = 32
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

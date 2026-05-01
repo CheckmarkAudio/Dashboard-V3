@@ -264,6 +264,56 @@ relitigate them unless the user brings them up.**
 - **All checklists render the same way** (14px checkbox, 5px
   radius, rose border for critical, muted border for normal).
 
+#### Canonical chrome dimensions (PR #63, measured 2026-04-30 at 1440×900)
+
+Captured here so the next chrome change has hard numbers, not a vibe.
+
+**Two-pane admin pages** — reference: **Settings** (`/admin/settings`).
+Used by Settings, Members (`/admin/my-team`), Assign (`/admin/templates`).
+
+```
+<div className="max-w-6xl mx-auto animate-fade-in">      // outer
+  <div className="mb-6">…<h1 className="text-2xl font-bold">…</h1></div>
+  <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
+    <aside className="bg-surface rounded-xl border border-border p-2 space-y-1">…</aside>
+    <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px]
+                        min-w-0 overflow-hidden">                 // table-friendly
+      …
+    </section>
+  </div>
+</div>
+```
+
+- `items-stretch` (NOT `items-start`) so sidebar bottom is flush
+  with right-pane bottom even when the rail is short.
+- `min-w-0 overflow-hidden` on the right-pane `<section>` whenever it
+  holds a wide table — without `min-w-0`, CSS Grid's default
+  `min-width: auto` lets the table push the rounded border past the
+  grid track and off-screen.
+- Measured at 1440 viewport: grid `x=144 right=1296 w=1152`; aside
+  `w=280`; right pane `w=848`; gap `24px`.
+
+**Full-width member pages** — reference: **Calendar** (`/calendar`).
+
+```
+<div className="max-w-6xl mx-auto animate-fade-in">
+  <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-3 items-stretch">…</div>
+</div>
+```
+
+Same `max-w-6xl` constraint, slightly wider sidebar (300 vs 280) and
+tighter gap (gap-3 vs gap-6).
+
+**Widget-grid surfaces** — reference: **Overview** (`/`). Three
+column stacks via `WorkspacePanel` + `DashboardWidgetFrame` per widget;
+row-spans `0.5 / 1 / 1.5 / 2 / 3` (340px row × multiplier + 16px gap).
+
+**How to use this:** before claiming a chrome change verified, run the
+attached snippet from `feedback_chrome_reference_check.md` to compare
+`getBoundingClientRect()` numbers between the changed page and the
+canonical reference. The numbers must match. User trigger phrase:
+**"reference-check it"**.
+
 ### User base must remain clickable
 
 - **Every instance of a username / avatar is a clickable
@@ -579,9 +629,50 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### Tier 3 — Interface tweaks + page-by-page fixes (planned 2026-04-30, locked)
+
+User delivered a wide-scope tweaks list + answered the 8 open questions. Plan = 10 Leans in dependency order. **Lean 1 cleared to start.**
+
+**Locked decisions** (full answers in `docs/PROJECT_STATE.md` Active section):
+
+1. Login disappeared ~2 days ago; user manually disabled login for previews and suspects entanglement. Lean 1 audits the preview-auto-login env vars + hostname guard.
+2. Widget grid → option (a): widgets **locked to their current row**, horizontal swap only.
+3. Studio Tasks rooms → single widget with **section dividers** (`Control room` / `Studio A` / `Lobby` / `Studio B`); backend adds a `room` column on `assigned_tasks`.
+4. Booking status hover → research Figma + Monday for the smooth pattern; add `cancel_session` / `confirm_session` / `reschedule_session` RPCs if missing.
+5. Show-completed default-on → local-date; tasks roll off at midnight; older completions land on a new **Completed Tasks** log page in the Members admin left rail (folded into Lean 10).
+6. Gradient → body-level, very subtle, not on cards.
+7. Forum presence → online when site open (site-based heartbeat).
+8. Assign bulk-delete → top-level bar in the main pane, scoped to the currently-viewed member.
+
+| # | Lean | One-line scope |
+|--|--|--|
+| 1 | Critical fixes | login back · clock-out modal de-jam · "+ Book a Session" position |
+| 2 | Theme & gradient | light-mode tone-down to grey/gold/black + subtle site gradient (incl. pinch of forum violet) |
+| 3 | Widget grid containment | constrain to one row, no falling down the page |
+| 4 | Calendar polish | click booking → detail modal · notes persist across nav · brighter notes + ♪ bullets |
+| 5 | Booking interactions | click booking → detail/edit · hover status → action popover |
+| 6 | Tasks tweaks | undo request-to-take · Studio Tasks room dividers (Control room / Studio A / Lobby / Studio B) |
+| 7 | Admin Hub rearrangement | drop flywheel + quick assign · MemberHighlights at top · Notifications + Task Requests rs2 · today_calendar in middle |
+| 8 | Forum polish | longer · own-messages right-aligned · presence bubbles · Troubleshooting → corner button |
+| 9 | Forum media uploads | upload button · image/video preview |
+| 10 | Assign page revamp | Select / Select-all / Delete · default-on Show Completed (today) · retire Legacy Assign → Assign Log page (toggle pattern) |
+
+Tier 3 supersedes the prior Tier 2 EmailJS-first sequence; EmailJS + ExportButtons + flywheel ledger remain queued behind Tier 3.
+
 ### Just shipped (most recent first)
 
-- **PR #50 — Persist Clock In/Out + 'On the Clock' Hub widget — 2026-04-29 (in flight).** First Tier 2 slice, originally drafted 2026-04-29 morning then rebased on top of PRs #58/#59/#60 before merge. Backend: new `time_clock_entries` table (one open shift per user, partial unique index) + 4 SECURITY DEFINER RPCs (`clock_in()` idempotent, `clock_out(p_notes)`, `get_my_open_clock_entry()`, `admin_currently_clocked_in()`); migration `20260429000000_time_clock_entries.sql` applied to staging, advisors clean. Frontend: header Clock button now React-Query-backed (cache key `['my-open-clock-entry']`) so clock-out in one tab updates the others; SelfReportModal Close + Log Out paths fire `clock_out` alongside existing behavior. New `AdminClockInWidget` ("On the Clock") on admin Hub col 3 below Team (rowSpan 0.5) with live elapsed counter (ticks every minute, refetches every 60s). New `src/lib/queries/timeClock.ts` with the 4 RPC wrappers. `WORKSPACE_LAYOUT_VERSION` 28 → 29 so saved Hub layouts pick up the new col-3 widget. Followup queued: populate Members > Clock Data pane (PR #58 reserved) with shift history table — this PR ships only the live "currently clocked in" view, not historical shifts.
+- **PR #71 — Capture Tier 3 plan in docs (no code) — 2026-04-30 (in flight).** User delivered a wide-scope UI tweaks list right before stepping away. Captured the raw list verbatim + a 10-Lean plan + 8 open questions in PROJECT_STATE.md Active section so nothing is lost between sessions. Tier 3 supersedes Tier 2 (EmailJS pushed back). User will answer the open questions on return; another doc pass at that point will lock the plan and kick off Lean 1.
+- **PR #70 — Retire `New` + `Required` row tags sitewide — 2026-04-30 (merged `8c01316`).** User: "remove all of the red new tags and required tags... we will implement an urgency mechanic but for now i want it all gone free from distraction." Removed display tags from MyTasksCard, AssignedTaskBoards, TaskDetailModal, AdminEditTasksModal, AddFromTemplateModal preview, TemplateAssignFlowModal preview, TemplatePreviewModal, TemplateEditorModal item list. Also dropped the `Priority` chip from PendingTaskRequestsWidget. Author-facing toggle labels stay (active edit controls, not passive tags). The `isNew` flag itself stays — drives the gold-tinted row background as a subtler signal of freshness.
+- **PR #69 — Task row metadata = role + first-name + last-initial + due-date; retire stage pills; add Self/Assigned filter on My Tasks — 2026-04-30 (merged `b0bab20`).** New helpers in `tasks/shared.tsx`: `formatShortName`, `rolePositionFor` (maps `team_members.position` to lowercase short tags; owner returns null), `isSelfAssigned`, `<SourceFilterRow>`. My Tasks now reads as `[role] · First L.` plain text with a gold `DUE` column header. Stage pill row removed (deferred to flywheel-event-ledger PR — not archived).
+- **PR #68 — Restore Notifications widget on Overview + Hub with shared sleek panel + Post/Channel quick-actions — 2026-04-30 (merged `4a69dbb`).** User asked for the dedicated Notifications widget back on Overview (same dimensions as My Tasks + Calendar) with the new sleek look; also wanted the Post quick-action available on BOTH the Overview widget and the Admin Hub widget so anyone can quick-post from their dashboard. (1) `forum_notifications` placement restored to `member_overview` col 3 rs2 (w=432 h=696, flush with cols 1–2). Top-bar dropdown bell stays — both surfaces coexist. (2) `AdminNotificationsWidget` refactored to render the shared `<NotificationsPanel />`; ~270 lines of inline channel/assignment row + duplicate RPC helpers retired. (3) New shared `<NotificationsPostActions />` (`src/components/notifications/NotificationsPostActions.tsx`) owns the Post + Channel buttons + their two modals (moved out of `adminHubWidgets.tsx`); renders ABOVE the panel on both widgets. Channel-list query dedupes off the same `['overview-notifications']` cache key. `WORKSPACE_LAYOUT_VERSION` 31 → 32.
+- **PR #67 — Notifications bell to rightmost slot, drop redundant sign-out button — 2026-04-30 (merged just prior).** Two-line layout cleanup. `<NotificationsBell />` moved from between `<SocialLinks />` and the theme toggle to the FINAL slot of the right cluster (after the avatar). The standalone `LogOut`-icon Sign out button removed entirely — the `SelfReportModal` already has a Log Out path that fires both `clock_out` AND `signOut`, so the dedicated icon was redundant. `LogOut` import dropped. Verified at 1440: bell `rightEdge=1389`; dropdown anchors flush right (`right=1383, x=1023, w=360`).
+- **PR #66 — Buttery-smooth notifications dropdown — 2026-04-30 (merged just prior).** Polish pass on the dropdown PR #65 introduced. User asked me to look at how Figma does notifications to make it feel "buttery smooth" — researched Figma / Linear / Vercel patterns and translated to concrete CSS. (1) Open transition: `opacity 0→1`, `scale(0.96) translateY(-4px) → scale(1) translateY(0)`, 180ms `cubic-bezier(0.16, 1, 0.3, 1)` (ease-out-expo); `transformOrigin: top right`. Two-frame `entered` state defers the to-state class one rAF so the browser actually animates from the from-state. (2) Frosted backdrop (`bg-surface/95 backdrop-blur-xl`) + layered three-stop shadow (`0_1px_2px_18% / 0_8px_24px_32% / 0_16px_48px_40%`). (3) Row interactions: `transition-[background-color,border-color,transform] duration-150 ease-out` (was `transition-all`, sluggish), `active:scale-[0.995]` tactile press. (4) `scroll-smooth` on body + autofocus on open. Verified byte-level: from/to states + transition declaration + 360×147 settled box + frosted blur + layered shadow + auto-focus all match.
+- **PR #65 — Overview header glow-up — beveled MemberHighlights, standardized gold CTA, social icons, notifications dropdown bell — 2026-04-30 (merged just prior).** Five user-spec items in one PR. (1) `MemberHighlights` bubbles: `gap-3` → `gap-5` and a beveled gold pill ring (multi-stop gradient + hairline + inset highlight + soft glow; hover deepens). (2) Standardized gold CTA shape (`h-10 px-4 rounded-2xl` + `shadow-[0_6px_14px_rgba(214,170,55,0.18)]`) across Overview Book a Session, Sessions Book/Add Client, and Layout Clock In — replaces the way-too-feathery `0_14px_28px_22%`. (3) IG / TikTok (custom inline SVG) / YouTube link strip in the global top bar (`SocialLinks.tsx`) — frontend-only stubs, hrefs blank until backend wire-up. (4) `NotificationsPanel` extracted from the old `ForumNotificationsWidget` so the new top-bar dropdown bell and the (now-unplaced) widget share one body; new category badges (forum=violet MessageSquare, task=gold ClipboardList, booking=sky Calendar) on each row. (5) `NotificationsBell` lives in the Layout top bar — click opens a 360px portal-anchored dropdown that stays open until X / Escape / outside-click (per user spec — does NOT close on row click). `forum_notifications` removed from `member_overview` placements; Overview is now a focused 2-col layout (My Tasks + Calendar). `WORKSPACE_LAYOUT_VERSION` 30 → 31.
+- **PR #64 — Retire Clients top-nav, fold into Bookings/Clients toggle on `/sessions` — 2026-04-30 (merged just prior).** User flagged the standalone Clients menu (PR #51) as drift — clients belonged with bookings, not as a separate top-nav entry. Deleted the nav link, the `/admin/clients` route, the `APP_ROUTES.admin.clients` constant, and the `ClientsAdmin.tsx` page itself. Extracted a self-contained `src/components/clients/ClientsPanel.tsx` (search + active/archived toggle + clients table + editor modal — same chrome as before, no PageHeader so the parent page owns the header) with a `registerAddClient` callback so the parent's "+ Add Client" header button can fire the panel's editor without prop drilling. Refactored `src/pages/Sessions.tsx` with a `view: 'bookings' | 'clients'` state driven by URL hash (`#clients` deep-links to the Clients tab). Page header dynamic: title stays "Booking" but the action button swaps "Book a Session" ↔ "Add Client", and the bookings-only category pills (All / Engineer / Consult / Trailing / Music Lesson / Education) hide when Clients is active. Reference-checked at 1440×900: both views have identical outer chrome `max-w-6xl mx-auto` x=144 right=1296 w=1152 — flush with Settings/Members/Calendar.
+- **PR #63 — Chrome consistency fixes — Members section overflow + Members & Assign sidebar bottom-flush — 2026-04-30 (merged just prior).** Recurring chrome bugs flagged by the user. (1) Members right-pane `<section>` got `min-w-0 overflow-hidden` so the rounded border stays inside the `max-w-6xl` grid track even when the 8-column member table loads — CSS Grid's default `min-width: auto` on `1fr` tracks was the root cause. (2) Both AssignAdmin and TeamManager grids switched `items-start` → `items-stretch`; the Assign aside also lost `h-fit sticky top-4`. Sidebars now grow to match their right-pane heights (Assign: 552/552 flush; Members: 612/612 flush, mirroring `/calendar`'s `grid-cols-[300px_1fr] gap-3 items-stretch`). User explicitly asked for Members stretch even with only 2 rail items today (more sections coming). **Canonical chrome dimensions captured** in `feedback_chrome_reference_check.md` AND in the "Canonical chrome dimensions" subsection of this doc — at 1440×900 the two-pane admin grid is `x=144 right=1296 w=1152`, aside `w=280`, right pane `w=848`, gap `24px`. New process memory: verify chrome via `getBoundingClientRect()` numbers vs the canonical reference BEFORE claiming verified. User trigger phrase: "reference-check it".
+- **PR #62 — Members > Clock Data shift history table — 2026-04-30 (merged just prior).** Closes the loop on PR #50 by populating the Clock Data left-rail slot PR #58 reserved. New SECURITY DEFINER RPC `admin_list_clock_entries(p_member_id?, p_limit?)` returning `{entry_id, member_id, member_name, clocked_in_at, clocked_out_at, duration_minutes, notes}`; admin-guarded via `is_team_admin()`, team-scoped, capped at 500 rows. Migration `20260430000000_admin_list_clock_entries.sql` applied to staging — only the standard SECURITY DEFINER advisor warnings (same shape as PR #50's RPCs). New `fetchAdminClockEntries(memberId?, limit?)` helper + `timeClockKeys.adminEntries(memberId)` cache key. New `ClockDataSection.tsx` renders inside the existing left-rail layout: "Shift history" h2 + Clock icon + "All members" filter `<Select>` + table (member linked to `/profile/{id}`, clocked-in, clocked-out / "ON SHIFT" emerald pill, `Hh Mm` duration, line-clamp-2 notes). Empty / loading / error states match the existing admin chrome.
+- **PR #61 — Overview UI refresh — 2026-04-29 (merged just prior).** Four UI changes the user asked for after running the merged PRs in preview. (1) Booking moved off the Overview grid: `booking_snapshot` widget de-placed (kept in registry, no `member_overview` placement) and replaced with a "+ Book a Session" primary button in the Overview page-header `actions` slot. The button opens the same canonical `CreateBookingModal`; refetch wiring for `MemberOverviewContext` preserved by wrapping the button inside the provider. (2) Notifications widget elongated: `forum_notifications` rowSpan 1.5 → 2 so col 3 height matches My Tasks (col 1) + Calendar (col 2). (3) New `MemberHighlights` component (`src/components/members/MemberHighlights.tsx`) — Instagram-story-style horizontal scroll row of circular member avatars (60px circle, gold gradient ring, first-name label), positioned between the page header and the workspace grid. Reads `team_members.status = 'active'` via `fetchTeamMembers`; each tile is a React Router `<Link>` to `/profile/{id}` honoring the user-entities-clickable rule. Initials fallback when `avatar_url` is null. (4) MyTasksCard no longer renders `task.description` inline under the title — the description is reserved for the expanded `TaskDetailModal` (clicking the row body), so rows stay compact and "notes belong only in the expanded view". Other task surfaces (Studio Tasks, Team Board) already had no inline description, so no change there. `WORKSPACE_LAYOUT_VERSION` 29 → 30 so saved Overview layouts shed `booking_snapshot` and pick up the new Notifications rowSpan.
+- **PR #50 — Persist Clock In/Out + 'On the Clock' Hub widget — 2026-04-29 (merged just prior).** First Tier 2 slice, originally drafted 2026-04-29 morning then rebased on top of PRs #58/#59/#60 before merge. Backend: new `time_clock_entries` table (one open shift per user, partial unique index) + 4 SECURITY DEFINER RPCs (`clock_in()` idempotent, `clock_out(p_notes)`, `get_my_open_clock_entry()`, `admin_currently_clocked_in()`); migration `20260429000000_time_clock_entries.sql` applied to staging, advisors clean. Frontend: header Clock button now React-Query-backed (cache key `['my-open-clock-entry']`) so clock-out in one tab updates the others; SelfReportModal Close + Log Out paths fire `clock_out` alongside existing behavior. New `AdminClockInWidget` ("On the Clock") on admin Hub col 3 below Team (rowSpan 0.5) with live elapsed counter (ticks every minute, refetches every 60s). New `src/lib/queries/timeClock.ts` with the 4 RPC wrappers. `WORKSPACE_LAYOUT_VERSION` 28 → 29 so saved Hub layouts pick up the new col-3 widget. Followup queued: populate Members > Clock Data pane (PR #58 reserved) with shift history table — this PR ships only the live "currently clocked in" view, not historical shifts.
 - **PR #58 — Members admin left-rail restructure — 2026-04-29 (merged just prior).** Extracted `SectionNavItem` from AdminSettings into a reusable shared `AdminSectionNavItem` (`src/components/admin/AdminSectionNavItem.tsx`) generic over section-key type. AdminSettings now imports the shared component (~30 lines of duplicate code deleted). TeamManager (`/admin/my-team`) restructured: standard `<h1>Members</h1>` + count badge + Add Member button (no subtitle per PR #60), two-pane grid below — left rail with **Roster** (default, current toolbar + filter pills + 8-column table) and **Clock Data** (placeholder section with "coming soon" empty state). Stripped inner `widget-card` chrome from the table since it was double-boxing against the new right-pane card. Sets up the shell that PR #50 (Clock In/Out v2) drops Clock Data content into.
 - **PR #60 — Remove all page-header subtitles — 2026-04-29 (merged just prior).** User asked for a "modern, simple, sleek" pass on the title pages. Removed the descriptive subtext under every page's `<h1>` — 11 PageHeader callers got their `subtitle` prop deleted (Hub · Templates · TeamManager · TemplateLibrary · ClientsAdmin · Sessions · DailyNotes · Dashboard · DailyChecklist · Pipeline · Leads); 4 inline `<p className="text-text-muted mt-1">` page-header subtitles deleted (AdminSettings · AssignAdmin · Reviews · Schedule). PageHeader component itself untouched — subtitle prop still supported for any future use. Login subtitle preserved (helps unauthenticated users orient).
 - **PR #59 — Assign right-pane top alignment — 2026-04-29 (merged just prior).** PR #57 fixed the page-header rhythm but the right pane's top edge still floated below the sidebar's Members card because the toolbar row (Settings for Tasks · Save as Template · Templates ▾) lived above the main card. Folded the toolbar INSIDE the main card with a hairline divider, wrapped main in `rounded-xl border border-border bg-surface p-5`, switched sidebar + main from `rounded-2xl` to `rounded-xl`, `gap-4` → `gap-6`, added `items-start` on the grid. Both panes now start at the same Y, exactly mirroring Settings.

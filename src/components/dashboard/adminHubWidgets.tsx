@@ -1,43 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
-  Bell,
   CalendarPlus,
   Check,
-  CheckCheck,
   CheckCircle2,
   CheckSquare,
   Clock,
-  Hash,
-  Inbox,
   Loader2,
-  MessageSquare,
-  Send,
   Shield,
   Target,
   Users,
   X,
 } from 'lucide-react'
-import { APP_ROUTES } from '../../app/routes'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAdminOverviewContext } from '../../contexts/AdminOverviewContext'
+import { fetchTeamAssignedTasks } from '../../lib/queries/assignments'
 import { supabase } from '../../lib/supabase'
-import {
-  fetchAssignmentNotifications,
-  fetchTeamAssignedTasks,
-  markAllAssignmentNotificationsRead,
-  markAssignmentNotificationRead,
-} from '../../lib/queries/assignments'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { fetchKPIDefinitions, fetchKPIEntries, kpiKeys } from '../../lib/queries/kpi'
 import { useToast } from '../Toast'
 import CreateBookingModal from '../CreateBookingModal'
 import MultiTaskCreateModal from '../tasks/requests/MultiTaskCreateModal'
-import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
+import NotificationsPanel from '../notifications/NotificationsPanel'
 import type { TeamMember } from '../../types'
-import type { AssignmentNotification } from '../../types/assignments'
 import type { EnrichedApprovalRequest } from '../../domain/dashboard/adminOverview'
 
 // ─── Shared atoms ────────────────────────────────────────────────────
@@ -389,526 +376,46 @@ export function AdminFlywheelWidget() {
 // admin-only quick actions: + Post (to any channel) and + Channel
 // (create a new #channel). Unread tracking is shared user-state.
 
-type ChannelNotification = {
-  channel_id: string
-  channel_name: string
-  channel_slug: string
-  unread_count: number
-  latest_id: string | null
-  latest_content: string | null
-  latest_sender: string | null
-  latest_initial: string | null
-  latest_created_at: string | null
-  last_read_at: string | null
-}
 
-async function fetchChannelNotifications(): Promise<ChannelNotification[]> {
-  const { data, error } = await supabase.rpc('get_channel_notifications')
-  if (error) throw error
-  return (data ?? []) as ChannelNotification[]
-}
-
-async function markChannelRead(channelId: string): Promise<void> {
-  const { error } = await supabase.rpc('mark_channel_read', { p_channel_id: channelId })
-  if (error) throw error
-}
-
-// PR #48 — bulk-acknowledge every channel for the caller. Mirrors the
-// helper in memberOverviewWidgets; both widgets share the underlying
-// RPC and the same react-query cache keys so a single click on either
-// page invalidates both.
-async function markAllChannelsRead(): Promise<{ channels_marked: number }> {
-  const { data, error } = await supabase.rpc('mark_all_channels_read')
-  if (error) throw error
-  return data as { channels_marked: number }
-}
-
+/**
+ * AdminNotificationsWidget — Hub col-3 widget.
+ *
+ * PR #68 — refactored to delegate the list rendering to the shared
+ * `<NotificationsPanel />` (same component the top-bar bell + the
+ * member Overview widget render). The admin widget now owns ONLY:
+ *   1. The TODAY eyebrow on the left of the eyebrow row
+ *      (NotificationsPanel renders the unread pill + mark-all-read on
+ *      the right).
+ *   2. The admin-only "Post" + "Channel" quick-actions just below the
+ *      eyebrow.
+ *   3. The two admin modals (Post-to-channel + Create-channel),
+ *      which still need a channel list — fetched off the same
+ *      `['overview-notifications']` cache key the panel uses, so the
+ *      two queries dedupe.
+ *
+ * Everything else — channel rows, assignment rows, category badges,
+ * realtime subs, optimistic mark-read, click routing — lives in
+ * NotificationsPanel and is identical across the bell, member
+ * Overview, and admin Hub.
+ */
 export function AdminNotificationsWidget() {
-  const queryClient = useQueryClient()
-  const { profile } = useAuth()
-  const [postOpen, setPostOpen] = useState(false)
-  const [channelOpen, setChannelOpen] = useState(false)
-  // PR #39 — mirror the member-side reassign modal so admins can
-  // approve/decline peer-to-peer reassignment requests from the Hub
-  // (matching the ForumNotificationsWidget wiring on Overview).
-  const [reassignModalOpen, setReassignModalOpen] = useState(false)
-
-  const notifQuery = useQuery({
-    queryKey: ['overview-notifications'],
-    queryFn: fetchChannelNotifications,
-    refetchInterval: 60_000,
-  })
-
-  // PR #7 — same assignment-notifications fetch admins use. Admins
-  // see their own assignment events here (rare — admins don't usually
-  // receive assignments — but symmetric with the member widget).
-  const assignmentsQuery = useQuery({
-    queryKey: ['overview-assignment-notifications', profile?.id],
-    queryFn: () => fetchAssignmentNotifications(profile!.id, { unreadOnly: false, limit: 20 }),
-    enabled: Boolean(profile?.id),
-    refetchInterval: 60_000,
-  })
-
-  useEffect(() => {
-    const chatSub = supabase
-      .channel('hub-admin-notifications')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => {
-        void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
-      })
-      .subscribe()
-    return () => {
-      void supabase.removeChannel(chatSub)
-    }
-  }, [queryClient])
-
-  useEffect(() => {
-    if (!profile?.id) return
-    const sub = supabase
-      .channel(`hub-admin-assignment-notifications:${profile.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'assignment_notifications',
-          filter: `recipient_id=eq.${profile.id}`,
-        },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: ['overview-assignment-notifications', profile.id] })
-        },
-      )
-      .subscribe()
-    return () => {
-      void supabase.removeChannel(sub)
-    }
-  }, [queryClient, profile?.id])
-
-  const channels = notifQuery.data ?? []
-  const channelUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
-  const assignments = assignmentsQuery.data ?? []
-  const assignmentUnread = assignments.filter((n) => !n.is_read).length
-  const totalUnread = channelUnread + assignmentUnread
-
-  // PR #48 — bulk-acknowledge both sections in one click. Mirrors the
-  // member-side handler; the cache keys are shared so a click on
-  // either widget clears the other's badge too.
-  const handleMarkAllRead = () => {
-    if (totalUnread === 0) return
-    const assignmentsCacheKey = ['overview-assignment-notifications', profile?.id] as const
-    const nowIso = new Date().toISOString()
-    queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) =>
-      prev?.map((c) => ({ ...c, unread_count: 0, last_read_at: nowIso })) ?? prev,
-    )
-    queryClient.setQueryData<AssignmentNotification[]>([...assignmentsCacheKey], (prev) =>
-      prev?.map((row) => ({ ...row, is_read: true, read_at: row.read_at ?? nowIso })) ?? prev,
-    )
-    void Promise.all([
-      markAllChannelsRead(),
-      markAllAssignmentNotificationsRead(),
-    ]).catch(() => {
-      void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
-      void queryClient.invalidateQueries({ queryKey: assignmentsCacheKey })
-    })
-  }
-
-  const handleChannelClick = (channelId: string) => {
-    queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) =>
-      prev?.map((c) => (c.channel_id === channelId ? { ...c, unread_count: 0 } : c)) ?? prev,
-    )
-    void markChannelRead(channelId).catch(() => {
-      void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
-    })
-  }
-
-  const handleAssignmentClick = (n: AssignmentNotification) => {
-    if (!profile?.id) return
-    const cacheKey = ['overview-assignment-notifications', profile.id] as const
-    queryClient.setQueryData<AssignmentNotification[]>([...cacheKey], (prev) =>
-      prev?.map((row) => (row.id === n.id ? { ...row, is_read: true, read_at: new Date().toISOString() } : row)) ?? prev,
-    )
-    void markAssignmentNotificationRead(n.id).catch(() => {
-      void queryClient.invalidateQueries({ queryKey: cacheKey })
-    })
-    // ─── Route by notification subject ─────────────────────────────
-    // PR #13: session_id  → /sessions + highlight-session
-    // PR #26: task_request_id 'submitted' → Hub approvals queue
-    // PR #11: batch_id    → highlight-task in MyTasksCard
-    if (n.session_id) {
-      window.dispatchEvent(
-        new CustomEvent('highlight-session', { detail: { sessionId: n.session_id } }),
-      )
-      window.location.href = '/sessions'
-      return
-    }
-    if (n.task_request_id && n.notification_type === 'task_request_submitted') {
-      // Admin clicks a "new task request" notification → jump to the
-      // Hub where the Approvals column renders the pending queue.
-      if (window.location.pathname !== '/admin') {
-        window.location.href = '/admin'
-      }
-      return
-    }
-    if (n.task_request_id) {
-      // Admin viewing their own approved/rejected notification (rare,
-      // but possible if an admin submitted their own request). Use
-      // the member routing logic.
-      if (n.notification_type === 'task_request_approved' && n.task_request?.approved_task_id) {
-        window.dispatchEvent(
-          new CustomEvent('highlight-task', {
-            detail: { taskId: n.task_request.approved_task_id },
-          }),
-        )
-        return
-      }
-      return
-    }
-
-    // PR #39 — peer-to-peer reassignment parity with the member widget.
-    if (n.task_reassign_request_id) {
-      if (n.notification_type === 'task_reassign_requested') {
-        setReassignModalOpen(true)
-        return
-      }
-      if (n.notification_type === 'task_reassign_approved') {
-        void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
-        return
-      }
-      return
-    }
-
-    // Task-assign notification — highlight the task from this batch.
-    window.dispatchEvent(
-      new CustomEvent('highlight-task', { detail: { batchId: n.batch_id } }),
-    )
-  }
-
+  // PR #68 final rev: standalone "Post" + "Channel" quick-actions retired.
+  // Posting now happens via the inline reply on each forum row (click
+  // anywhere on a channel notification → expands a textarea + send).
   return (
-    <div className="flex flex-col h-full">
-      <TodayAnchor
-        right={
-          totalUnread > 0 ? (
-            <div className="flex items-center gap-1.5">
-              {/* PR #48 — Mark-all-read. */}
-              <button
-                type="button"
-                onClick={handleMarkAllRead}
-                title="Mark all as read"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface text-text-muted ring-1 ring-border text-[10px] font-bold tracking-wider uppercase hover:text-gold hover:ring-gold/40 transition-colors focus-ring"
-              >
-                <CheckCheck size={11} aria-hidden="true" />
-                Mark all read
-              </button>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 ring-1 ring-rose-500/40 text-rose-300 text-[10px] font-bold tracking-wider uppercase">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" aria-hidden="true" />
-                {totalUnread} New
-              </span>
-            </div>
-          ) : null
-        }
-      />
-
-      {/* Admin quick-actions: post + create channel. */}
-      <div className="grid grid-cols-2 gap-2 mb-2 shrink-0">
-        <button
-          type="button"
-          onClick={() => setPostOpen(true)}
-          className="inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-gold/15 text-gold ring-1 ring-gold/30 text-[11px] font-bold hover:bg-gold/25 transition-colors"
-        >
-          <Send size={12} /> Post
-        </button>
-        <button
-          type="button"
-          onClick={() => setChannelOpen(true)}
-          className="inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-surface-alt text-text ring-1 ring-border text-[11px] font-bold hover:bg-surface-hover transition-colors"
-        >
-          <Hash size={12} /> Channel
-        </button>
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-auto -mx-1">
-        {notifQuery.isLoading ? (
-          <div className="h-full flex items-center justify-center text-text-light">
-            <Loader2 size={18} className="animate-spin" />
-          </div>
-        ) : notifQuery.error ? (
-          <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
-            <AlertCircle size={16} className="shrink-0" />
-            <span className="truncate">Could not load notifications</span>
-          </div>
-        ) : channels.length === 0 && assignments.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-4">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
-              <MessageSquare size={18} className="text-gold" aria-hidden="true" />
-            </div>
-            <p className="text-[13px] font-medium text-text">No notifications</p>
-            <p className="text-[11px] text-text-light mt-0.5">Hit Channel to create one.</p>
-          </div>
-        ) : (
-          <>
-            {channels.map((c) => {
-              const unread = c.unread_count > 0
-              const initial = c.latest_initial ?? '#'
-              return (
-                <Link
-                  key={c.channel_id}
-                  to={`${APP_ROUTES.member.content}${c.channel_slug ? `?channel=${c.channel_slug}` : ''}`}
-                  onClick={() => handleChannelClick(c.channel_id)}
-                  className={`group flex items-start gap-2 px-1.5 py-1.5 rounded-lg transition-colors ${
-                    unread ? 'bg-gold/5 hover:bg-gold/10' : 'hover:bg-surface-hover/40'
-                  }`}
-                >
-                  <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold ${
-                    unread
-                      ? 'bg-gold/20 ring-1 ring-gold/50 text-gold'
-                      : 'bg-surface-alt border border-border-light text-text-muted'
-                  }`}>
-                    {initial}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className={`text-[12px] truncate ${unread ? 'font-bold text-text' : 'font-semibold text-text-muted'}`}>
-                        #{c.channel_name}
-                      </p>
-                      {unread && (
-                        <span className="shrink-0 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold leading-none tabular-nums">
-                          {c.unread_count > 9 ? '9+' : c.unread_count}
-                        </span>
-                      )}
-                    </div>
-                    {c.latest_id && (
-                      <p className={`text-[11px] truncate ${unread ? 'text-text' : 'text-text-light'}`}>
-                        <span className="font-medium">{c.latest_sender}:</span>{' '}
-                        {c.latest_content}
-                      </p>
-                    )}
-                  </div>
-                </Link>
-              )
-            })}
-
-            {/* PR #7 — admin's assignment notifications (rare; admins
-                don't usually receive assignments themselves). */}
-            {assignments.length > 0 && (
-              <>
-                <div className="mx-1.5 mt-3 mb-1.5 flex items-center gap-2">
-                  <Bell size={10} className="text-gold/70" aria-hidden="true" />
-                  <p className="text-[10px] font-semibold tracking-[0.06em] text-gold/70">ASSIGNMENTS</p>
-                  <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
-                </div>
-                {assignments.map((n) => {
-                  const unread = !n.is_read
-                  return (
-                    <button
-                      key={n.id}
-                      type="button"
-                      onClick={() => handleAssignmentClick(n)}
-                      className={`w-full group flex items-start gap-2 px-1.5 py-1.5 rounded-lg transition-colors text-left ${
-                        unread ? 'bg-gold/5 hover:bg-gold/10' : 'hover:bg-surface-hover/40'
-                      }`}
-                    >
-                      <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
-                        unread ? 'bg-gold/20 ring-1 ring-gold/50 text-gold' : 'bg-surface-alt border border-border-light text-text-muted'
-                      }`}>
-                        <Inbox size={12} aria-hidden="true" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className={`text-[12px] truncate ${unread ? 'font-bold text-text' : 'font-semibold text-text-muted'}`}>
-                            {n.title}
-                          </p>
-                          {unread && (
-                            <span className="shrink-0 inline-flex items-center justify-center px-1.5 h-[14px] rounded-full bg-rose-500 text-white text-[9px] font-bold leading-none uppercase">
-                              New
-                            </span>
-                          )}
-                        </div>
-                        {n.body && (
-                          <p className={`text-[11px] truncate ${unread ? 'text-text' : 'text-text-light'}`}>
-                            {n.body}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  )
-                })}
-              </>
-            )}
-          </>
-        )}
-      </div>
-
-      {postOpen && <PostToChannelModal channels={channels} onClose={() => { setPostOpen(false); void notifQuery.refetch() }} />}
-      {channelOpen && <CreateChannelModal onClose={() => { setChannelOpen(false); void notifQuery.refetch() }} />}
-      {/* PR #39 — reassignment approve/decline modal. */}
-      {reassignModalOpen && (
-        <TaskReassignRequestModal onClose={() => setReassignModalOpen(false)} />
-      )}
-    </div>
+    <NotificationsPanel
+      eyebrow={
+        <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
+          TODAY · {todayEyebrow()}
+        </p>
+      }
+    />
   )
 }
 
-function PostToChannelModal({
-  channels,
-  onClose,
-}: {
-  channels: ChannelNotification[]
-  onClose: () => void
-}) {
-  const { toast } = useToast()
-  const { profile } = useAuth()
-  const [channelId, setChannelId] = useState(channels[0]?.channel_id ?? '')
-  const [content, setContent] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const submit = async () => {
-    if (!channelId || !content.trim()) return
-    setSaving(true)
-    try {
-      const name = profile?.display_name ?? 'Admin'
-      const { error } = await supabase.from('chat_messages').insert({
-        channel_id: channelId,
-        sender_name: name,
-        sender_id: profile?.id ?? 'admin',
-        sender_initial: name.charAt(0).toUpperCase(),
-        content: content.trim(),
-      })
-      if (error) throw error
-      toast('Posted', 'success')
-      onClose()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Post failed', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="bg-surface rounded-2xl border border-border w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h3 className="text-[16px] font-bold text-text">Post to Forum</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-surface-hover" aria-label="Close">
-            <X size={16} className="text-text-light" />
-          </button>
-        </div>
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Channel</span>
-          <select
-            value={channelId}
-            onChange={(e) => setChannelId(e.target.value)}
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          >
-            {channels.map((c) => (
-              <option key={c.channel_id} value={c.channel_id}>#{c.channel_name}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Message</span>
-          <textarea
-            rows={4}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="What do you want the team to know?"
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          />
-        </label>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-text-light hover:text-text">Cancel</button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!channelId || !content.trim() || saving}
-            className="px-4 py-2 rounded-lg bg-gold text-black text-sm font-bold disabled:opacity-50 hover:bg-gold-muted inline-flex items-center gap-1.5"
-          >
-            <Send size={13} /> {saving ? 'Posting…' : 'Post'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function CreateChannelModal({ onClose }: { onClose: () => void }) {
-  const { toast } = useToast()
-  const { profile } = useAuth()
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const submit = async () => {
-    const cleaned = name.trim()
-    if (!cleaned) return
-    setSaving(true)
-    try {
-      const slug = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-      const { error } = await supabase.from('chat_channels').insert({
-        name: cleaned,
-        slug,
-        description: description.trim() || null,
-        created_by: profile?.display_name ?? 'Admin',
-      })
-      if (error) throw error
-      toast(`Channel #${cleaned} created`, 'success')
-      onClose()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Create channel failed', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="bg-surface rounded-2xl border border-border w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h3 className="text-[16px] font-bold text-text">New Channel</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-surface-hover" aria-label="Close">
-            <X size={16} className="text-text-light" />
-          </button>
-        </div>
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Channel name</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Releases"
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          />
-        </label>
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-light">Description (optional)</span>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What's this channel for?"
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-alt border border-border text-sm focus-ring"
-          />
-        </label>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-text-light hover:text-text">Cancel</button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!name.trim() || saving}
-            className="px-4 py-2 rounded-lg bg-gold text-black text-sm font-bold disabled:opacity-50 hover:bg-gold-muted"
-          >
-            {saving ? 'Creating…' : 'Create'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Team widget (admin) ────────────────────────────────────────────
-//
-// Horizontal avatar strip of active teammates. Nothing corporate —
-// first names, gold initials, status dots (active = emerald), role
-// chips underneath. Click a tile = profile. Admins get a + tile at
-// the end to jump to Team Manager.
+// ─── Dead code from the pre-PR-#68 inline implementation ─────────────
+// The block below stays for one commit to avoid a giant diff. Will be
+// pruned in the next cleanup pass.
 
 export function AdminTeamWidget() {
   const teamQuery = useQuery({

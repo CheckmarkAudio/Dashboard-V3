@@ -8,18 +8,26 @@ import {
   taskRequestKeys,
   type MyTaskRequest,
 } from '../../lib/queries/taskRequests'
+import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { supabase } from '../../lib/supabase'
 import type { AssignedTask } from '../../types/assignments'
+import type { TeamMember } from '../../types'
 import {
   CompletedToggle,
-  StagePillRow,
+  SourceFilterRow,
   SubmitBar,
   formatDueShort,
-  taskStage,
-  type Stage,
+  formatShortName,
+  rolePositionFor,
+  isSelfAssigned,
 } from './shared'
 import TaskRequestModal from './requests/TaskRequestModal'
 import TaskDetailModal from './TaskDetailModal'
+
+// PR #69 — assignment-source filter. "Self" means the user pressed the
+// button themselves (assigner === assignee). "Assigned" means someone
+// else (admin or task-request approver) put it in their queue.
+type SourceFilter = 'all' | 'assigned' | 'self'
 
 interface MyTasksCardProps {
   embedded?: boolean
@@ -36,9 +44,11 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [requestModalOpen, setRequestModalOpen] = useState(false)
   const [requestsExpanded, setRequestsExpanded] = useState(false)
-  // PR #36 — flywheel stage filter. 'all' = no filter; otherwise the
-  // active stage. The pill row renders above the task list.
-  const [stageFilter, setStageFilter] = useState<'all' | Stage>('all')
+  // PR #69 — replaces the stage filter (deferred to the flywheel-event-
+  // ledger PR where stages will surface as real KPIs). Splits My Tasks
+  // by who put the task in the queue: someone else (admin / approver)
+  // vs the user themselves.
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   // PR #37 — pending → Submit pattern. Checking a box adds the task
   // id to this set (visual state only, no RPC). Submit Completed
   // button commits all queued ids in parallel.
@@ -179,26 +189,37 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     return { openTasks: open, doneTasks: done }
   }, [tasksQuery.data])
 
-  // Stage counts — always computed against OPEN tasks (not completed)
-  // so the "All" count matches the "N open" line in the header and
-  // filtering by stage only reveals work that's still needed.
-  const stageCounts = useMemo(() => {
-    const c: Record<'all' | Stage, number> = {
-      all: openTasks.length,
-      deliver: 0, capture: 0, share: 0, attract: 0, book: 0,
-    }
+  // PR #69 — team_members lookup so each row can show the assignee's
+  // role (e.g. [marketing], [engineer]) instead of "from {template}".
+  // Cached for 60s; reused across MemberHighlights / TeamManager.
+  const membersQuery = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+    staleTime: 60_000,
+  })
+  const memberMap = useMemo(() => {
+    const m = new Map<string, TeamMember>()
+    for (const member of membersQuery.data ?? []) m.set(member.id, member)
+    return m
+  }, [membersQuery.data])
+
+  // PR #69 — assigned/self counts driving the filter pill row.
+  const sourceCounts = useMemo(() => {
+    const c: Record<SourceFilter, number> = { all: openTasks.length, assigned: 0, self: 0 }
     for (const t of openTasks) {
-      const s = taskStage(t.category)
-      if (s) c[s]++
+      if (isSelfAssigned(t)) c.self++
+      else c.assigned++
     }
     return c
   }, [openTasks])
 
   const preFilterVisible = showCompleted ? [...openTasks, ...doneTasks] : openTasks
   const visibleTasks =
-    stageFilter === 'all'
+    sourceFilter === 'all'
       ? preFilterVisible
-      : preFilterVisible.filter((t) => taskStage(t.category) === stageFilter)
+      : sourceFilter === 'self'
+        ? preFilterVisible.filter((t) => isSelfAssigned(t))
+        : preFilterVisible.filter((t) => !isSelfAssigned(t))
 
   // PR #37 — no header strip. The widget frame already shows "My
   // Tasks" up top; the "N open · M done" counter + completed toggle
@@ -284,11 +305,19 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
 
   const body = (
     <>
-      {/* PR #36 — flywheel stage filter. Sits at the TOP of the widget
-          body (below the widget-frame title), reads as "filter bar"
-          for the list below. */}
+      {/* PR #69 — source filter (Assigned vs Self) replaces the stage
+          pill row. Stages return as real KPIs in the upcoming flywheel
+          event ledger PR; until then they're decorative noise here. */}
       <div className="shrink-0 mb-2">
-        <StagePillRow counts={stageCounts} active={stageFilter} onChange={setStageFilter} />
+        <SourceFilterRow counts={sourceCounts} active={sourceFilter} onChange={setSourceFilter} />
+      </div>
+
+      {/* PR #69 — column header. Anchors the right-aligned "Due" label
+          so users know the date column = due date, not assigned date. */}
+      <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1">
+        <span className="w-[18px]" aria-hidden="true" />
+        <span aria-hidden="true" />
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
       </div>
 
       {/* PR #16 — pending-request strip. Collapsed by default; the
@@ -349,6 +378,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
                     if (node) rowRefs.current.set(task.id, node)
                     else rowRefs.current.delete(task.id)
                   }}
+                  memberMap={memberMap}
                 />
               </div>
             )
@@ -439,6 +469,7 @@ function AssignedTaskRow({
   onToggle,
   onOpenDetail,
   rowRef,
+  memberMap,
 }: {
   task: AssignedTask
   highlighted: boolean
@@ -446,6 +477,7 @@ function AssignedTaskRow({
   onToggle: (task: AssignedTask) => void
   onOpenDetail: (task: AssignedTask) => void
   rowRef: (node: HTMLDivElement | null) => void
+  memberMap: Map<string, TeamMember>
 }) {
   const done = task.is_completed
   // Checkbox shows the pending-but-not-submitted state distinctly so
@@ -458,12 +490,14 @@ function AssignedTaskRow({
     Boolean(task.batch?.created_at) &&
     Date.now() - new Date(task.batch!.created_at).getTime() < 24 * 60 * 60 * 1000
 
-  const originLabel = (() => {
-    if (task.source_type === 'daily_checklist') return 'Daily checklist'
-    if (task.source_type === 'custom') return 'Assigned directly'
-    if (task.batch?.title) return `from ${task.batch.title}`
-    return null
-  })()
+  // PR #69 — replaced "from {template}" / "Assigned directly" subtext
+  // with the assignee's role tag (looked up from the team_members
+  // cache by `assigned_to`) plus first-name + last-initial. Studio-
+  // scope tasks keep their existing "Studio" pill on the title row, so
+  // the subtext stays one line of metadata across all task widgets.
+  const assignee = task.assigned_to ? memberMap.get(task.assigned_to) : undefined
+  const roleLabel = rolePositionFor(assignee?.position)
+  const shortName = formatShortName(task.assigned_to_name)
 
   // PR #25 — split click surfaces. Checkbox toggles completion;
   // body-click opens the detail modal. Keyboard: Space toggles
@@ -526,29 +560,23 @@ function AssignedTaskRow({
           <p className={`text-[13px] truncate ${done ? 'line-through text-text-muted' : 'font-semibold text-text'}`}>
             {task.title}
           </p>
-          {isNew && (
-            <span className="shrink-0 inline-flex items-center justify-center px-1.5 h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none uppercase tracking-wide">
-              New
-            </span>
-          )}
-          {task.is_required && !done && (
-            <span className="shrink-0 text-[10px] uppercase tracking-wider text-rose-400 font-bold">Required</span>
-          )}
+          {/* PR #70 — `New` + `Required` tags retired. The new-row gold
+              background tint already signals freshness; required-task
+              context lives in the detail modal. Studio scope still
+              gets a tag since it's a meaningful row-type distinction. */}
           {task.scope === 'studio' && !done && (
             <span className="shrink-0 text-[10px] uppercase tracking-wider text-cyan-300 font-bold">Studio</span>
           )}
         </div>
-        {task.description && (
-          <p className={`text-[12px] mt-0.5 truncate ${done ? 'text-text-light' : 'text-text-muted'}`}>
-            {task.description}
-          </p>
-        )}
+        {/* PR #69 — task description is intentionally not rendered
+            inline (PR #61). The metadata row now reads as
+            `[role] · First L.` — the date column header above shows
+            "Due" so readers know the right-side label is the due
+            date, not assignment date. */}
         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-light flex-wrap">
-          {originLabel && <span>{originLabel}</span>}
-          {originLabel && task.category && <span aria-hidden="true">·</span>}
-          {task.category && <span>{task.category}</span>}
-          {(originLabel || task.category) && task.assigned_to_name && <span aria-hidden="true">·</span>}
-          {task.assigned_to_name && <span>{task.assigned_to_name}</span>}
+          {roleLabel && <span className="lowercase">{roleLabel}</span>}
+          {roleLabel && shortName && <span aria-hidden="true">·</span>}
+          {shortName && <span>{shortName}</span>}
         </div>
       </div>
 

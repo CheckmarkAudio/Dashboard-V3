@@ -1,28 +1,48 @@
-import { LayoutDashboard } from 'lucide-react'
-import { MemberOverviewProvider } from '../contexts/MemberOverviewContext'
+import { useState } from 'react'
+import { LayoutDashboard, Plus } from 'lucide-react'
+import { MemberOverviewProvider, useMemberOverviewContext } from '../contexts/MemberOverviewContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import WorkspacePanel from '../components/dashboard/WorkspacePanel'
 import { MEMBER_WIDGET_DEFINITIONS } from '../components/dashboard/widgetRegistry'
 import { PageHeader } from '../components/ui'
+import MemberHighlights from '../components/members/MemberHighlights'
+import CreateBookingModal from '../components/CreateBookingModal'
+
+const MEMBER_SCOPE = 'member_overview' as const
 
 /**
- * Member Overview — `/`
- *
- * PR #29 — back on `WorkspacePanel` with the 3-column equal-width
- * grid. Every widget occupies exactly one column cell (span: 1) so
- * drag-reorder is predictable: a widget always drops into a uniform
- * slot, columns never shift, and rearranging feels fluid.
- *
- * Widget heights flex to content via `auto-rows-min`. A taller
- * widget (My Tasks with 12 rows) doesn't force the Booking widget
- * to be equally tall.
- *
- * Expand-to-modal comes free through `DashboardWidgetFrame` — click
- * a widget title or the maximize icon to open it as a floating
- * detail modal (click backdrop / Esc to close).
+ * Book-a-Session CTA — gold gradient pill matching the Sessions page
+ * "Book a Session" button (PR #65 unifies them) so the action looks
+ * the same wherever it appears. Shadow is the standardized
+ * `shadow-[0_6px_14px_rgba(214,170,55,0.18)]` — ~60% lighter than the
+ * earlier `0_14px_28px` feathering. h-10 / px-4 / rounded-2xl /
+ * font-extrabold matches the top-nav active-pill rhythm.
  */
-const MEMBER_SCOPE = 'member_overview' as const
+function BookButton() {
+  const { refetch } = useMemberOverviewContext()
+  const [showBooking, setShowBooking] = useState(false)
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setShowBooking(true)}
+        className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold tracking-tight hover:brightness-105 transition-all shadow-[0_6px_14px_rgba(214,170,55,0.18)] focus-ring"
+      >
+        <Plus size={14} strokeWidth={2.4} aria-hidden="true" />
+        Book a Session
+      </button>
+      {showBooking && (
+        <CreateBookingModal
+          onClose={() => {
+            setShowBooking(false)
+            void refetch()
+          }}
+        />
+      )}
+    </>
+  )
+}
 
 export default function Dashboard() {
   useDocumentTitle('Overview - Checkmark Workspace')
@@ -30,19 +50,18 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-[1440px] mx-auto animate-fade-in space-y-6">
-      <PageHeader
-        icon={LayoutDashboard}
-        title="Overview"
-      />
       <MemberOverviewProvider>
+        <PageHeader
+          icon={LayoutDashboard}
+          title="Overview"
+          actions={<BookButton />}
+        />
+        <MemberHighlights />
         <WorkspacePanel
           role={appRole}
           userId={profile?.id ?? 'guest'}
           scope={MEMBER_SCOPE}
           definitions={MEMBER_WIDGET_DEFINITIONS}
-          // PR #31 — controls bar hidden. Drag-reorder + expand-to-modal
-          // still work via each widget's frame. All widgets stay visible
-          // by default until we want a hide-surface again.
           controlsDescription=""
           showControls={false}
         />
