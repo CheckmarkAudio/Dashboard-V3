@@ -108,28 +108,41 @@
    utilities (bg-surface, text-text, border-border, etc.) automatically
    flip to light mode. Brand gold, status colors, and flywheel stage hues
    stay constant across both themes for identity consistency.
+
+   Lean 2 (PR #79) — neutrals shifted from warm cream (#f6f5f1, #f0efea
+   etc.) to cool grey (#f4f4f6 / #ededf0 etc.) so light mode reads as
+   grey/gold/black instead of cream/gold/black. Pure white kept on
+   `surface` so cards still pop against the body bg.
 */
 :root[data-theme='light'] {
-  --color-bg: #f6f5f1;
+  --color-bg: #f4f4f6;
   --color-surface: #ffffff;
-  --color-surface-alt: #f0efea;
-  --color-surface-hover: #e7e5dc;
-  --color-border: #d9d7cf;
-  --color-border-light: #b6b3a6;
+  --color-surface-alt: #ededf0;
+  --color-surface-hover: #e3e3e8;
+  --color-border: #d6d6db;
+  --color-border-light: #afafb6;
   --color-text: #1c1c22;
   --color-text-muted: #3f3f46;
   --color-text-light: #6b6b72;
 }
 
 body {
-  /* Matches the Workspace-UI-Draft mockup — a subtle gold wash top-left
-     fading into deep charcoal. Gold/white/black only on the chrome; the
-     flywheel stage hues stay untouched on in-widget badges.
+  /* Lean 2 (PR #79) — body-level gradient with three tints, all VERY
+     subtle (<10% alpha). Gold wash top-left = brand identity; pinch
+     of forum violet bottom-right = nods to the forum/notifications
+     accent without polluting cards. Gradient is layered on TOP of a
+     neutral base so cards (`bg-surface`) stay flat and unaffected.
+
+     The `linear-gradient(180deg, #111118 → #0b0b10)` base is the
+     dark-mode charcoal. Light mode overrides the whole stack below
+     with its own cool-grey base + matching radial pinches.
+
      The padding creates the gap around the dashboard-shell. */
   --shell-gap: clamp(8px, 1.6vw, 20px);
   padding: var(--shell-gap);
   background:
-    radial-gradient(circle at top left, rgba(201, 168, 76, 0.10), transparent 30%),
+    radial-gradient(circle at top left,     rgba(201, 168, 76, 0.10), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.05), transparent 36%),
     linear-gradient(180deg, #111118 0%, #0b0b10 58%);
   background-attachment: fixed;
   font-family: var(--font-sans);
@@ -144,7 +157,14 @@ body {
 }
 
 :root[data-theme='light'] body {
-  background: var(--color-bg);
+  /* Same gradient grammar as dark mode but lower-alpha so light mode
+     reads as a near-flat grey with the faintest gold + violet tints
+     in the corners. Per Tier 3 locked decision #6: gradient is
+     body-level only, never on cards. */
+  background:
+    radial-gradient(circle at top left,     rgba(201, 168, 76, 0.06), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.03), transparent 38%),
+    var(--color-bg);
   color-scheme: light;
 }
 
