@@ -150,6 +150,10 @@ export type AdminWidgetId =
   // with an open time_clock_entries shift, with a live elapsed
   // counter per row.
   | 'admin_clock_in'
+  // Lean 7 (PR #78) — admin Hub copy of today_calendar. Same
+  // CalendarDayCard component as the member widget; separate id so
+  // the disjoint MemberWidgetId / AdminWidgetId invariant holds.
+  | 'admin_today_calendar'
   // Admin-side widget bank — registered but not on the page yet.
   | 'team_focus'
   | 'approval_queue'
