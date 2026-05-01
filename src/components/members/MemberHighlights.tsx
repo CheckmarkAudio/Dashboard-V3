@@ -30,9 +30,13 @@ function HighlightAvatar({ member }: { member: TeamMember }) {
       className="group flex flex-col items-center gap-2 shrink-0 w-[80px] focus-ring rounded-xl"
       aria-label={`View ${member.display_name}'s profile`}
     >
-      {/* Outer ring — soft gold glow + hairline */}
+      {/* Outer ring — soft gold glow + hairline + thin black ink
+          line so the bubble doesn't get buried against the light
+          grey body in light mode (Lean 2 rev9). border-border maps
+          to black in light, dark-grey in dark — both modes gain a
+          defining edge without losing the gold pill character. */}
       <span
-        className="relative inline-flex items-center justify-center rounded-full p-[3px] bg-gradient-to-b from-gold/85 via-gold/55 to-gold/25 ring-1 ring-gold/35 shadow-[0_2px_6px_rgba(214,170,55,0.22),inset_0_1px_0_rgba(255,255,255,0.18)] transition-all duration-200 group-hover:from-gold group-hover:via-gold-muted group-hover:to-gold/55 group-hover:shadow-[0_3px_10px_rgba(214,170,55,0.32),inset_0_1px_0_rgba(255,255,255,0.28)]"
+        className="relative inline-flex items-center justify-center rounded-full p-[3px] bg-gradient-to-b from-gold/85 via-gold/55 to-gold/25 ring-1 ring-gold/35 border border-border shadow-[0_2px_6px_rgba(214,170,55,0.22),inset_0_1px_0_rgba(255,255,255,0.18)] transition-all duration-200 group-hover:from-gold group-hover:via-gold-muted group-hover:to-gold/55 group-hover:shadow-[0_3px_10px_rgba(214,170,55,0.32),inset_0_1px_0_rgba(255,255,255,0.28)]"
       >
         {/* Bevel cutout — bg-bg disk that the avatar sits on */}
         <span className="block w-[60px] h-[60px] rounded-full bg-bg p-[2px]">

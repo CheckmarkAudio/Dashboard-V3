@@ -193,13 +193,17 @@
   --color-text-muted:    #3f3f46; /* dark grey (unchanged)      */
   --color-text-light:    #6b6b72; /* neutral mid-grey           */
 
-  /* Vibrant marigold/amber — replaces the muddy brand-700 bronze.
-     Saturated 87% so translucent uses (bg-gold/10 etc) read as
-     warm orange-yellow tints, and solid buttons punch as rich
-     marigold rather than muted gold. */
-  --color-gold:          #f0a623; /* HSL 36°, 87%, 54% — marigold */
-  --color-gold-muted:    #d08819; /* darker hover state           */
-  --color-gold-dim:      #a8691a; /* darker still                 */
+  /* Vibrant marigold/amber — saturated enough that translucent uses
+     (bg-gold/10 etc) read as warm orange-yellow tints, and solid
+     buttons punch as rich marigold rather than muted gold.
+     rev9: nudged darker (54% L → 47% L) per user feedback "make
+     the font in the marigold bubbles a tad darker so they are
+     easier to see" — improves contrast for `text-gold` on white
+     cards + on translucent gold pill backgrounds, while keeping
+     buttons readably vibrant. */
+  --color-gold:          #d8941d; /* HSL 38°, 76%, 47% — deeper marigold */
+  --color-gold-muted:    #b87a18; /* darker hover state                  */
+  --color-gold-dim:      #8a5b12; /* darker still                        */
 }
 
 body {
