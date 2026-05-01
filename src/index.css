@@ -110,17 +110,23 @@
    stay constant across both themes for identity consistency.
 
    Lean 2 (PR #79) — neutrals shifted from warm cream (#f6f5f1, #f0efea
-   etc.) to cool grey (#f4f4f6 / #ededf0 etc.) so light mode reads as
-   grey/gold/black instead of cream/gold/black. Pure white kept on
-   `surface` so cards still pop against the body bg.
+   etc.) to cool grey so light mode reads as grey/gold/black instead
+   of cream/gold/black. Pure white kept on `surface` so cards still
+   pop against the body bg.
+
+   Lean 2 rev (PR #79 follow-up) — darkened all neutrals one step
+   further per user feedback ("light mode is still blinding"). New
+   bg is `#e7e7eb` (~91% lightness vs prior `#f4f4f6` at ~96%) — a
+   noticeably calmer cool grey. White cards still pop, but the page
+   no longer feels like a flashlight on first load.
 */
 :root[data-theme='light'] {
-  --color-bg: #f4f4f6;
+  --color-bg: #e7e7eb;
   --color-surface: #ffffff;
-  --color-surface-alt: #ededf0;
-  --color-surface-hover: #e3e3e8;
-  --color-border: #d6d6db;
-  --color-border-light: #afafb6;
+  --color-surface-alt: #dfdfe4;
+  --color-surface-hover: #d6d6db;
+  --color-border: #c7c7cc;
+  --color-border-light: #a3a3a9;
   --color-text: #1c1c22;
   --color-text-muted: #3f3f46;
   --color-text-light: #6b6b72;
@@ -157,13 +163,17 @@ body {
 }
 
 :root[data-theme='light'] body {
-  /* Same gradient grammar as dark mode but lower-alpha so light mode
-     reads as a near-flat grey with the faintest gold + violet tints
-     in the corners. Per Tier 3 locked decision #6: gradient is
-     body-level only, never on cards. */
+  /* Lean 2 rev (PR #79 follow-up) — alphas + radial reach bumped per
+     user feedback ("hardly see a gradient, can you make it more
+     visible"). Gold 0.06 → 0.18, violet 0.03 → 0.10. Reach extended
+     32% → 48% / 38% → 52% so the tint covers a bigger arc of the
+     page. Still subtle enough that mid-page reading surfaces stay
+     near-flat — the tint sits in the corners, not behind the
+     widgets. Per Tier 3 locked decision #6: body-level only, never
+     on cards. */
   background:
-    radial-gradient(circle at top left,     rgba(201, 168, 76, 0.06), transparent 32%),
-    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.03), transparent 38%),
+    radial-gradient(circle at top left,     rgba(201, 168, 76, 0.18), transparent 48%),
+    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.10), transparent 52%),
     var(--color-bg);
   color-scheme: light;
 }
@@ -254,7 +264,17 @@ body {
     position: relative;
   }
   :root[data-theme='light'] .dashboard-shell {
-    background: var(--color-surface);
+    /* Lean 2 rev (PR #79 follow-up) — replaced flat white surface
+       with the body gradient stack so the gold + violet tints are
+       actually visible inside the shell (was being hidden behind a
+       pure-white plate before). Same alphas as the body rule so the
+       gradient reads consistently whether the shell is transparent
+       or opaque. Per Tier 3 locked decision #6: body / shell level
+       only, never on individual widget cards. */
+    background:
+      radial-gradient(circle at top left,     rgba(201, 168, 76, 0.18), transparent 48%),
+      radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.10), transparent 52%),
+      var(--color-surface);
     border-color: var(--color-border);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   }
