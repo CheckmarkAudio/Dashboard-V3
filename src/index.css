@@ -131,34 +131,52 @@
    landed at #bcb5a8, which user correctly flagged as TAN/khaki, not
    warm grey.
 
-   Lean 2 rev5 (PR #79 follow-up) — color-theory pass. A true warm
-   grey requires LOW saturation (3-6%) with a subtle hue bias toward
-   warm (red/orange/yellow). The rev4 #bcb5a8 was HSL(33°, 13%, 70%)
-   — 13% sat reads as beige/tan to the eye, not grey. Recomputed via
-   color theory:
+   Lean 2 rev6 (PR #79 follow-up) — pure greyscale chrome per user
+   feedback + reference images (Helperbird, Google Star Wars, Ghacks):
+   "scrap using gold or creams for the background. really everything
+   should be greyscale like this images except for accenting. gold
+   can't be a standalone color without a border of sorts to back it
+   up".
 
-     Body (cream)   #f0eae0  → HSL(38°, 26%, 91%)
-     Card (rev5)    #b0aea6  → HSL(40°,  4%, 67%)  ← matches body
-                                                     hue, drops sat
-                                                     to grey range
-     Card-alt       #a4a29a  → HSL(40°,  4%, 62%)
-     Card-hover     #98968e  → HSL(40°,  5%, 57%)
+   Three changes:
 
-   By keeping the same warm hue (~38-40°) but pulling saturation
-   down to 4-5%, the cards harmonize with the cream body (same
-   undertone) while reading visually as grey panels, not as tan
-   beige. Black ink borders + gold accents do all the contrast work.
+   (1) Drop ALL warm tints from chrome neutrals. Body, cards, surfaces,
+       borders, dividers, text-muted, text-light — every chrome token
+       moves to pure greyscale (0% saturation). Black ink borders +
+       neutral greys do all the visual hierarchy work.
+
+   (2) Cards become PURE WHITE (was warm grey). High-contrast white
+       cards on a light grey body matches the Helperbird reference
+       and lets the black ink borders read at maximum punch.
+
+   (3) Override `--color-gold` to brand-700 (#8a6e2f) in light mode.
+       The brand gold (#C9A84C) is gorgeous on dark bg but reads as
+       washed-out / illegible on light bg, especially as standalone
+       eyebrow text ("TODAY", "DUE", "APPROVALS"). Brand-700 is the
+       deep readable bronze that still says "gold accent" without
+       blinding or vanishing. Buttons using `bg-gold` become a
+       deeper gold which actually reads better on light backgrounds.
+
+   Dark mode unchanged — its warm gradient and brand-500 gold remain.
 */
 :root[data-theme='light'] {
-  --color-bg:            #f0eae0; /* warm cream — body / shell  */
-  --color-surface:       #b0aea6; /* warm grey — cards (rev5)   */
-  --color-surface-alt:   #a4a29a; /* darker warm grey (nests)   */
-  --color-surface-hover: #98968e; /* hover state                */
+  --color-bg:            #dcdcdc; /* light neutral grey — body  */
+  --color-surface:       #ffffff; /* pure white — cards         */
+  --color-surface-alt:   #f3f3f3; /* very light grey (nests)    */
+  --color-surface-hover: #e8e8e8; /* hover state                */
   --color-border:        #1c1c22; /* black ink (unchanged)      */
-  --color-border-light:  #7e786d; /* warm mid-grey dividers     */
+  --color-border-light:  #9a9a9a; /* neutral mid-grey dividers  */
   --color-text:          #1c1c22; /* black (unchanged)          */
-  --color-text-muted:    #3f3f46; /* (unchanged)                */
-  --color-text-light:    #7e786d; /* warm mid-grey              */
+  --color-text-muted:    #3f3f46; /* dark grey (unchanged)      */
+  --color-text-light:    #6b6b72; /* neutral mid-grey           */
+
+  /* Gold readability override — brand-500 is illegible as standalone
+     text on light bg; shift to brand-700 (deep bronze) so eyebrow
+     text + accents stay recognizably "gold-warm" without vanishing.
+     Hover variants follow proportionally. */
+  --color-gold:          #8a6e2f; /* brand-700 (was brand-500)  */
+  --color-gold-muted:    #6b5524; /* brand-800 (was brand-600)  */
+  --color-gold-dim:      #4a3b19; /* brand-900 (was brand-700)  */
 }
 
 body {
