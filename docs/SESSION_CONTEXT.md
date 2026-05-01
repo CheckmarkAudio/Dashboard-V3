@@ -22,6 +22,15 @@
      to keep / avoid)
 4. Commit this doc with any substantive change.
 
+### Change provenance tags
+
+When writing handoff notes, use these tags so future Claude/Codex sessions
+can tell what happened where without rereading the whole thread:
+
+- **`CODEX:`** repo/code/documentation changes authored in Codex
+- **`MANUAL-SUPABASE:`** SQL or dashboard changes run manually in Supabase
+- **`LIVE-VERIFIED:`** confirmed on the live Vercel site by the user
+
 ---
 
 ## Who + what
@@ -466,6 +475,23 @@ Everything depends on this layer. Start here.
 
 ## Active plans
 
+### Completed emergency track — 2026-05-01 security stabilization
+
+- **`CODEX:`** authored two repo migrations:
+  `20260501090000_harden_security_surface.sql` and
+  `20260501093000_lock_remaining_intern_views.sql`, plus Vercel
+  security headers in `vercel.json`.
+- **`MANUAL-SUPABASE:`** user ran the SQL in Supabase project
+  `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") and cleared
+  Security Advisor from 6 `Security Definer View` errors to
+  **0 errors**.
+- **`LIVE-VERIFIED:`** user deployed from `main` to Vercel and
+  sanity-checked login, dashboard, leads, clients, bookings, and
+  notifications. No obvious security-related regression surfaced.
+- Remaining work from this track is follow-up only:
+  Supabase Security Advisor still shows warnings (not errors), and a
+  non-security `/daily` realtime crash was observed separately.
+
 ### In progress — UI design refresh
 
 All 4 highest-impact surfaces now share the same grammar:
@@ -628,6 +654,28 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 ---
 
 ## Recent + next
+
+### 2026-05-01 security stabilization handoff
+
+- **`CODEX:`** Generated/appended the following repo-side hardening:
+  - `supabase/migrations/20260501090000_harden_security_surface.sql`
+  - `supabase/migrations/20260501093000_lock_remaining_intern_views.sql`
+  - `vercel.json` security headers (CSP, frame deny, nosniff,
+    referrer policy, permissions policy)
+  - `src/components/tasks/MyTasksCard.tsx` realtime-channel crash fix
+    candidate (separate from the security work; deploy only if desired)
+- **`MANUAL-SUPABASE:`** User manually executed SQL in Supabase SQL
+  Editor for project `ncljfjdcyswoeitsooty`. First pass removed the
+  initial Security Definer View findings; second pass cleared the last
+  6 remaining view errors. Result: Security Advisor **Errors = 0**.
+- **`LIVE-VERIFIED:`** User pushed/deployed to Vercel from `main`;
+  deployment reached `Ready`; sanity check passed on login, dashboard,
+  leads, clients, bookings, and notifications.
+- **Interpretation for future sessions:** if a later bug appears in
+  leads/clients/bookings and smells like permissions, compare against
+  the two 2026-05-01 migrations first. If it smells like routing/UI
+  crash, do **not** assume the security work caused it — a separate
+  realtime subscription bug was observed on `/daily`.
 
 ### Tier 3 — Interface tweaks + page-by-page fixes (planned 2026-04-30, locked)
 
@@ -988,6 +1036,12 @@ Tier 3 supersedes the prior Tier 2 EmailJS-first sequence; EmailJS + ExportButto
 
 - Working directory: `/Users/bridges/GITHUB/Dashboard-V3/` (main
   repo) and a worktree at `.claude/worktrees/peaceful-zhukovsky/`.
+- GitHub Desktop / worktree gotcha (hit on 2026-05-01): Desktop may
+  be opened on a Claude worktree branch such as `claude/dreamy-buck`
+  while the real shipping changes live on `/Users/bridges/GITHUB/Dashboard-V3`
+  checked out to `main`. If Desktop says `fatal: 'main' is already
+  used by worktree`, do **not** force-switch branches inside that
+  worktree window; open the real local repository path directly.
 - Branch `claude/peaceful-zhukovsky` tracks the worktree; `main`
   is fast-forwarded from it and pushed to GitHub → Vercel.
 - Preview dev server: `npm run dev` or the `preview_start` tool

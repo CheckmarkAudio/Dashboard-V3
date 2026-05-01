@@ -13,9 +13,9 @@
 | **Live URL** | https://dashboard-v3-dusky.vercel.app |
 | **Hosting** | Vercel (auto-deploys from `main`) |
 | **Database** | Supabase project `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") |
-| **Latest commit (main)** | PR #70 — `fix(tasks): retire 'New' + 'Required' row tags`. PRs #69 (task row metadata: role/name/due, source filter, retired stage pills) + #68 (notifications widget restored on Overview + Hub + Post quick-action) merged just prior. |
-| **Currently active** | **Tier 3 — interface tweaks + page-by-page fixes (planned 2026-04-30, awaiting user answers on 8 open questions before starting Lean 1).** User delivered a wide-scope list of UI tweaks across login / clock-out modal / theme / widget grid / Calendar / Booking / Forum / Admin Hub / Assign / Tasks. Plan grouped into 10 Leans (small shippable PRs in dependency order). Tier 3 supersedes the prior Tier 2 EmailJS-first sequence; EmailJS + ExportButtons + flywheel ledger remain queued behind Tier 3. See "Tier 3 plan" section below for the full Lean breakdown + open questions. |
-| **Prior active** | PR #70 retired the `New` / `Required` / `Priority` red display tags sitewide (urgency mechanic deferred); PR #69 reworked task row metadata + retired stage pills; PR #68 restored Notifications widget on Overview + Admin Hub with the shared sleek panel + Post quick-action; PRs #65–#67 shipped the Overview header glow-up, buttery-smooth dropdown polish, and bell move to the rightmost slot. |
+| **Latest commit (main)** | `821df18` merge commit after the **Codex security stabilization** push `73d4f32` (`got it`) on 2026-05-01. This is the deployment now live on Vercel. |
+| **Currently active** | **Tier 3 — interface tweaks + page-by-page fixes remains the product roadmap**, but **2026-05-01 was a Codex-led security stabilization session**. Critical Supabase Security Advisor errors were driven to `0`, matching migrations were written into git, Vercel security headers were added, and the live site passed a lightweight sanity check (login, dashboard, leads, clients, bookings, notifications). |
+| **Prior active** | PR #72 (`ab3c340`) Lean 1 fixes landed just before the security pass: login back button, clock-out modal de-jam, and Book a Session button centering. PR #70 retired the `New` / `Required` / `Priority` red display tags sitewide; PR #69 reworked task row metadata + retired stage pills; PR #68 restored Notifications widget on Overview + Hub with the shared sleek panel + Post quick-action. |
 
 ---
 
@@ -24,6 +24,7 @@
 | Area | Implementation |
 |--|--|
 | **Hosting** | Vercel; `vercel.json` at repo root; SPA rewrites + smart cache headers |
+| **Browser security headers** | Added 2026-05-01 in a Codex session: CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and restrictive `Permissions-Policy` on all routes. |
 | **Auth** | Supabase Auth, `flowType: 'implicit'`, `lock` disabled in `src/lib/supabase.ts` |
 | **Recovery flow** | Inline `<script>` in `src/index.html` detects `#type=recovery` BEFORE supabase-js init; `src/components/auth/RecoveryGate.tsx` intercepts every route when flag is set |
 | **Owner protection** | 3 layers: DB triggers (`protect_owner_update`, `protect_owner_delete`), `OWNER_EMAIL` constant in `src/domain/permissions/index.ts`, email-first `getAppRole(email)` |
@@ -112,6 +113,7 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 
 | Date | Commit | What landed |
 |--|--|--|
+| 2026-05-01 | `73d4f32` + `821df18` | **CODEX SECURITY STABILIZATION + LIVE DEPLOY.** Manual Supabase SQL work in project `ncljfjdcyswoeitsooty` cleared Security Advisor from 6 `Security Definer View` errors to **0 errors**. Codex captured those manual DB fixes in git as `supabase/migrations/20260501090000_harden_security_surface.sql` and `supabase/migrations/20260501093000_lock_remaining_intern_views.sql`, and hardened `vercel.json` with CSP + anti-clickjacking / anti-sniff / referrer / permissions headers. User committed/pushed on `main`; Vercel deployment reached `Ready`; user sanity-checked login, dashboard, leads, clients, bookings, and notifications with no obvious regression. Provenance note for future sessions: **manual dashboard actions happened in Supabase SQL Editor; code/file changes were authored in Codex.** |
 | 2026-04-16 | `5be53d9` | Vercel migration prep (removed deployToRoot, added vercel.json) |
 | 2026-04-16 | `f3a9442` | Connected to Checkmark Intern Manager Supabase project |
 | 2026-04-16 | `2a1aaf3` | Login flow hardening (legacy JWT, transient-error retry, owner row triggers) |
