@@ -218,6 +218,44 @@
   color: #7a510f; /* HSL 38°, 78%, 27% — deep amber for high contrast */
 }
 
+/* Light-mode accent-text legibility overrides (rev17).
+   Tailwind's default `text-{color}-300/400` palette is tuned for
+   DARK backgrounds — they read fine on charcoal but fade out on
+   the light grey body / white-ish translucent pill backgrounds in
+   light mode (e.g., the violet forum chat icon was "virtually
+   illegible" per user feedback). Each rule below remaps the
+   light-shade Tailwind class to its 700-tier counterpart in light
+   mode only, while leaving the original light shade untouched in
+   dark mode where it works correctly.
+
+   Pattern: same hue family, ~4 shade-stops darker. Selectors at
+   specificity (0,2,0) override the Tailwind utility (0,1,0) without
+   needing `!important`.
+
+   If a class is ever needed to render in its ORIGINAL (light) shade
+   on a colored background (rare — e.g., a colored chip with a
+   colored text), wrap that occurrence in an opt-out class. */
+:root[data-theme='light'] .text-violet-200 { color: #4c1d95; }  /* violet-800 */
+:root[data-theme='light'] .text-violet-300 { color: #6d28d9; }  /* violet-700 */
+:root[data-theme='light'] .text-violet-400 { color: #6d28d9; }
+:root[data-theme='light'] .text-sky-300    { color: #0369a1; }  /* sky-700    */
+:root[data-theme='light'] .text-sky-400    { color: #0369a1; }
+:root[data-theme='light'] .text-emerald-200 { color: #065f46; } /* emerald-800 */
+:root[data-theme='light'] .text-emerald-300 { color: #047857; } /* emerald-700 */
+:root[data-theme='light'] .text-emerald-400 { color: #047857; }
+:root[data-theme='light'] .text-rose-200   { color: #9f1239; }  /* rose-800   */
+:root[data-theme='light'] .text-rose-300   { color: #be123c; }  /* rose-700   */
+:root[data-theme='light'] .text-rose-400   { color: #be123c; }
+:root[data-theme='light'] .text-amber-200  { color: #92400e; }  /* amber-800  */
+:root[data-theme='light'] .text-amber-300  { color: #b45309; }  /* amber-700  */
+:root[data-theme='light'] .text-amber-400  { color: #b45309; }
+:root[data-theme='light'] .text-red-300    { color: #b91c1c; }  /* red-700    */
+:root[data-theme='light'] .text-red-400    { color: #b91c1c; }
+:root[data-theme='light'] .text-cyan-300   { color: #0e7490; }  /* cyan-700   */
+:root[data-theme='light'] .text-cyan-400   { color: #0e7490; }
+:root[data-theme='light'] .text-fuchsia-300 { color: #a21caf; } /* fuchsia-700 */
+:root[data-theme='light'] .text-fuchsia-400 { color: #a21caf; }
+
 body {
   /* Lean 2 (PR #79) — body-level gradient with three tints, all VERY
      subtle (<10% alpha). Gold wash top-left = brand identity; pinch
