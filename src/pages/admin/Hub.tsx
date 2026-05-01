@@ -4,6 +4,7 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { EmptyState, PageHeader } from '../../components/ui'
 import WorkspacePanel from '../../components/dashboard/WorkspacePanel'
 import { ADMIN_WIDGET_DEFINITIONS } from '../../components/dashboard/widgetRegistry'
+import MemberHighlights from '../../components/members/MemberHighlights'
 import { UsersRound, Shield } from 'lucide-react'
 
 /**
@@ -40,6 +41,10 @@ export default function AdminHub() {
           icon={UsersRound}
           title="Dashboard"
         />
+        {/* Lean 7 (PR #78) — instagram-story-style member bubbles
+            above the widget grid, mirroring the member Overview
+            pattern from PR #61. Same component, same query cache. */}
+        <MemberHighlights />
         <WorkspacePanel
           role={appRole}
           userId={profile?.id ?? 'guest'}

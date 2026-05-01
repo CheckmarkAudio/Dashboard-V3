@@ -157,10 +157,15 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 // PR #32 — column-snap model (see MEMBER comment block for the full
 // grammar).
 //
-// Hub stacks:
-//   col 1: admin_quick_assign · admin_task_requests
-//   col 2: admin_flywheel (rs2)
-//   col 3: admin_notifications · admin_team · admin_clock_in (PR #50)
+// Hub stacks (Lean 7, PR #78):
+//   col 1: admin_task_requests (rs2)
+//   col 2: admin_today_calendar (rs2)
+//   col 3: admin_notifications (rs2) · admin_team · admin_clock_in
+// admin_quick_assign + admin_flywheel are still registered (so saved
+// layouts that referenced them sanitize cleanly via the LAYOUT_VERSION
+// bump) but their `admin_overview` placement was dropped — the
+// flywheel was decorative without the event ledger, and Quick Assign
+// duplicated the dedicated Assign page.
 //
 // Assign stacks (PR #41 reorg per sketch, logs in PRs #44 + #45,
 // Templates thumbnails + arrange-by in PR #46, Assign compacted to
@@ -170,30 +175,55 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 //   col 3: admin_templates (rs2 — friendly thumbnails with per-role icons)
 export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
   {
+    // Lean 7 (PR #78) — dropped from admin_overview. Kept registered
+    // (no placement) so saved layouts referencing it sanitize away
+    // cleanly via the LAYOUT_VERSION bump. Re-add a placement here if
+    // Quick Assign returns to the Hub later.
     id: 'admin_quick_assign',
     title: 'Quick Assign',
     description: 'Fire off a one-off task without leaving the Hub.',
-    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 1, col: 1 }],
+    defaultPlacements: [],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
+    // Lean 7 (PR #78) — dropped from admin_overview. The placeholder
+    // KPIs read decorative without the flywheel event ledger backing
+    // them; bring this back when the ledger ships.
     id: 'admin_flywheel',
     title: 'Flywheel',
     description: 'KPIs across the five flywheel stages.',
-    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 2, col: 2 }],
+    defaultPlacements: [],
     accessVisibility: 'admin',
     dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
+    // Lean 7 (PR #78) — bumped to rs2 so col 3 reads as a tall
+    // notification rail balanced against col 1's Task Requests rs2
+    // and col 2's Today Calendar rs2.
     id: 'admin_notifications',
     title: 'Notifications',
     description: 'Unread channels, new assignments, and quick post as admin.',
-    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 1, col: 3 }],
+    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 2, col: 3 }],
     accessVisibility: 'admin',
     dataScope: 'self',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
+    // Lean 7 (PR #78) — admin Hub mirror of the member-side
+    // today_calendar. Same CalendarDayCard component; separate id
+    // because the disjoint MemberWidgetId / AdminWidgetId invariant
+    // is enforced at the type level. Centered in col 2 at rs2 so it
+    // anchors the Hub between Task Requests (col 1) and Notifications
+    // (col 3).
+    id: 'admin_today_calendar',
+    title: 'Today',
+    description: "Today's bookings at a glance.",
+    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 2, col: 2 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
     allowedRoles: ['admin', 'owner'],
   },
   {
@@ -263,12 +293,14 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     id: 'admin_task_requests',
     title: 'Task Requests',
     description: 'Members asking for tasks to be added to their queue.',
-    // Hub overview col 1 (stacks under Quick Assign — unchanged).
-    // PR #47-rev2: Assign-page placement moves col 1 → col 2 per
-    // user drag layout. Registered AFTER admin_edit_tasks so col 2
-    // of admin_assign resolves Assign → Edit → Task Requests.
+    // Hub overview col 1 — Lean 7 (PR #78): bumped rs1 → rs2 since
+    // Quick Assign was dropped above it; Task Requests now anchors
+    // col 1 alongside Today (col 2) and Notifications (col 3) at rs2.
+    // Assign-page placement still col 2 rs1 per PR #47-rev2 user drag
+    // layout. Registered AFTER admin_edit_tasks so col 2 of
+    // admin_assign resolves Assign → Edit → Task Requests.
     defaultPlacements: [
-      { scope: 'admin_overview', span: 1, rowSpan: 1, col: 1 },
+      { scope: 'admin_overview', span: 1, rowSpan: 2, col: 1 },
       { scope: 'admin_assign', span: 1, rowSpan: 1, col: 2 },
     ],
     accessVisibility: 'admin',
@@ -513,7 +545,13 @@ function buildDefaultWidgetStateForScope(
 // grid (col 3, rs2) and the admin Hub widget refactored to render
 // the same shared `NotificationsPanel`. Both surfaces coexist with
 // the always-on top-bar dropdown bell.
-export const WORKSPACE_LAYOUT_VERSION = 32
+// v33 (2026-05-01, PR #78): admin Hub cleanup (Lean 7). Dropped
+// admin_quick_assign + admin_flywheel from `admin_overview` (kept
+// registered, no placement). Bumped admin_task_requests col 1 rs1 →
+// rs2, admin_notifications col 3 rs1 → rs2. New admin_today_calendar
+// (col 2 rs2) reusing the TodayCalendarWidget component. Saved v32
+// admin Hub layouts get sanitized to the new defaults.
+export const WORKSPACE_LAYOUT_VERSION = 33
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
