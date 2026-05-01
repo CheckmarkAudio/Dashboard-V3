@@ -134,15 +134,15 @@ function MemberPill({ member }: { member: TeamMember }) {
 // ─── Social pill ────────────────────────────────────────────────────
 
 /**
- * SocialStat — borderless follower-snapshot block. Each instance is
- * a clickable link that reads as a quick "platform · count · label"
- * stat rather than a bordered pill. Visually distinct from the
- * member pills so the rail reads as
- *   [pills (people)] | [stats (audience)]
+ * SocialStat — solid-body social snapshot. Each entry is a 40×40
+ * filled rounded-square holding the brand glyph (inverse-color
+ * inside), with a bold count to the right. Platform label is
+ * intentionally omitted — the glyph IS the label. Hover swaps the
+ * filled body to marigold for a tactile cue.
  *
- * Layout: large outlined icon on the left, then a tight two-line
- * stack on the right (bold count over tiny uppercase platform).
- * Hover: icon + count shift to marigold for a tactile cue.
+ * Distinct from member pills: members are bordered chips with
+ * inverse anatomy (avatar visible, name beside); social stats are
+ * filled tiles + count, no border, no platform name.
  */
 function SocialStat({ channel }: { channel: SocialChannel }) {
   return (
@@ -150,20 +150,23 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
       href={channel.href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex items-center gap-2.5 shrink-0 rounded-md focus-ring transition-colors"
+      className="group inline-flex items-center gap-2.5 shrink-0 rounded-xl focus-ring transition-colors"
       aria-label={`${channel.label} — ${formatCount(channel.count)} followers`}
       title={`${channel.label} — ${formatCount(channel.count)} followers`}
     >
-      <span className="text-text group-hover:text-gold transition-colors shrink-0">
-        <PlatformIcon platform={channel.platform} size={32} />
+      {/* Solid icon body — inverse-color so it pops in both themes.
+          Uses explicit CSS-var arbitrary values because the
+          `bg-text` / `text-bg` Tailwind shortcuts collide with
+          built-in text-* utility prefixes and never generated.
+          bg = current theme's text color (black in light /
+          near-white in dark); glyph = current theme's body color
+          (cream in light / charcoal in dark). Hover flips body to
+          marigold gold; glyph auto-stays inverse for legibility. */}
+      <span className="flex w-10 h-10 items-center justify-center rounded-xl bg-[var(--color-text)] text-[var(--color-bg)] group-hover:bg-gold transition-colors shrink-0">
+        <PlatformIcon platform={channel.platform} size={22} />
       </span>
-      <span className="flex flex-col leading-none">
-        <span className="text-[22px] font-bold text-text group-hover:text-gold transition-colors tabular-nums whitespace-nowrap">
-          {formatCount(channel.count)}
-        </span>
-        <span className="text-[10px] text-text-light whitespace-nowrap uppercase tracking-[0.12em] mt-1">
-          {channel.label}
-        </span>
+      <span className="text-[22px] font-bold text-text group-hover:text-gold transition-colors tabular-nums whitespace-nowrap leading-none">
+        {formatCount(channel.count)}
       </span>
     </a>
   )
@@ -195,11 +198,13 @@ export default function MemberHighlights() {
         ))}
       </div>
 
-      {/* Social snapshot — borderless stat blocks, right-aligned.
-          Larger gap between stats so each reads as its own entity
-          rather than a connected pill rail. */}
+      {/* Social snapshot — solid-body stat tiles, right-aligned.
+          gap-4 between tiles + pr-1 buffer so even with hover
+          transitions and font measurement quirks the rightmost
+          tile content stays comfortably inside the rightmost
+          widget's right edge — no bleed at any viewport. */}
       <div
-        className="flex items-center gap-5 shrink-0 pl-2"
+        className="flex items-center gap-4 shrink-0 pl-2 pr-1"
         aria-label="Checkmark Audio social media snapshot"
       >
         {SOCIAL_CHANNELS.map((channel) => (
