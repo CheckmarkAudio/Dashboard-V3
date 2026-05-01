@@ -677,9 +677,9 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
   crash, do **not** assume the security work caused it — a separate
   realtime subscription bug was observed on `/daily`.
 
-### Tier 3 — Interface tweaks + page-by-page fixes (planned 2026-04-30, locked)
+### Tier 3 — Interface tweaks + page-by-page fixes (started 2026-04-30)
 
-User delivered a wide-scope tweaks list + answered the 8 open questions. Plan = 10 Leans in dependency order. **Lean 1 cleared to start.**
+User delivered a wide-scope tweaks list + answered the 8 open questions. Plan = 10 Leans in dependency order. **Lean 1 SHIPPED via PR #72.** Lean 2 (theme + gradient) is next.
 
 **Locked decisions** (full answers in `docs/PROJECT_STATE.md` Active section):
 
@@ -709,6 +709,11 @@ Tier 3 supersedes the prior Tier 2 EmailJS-first sequence; EmailJS + ExportButto
 
 ### Just shipped (most recent first)
 
+- **PR #72 — Lean 1: login back · clock-out modal de-jam · "+ Book a Session" vertical center — 2026-04-30 (merged `ab3c340`).** Three critical-fix items in one PR.
+  - **(1) Auth bypass hardened on TWO sites.** `ProtectedRoute.tsx` was the obvious one — added `isProductionAlias()` helper + AND-guard so the `import.meta.env.DEV || VITE_DEMO_MODE === 'true'` bypass refuses to mount when `window.location.hostname === 'dashboard-v3-dusky.vercel.app'`. After user reported incognito on prod still showed no login page, found the SECOND bypass: `AuthContext.tsx` `DevAuthProvider` was hard-coding a fake "Dev Admin" user under the same env check, mounted at the provider level so `ProtectedRoute` never even saw real auth. Same hostname guard applied. Defense-in-depth: even if Vercel still has `VITE_DEMO_MODE=true` baked into a stale build, production hostname refuses to bypass regardless of any env var or any stale build. Local dev (`hostname=localhost`) still mounts Dev Admin mock — verified.
+  - **(2) `SelfReportModal` portaled to `document.body`.** Modal was rendering inside `<header className="backdrop-blur-md">` in `Layout.tsx`. CSS spec quirk: `backdrop-filter` creates a containing block for `position: fixed` descendants → re-anchored modal to the header (top of page) instead of the viewport. Symptom: "modal jammed at the top of the website with first half cut off". Fix: `import { createPortal }` + render at `document.body` so fixed positioning is viewport-relative again. Same fix the `NotificationsBell` dropdown uses.
+  - **(3) `PageHeader` outer flex `items-start` → `items-center`.** Action button now vertically centers with the title block instead of top-aligning with the icon chip. Verified: "Book a Session" centerY=176 matches h1 centerY=176, offset=0px on `/sessions`.
+  - User action item post-merge: trigger fresh production redeploy on Vercel so new bytes serve; consider removing `VITE_DEMO_MODE=true` from Production env scope as hygiene (code is hardened either way).
 - **PR #71 — Capture Tier 3 plan in docs (no code) — 2026-04-30 (in flight).** User delivered a wide-scope UI tweaks list right before stepping away. Captured the raw list verbatim + a 10-Lean plan + 8 open questions in PROJECT_STATE.md Active section so nothing is lost between sessions. Tier 3 supersedes Tier 2 (EmailJS pushed back). User will answer the open questions on return; another doc pass at that point will lock the plan and kick off Lean 1.
 - **PR #70 — Retire `New` + `Required` row tags sitewide — 2026-04-30 (merged `8c01316`).** User: "remove all of the red new tags and required tags... we will implement an urgency mechanic but for now i want it all gone free from distraction." Removed display tags from MyTasksCard, AssignedTaskBoards, TaskDetailModal, AdminEditTasksModal, AddFromTemplateModal preview, TemplateAssignFlowModal preview, TemplatePreviewModal, TemplateEditorModal item list. Also dropped the `Priority` chip from PendingTaskRequestsWidget. Author-facing toggle labels stay (active edit controls, not passive tags). The `isNew` flag itself stays — drives the gold-tinted row background as a subtler signal of freshness.
 - **PR #69 — Task row metadata = role + first-name + last-initial + due-date; retire stage pills; add Self/Assigned filter on My Tasks — 2026-04-30 (merged `b0bab20`).** New helpers in `tasks/shared.tsx`: `formatShortName`, `rolePositionFor` (maps `team_members.position` to lowercase short tags; owner returns null), `isSelfAssigned`, `<SourceFilterRow>`. My Tasks now reads as `[role] · First L.` plain text with a gold `DUE` column header. Stage pill row removed (deferred to flywheel-event-ledger PR — not archived).
