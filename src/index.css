@@ -125,21 +125,23 @@
    stayed pure white.
 
    Lean 2 rev3 (PR #79 follow-up) — warm-cream + grey-card editorial
-   pass per user reference (Replit Agent 4 page): cream/peach body,
-   warm beige-grey for card surfaces, black ink for borders and
-   text. Pure white retired in light mode — the page now lives in a
-   warm tonal range (~80%-92% lightness) with black ink doing the
-   contrast work, which matches the Replit reference's brightness
-   level + temperature. Gold token unchanged — still drives the
-   Clock In button, MemberHighlights pill ring, etc.
+   pass per user reference (Replit Agent 4 page).
+
+   Lean 2 rev4 (PR #79 follow-up) — card surfaces shifted from a
+   warm beige (#cfc8bc, too close to the cream body and reading as
+   a tint) to a more solid warm grey (#bcb5a8) so the cards punch
+   out as distinct panels rather than blending. Same lightness
+   range, lower yellow saturation → reads as proper grey, not
+   another shade of cream. Body cream + black ink + gold accents
+   all unchanged.
 */
 :root[data-theme='light'] {
   --color-bg:            #f0eae0; /* warm cream — body / shell  */
-  --color-surface:       #cfc8bc; /* warm beige-grey — cards    */
-  --color-surface-alt:   #c5bdb1; /* slightly darker for nests  */
-  --color-surface-hover: #b9b1a3; /* hover state grey           */
+  --color-surface:       #bcb5a8; /* warm grey — cards (rev4)   */
+  --color-surface-alt:   #b3ac9e; /* darker warm grey (nests)   */
+  --color-surface-hover: #a59e8f; /* hover state                */
   --color-border:        #1c1c22; /* black ink (unchanged)      */
-  --color-border-light:  #7e786d; /* warm mid-grey for dividers */
+  --color-border-light:  #7e786d; /* warm mid-grey dividers     */
   --color-text:          #1c1c22; /* black (unchanged)          */
   --color-text-muted:    #3f3f46; /* (unchanged)                */
   --color-text-light:    #7e786d; /* warm mid-grey              */
