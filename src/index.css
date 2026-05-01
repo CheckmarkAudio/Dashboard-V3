@@ -178,15 +178,15 @@
    back it up" — buttons and pills both have implicit framing).
 */
 :root[data-theme='light'] {
-  /* Lean 2 rev8 (PR #79 follow-up) — body / card swap per user
-     feedback: "reverse the white widgets with the grey card colors".
-     Now grey body + white cards (high-contrast, cards punch out
-     against the body). Vibrant marigold gold from rev7 is preserved
-     since user signed off on the gold change. */
-  --color-bg:            #dcdcdc; /* light grey — body          */
-  --color-surface:       #ffffff; /* pure white — cards         */
-  --color-surface-alt:   #f3f3f3; /* very light grey (nests)    */
-  --color-surface-hover: #e8e8e8; /* hover state                */
+  /* Lean 2 rev15 — un-reverse the body/card swap per user feedback:
+     "I thought I told you to make the widgets the grey and the box
+     behind them light". Goes back to rev7's almost-white body +
+     grey cards arrangement. Earlier rev8 swap mis-interpreted user
+     intent. */
+  --color-bg:            #f5f5f5; /* almost white — body        */
+  --color-surface:       #dcdcdc; /* light grey — widgets/cards */
+  --color-surface-alt:   #d0d0d0; /* darker grey (nests)        */
+  --color-surface-hover: #c4c4c4; /* hover state                */
   --color-border:        #1c1c22; /* black ink (unchanged)      */
   --color-border-light:  #9a9a9a; /* neutral mid-grey dividers  */
   --color-text:          #1c1c22; /* black (unchanged)          */
