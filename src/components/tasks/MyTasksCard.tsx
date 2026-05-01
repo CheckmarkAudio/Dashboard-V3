@@ -222,9 +222,9 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         : preFilterVisible.filter((t) => !isSelfAssigned(t))
 
   // PR #37 — no header strip. The widget frame already shows "My
-  // Tasks" up top; the "N open · M done" counter + completed toggle
-  // were extra noise inside the card. Pending-request chip + eye
-  // toggle now live in the footer alongside the + Task button.
+  // Tasks" up top; the "N open · M done" counter stays out of the
+  // card. Action controls live above the task list so users don't
+  // have to hunt at the bottom of the widget.
 
   // Inline "+ Task" row. Sits inside the empty-state call-to-action;
   // the real footer below the list carries the same button at the
@@ -266,11 +266,8 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     submitMutation.mutate(toggles)
   }
 
-  // Sticky bottom footer — two rows:
-  //   - SubmitBar (greyed when pendingIds empty, gold when queued)
-  //   - + Task · pending-requests chip · Show-completed eye
-  const footerBar = (
-    <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t border-white/5">
+  const actionBar = (
+    <div className="shrink-0 space-y-1.5 mb-2 pb-2 border-b border-white/5">
       <SubmitBar
         count={pendingIds.size}
         isSubmitting={submitMutation.isPending}
@@ -305,6 +302,8 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
 
   const body = (
     <>
+      {actionBar}
+
       {/* PR #69 — source filter (Assigned vs Self) replaces the stage
           pill row. Stages return as real KPIs in the upcoming flywheel
           event ledger PR; until then they're decorative noise here. */}
@@ -386,10 +385,6 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         )}
       </div>
 
-      {/* PR #37 — sticky footer with + Task, pending-requests chip
-          (if any), and the show-completed eye. Stays below the scroll
-          area so the eye is always reachable. */}
-      {footerBar}
     </>
   )
 

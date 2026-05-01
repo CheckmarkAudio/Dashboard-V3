@@ -141,8 +141,29 @@ function AssignmentBoardBody({
     })
   }, [showCompleted, tasksQuery.data])
 
+  const submitPending = () => {
+    if (pendingIds.size === 0) return
+    const tasks = tasksQuery.data ?? []
+    const toggles = Array.from(pendingIds).map((id) => {
+      const t = tasks.find((x) => x.id === id)
+      return { taskId: id, next: !(t?.is_completed ?? false) }
+    })
+    submitMutation.mutate(toggles)
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0">
+      <div className="shrink-0 space-y-1.5 mb-2 pb-2 border-b border-white/5">
+        <SubmitBar
+          count={pendingIds.size}
+          isSubmitting={submitMutation.isPending}
+          onClick={submitPending}
+        />
+        <div className="flex items-center justify-end">
+          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+        </div>
+      </div>
+
       {/* PR #69 — `Due` column header anchors the right-side date so
           users know it's the due date, not assignment date. Stage
           filter (PR #36) deferred to the flywheel-event-ledger PR. */}
@@ -207,28 +228,6 @@ function AssignmentBoardBody({
         )}
       </div>
 
-      {/* PR #37 — sticky footer: Submit Completed bar (greyed until
-          user queues at least one pending toggle) + show-completed
-          eye. No +Task button here since these boards don't support
-          self-requesting. */}
-      <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t border-white/5">
-        <SubmitBar
-          count={pendingIds.size}
-          isSubmitting={submitMutation.isPending}
-          onClick={() => {
-            if (pendingIds.size === 0) return
-            const tasks = tasksQuery.data ?? []
-            const toggles = Array.from(pendingIds).map((id) => {
-              const t = tasks.find((x) => x.id === id)
-              return { taskId: id, next: !(t?.is_completed ?? false) }
-            })
-            submitMutation.mutate(toggles)
-          }}
-        />
-        <div className="flex items-center justify-end">
-          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-        </div>
-      </div>
     </div>
   )
 }
