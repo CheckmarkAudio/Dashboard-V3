@@ -6,9 +6,21 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/check-docs-drift.sh",
-            "timeout": 10,
-            "statusMessage": "Checking docs drift"
+            "command": "bash .claude/hooks/check-drift.sh",
+            "timeout": 15,
+            "statusMessage": "Checking drift (docs · branch · PRs · types)"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-commit-docs-guard.sh",
+            "timeout": 5
           }
         ]
       }

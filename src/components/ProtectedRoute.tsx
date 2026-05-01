@@ -3,23 +3,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { APP_ROUTES } from '../app/routes'
 import { hasCapability, isAtLeastRole, type AppCapability, type AppRole } from '../domain/permissions'
 
-/**
- * Production alias — the canonical Live URL. The auth bypass below
- * MUST never fire on this hostname, even if `VITE_DEMO_MODE=true`
- * accidentally leaks into the production env scope on Vercel.
- *
- * PR #72 — hardened after the user reported "the login page is gone"
- * on the live URL. Root cause was `VITE_DEMO_MODE=true` getting baked
- * into the production build (env var was scoped wrong on Vercel,
- * making every visit auto-pass through to the dashboard). This guard
- * is defense-in-depth: even if the env var leaks, production refuses
- * to bypass.
- */
-function isProductionAlias(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.location.hostname === 'dashboard-v3-dusky.vercel.app'
-}
-
 export default function ProtectedRoute({
   children,
   adminOnly: _adminOnly = false,
@@ -31,12 +14,10 @@ export default function ProtectedRoute({
   requiredRole?: AppRole
   requiredCapabilities?: AppCapability[]
 }) {
-  // DEMO BYPASS — skip auth for local dev and (intentionally) the
-  // Vercel branch-preview URLs when `VITE_DEMO_MODE=true`. Production
-  // alias is hard-excluded by `isProductionAlias()` so a misconfigured
-  // env var can NEVER bypass auth on the Live URL.
-  const bypassEnabled = import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true'
-  if (bypassEnabled && !isProductionAlias()) {
+  // Local-dev bypass only. `import.meta.env.DEV` is build-time true ONLY
+  // when running `vite dev` — Vercel builds (preview AND production) get
+  // `DEV=false`, so this can never bypass auth on a deployed site.
+  if (import.meta.env.DEV) {
     return <>{children}</>
   }
 
