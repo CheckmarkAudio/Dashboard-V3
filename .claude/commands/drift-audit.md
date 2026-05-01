@@ -1,5 +1,5 @@
 ---
-description: Deep on-demand drift audit — checks docs, schema, memory, design tokens, dead code
+description: Deep on-demand drift audit — checks docs, schema, memory, auth bypass, design tokens, dead code
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
@@ -56,7 +56,31 @@ Use `grep -r "export (default |const |function )"` to list exports, then for eac
 
 `grep -rn "^\s*//.*\b(TODO|FIXME|XXX|HACK)\b" src/ supabase/` — surface stale TODOs older than 30 days (check via `git blame`).
 
-## 8. Open PR conflict status
+## 8. Auth bypass surface (REGRESSION GUARD)
+
+The `VITE_DEMO_MODE=true` env-leak incident (April 2026, fixed in PR #72 then deleted in PR #75) is a **recurring regression class**: a build-time env var gates an auth bypass, env vars drift in Vercel's dashboard outside of git, and the bypass leaks to production. To prevent future recurrences:
+
+```bash
+# Scan src/ for any new conditional that returns children without auth.
+grep -rn "return *<>{children}</>" src/
+
+# Scan src/ for any env-gated bypass pattern (new env var name = new risk).
+grep -rEn "import\.meta\.env\.[A-Z_]+ *(===|!==|==) *['\"]" src/components/ src/contexts/ src/lib/
+
+# Scan src/ for hardcoded mock users.
+grep -rn "Dev Admin\|mockProfile\|MockAuth\|fakeUser" src/
+```
+
+For every match:
+- Report the file:line
+- Read the surrounding 10 lines and assess whether the bypass:
+  - (a) is gated to `import.meta.env.DEV` ONLY (build-time, safe — `vite dev` only)
+  - (b) is gated to a runtime env var like `VITE_DEMO_MODE` (UNSAFE — flag P0)
+  - (c) lacks a guard at all (catastrophic — flag P0)
+
+Cross-check the production smoke test workflow at `.github/workflows/production-smoke-test.yml` is still present and references the same patterns. If a match was added without updating the smoke test, flag P1.
+
+## 9. Open PR conflict status
 
 ```bash
 gh pr list --state open --json number,title,mergeable,updatedAt --limit 30
