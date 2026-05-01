@@ -31,6 +31,7 @@ const HIGHLIGHT_DURATION_MS = 1600
 export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {}) {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
+  const realtimeTopicRef = useRef(`my-tasks:${crypto.randomUUID()}`)
   const [showCompleted, setShowCompleted] = useState(false)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [requestModalOpen, setRequestModalOpen] = useState(false)
@@ -72,7 +73,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   useEffect(() => {
     if (!profile?.id) return
     const sub = supabase
-      .channel(`my-tasks:${profile.id}`)
+      .channel(`${realtimeTopicRef.current}:${profile.id}`)
       .on(
         'postgres_changes',
         {

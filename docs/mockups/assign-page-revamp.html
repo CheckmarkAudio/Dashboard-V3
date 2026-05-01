@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assign Page Sketch Mockup</title>
+  <style>
+    :root {
+      --canvas: #a6a6a6;
+      --panel: #252525;
+      --callout: #545454;
+      --text: #f4f4f4;
+      --line: #ffffff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--canvas);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      padding: 36px 28px;
+    }
+
+    .mockup {
+      width: min(1560px, 100%);
+      margin: 0 auto;
+    }
+
+    .top-nav {
+      width: 100%;
+      height: 68px;
+      background: var(--panel);
+      display: grid;
+      grid-template-columns: 1fr 1.65fr;
+      align-items: center;
+      padding: 0 38px;
+      margin-bottom: 28px;
+    }
+
+    .top-nav .left,
+    .top-nav .right {
+      text-align: center;
+      font-size: 58px;
+      line-height: 1;
+      font-weight: 400;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 425px minmax(0, 1fr);
+      gap: 72px;
+      align-items: start;
+    }
+
+    .members-panel {
+      background: var(--panel);
+      min-height: 690px;
+      padding: 54px 54px 34px;
+    }
+
+    .members-title {
+      margin: 0 0 48px;
+      font-size: 66px;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .member-list {
+      display: grid;
+      gap: 54px;
+      margin-bottom: 64px;
+    }
+
+    .member-line {
+      width: 200px;
+      height: 16px;
+      background: var(--line);
+      margin-left: 16px;
+    }
+
+    .sidebar-section {
+      margin-top: 18px;
+      text-align: center;
+    }
+
+    .sidebar-section h3 {
+      margin: 0;
+      font-size: 54px;
+      line-height: 1.02;
+      font-weight: 400;
+    }
+
+    .sidebar-section p {
+      margin: 18px auto 0;
+      max-width: 260px;
+      font-size: 25px;
+      line-height: 1.08;
+      font-weight: 400;
+    }
+
+    .sidebar-spacer {
+      height: 28px;
+    }
+
+    .main {
+      position: relative;
+    }
+
+    .task-toolbar {
+      width: 100%;
+      height: 58px;
+      background: var(--panel);
+      display: grid;
+      grid-template-columns: 1.25fr 1.15fr 0.9fr;
+      align-items: center;
+      padding: 0 26px;
+      margin-bottom: 48px;
+    }
+
+    .task-toolbar div {
+      text-align: center;
+      font-size: 40px;
+      line-height: 1;
+      font-weight: 400;
+      white-space: nowrap;
+    }
+
+    .task-board {
+      background: var(--panel);
+      min-height: 596px;
+      padding: 26px 40px 34px;
+      position: relative;
+    }
+
+    .task-board h2 {
+      margin: 0 0 26px;
+      font-size: 60px;
+      line-height: 1;
+      font-weight: 400;
+      text-align: center;
+    }
+
+    .task-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 92px;
+      position: relative;
+      padding: 10px 8px 0;
+    }
+
+    .task-columns::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 0;
+      transform: translateX(-50%);
+      width: 18px;
+      height: 392px;
+      background: var(--line);
+    }
+
+    .task-list {
+      display: grid;
+      gap: 32px;
+    }
+
+    .task-row {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .checkbox {
+      width: 38px;
+      height: 38px;
+      background: #d5d5d5;
+    }
+
+    .task-line {
+      height: 15px;
+      background: var(--line);
+      width: 100%;
+    }
+
+    .edit {
+      font-size: 46px;
+      line-height: 1;
+      font-weight: 400;
+      white-space: nowrap;
+    }
+
+    .template-arrow {
+      position: absolute;
+      right: 94px;
+      top: 32px;
+      width: 0;
+      height: 0;
+      border-left: 38px solid transparent;
+      border-right: 38px solid transparent;
+      border-bottom: 42px solid var(--line);
+      transform: rotate(-10deg);
+    }
+
+    .template-callout {
+      position: absolute;
+      top: 38px;
+      right: -164px;
+      width: 196px;
+      min-height: 320px;
+      background: var(--callout);
+      padding: 18px 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .template-callout p {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.18;
+      font-weight: 400;
+    }
+
+    @media (max-width: 1380px) {
+      .top-nav .left,
+      .top-nav .right { font-size: 46px; }
+
+      .members-title { font-size: 52px; }
+      .sidebar-section h3 { font-size: 44px; }
+      .task-toolbar div { font-size: 31px; }
+      .task-board h2 { font-size: 48px; }
+      .edit { font-size: 34px; }
+      .template-callout {
+        position: static;
+        margin-top: 18px;
+        width: 100%;
+        min-height: 0;
+      }
+      .template-arrow { display: none; }
+    }
+
+    @media (max-width: 1080px) {
+      body {
+        padding: 18px 14px;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        gap: 28px;
+      }
+
+      .top-nav {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        height: auto;
+        padding-top: 12px;
+        padding-bottom: 12px;
+      }
+
+      .task-toolbar {
+        grid-template-columns: 1fr;
+        height: auto;
+        gap: 10px;
+        padding-top: 12px;
+        padding-bottom: 12px;
+      }
+
+      .task-columns {
+        grid-template-columns: 1fr;
+        gap: 36px;
+      }
+
+      .task-columns::before {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="mockup">
+    <div class="top-nav">
+      <div class="left">Nav Bar</div>
+      <div class="right">assign page</div>
+    </div>
+
+    <div class="layout">
+      <aside class="members-panel">
+        <h1 class="members-title">Members</h1>
+
+        <div class="member-list">
+          <div class="member-line"></div>
+          <div class="member-line"></div>
+          <div class="member-line"></div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>Templates</h3>
+          <p>Seprate page for managing templates</p>
+        </div>
+
+        <div class="sidebar-spacer"></div>
+
+        <div class="sidebar-section">
+          <h3>Other assignpages if any</h3>
+        </div>
+      </aside>
+
+      <section class="main">
+        <div class="task-toolbar">
+          <div>Settings for Tasks</div>
+          <div>Save as template</div>
+          <div>Templates</div>
+        </div>
+
+        <div class="task-board">
+          <h2>All Tasks for Selected Member</h2>
+
+          <div class="task-columns">
+            <div class="task-list">
+              <div class="task-row">
+                <div class="checkbox"></div>
+                <div class="task-line"></div>
+                <div class="edit">Edit</div>
+              </div>
+              <div class="task-row">
+                <div class="checkbox"></div>
+                <div class="task-line"></div>
+                <div class="edit">Edit</div>
+              </div>
+              <div class="task-row">
+                <div class="checkbox"></div>
+                <div class="task-line"></div>
+                <div class="edit">Edit</div>
+              </div>
+            </div>
+
+            <div class="task-list">
+              <div class="task-row">
+                <div class="checkbox"></div>
+                <div class="task-line"></div>
+                <div class="edit">Edit</div>
+              </div>
+              <div class="task-row">
+                <div class="checkbox"></div>
+                <div class="task-line"></div>
+                <div class="edit">Edit</div>
+              </div>
+              <div class="task-row">
+                <div class="checkbox"></div>
+                <div class="task-line"></div>
+                <div class="edit">Edit</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="template-arrow"></div>
+        <div class="template-callout">
+          <p>Drop down for templates. When selected adds template to the tasks that are there</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
