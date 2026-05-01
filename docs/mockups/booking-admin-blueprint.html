@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Booking Admin Blueprint</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --paper: #ffffff;
+      --line: #b8bec8;
+      --line-strong: #7e8795;
+      --text: #1f2937;
+      --muted: #5b6472;
+      --accent: #d1d5db;
+      --font: "SFMono-Regular", Menlo, Consolas, monospace;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(0deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        var(--bg);
+      background-size: 24px 24px, 24px 24px, auto;
+      color: var(--text);
+      font-family: var(--font);
+      padding: 24px;
+    }
+
+    .sheet {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+      background: var(--paper);
+      border: 2px solid var(--line-strong);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+    }
+
+    .header,
+    .content {
+      padding: 18px;
+    }
+
+    .header {
+      border-bottom: 2px solid var(--line-strong);
+    }
+
+    .label {
+      display: inline-block;
+      padding: 4px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    h1, h2, h3, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 26px;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .wire {
+      border: 2px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.015);
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .toolbar-col {
+      display: grid;
+      gap: 10px;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .chip,
+    .button,
+    .search,
+    .bubble,
+    .mini {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 12px;
+    }
+
+    .button.primary {
+      border-style: solid;
+      border-width: 2px;
+      border-color: var(--line-strong);
+      font-weight: 700;
+    }
+
+    .search {
+      min-width: 280px;
+      color: var(--muted);
+    }
+
+    .bubble-strip {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .bubble-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .bubble {
+      min-height: 50px;
+      gap: 10px;
+      padding: 8px 12px;
+    }
+
+    .avatar {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      flex: 0 0 auto;
+    }
+
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .card {
+      min-height: 180px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mini {
+      min-height: 48px;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .board {
+      display: grid;
+      gap: 10px;
+    }
+
+    .board-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .board-row {
+      border: 2px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1.4fr 1.1fr 0.8fr 0.8fr 1.2fr;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .cell {
+      min-height: 54px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      display: grid;
+      gap: 6px;
+    }
+
+    .cell strong {
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .action-stack {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .callout {
+      margin-top: 16px;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius);
+      padding: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+    }
+
+    @media (max-width: 1180px) {
+      .toolbar,
+      .three-col,
+      .board-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="header">
+      <span class="label">WIREFRAME / BUTTON PLACEMENT ONLY</span>
+      <h1>/sessions canonical admin blueprint</h1>
+      <div class="legend">
+        <span>[button] = clickable action</span>
+        <span>[box] = content area</span>
+        <span>dashed border = layout container</span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="toolbar wire">
+        <div class="toolbar-col">
+          <div class="row">
+            <div class="chip">[Bookings tab]</div>
+            <div class="chip">[Clients tab]</div>
+          </div>
+          <div class="row">
+            <div class="chip">[Today]</div>
+            <div class="chip">[Upcoming]</div>
+            <div class="chip">[Needs Staff]</div>
+            <div class="chip">[Past]</div>
+          </div>
+        </div>
+
+        <div class="toolbar-col">
+          <div class="row" style="justify-content: flex-end;">
+            <div class="search">[Search client / engineer / room]</div>
+          </div>
+          <div class="row" style="justify-content: flex-end;">
+            <div class="button">[Manage Clients]</div>
+            <div class="button">[Manage Bookings]</div>
+            <div class="button primary">[Book Session]</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bubble-strip wire">
+        <div class="label" style="margin: 0;">MEMBER BUBBLES STRIP</div>
+        <div class="bubble-group">
+          <div class="bubble"><div class="avatar">A</div> [Alex bubble]</div>
+          <div class="bubble"><div class="avatar">J</div> [Jordan bubble]</div>
+          <div class="bubble"><div class="avatar">M</div> [Maria bubble]</div>
+          <div class="bubble"><div class="avatar">K</div> [Kai bubble]</div>
+        </div>
+      </div>
+
+      <div class="three-col">
+        <div class="card wire">
+          <div class="card-head">
+            <h2>Pulse</h2>
+            <span class="label" style="margin: 0;">summary</span>
+          </div>
+          <div class="mini">[bookings count] [today]</div>
+          <div class="mini">[unassigned count] [open]</div>
+          <div class="mini">[conflict count] [soft]</div>
+          <div class="mini">[client count] [active]</div>
+        </div>
+
+        <div class="card wire">
+          <div class="card-head">
+            <h2>Needs Attention</h2>
+            <span class="label" style="margin: 0;">priority box</span>
+          </div>
+          <div class="mini">[unassigned booking]</div>
+          <div class="mini">[reschedule request]</div>
+          <div class="mini">[overlap warning]</div>
+        </div>
+
+        <div class="card wire">
+          <div class="card-head">
+            <h2>Quick Admin</h2>
+            <span class="label" style="margin: 0;">direct actions</span>
+          </div>
+          <div class="mini">[Assign engineer]</div>
+          <div class="mini">[Add client]</div>
+          <div class="mini">[Open booking editor]</div>
+        </div>
+      </div>
+
+      <div class="board wire">
+        <div class="board-head">
+          <h2>Bookings board</h2>
+          <div class="row">
+            <div class="label" style="margin: 0;">row actions live here</div>
+          </div>
+        </div>
+
+        <div class="board-row">
+          <div class="cell">
+            <strong>[Client name]</strong>
+            <span>[session type]</span>
+          </div>
+          <div class="cell">
+            <strong>[date + time]</strong>
+            <span>[duration / note]</span>
+          </div>
+          <div class="cell">
+            <strong>[engineer]</strong>
+            <span>[room]</span>
+          </div>
+          <div class="cell">
+            <strong>[status]</strong>
+            <span>[confirmed / pending / review]</span>
+          </div>
+          <div class="cell">
+            <strong>ROW ACTIONS</strong>
+            <div class="action-stack">
+              <div class="button">[View]</div>
+              <div class="button">[Edit]</div>
+              <div class="button">[Assign]</div>
+              <div class="button">[Cancel]</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="board-row">
+          <div class="cell">
+            <strong>[Client name]</strong>
+            <span>[new lead / repeat client]</span>
+          </div>
+          <div class="cell">
+            <strong>[date + time]</strong>
+            <span>[needs staff / reschedule]</span>
+          </div>
+          <div class="cell">
+            <strong>[engineer or unassigned]</strong>
+            <span>[room]</span>
+          </div>
+          <div class="cell">
+            <strong>[status]</strong>
+            <span>[pending / unassigned]</span>
+          </div>
+          <div class="cell">
+            <strong>ROW ACTIONS</strong>
+            <div class="action-stack">
+              <div class="button">[View]</div>
+              <div class="button">[Edit]</div>
+              <div class="button">[Assign]</div>
+              <div class="button">[Cancel]</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Placement rules</strong>
+        <ul>
+          <li>`Book Session` stays top-right and primary.</li>
+          <li>`Manage Bookings` stays top-right for list-wide admin editing.</li>
+          <li>`Manage Clients` stays top-right because clients are part of the same surface.</li>
+          <li>Critical session actions move to each booking row: `Edit`, `Assign`, `Cancel`.</li>
+          <li>`Needs Attention` gets its own box so problems are visible before scrolling the board.</li>
+          <li>Member bubbles belong in a contained strip, not floating loose.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

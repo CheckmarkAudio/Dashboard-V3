@@ -6,31 +6,31 @@
   <title>Checkmark Booking Admin Revamp</title>
   <style>
     :root {
-      --bg: #0d1016;
-      --bg-2: #121723;
-      --panel: rgba(20, 24, 34, 0.92);
-      --panel-strong: rgba(25, 31, 44, 0.96);
-      --panel-soft: rgba(255, 255, 255, 0.03);
-      --border: rgba(255, 255, 255, 0.08);
-      --border-strong: rgba(214, 178, 94, 0.24);
+      --bg: #11141b;
+      --bg-2: #171b24;
+      --panel: rgba(24, 28, 38, 0.96);
+      --panel-2: rgba(31, 37, 49, 0.96);
+      --line: rgba(255, 255, 255, 0.08);
+      --line-soft: rgba(255, 255, 255, 0.05);
       --text: #eef2f7;
-      --muted: #a2acb8;
-      --dim: #738091;
+      --muted: #a0a8b6;
+      --dim: #707887;
       --gold: #d6b25e;
-      --gold-soft: rgba(214, 178, 94, 0.16);
-      --green: #59c084;
-      --green-soft: rgba(89, 192, 132, 0.16);
-      --amber: #f1b44c;
-      --amber-soft: rgba(241, 180, 76, 0.14);
-      --rose: #f07878;
-      --rose-soft: rgba(240, 120, 120, 0.14);
-      --blue: #74b7ff;
-      --blue-soft: rgba(116, 183, 255, 0.12);
-      --radius-xl: 28px;
-      --radius-lg: 20px;
+      --gold-soft: rgba(214, 178, 94, 0.12);
+      --gold-line: rgba(214, 178, 94, 0.24);
+      --green: #55c181;
+      --green-soft: rgba(85, 193, 129, 0.12);
+      --amber: #efb14c;
+      --amber-soft: rgba(239, 177, 76, 0.14);
+      --red: #ef7676;
+      --red-soft: rgba(239, 118, 118, 0.12);
+      --blue: #72b0ff;
+      --blue-soft: rgba(114, 176, 255, 0.14);
+      --radius-xl: 26px;
+      --radius-lg: 18px;
       --radius-md: 14px;
-      --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
-      --font: "Inter", "Segoe UI", system-ui, sans-serif;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.33);
+      --font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     * { box-sizing: border-box; }
@@ -38,43 +38,43 @@
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: var(--font);
-      color: var(--text);
       background:
-        radial-gradient(circle at 20% 0%, rgba(214, 178, 94, 0.16), transparent 28%),
-        radial-gradient(circle at 100% 10%, rgba(116, 183, 255, 0.12), transparent 32%),
+        radial-gradient(circle at top left, rgba(214, 178, 94, 0.12), transparent 26%),
         linear-gradient(180deg, var(--bg), var(--bg-2));
-      padding: 28px;
+      color: var(--text);
+      font-family: var(--font);
+      padding: 26px;
     }
 
     .shell {
-      width: min(1480px, 100%);
+      width: min(1460px, 100%);
       margin: 0 auto;
-      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent 30%);
-      border: 1px solid var(--border);
-      border-radius: 32px;
+      border: 1px solid var(--line);
+      border-radius: 30px;
       overflow: hidden;
+      background: rgba(16, 19, 26, 0.9);
       box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
+      backdrop-filter: blur(16px);
     }
 
     .header {
-      padding: 24px 28px 18px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(13, 16, 22, 0.55);
+      padding: 24px 26px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.015);
     }
 
-    .brand-row,
-    .title-row,
-    .toolbar-row {
+    .header-top,
+    .toolbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 18px;
+      gap: 16px;
+      flex-wrap: wrap;
     }
 
-    .brand-row { margin-bottom: 18px; }
-    .title-row { margin-bottom: 18px; align-items: flex-end; }
+    .header-top {
+      margin-bottom: 18px;
+    }
 
     .brand {
       display: flex;
@@ -83,16 +83,16 @@
     }
 
     .logo {
-      width: 44px;
-      height: 44px;
+      width: 42px;
+      height: 42px;
       border-radius: 14px;
       display: grid;
       place-items: center;
-      background: linear-gradient(180deg, rgba(214, 178, 94, 0.18), rgba(214, 178, 94, 0.06));
-      border: 1px solid rgba(214, 178, 94, 0.22);
+      background: linear-gradient(180deg, rgba(214,178,94,0.18), rgba(214,178,94,0.06));
+      border: 1px solid rgba(214,178,94,0.22);
       color: var(--gold);
-      font-size: 20px;
-      font-weight: 800;
+      font-size: 19px;
+      font-weight: 900;
       letter-spacing: -0.04em;
     }
 
@@ -105,75 +105,59 @@
     .brand-copy span {
       display: block;
       margin-top: 4px;
-      color: var(--gold);
       font-size: 12px;
+      color: var(--gold);
       font-weight: 700;
       letter-spacing: 0.04em;
-      text-transform: uppercase;
     }
 
-    .title-copy small {
-      display: block;
-      color: var(--gold);
-      font-size: 11px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      margin-bottom: 8px;
+    .page-title {
+      display: flex;
+      align-items: end;
+      gap: 16px;
+      flex-wrap: wrap;
     }
 
-    .title-copy h1 {
+    .page-title h1 {
       margin: 0;
       font-size: 34px;
       letter-spacing: -0.04em;
       line-height: 1;
     }
 
-    .title-copy p {
-      margin: 10px 0 0;
-      color: var(--muted);
-      max-width: 720px;
-      line-height: 1.55;
-      font-size: 14px;
-    }
-
-    .status-strip {
+    .chips {
       display: flex;
-      align-items: center;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
-      justify-content: flex-end;
     }
 
-    .pill {
+    .chip {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      min-height: 38px;
-      padding: 0 14px;
+      min-height: 36px;
+      padding: 0 13px;
       border-radius: 999px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--line);
+      color: var(--muted);
       background: rgba(255, 255, 255, 0.03);
       font-size: 12px;
       font-weight: 700;
-      color: var(--muted);
       white-space: nowrap;
     }
 
-    .pill.live {
+    .chip.gold {
       color: var(--gold);
-      border-color: var(--border-strong);
       background: var(--gold-soft);
+      border-color: var(--gold-line);
     }
 
-    .pill.ok {
+    .chip.green {
       color: var(--green);
-      border-color: rgba(89, 192, 132, 0.26);
       background: var(--green-soft);
+      border-color: rgba(85, 193, 129, 0.22);
     }
 
-    .toolbar-row {
-      flex-wrap: wrap;
+    .toolbar {
       align-items: center;
     }
 
@@ -190,14 +174,15 @@
       gap: 6px;
       padding: 6px;
       border-radius: 999px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--border);
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.02);
     }
 
     .segmented button,
-    .filter-bar button,
+    .filters button,
     .action,
-    .ghost {
+    .action-ghost,
+    .row-actions button {
       border: 0;
       font: inherit;
       cursor: pointer;
@@ -215,327 +200,303 @@
 
     .segmented .active {
       color: var(--gold);
-      background: linear-gradient(180deg, rgba(214, 178, 94, 0.18), rgba(214, 178, 94, 0.08));
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+      background: linear-gradient(180deg, rgba(214,178,94,0.18), rgba(214,178,94,0.08));
     }
 
-    .filter-bar {
+    .filters {
       display: inline-flex;
       gap: 8px;
       flex-wrap: wrap;
     }
 
-    .filter-bar button {
-      height: 36px;
-      padding: 0 14px;
+    .filters button {
+      height: 34px;
+      padding: 0 12px;
       border-radius: 999px;
       color: var(--muted);
-      background: rgba(255,255,255,0.03);
+      background: rgba(255, 255, 255, 0.03);
       border: 1px solid transparent;
       font-size: 12px;
       font-weight: 700;
     }
 
-    .filter-bar .active {
+    .filters .active {
       color: var(--text);
-      border-color: rgba(255,255,255,0.1);
+      border-color: rgba(255,255,255,0.09);
       background: rgba(255,255,255,0.06);
     }
 
+    .search {
+      min-width: 280px;
+      height: 40px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
     .action,
-    .ghost {
-      height: 42px;
-      padding: 0 16px;
-      border-radius: 16px;
+    .action-ghost {
+      height: 40px;
+      padding: 0 14px;
+      border-radius: 14px;
       font-size: 13px;
       font-weight: 800;
       letter-spacing: -0.01em;
     }
 
     .action {
-      color: #17120a;
-      background: linear-gradient(180deg, #e3c06f, #cfa652);
+      color: #17130b;
+      background: linear-gradient(180deg, #e2bf6f, #cfa652);
       box-shadow: 0 8px 18px rgba(214, 178, 94, 0.2);
     }
 
-    .ghost {
+    .action-ghost {
       color: var(--gold);
       background: var(--gold-soft);
-      border: 1px solid var(--border-strong);
+      border: 1px solid var(--gold-line);
     }
 
-    .search {
+    .content {
+      padding: 22px 26px 28px;
+    }
+
+    .bubble-strip {
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: rgba(255,255,255,0.02);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .bubble-label {
+      color: var(--dim);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .bubbles {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .bubble {
       display: flex;
       align-items: center;
       gap: 10px;
-      min-width: 280px;
-      padding: 0 14px;
-      height: 42px;
-      border-radius: 16px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-size: 13px;
     }
 
-    .body {
-      padding: 24px 28px 28px;
+    .bubble-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
       display: grid;
+      place-items: center;
+      background: rgba(214,178,94,0.12);
+      border: 1px solid rgba(214,178,94,0.18);
+      color: var(--gold);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .bubble-copy strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .bubble-copy span {
+      display: block;
+      margin-top: 3px;
+      color: var(--dim);
+      font-size: 11px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 18px;
-      grid-template-columns: 1.2fr 3fr;
+      align-items: start;
     }
 
     .card {
       background: var(--panel);
-      border: 1px solid var(--border);
+      border: 1px solid var(--line);
       border-radius: var(--radius-xl);
       padding: 18px;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
     }
 
-    .card h2,
-    .card h3 {
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .card-head h2,
+    .card-head h3 {
       margin: 0;
+      font-size: 19px;
       letter-spacing: -0.03em;
     }
 
-    .meta {
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.5;
-    }
-
-    .left-col {
-      display: grid;
-      gap: 18px;
-      align-content: start;
-    }
-
-    .summary-grid {
-      display: grid;
-      gap: 12px;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      margin-top: 16px;
-    }
-
-    .summary-cell {
-      padding: 14px;
-      border-radius: var(--radius-md);
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .summary-cell strong {
-      display: block;
-      font-size: 22px;
-      letter-spacing: -0.04em;
-      margin-bottom: 4px;
-    }
-
-    .summary-cell span {
+    .tiny {
       color: var(--dim);
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 800;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
+      white-space: nowrap;
     }
 
-    .queue {
+    .stats {
       display: grid;
-      gap: 10px;
-      margin-top: 16px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
     }
 
-    .queue-item {
+    .stat {
       padding: 14px;
-      border-radius: 16px;
-      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--line-soft);
       background: rgba(255,255,255,0.03);
     }
 
-    .queue-top {
+    .stat strong {
+      display: block;
+      font-size: 24px;
+      letter-spacing: -0.04em;
+      margin-bottom: 5px;
+    }
+
+    .stat span {
+      color: var(--dim);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .attention-list,
+    .mini-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .attention-item,
+    .mini-item {
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid var(--line-soft);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .attention-top,
+    .mini-top {
       display: flex;
+      align-items: center;
       justify-content: space-between;
       gap: 10px;
-      align-items: center;
       margin-bottom: 6px;
     }
 
-    .queue-item strong {
+    .attention-item strong,
+    .mini-item strong {
       font-size: 14px;
       letter-spacing: -0.02em;
     }
 
-    .queue-item p {
+    .attention-item p,
+    .mini-item p {
       margin: 0;
       color: var(--muted);
       font-size: 12px;
       line-height: 1.45;
     }
 
-    .mini {
-      font-size: 11px;
-      font-weight: 800;
+    .tag {
       padding: 4px 8px;
       border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       white-space: nowrap;
     }
 
-    .mini.today {
+    .tag.amber {
       color: var(--amber);
       background: var(--amber-soft);
     }
 
-    .mini.unassigned {
+    .tag.blue {
       color: var(--blue);
       background: var(--blue-soft);
     }
 
-    .mini.changed {
+    .tag.green {
       color: var(--green);
       background: var(--green-soft);
     }
 
-    .main-col {
-      display: grid;
-      gap: 18px;
-    }
-
-    .hero-card {
-      padding: 22px;
-      background:
-        linear-gradient(135deg, rgba(214,178,94,0.1), rgba(116,183,255,0.06)),
-        var(--panel-strong);
-    }
-
-    .hero-grid {
-      display: grid;
-      gap: 18px;
-      grid-template-columns: 1.8fr 1fr;
-      align-items: stretch;
-    }
-
-    .hero-panel {
-      padding: 16px;
-      border-radius: 18px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .hero-panel h3 {
-      font-size: 18px;
-      margin-bottom: 8px;
-    }
-
-    .hero-panel p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.55;
-    }
-
-    .hero-actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 14px;
-    }
-
-    .hero-actions .action,
-    .hero-actions .ghost {
-      height: 40px;
-      border-radius: 14px;
-    }
-
-    .hero-list {
-      display: grid;
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    .hero-list div {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .hero-list span {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--gold);
-      box-shadow: 0 0 0 6px rgba(214,178,94,0.08);
-    }
-
-    .table-card {
+    .board {
       padding: 0;
       overflow: hidden;
+      background: var(--panel-2);
     }
 
-    .table-head {
+    .board-head {
+      padding: 16px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
-      padding: 18px 20px;
-      border-bottom: 1px solid var(--border);
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
     }
 
-    .table-head h2 {
-      font-size: 21px;
+    .board-head h2 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -0.03em;
     }
 
-    .table-head p {
-      margin: 6px 0 0;
-      color: var(--muted);
-      font-size: 13px;
+    .row {
+      padding: 16px 18px;
+      display: grid;
+      grid-template-columns: 1.5fr 1.1fr 0.9fr 0.9fr 0.8fr;
+      gap: 16px;
+      align-items: start;
+      border-bottom: 1px solid var(--line-soft);
     }
 
-    .table-wrap {
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 980px;
-    }
-
-    thead th {
-      padding: 14px 20px;
-      text-align: left;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--dim);
-      font-weight: 800;
-      border-bottom: 1px solid var(--border);
+    .row:hover {
       background: rgba(255,255,255,0.02);
     }
 
-    tbody tr {
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-
-    tbody tr:hover {
-      background: rgba(255,255,255,0.02);
-    }
-
-    td {
-      padding: 18px 20px;
-      vertical-align: top;
-    }
-
-    .client-name {
+    .cell strong {
+      display: block;
       font-size: 14px;
-      font-weight: 700;
       letter-spacing: -0.02em;
       margin-bottom: 4px;
     }
 
-    .sub {
+    .cell span {
+      display: block;
       color: var(--muted);
       font-size: 12px;
       line-height: 1.45;
@@ -545,9 +506,9 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
+      color: var(--muted);
       font-size: 12px;
       font-weight: 700;
-      color: var(--muted);
     }
 
     .status-dot {
@@ -559,7 +520,7 @@
 
     .confirmed { background: var(--green); }
     .pending { background: var(--amber); }
-    .cancelled { background: var(--rose); }
+    .cancelled { background: var(--red); }
 
     .row-actions {
       display: flex;
@@ -569,51 +530,46 @@
     }
 
     .row-actions button {
-      height: 34px;
-      padding: 0 12px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.03);
+      height: 32px;
+      padding: 0 10px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
       color: var(--text);
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
+      font-size: 11px;
+      font-weight: 800;
     }
 
-    .row-actions .warn {
+    .row-actions .gold {
       color: var(--gold);
-      border-color: rgba(214,178,94,0.24);
-      background: rgba(214,178,94,0.08);
+      background: var(--gold-soft);
+      border-color: var(--gold-line);
     }
 
     .row-actions .danger {
-      color: #ffcdcd;
-      border-color: rgba(240,120,120,0.2);
-      background: rgba(240,120,120,0.08);
+      color: #ffd1d1;
+      background: var(--red-soft);
+      border-color: rgba(239,118,118,0.18);
     }
 
-    .footer-note {
-      padding: 16px 20px 20px;
+    .footer {
+      padding: 16px 18px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
       color: var(--dim);
       font-size: 12px;
-      line-height: 1.5;
     }
 
-    @media (max-width: 1080px) {
-      .body,
-      .hero-grid {
+    @media (max-width: 1200px) {
+      .grid {
         grid-template-columns: 1fr;
       }
 
-      .title-row,
-      .toolbar-row,
-      .brand-row {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .status-strip {
-        justify-content: flex-start;
+      .row {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -621,7 +577,7 @@
 <body>
   <div class="shell">
     <header class="header">
-      <div class="brand-row">
+      <div class="header-top">
         <div class="brand">
           <div class="logo">C</div>
           <div class="brand-copy">
@@ -629,269 +585,253 @@
             <span>Workspace</span>
           </div>
         </div>
-        <div class="status-strip">
-          <div class="pill live">Live booking control center</div>
-          <div class="pill ok">Clients + bookings in one surface</div>
-          <div class="pill">Admin discoverability first</div>
+
+        <div class="page-title">
+          <h1>Booking</h1>
+          <div class="chips">
+            <div class="chip gold">14 today</div>
+            <div class="chip">2 unassigned</div>
+            <div class="chip green">Live</div>
+          </div>
         </div>
       </div>
 
-      <div class="title-row">
-        <div class="title-copy">
-          <small>Booking Admin Revamp</small>
-          <h1>Make bookings feel complete, not scattered.</h1>
-          <p>
-            A Checkmark-first booking surface that treats bookings, clients, staffing,
-            rooms, and admin actions as one workflow. The goal is not “more widgets” —
-            it is one confident place to create, manage, reschedule, assign, and cancel
-            sessions without hunting through legacy paths.
-          </p>
-        </div>
-        <div class="status-strip">
-          <div class="pill">Today: 14 sessions</div>
-          <div class="pill">Unassigned: 2</div>
-          <div class="pill">Conflicts: 1 soft warning</div>
-        </div>
-      </div>
-
-      <div class="toolbar-row">
+      <div class="toolbar">
         <div class="left-tools">
           <div class="segmented">
             <button class="active">Bookings</button>
             <button>Clients</button>
-            <button>Resources</button>
           </div>
-          <div class="filter-bar">
+          <div class="filters">
             <button class="active">Today</button>
             <button>Upcoming</button>
-            <button>Needs staff</button>
-            <button>Pending</button>
+            <button>Needs Staff</button>
             <button>Past</button>
           </div>
         </div>
+
         <div class="right-tools">
-          <div class="search">Search client, engineer, room, or date…</div>
-          <button class="ghost">Manage Clients</button>
+          <div class="search">Search client, engineer, room…</div>
+          <button class="action-ghost">Manage Bookings</button>
           <button class="action">Book Session</button>
         </div>
       </div>
     </header>
 
-    <main class="body">
-      <aside class="left-col">
-        <section class="card">
-          <h2>Booking Pulse</h2>
-          <p class="meta">
-            Keep the operator state visible: what needs attention now, what is
-            unassigned, and where admin intervention matters most.
-          </p>
-          <div class="summary-grid">
-            <div class="summary-cell">
+    <main class="content">
+      <section class="bubble-strip">
+        <div class="bubble-label">Members</div>
+        <div class="bubbles">
+          <div class="bubble">
+            <div class="bubble-avatar">A</div>
+            <div class="bubble-copy">
+              <strong>Alex</strong>
+              <span>3 today</span>
+            </div>
+          </div>
+          <div class="bubble">
+            <div class="bubble-avatar">J</div>
+            <div class="bubble-copy">
+              <strong>Jordan</strong>
+              <span>2 today</span>
+            </div>
+          </div>
+          <div class="bubble">
+            <div class="bubble-avatar">M</div>
+            <div class="bubble-copy">
+              <strong>Maria</strong>
+              <span>1 change</span>
+            </div>
+          </div>
+          <div class="bubble">
+            <div class="bubble-avatar">K</div>
+            <div class="bubble-copy">
+              <strong>Kai</strong>
+              <span>open</span>
+            </div>
+          </div>
+          <div class="bubble">
+            <div class="bubble-avatar">S</div>
+            <div class="bubble-copy">
+              <strong>Syd</strong>
+              <span>4 today</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="card">
+          <div class="card-head">
+            <h2>Pulse</h2>
+            <span class="tiny">Today</span>
+          </div>
+          <div class="stats">
+            <div class="stat">
               <strong>14</strong>
-              <span>today's sessions</span>
+              <span>Bookings</span>
             </div>
-            <div class="summary-cell">
+            <div class="stat">
               <strong>2</strong>
-              <span>need assignment</span>
+              <span>Unassigned</span>
             </div>
-            <div class="summary-cell">
-              <strong>5</strong>
-              <span>client actions</span>
-            </div>
-            <div class="summary-cell">
+            <div class="stat">
               <strong>1</strong>
-              <span>soft conflict</span>
+              <span>Conflict</span>
+            </div>
+            <div class="stat">
+              <strong>5</strong>
+              <span>Clients</span>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section class="card">
-          <h3>Needs attention</h3>
-          <div class="queue">
-            <div class="queue-item">
-              <div class="queue-top">
-                <strong>Kai - Engineer session</strong>
-                <span class="mini unassigned">Unassigned</span>
+        <div class="card">
+          <div class="card-head">
+            <h2>Needs Attention</h2>
+            <span class="tiny">3</span>
+          </div>
+          <div class="attention-list">
+            <div class="attention-item">
+              <div class="attention-top">
+                <strong>Kai consult</strong>
+                <span class="tag blue">Unassigned</span>
               </div>
-              <p>Tomorrow · 2:00 PM · Room B · client confirmed, engineer missing.</p>
+              <p>Tomorrow · 2:00 PM · Room B</p>
             </div>
-            <div class="queue-item">
-              <div class="queue-top">
-                <strong>Education consult</strong>
-                <span class="mini today">Today</span>
+            <div class="attention-item">
+              <div class="attention-top">
+                <strong>Maria reschedule</strong>
+                <span class="tag amber">Today</span>
               </div>
-              <p>Overlap warning with Alex's current afternoon block. Needs admin check.</p>
+              <p>Client requested new time</p>
             </div>
-            <div class="queue-item">
-              <div class="queue-top">
-                <strong>Maria vocal lesson</strong>
-                <span class="mini changed">Changed</span>
+            <div class="attention-item">
+              <div class="attention-top">
+                <strong>Jordan overlap</strong>
+                <span class="tag green">Soft</span>
               </div>
-              <p>Client requested a new time. Existing room and staff still available.</p>
+              <p>4:30 PM block collision warning</p>
             </div>
           </div>
-        </section>
-      </aside>
+        </div>
 
-      <section class="main-col">
-        <section class="card hero-card">
-          <div class="hero-grid">
-            <div class="hero-panel">
-              <h3>One operator workflow</h3>
-              <p>
-                The booking page should feel like the command center for the whole
-                session lifecycle: create, assign, reschedule, cancel, and client follow-up.
-                The admin should not need to leave this page to find edit/delete actions.
-              </p>
-              <div class="hero-actions">
-                <button class="action">New Booking</button>
-                <button class="ghost">Manage Existing Bookings</button>
+        <div class="card">
+          <div class="card-head">
+            <h2>Quick Actions</h2>
+            <span class="tiny">Admin</span>
+          </div>
+          <div class="mini-list">
+            <div class="mini-item">
+              <div class="mini-top">
+                <strong>Manage bookings</strong>
+                <span class="tag green">Live</span>
               </div>
-              <div class="hero-list">
-                <div><span></span>Inline row actions for edit, reassign, notify, and cancel</div>
-                <div><span></span>Soft conflict warnings without blocking intentional double-books</div>
-                <div><span></span>Clear client context without hiding the client management surface</div>
+              <p>Edit, assign, cancel</p>
+            </div>
+            <div class="mini-item">
+              <div class="mini-top">
+                <strong>Manage clients</strong>
+                <span class="tag amber">Open</span>
               </div>
+              <p>Add, archive, update</p>
             </div>
-            <div class="hero-panel">
-              <h3>Checkmark principles</h3>
-              <p>
-                Keep the existing dark-gold identity, maintain the calm studio-operating feel,
-                and make the experience more decisive rather than busier.
-              </p>
-              <div class="hero-list">
-                <div><span></span>Gold actions for creation and attention</div>
-                <div><span></span>Muted layout with strong action visibility</div>
-                <div><span></span>No legacy-widget dependency for critical actions</div>
+            <div class="mini-item">
+              <div class="mini-top">
+                <strong>Assign engineer</strong>
+                <span class="tag blue">2 open</span>
               </div>
+              <p>Fast reassign flow</p>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section class="card table-card">
-          <div class="table-head">
-            <div>
-              <h2>Today & upcoming bookings</h2>
-              <p>Admins can manage the full booking workflow directly from the canonical booking surface.</p>
-            </div>
-            <div class="status-strip">
-              <div class="pill live">14 active rows</div>
-              <div class="pill">Refreshed 30s ago</div>
-            </div>
+      <section class="card board" style="margin-top: 18px;">
+        <div class="board-head">
+          <h2>Bookings Board</h2>
+          <div class="chips">
+            <div class="chip">Current</div>
+            <div class="chip gold">Manage in row</div>
           </div>
+        </div>
 
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Date & time</th>
-                  <th>Engineer</th>
-                  <th>Room</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>
-                    <div class="client-name">Riley Morgan</div>
-                    <div class="sub">Engineer session · repeat client · invoice ready</div>
-                  </td>
-                  <td>
-                    <div class="client-name">Today · 11:00 AM–1:00 PM</div>
-                    <div class="sub">2 hr block · no conflict</div>
-                  </td>
-                  <td>
-                    <div class="client-name">Alex</div>
-                    <div class="sub">Assigned · confirmed</div>
-                  </td>
-                  <td>
-                    <div class="client-name">Room A</div>
-                    <div class="sub">Tracked resource</div>
-                  </td>
-                  <td>
-                    <div class="status"><span class="status-dot confirmed"></span>Confirmed</div>
-                  </td>
-                  <td>
-                    <div class="row-actions">
-                      <button>View</button>
-                      <button class="warn">Edit</button>
-                      <button>Reassign</button>
-                      <button class="danger">Cancel</button>
-                    </div>
-                  </td>
-                </tr>
-
-                <tr>
-                  <td>
-                    <div class="client-name">Kai Brooks</div>
-                    <div class="sub">Mix consult · new lead converting to booking</div>
-                  </td>
-                  <td>
-                    <div class="client-name">Tomorrow · 2:00 PM–3:00 PM</div>
-                    <div class="sub">Needs staffing before reminder goes out</div>
-                  </td>
-                  <td>
-                    <div class="client-name">Unassigned</div>
-                    <div class="sub">2 engineers available</div>
-                  </td>
-                  <td>
-                    <div class="client-name">Room B</div>
-                    <div class="sub">Open</div>
-                  </td>
-                  <td>
-                    <div class="status"><span class="status-dot pending"></span>Pending staff</div>
-                  </td>
-                  <td>
-                    <div class="row-actions">
-                      <button>View</button>
-                      <button class="warn">Assign</button>
-                      <button class="warn">Edit</button>
-                      <button class="danger">Cancel</button>
-                    </div>
-                  </td>
-                </tr>
-
-                <tr>
-                  <td>
-                    <div class="client-name">Maria Lopez</div>
-                    <div class="sub">Vocal lesson · asked to reschedule via text</div>
-                  </td>
-                  <td>
-                    <div class="client-name">Friday · 4:30 PM–5:30 PM</div>
-                    <div class="sub">Soft overlap with an existing engineer block</div>
-                  </td>
-                  <td>
-                    <div class="client-name">Jordan</div>
-                    <div class="sub">Reassignment suggested</div>
-                  </td>
-                  <td>
-                    <div class="client-name">Lesson Room</div>
-                    <div class="sub">Available</div>
-                  </td>
-                  <td>
-                    <div class="status"><span class="status-dot pending"></span>Needs review</div>
-                  </td>
-                  <td>
-                    <div class="row-actions">
-                      <button>View</button>
-                      <button class="warn">Reschedule</button>
-                      <button>Notify</button>
-                      <button class="danger">Cancel</button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+        <div class="row">
+          <div class="cell">
+            <strong>Riley Morgan</strong>
+            <span>Engineer session</span>
           </div>
-
-          <div class="footer-note">
-            Mockup intent: make `/sessions` feel like the actual control center.
-            The current secure admin edit/delete logic can still power these actions;
-            this is a workflow and discoverability redesign, not a backend rewrite.
+          <div class="cell">
+            <strong>Today · 11:00–1:00</strong>
+            <span>2 hr block</span>
           </div>
-        </section>
+          <div class="cell">
+            <strong>Alex</strong>
+            <span>Room A</span>
+          </div>
+          <div class="cell">
+            <div class="status"><span class="status-dot confirmed"></span>Confirmed</div>
+          </div>
+          <div class="row-actions">
+            <button>View</button>
+            <button class="gold">Edit</button>
+            <button>Assign</button>
+            <button class="danger">Cancel</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="cell">
+            <strong>Kai Brooks</strong>
+            <span>Mix consult</span>
+          </div>
+          <div class="cell">
+            <strong>Tomorrow · 2:00–3:00</strong>
+            <span>Needs staff</span>
+          </div>
+          <div class="cell">
+            <strong>Unassigned</strong>
+            <span>Room B</span>
+          </div>
+          <div class="cell">
+            <div class="status"><span class="status-dot pending"></span>Pending</div>
+          </div>
+          <div class="row-actions">
+            <button>View</button>
+            <button class="gold">Assign</button>
+            <button class="gold">Edit</button>
+            <button class="danger">Cancel</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="cell">
+            <strong>Maria Lopez</strong>
+            <span>Vocal lesson</span>
+          </div>
+          <div class="cell">
+            <strong>Friday · 4:30–5:30</strong>
+            <span>Reschedule request</span>
+          </div>
+          <div class="cell">
+            <strong>Jordan</strong>
+            <span>Lesson Room</span>
+          </div>
+          <div class="cell">
+            <div class="status"><span class="status-dot pending"></span>Review</div>
+          </div>
+          <div class="row-actions">
+            <button>View</button>
+            <button class="gold">Reschedule</button>
+            <button>Notify</button>
+            <button class="danger">Cancel</button>
+          </div>
+        </div>
+
+        <div class="footer">
+          <span>Three-column admin feel retained</span>
+          <span>Critical actions surfaced on the booking page</span>
+        </div>
       </section>
     </main>
   </div>

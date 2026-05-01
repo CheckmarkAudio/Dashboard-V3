@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Interaction Blueprint Template</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --paper: #ffffff;
+      --line: #b8bec8;
+      --line-strong: #7e8795;
+      --text: #1f2937;
+      --muted: #5b6472;
+      --font: "SFMono-Regular", Menlo, Consolas, monospace;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(0deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        var(--bg);
+      background-size: 24px 24px, 24px 24px, auto;
+      color: var(--text);
+      font-family: var(--font);
+      padding: 24px;
+    }
+
+    .sheet {
+      width: min(1280px, 100%);
+      margin: 0 auto;
+      background: var(--paper);
+      border: 2px solid var(--line-strong);
+      border-radius: 20px;
+      overflow: hidden;
+      padding: 18px;
+    }
+
+    .label {
+      display: inline-block;
+      padding: 4px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    h1, h2, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 14px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .wire {
+      border: 2px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.015);
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .box,
+    .button,
+    .field {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 12px;
+      background: #fff;
+    }
+
+    .button.primary {
+      border-width: 2px;
+      border-color: var(--line-strong);
+      font-weight: 700;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .notes {
+      margin-top: 14px;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius);
+      padding: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+    }
+
+    @media (max-width: 900px) {
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <span class="label">BLUEPRINT TEMPLATE</span>
+    <h1>[Surface name]</h1>
+
+    <div class="grid">
+      <div class="wire">
+        <div class="row">
+          <div class="button">[Secondary action]</div>
+          <div class="button">[Secondary action]</div>
+          <div class="button primary">[Primary action]</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="wire">
+          <h2 style="margin-bottom: 10px;">[Left content]</h2>
+          <div class="grid">
+            <div class="field">[Field / filter / tab]</div>
+            <div class="field">[Field / filter / tab]</div>
+            <div class="box">[Info box / item]</div>
+          </div>
+        </div>
+
+        <div class="wire">
+          <h2 style="margin-bottom: 10px;">[Right content]</h2>
+          <div class="grid">
+            <div class="box">[List row / card / detail]</div>
+            <div class="box">[List row / card / detail]</div>
+            <div class="row">
+              <div class="button">[Row action]</div>
+              <div class="button">[Row action]</div>
+              <div class="button">[Danger action]</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <strong>Use this template to answer:</strong>
+        <ul>
+          <li>Which page owns the interaction?</li>
+          <li>What is the primary action?</li>
+          <li>Which actions stay visible?</li>
+          <li>Which actions stay menu-only?</li>
+          <li>Which actions require confirmation?</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

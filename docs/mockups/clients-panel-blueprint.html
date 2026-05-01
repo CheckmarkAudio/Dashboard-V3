@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Clients Panel Blueprint</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --paper: #ffffff;
+      --line: #b8bec8;
+      --line-strong: #7e8795;
+      --text: #1f2937;
+      --muted: #5b6472;
+      --font: "SFMono-Regular", Menlo, Consolas, monospace;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(0deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        var(--bg);
+      background-size: 24px 24px, 24px 24px, auto;
+      color: var(--text);
+      font-family: var(--font);
+      padding: 24px;
+    }
+
+    .sheet {
+      width: min(1420px, 100%);
+      margin: 0 auto;
+      background: var(--paper);
+      border: 2px solid var(--line-strong);
+      border-radius: 20px;
+      overflow: hidden;
+      padding: 18px;
+    }
+
+    .label {
+      display: inline-block;
+      padding: 4px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 24px; margin-bottom: 14px; }
+
+    .wire {
+      border: 2px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.015);
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .field, .button, .box, .tag {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 12px;
+      background: #fff;
+    }
+
+    .button.primary {
+      border-width: 2px;
+      border-color: var(--line-strong);
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 14px;
+    }
+
+    .table {
+      display: grid;
+      gap: 10px;
+    }
+
+    .table-head,
+    .table-row {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr 0.9fr 0.9fr 1.1fr;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .cell {
+      min-height: 56px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      display: grid;
+      gap: 6px;
+    }
+
+    .cell strong {
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .notes {
+      margin-top: 14px;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius);
+      padding: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+    }
+
+    @media (max-width: 1100px) {
+      .toolbar,
+      .table-head,
+      .table-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <span class="label">WIREFRAME / CLIENT ACTION PLACEMENT</span>
+    <h1>/sessions#clients canonical blueprint</h1>
+
+    <div class="wire toolbar">
+      <div class="row">
+        <div class="field">[Search clients]</div>
+        <div class="tag">[Active]</div>
+        <div class="tag">[All]</div>
+      </div>
+      <div class="row" style="justify-content: flex-end;">
+        <div class="button">[Manage Bookings]</div>
+        <div class="button primary">[Add Client]</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="wire table">
+        <div class="table-head">
+          <div class="cell"><strong>[Client]</strong><span>name + created date</span></div>
+          <div class="cell"><strong>[Contact]</strong><span>email + phone</span></div>
+          <div class="cell"><strong>[Notes]</strong><span>short summary</span></div>
+          <div class="cell"><strong>[Review link]</strong><span>open / none</span></div>
+          <div class="cell"><strong>[Actions]</strong><span>button hierarchy</span></div>
+        </div>
+
+        <div class="table-row">
+          <div class="cell">
+            <strong>[Client name]</strong>
+            <span>[created date / archived badge if needed]</span>
+          </div>
+          <div class="cell">
+            <strong>[email / phone]</strong>
+            <span>[click targets]</span>
+          </div>
+          <div class="cell">
+            <strong>[note preview]</strong>
+            <span>[truncated]</span>
+          </div>
+          <div class="cell">
+            <strong>[review link]</strong>
+            <span>[open]</span>
+          </div>
+          <div class="cell">
+            <strong>PRIMARY ROW ACTIONS</strong>
+            <div class="actions">
+              <div class="button">[Edit]</div>
+              <div class="button">[Book]</div>
+              <div class="button">[More]</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-row">
+          <div class="cell">
+            <strong>[Archived client]</strong>
+            <span>[archived badge]</span>
+          </div>
+          <div class="cell">
+            <strong>[email / phone]</strong>
+            <span>[read-only]</span>
+          </div>
+          <div class="cell">
+            <strong>[note preview]</strong>
+            <span>[truncated]</span>
+          </div>
+          <div class="cell">
+            <strong>[review link]</strong>
+            <span>[open / none]</span>
+          </div>
+          <div class="cell">
+            <strong>ARCHIVED ROW ACTIONS</strong>
+            <div class="actions">
+              <div class="button">[Edit]</div>
+              <div class="button">[Restore]</div>
+              <div class="button">[More]</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <strong>Placement rules</strong>
+      <ul>
+        <li>`Add Client` stays top-right and primary.</li>
+        <li>`Edit` becomes a direct row action instead of living only in the 3-dot menu.</li>
+        <li>`Book` belongs on the client row so a client can flow directly into booking.</li>
+        <li>`Archive` can stay behind `More` for active clients.</li>
+        <li>`Restore` should be visible for archived clients.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
