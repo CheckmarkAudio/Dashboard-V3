@@ -120,26 +120,29 @@
    noticeably calmer cool grey. White cards still pop, but the page
    no longer feels like a flashlight on first load.
 
-   Lean 2 rev2 (PR #79 follow-up) — black-edge editorial pass per
-   user feedback + reference image: "more defined black edges for
-   light mode instead of gold; we can still use gold as an accent
-   color". Borders moved from soft grey to near-black `#1c1c22`
-   (matches text colour) so widget cards punch out as crisp
-   ink-lined panels against the cool grey body. Gold body wash
-   removed in favour of a flat shell + the violet pinch remains as
-   the only background tint. Gold token unchanged — still drives the
-   Clock In button, MemberHighlights pill ring, and other accents.
+   Lean 2 rev2 (PR #79 follow-up) — black-edge editorial pass.
+   Borders went near-black; gold removed from body wash; cards
+   stayed pure white.
+
+   Lean 2 rev3 (PR #79 follow-up) — warm-cream + grey-card editorial
+   pass per user reference (Replit Agent 4 page): cream/peach body,
+   warm beige-grey for card surfaces, black ink for borders and
+   text. Pure white retired in light mode — the page now lives in a
+   warm tonal range (~80%-92% lightness) with black ink doing the
+   contrast work, which matches the Replit reference's brightness
+   level + temperature. Gold token unchanged — still drives the
+   Clock In button, MemberHighlights pill ring, etc.
 */
 :root[data-theme='light'] {
-  --color-bg: #e7e7eb;
-  --color-surface: #ffffff;
-  --color-surface-alt: #dfdfe4;
-  --color-surface-hover: #d6d6db;
-  --color-border: #1c1c22;
-  --color-border-light: #5e5e66;
-  --color-text: #1c1c22;
-  --color-text-muted: #3f3f46;
-  --color-text-light: #6b6b72;
+  --color-bg:            #f0eae0; /* warm cream — body / shell  */
+  --color-surface:       #cfc8bc; /* warm beige-grey — cards    */
+  --color-surface-alt:   #c5bdb1; /* slightly darker for nests  */
+  --color-surface-hover: #b9b1a3; /* hover state grey           */
+  --color-border:        #1c1c22; /* black ink (unchanged)      */
+  --color-border-light:  #7e786d; /* warm mid-grey for dividers */
+  --color-text:          #1c1c22; /* black (unchanged)          */
+  --color-text-muted:    #3f3f46; /* (unchanged)                */
+  --color-text-light:    #7e786d; /* warm mid-grey              */
 }
 
 body {
@@ -173,16 +176,13 @@ body {
 }
 
 :root[data-theme='light'] body {
-  /* Lean 2 rev2 (PR #79 follow-up) — gold radial removed for the
-     editorial black-edge look. The single violet pinch in the
-     bottom-right stays as the only tint so the body isn't pure flat
-     grey, but stays subtle enough that the crisp black card borders
-     are the dominant visual character. Gold returns as small
-     accents (Clock In button, member-highlight pill ring), not as
-     a body wash. Per Tier 3 locked decision #6: body-level only. */
-  background:
-    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.06), transparent 52%),
-    var(--color-bg);
+  /* Lean 2 rev3 (PR #79 follow-up) — flat warm-cream body to match
+     the Replit reference. No radial tint: the warm cream + grey-on-
+     cream card contrast + black ink borders do all the work; adding
+     a coloured tint would muddy the editorial look. The dark theme
+     keeps its gold + violet gradient — that's atmospheric depth,
+     not chrome character. */
+  background: var(--color-bg);
   color-scheme: light;
 }
 
@@ -272,14 +272,13 @@ body {
     position: relative;
   }
   :root[data-theme='light'] .dashboard-shell {
-    /* Lean 2 rev2 (PR #79 follow-up) — editorial black-edge pass.
-       Shell goes back to flat white surface so the new near-black
-       border + black widget-card borders read as crisp ink lines.
-       The body keeps a faint violet pinch in the bottom-right; the
-       shell deliberately doesn't pick that up so the focal area
-       reads as a clean white "page" with sharp edges (reference
-       look the user shared). */
-    background: var(--color-surface);
+    /* Lean 2 rev3 (PR #79 follow-up) — shell uses the cream body bg
+       (NOT the grey card surface) so the whole page area reads as
+       one continuous warm cream sheet, with the grey widget cards
+       sitting on top in editorial relief. Mirrors the Replit
+       reference page where the body cream extends edge-to-edge and
+       only the cards drop into a warmer grey. */
+    background: var(--color-bg);
     border-color: var(--color-border);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   }
