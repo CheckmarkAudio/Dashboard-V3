@@ -270,7 +270,7 @@ export default function AssignAdmin() {
           pattern (`grid-cols-[300px_1fr] gap-3 items-stretch`). The aside
           loses `h-fit sticky top-4` because that pinned the sidebar at
           its content height and broke the bottom-flush requirement. */}
-      <div className="grid grid-cols-[260px_1fr] gap-6 items-stretch">
+      <div className="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)] gap-6 items-stretch">
         {/* ─── Sidebar ───────────────────────────────────────────── */}
         <aside className="rounded-xl border border-border bg-surface p-3">
           {/* Members */}
@@ -388,7 +388,7 @@ export default function AssignAdmin() {
         </aside>
 
         {/* ─── Main content ──────────────────────────────────────── */}
-        <main className="rounded-xl border border-border bg-surface p-5">
+        <main className="min-w-0 rounded-xl border border-border bg-surface p-5">
           {/* Top action bar — Settings · Save as Template · Templates ▾.
               Lives INSIDE the main card so the right pane starts at the same
               Y as the sidebar (mirrors Settings page rhythm). */}
@@ -418,6 +418,44 @@ export default function AssignAdmin() {
             >
               Save as Template
             </Button>
+            <label className="inline-flex items-center gap-2 h-8 px-3 rounded-lg bg-surface-alt border border-border text-xs font-semibold text-text cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={toggleSelectAllVisible}
+                disabled={tasks.length === 0}
+                aria-label="Select all tasks"
+                className="w-4 h-4 rounded border-border accent-gold cursor-pointer disabled:cursor-not-allowed"
+              />
+              Select all
+            </label>
+            <Button
+              variant="secondary"
+              size="sm"
+              iconLeft={<Edit2 size={14} aria-hidden="true" />}
+              onClick={() => {
+                const [taskId] = Array.from(selectedTaskIds)
+                const task = tasks.find((t) => t.id === taskId)
+                if (task) setEditTask(task)
+              }}
+              disabled={selectedCount !== 1}
+              title={selectedCount === 1 ? 'Edit selected task' : 'Select one task to edit'}
+            >
+              Edit selected
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              iconLeft={<Trash2 size={14} aria-hidden="true" />}
+              onClick={() => deleteTasks(Array.from(selectedTaskIds))}
+              disabled={selectedCount === 0 || deleteMutation.isPending}
+              loading={deleteMutation.isPending}
+            >
+              Delete selected
+            </Button>
+            <span className="text-[11px] text-text-light">
+              {selectedCount} selected
+            </span>
 
             <div className="ml-auto relative" ref={tplDropdownRef}>
               <Button
@@ -508,35 +546,6 @@ export default function AssignAdmin() {
               </Button>
             </div>
 
-            {tasks.length > 0 && (
-              <div className="mb-3 flex items-center gap-3 rounded-xl border border-border/70 bg-surface-alt px-3 py-2">
-                <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-text cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={allVisibleSelected}
-                    onChange={toggleSelectAllVisible}
-                    aria-label="Select all visible tasks"
-                    className="w-4 h-4 rounded border-border accent-gold cursor-pointer"
-                  />
-                  Select all
-                </label>
-                <span className="text-[11px] text-text-light">
-                  {selectedCount} selected
-                </span>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  iconLeft={<Trash2 size={14} aria-hidden="true" />}
-                  onClick={() => deleteTasks(Array.from(selectedTaskIds))}
-                  disabled={selectedCount === 0 || deleteMutation.isPending}
-                  loading={deleteMutation.isPending}
-                  className="ml-auto"
-                >
-                  Delete selected
-                </Button>
-              </div>
-            )}
-
             {tasksQuery.isLoading ? (
               <div className="py-10 flex items-center justify-center text-text-light">
                 <Loader2 size={18} className="animate-spin mr-2" />
@@ -611,6 +620,11 @@ export default function AssignAdmin() {
               queryKey: ['assign-page-member-tasks', selectedMember?.id],
             })
           }}
+          onDelete={() => {
+            deleteTasks([editTask.id])
+            setEditTask(null)
+          }}
+          deleteDisabled={deleteMutation.isPending}
         />
       )}
 
@@ -715,7 +729,7 @@ const TaskRow = memo(function TaskRow({
         onClick={() => onEdit(task)}
         title={`Edit "${task.title}"`}
         aria-label={`Edit ${task.title}`}
-        className="p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface hover:text-gold transition-all focus-ring"
+        className="p-1.5 rounded-lg text-text-muted hover:bg-surface hover:text-gold transition-all focus-ring"
       >
         <Edit2 size={12} aria-hidden="true" />
       </button>
@@ -725,7 +739,7 @@ const TaskRow = memo(function TaskRow({
         disabled={deleteDisabled}
         title={`Delete "${task.title}"`}
         aria-label={`Delete ${task.title}`}
-        className="p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400 transition-all focus-ring disabled:opacity-40 disabled:cursor-not-allowed"
+        className="p-1.5 rounded-lg text-text-muted hover:bg-red-500/10 hover:text-red-400 transition-all focus-ring disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <Trash2 size={12} aria-hidden="true" />
       </button>
@@ -755,10 +769,14 @@ function SingleTaskEditModal({
   task,
   onClose,
   onSaved,
+  onDelete,
+  deleteDisabled,
 }: {
   task: AssignedTask
   onClose: () => void
   onSaved: (updated: AssignedTask) => void
+  onDelete: () => void
+  deleteDisabled: boolean
 }) {
   const { toast } = useToast()
   const [title, setTitle] = useState(task.title)
@@ -872,7 +890,16 @@ function SingleTaskEditModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-5 mt-5 border-t border-border">
+        <div className="flex items-center gap-2 pt-5 mt-5 border-t border-border">
+          <Button
+            variant="danger"
+            onClick={onDelete}
+            disabled={deleteDisabled || mutation.isPending}
+            iconLeft={<Trash2 size={14} aria-hidden="true" />}
+          >
+            Delete task
+          </Button>
+          <div className="flex-1" />
           <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>
             Cancel
           </Button>
