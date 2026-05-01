@@ -126,24 +126,35 @@ function MemberPill({ member }: { member: TeamMember }) {
 
 // ─── Social pill ────────────────────────────────────────────────────
 
-function SocialPill({ channel }: { channel: SocialChannel }) {
+/**
+ * SocialStat — borderless follower-snapshot block. Each instance is
+ * a clickable link that reads as a quick "platform · count · label"
+ * stat rather than a bordered pill. Visually distinct from the
+ * member pills so the rail reads as
+ *   [pills (people)] | [stats (audience)]
+ *
+ * Layout: large outlined icon on the left, then a tight two-line
+ * stack on the right (bold count over tiny uppercase platform).
+ * Hover: icon + count shift to marigold for a tactile cue.
+ */
+function SocialStat({ channel }: { channel: SocialChannel }) {
   return (
     <a
       href={channel.href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex items-center gap-2.5 shrink-0 pl-1.5 pr-4 py-1.5 rounded-2xl border border-border bg-surface hover:bg-surface-hover transition-colors focus-ring"
+      className="group inline-flex items-center gap-2 shrink-0 px-1 py-0.5 -mx-1 rounded-md focus-ring transition-colors"
       aria-label={`${channel.label} — ${formatCount(channel.count)} followers`}
       title={`${channel.label} — ${formatCount(channel.count)} followers`}
     >
-      <span className="flex w-9 h-9 items-center justify-center rounded-full ring-1 ring-border bg-surface-alt text-text shrink-0">
-        <PlatformIcon platform={channel.platform} size={16} />
+      <span className="text-text group-hover:text-gold transition-colors shrink-0">
+        <PlatformIcon platform={channel.platform} size={26} />
       </span>
-      <span className="flex flex-col leading-tight">
-        <span className="text-[13px] font-bold text-text whitespace-nowrap">
+      <span className="flex flex-col leading-none">
+        <span className="text-[18px] font-bold text-text group-hover:text-gold transition-colors tabular-nums whitespace-nowrap">
           {formatCount(channel.count)}
         </span>
-        <span className="text-[10px] text-text-light whitespace-nowrap uppercase tracking-wide">
+        <span className="text-[9px] text-text-light whitespace-nowrap uppercase tracking-[0.12em] mt-0.5">
           {channel.label}
         </span>
       </span>
@@ -177,13 +188,15 @@ export default function MemberHighlights() {
         ))}
       </div>
 
-      {/* Social snapshot — right side, fixed-width and right-aligned */}
+      {/* Social snapshot — borderless stat blocks, right-aligned.
+          Larger gap between stats so each reads as its own entity
+          rather than a connected pill rail. */}
       <div
-        className="flex gap-2 shrink-0"
+        className="flex items-center gap-5 shrink-0 pl-2"
         aria-label="Checkmark Audio social media snapshot"
       >
         {SOCIAL_CHANNELS.map((channel) => (
-          <SocialPill key={channel.platform} channel={channel} />
+          <SocialStat key={channel.platform} channel={channel} />
         ))}
       </div>
     </div>
