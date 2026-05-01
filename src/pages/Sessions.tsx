@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import CreateBookingModal from '../components/CreateBookingModal'
+import AdminEditSessionsModal from '../components/admin/sessions/AdminEditSessionsModal'
 import ClientsPanel from '../components/clients/ClientsPanel'
 import { loadSessionsWindow, type SessionCategory, type SessionListItem } from '../domain/sessions/queries'
 import { PageHeader } from '../components/ui'
-import { AlertCircle, Briefcase, Loader2, Plus, UserSquare } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
+import { AlertCircle, Briefcase, Loader2, Pencil, Plus, UserSquare } from 'lucide-react'
 
 // PR #15 — matches the highlight-task pattern in MyTasksCard. When a
 // session-assign notification is clicked elsewhere in the app, the
@@ -39,6 +41,7 @@ function StatusLabel({ status }: { status: string }) {
 
 export default function Sessions() {
   useDocumentTitle('Booking Agent - Checkmark Workspace')
+  const { isAdmin } = useAuth()
 
   // PR #64 — top-level Bookings ↔ Clients toggle. Replaces the
   // standalone /admin/clients page (which the user asked to retire).
@@ -57,6 +60,7 @@ export default function Sessions() {
 
   const [activeCategory, setActiveCategory] = useState<CategoryTab>('All')
   const [showBooking, setShowBooking] = useState(false)
+  const [showAdminEdit, setShowAdminEdit] = useState(false)
   const [sessions, setSessions] = useState<SessionListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -128,14 +132,27 @@ export default function Sessions() {
   // `0_14px_28px_22%` — way too feathery per user feedback).
   const headerAction =
     view === 'bookings' ? (
-      <button
-        type="button"
-        onClick={() => setShowBooking(true)}
-        className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold tracking-tight hover:brightness-105 transition-all shadow-[0_6px_14px_rgba(214,170,55,0.18)] focus-ring"
-      >
-        <Plus size={14} strokeWidth={2.4} />
-        Book a Session
-      </button>
+      <div className="flex items-center gap-2 flex-wrap justify-end">
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setShowAdminEdit(true)}
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-gold/25 bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/18 transition-all focus-ring"
+            title="Edit or cancel existing bookings"
+          >
+            <Pencil size={14} strokeWidth={2.2} />
+            Manage Bookings
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowBooking(true)}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold tracking-tight hover:brightness-105 transition-all shadow-[0_6px_14px_rgba(214,170,55,0.18)] focus-ring"
+        >
+          <Plus size={14} strokeWidth={2.4} />
+          Book a Session
+        </button>
+      </div>
     ) : (
       <button
         type="button"
@@ -150,6 +167,14 @@ export default function Sessions() {
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
       {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); void refetch() }} />}
+      {showAdminEdit && (
+        <AdminEditSessionsModal
+          onClose={() => {
+            setShowAdminEdit(false)
+            void refetch()
+          }}
+        />
+      )}
 
       <PageHeader
         icon={Briefcase}
