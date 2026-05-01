@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { normalizeEmail } from '../../lib/email'
 import { useAuth } from '../../contexts/AuthContext'
@@ -14,6 +15,11 @@ import {
   assignTemplatesToMember,
   generateTodayChecklist,
 } from '../../lib/queries/templates'
+import {
+  fetchClockEntries,
+  timeClockKeys,
+  type ClockEntryRow,
+} from '../../lib/queries/timeClock'
 import type { TeamMember, ReportTemplate } from '../../types'
 import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
@@ -93,9 +99,13 @@ export default function TeamManager() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // PR #58 — left-rail active section (Roster default; Clock Data is a
-  // placeholder until PR #59 lands the shifts table).
+  // PR #58 — left-rail active section (Roster default; Clock Data
+  // populated by PR #61 below).
   const [activeSection, setActiveSection] = useState<MembersSectionKey>('roster')
+
+  // Clock Data section — member filter dropdown reuses the existing
+  // roster (no second fetch).
+  const [clockMemberFilter, setClockMemberFilter] = useState<string>('all')
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean; memberId: string; memberName: string; loading: boolean
@@ -832,16 +842,11 @@ export default function TeamManager() {
       </>)}
 
       {activeSection === 'clock-data' && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-14 h-14 rounded-full bg-surface-alt flex items-center justify-center mb-4">
-            <Clock size={24} className="text-text-muted" aria-hidden="true" />
-          </div>
-          <h2 className="text-lg font-bold mb-2">Clock data — coming soon</h2>
-          <p className="text-text-muted text-sm max-w-sm">
-            Per-member shift logs, reflection prompts, and payroll-grade timestamps land in the
-            next PR. The sidebar slot is here so admins can preview the eventual home for this view.
-          </p>
-        </div>
+        <ClockDataSection
+          members={members}
+          memberFilter={clockMemberFilter}
+          onMemberFilterChange={setClockMemberFilter}
+        />
       )}
 
         </section>
@@ -1385,4 +1390,210 @@ function formatTerm(m: TeamMember): string {
   if (!start || start === '—') return '—'
   const end = m.end_date ? formatDate(m.end_date) : 'present'
   return `${start} – ${end}`
+}
+
+// ─── PR #61 — Clock Data section ────────────────────────────────────
+//
+// Historical shift log driven by the new admin_list_clock_entries RPC.
+// Lives inside the right-pane card — no extra chrome of its own,
+// matching the Roster table directly above.
+
+function ClockDataSection({
+  members,
+  memberFilter,
+  onMemberFilterChange,
+}: {
+  members: TeamMember[]
+  memberFilter: string
+  onMemberFilterChange: (value: string) => void
+}) {
+  const memberId = memberFilter === 'all' ? null : memberFilter
+
+  const query = useQuery({
+    queryKey: timeClockKeys.entries(memberId),
+    queryFn: () => fetchClockEntries(memberId),
+    refetchOnWindowFocus: true,
+    // Open shifts surface a live "ON SHIFT" pill — refresh once a
+    // minute so a clock-out in another tab shows up here.
+    refetchInterval: 60_000,
+  })
+
+  // Sort the dropdown by display_name to match the roster ordering.
+  const memberOptions = useMemo(
+    () => [...members].sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    [members],
+  )
+
+  const rows = query.data ?? []
+
+  return (
+    <div className="space-y-4">
+      {/* Toolbar — member filter dropdown + counter */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="clock-data-member-filter"
+            className="text-[11px] font-semibold uppercase tracking-wide text-text-muted"
+          >
+            Member
+          </label>
+          <select
+            id="clock-data-member-filter"
+            value={memberFilter}
+            onChange={(e) => onMemberFilterChange(e.target.value)}
+            className="text-sm rounded-lg border border-border bg-surface px-3 py-1.5 focus-ring"
+          >
+            <option value="all">All members</option>
+            {memberOptions.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.display_name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <span className="text-[11px] text-text-muted">
+          {query.isLoading ? 'Loading…' : `${rows.length} shift${rows.length === 1 ? '' : 's'}`}
+        </span>
+      </div>
+
+      {query.isLoading ? (
+        <div className="py-12 flex items-center justify-center">
+          <Loader2 size={18} className="animate-spin text-text-muted" aria-hidden="true" />
+        </div>
+      ) : query.error ? (
+        <p className="py-8 text-center text-sm text-rose-300">Couldn't load clock data.</p>
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={Clock}
+          title="No shifts yet"
+          description={
+            memberFilter === 'all'
+              ? 'Shifts will appear here once team members start clocking in.'
+              : 'This member has no clock entries on file yet.'
+          }
+        />
+      ) : (
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/5">
+                  <TmHeaderCell>Member</TmHeaderCell>
+                  <TmHeaderCell>Clock In</TmHeaderCell>
+                  <TmHeaderCell>Clock Out</TmHeaderCell>
+                  <TmHeaderCell>Duration</TmHeaderCell>
+                  <TmHeaderCell>Notes</TmHeaderCell>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <ClockEntryTableRow
+                    key={row.entry_id}
+                    row={row}
+                    memberId={
+                      members.find((m) => m.id === row.member_id)?.id ?? row.member_id
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ClockEntryTableRow({
+  row,
+  memberId,
+}: {
+  row: ClockEntryRow
+  memberId: string
+}) {
+  const isOpen = row.clocked_out_at === null
+  const initial = row.member_name?.charAt(0)?.toUpperCase() ?? '?'
+
+  return (
+    <tr className="border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors">
+      <td className="px-5 py-3">
+        <Link
+          to={`/profile/${memberId}`}
+          className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+        >
+          <div className="w-8 h-8 rounded-full bg-surface-alt border-[2px] border-white/12 text-gold flex items-center justify-center text-[12px] font-bold shrink-0">
+            {initial}
+          </div>
+          <span className="text-[13px] font-medium text-text truncate">
+            {row.member_name}
+          </span>
+        </Link>
+      </td>
+      <td className="px-5 py-3 whitespace-nowrap">
+        <span className="text-[13px] text-text-muted tabular-nums">
+          {formatClockTimestamp(row.clocked_in_at)}
+        </span>
+      </td>
+      <td className="px-5 py-3 whitespace-nowrap">
+        {isOpen ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/12 ring-1 ring-emerald-500/30 text-emerald-300 text-[10px] font-bold">
+            <span
+              className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"
+              aria-hidden="true"
+            />
+            ON SHIFT
+          </span>
+        ) : (
+          <span className="text-[13px] text-text-muted tabular-nums">
+            {formatClockTimestamp(row.clocked_out_at!)}
+          </span>
+        )}
+      </td>
+      <td className="px-5 py-3 whitespace-nowrap">
+        <span className="text-[13px] text-text-muted tabular-nums">
+          {formatDuration(row.duration_minutes)}
+        </span>
+      </td>
+      <td className="px-5 py-3">
+        <span className="text-[13px] text-text-muted line-clamp-2 max-w-md">
+          {row.notes?.trim() || '—'}
+        </span>
+      </td>
+    </tr>
+  )
+}
+
+/**
+ * "Apr 29, 2026 · 9:14 AM" — readable, sortable, CSV-friendly. The
+ * upcoming `<ExportButtons />` work expects ISO-or-readable strings;
+ * this falls in the readable-but-unambiguous bucket.
+ */
+function formatClockTimestamp(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const date = d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+  const time = d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+  return `${date} · ${time}`
+}
+
+/** "—" for open shifts; "5m" / "1h 23m" / "8h" / "1d 4h" otherwise. */
+function formatDuration(minutes: number | null): string {
+  if (minutes === null || minutes < 0) return '—'
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    const m = minutes % 60
+    return m === 0 ? `${hours}h` : `${hours}h ${m}m`
+  }
+  const days = Math.floor(hours / 24)
+  const h = hours % 24
+  return h === 0 ? `${days}d` : `${days}d ${h}h`
 }

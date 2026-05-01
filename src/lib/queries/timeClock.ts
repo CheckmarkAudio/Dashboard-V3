@@ -77,9 +77,40 @@ export async function fetchCurrentlyClockedIn(): Promise<CurrentlyClockedInRow[]
   return (data as CurrentlyClockedInRow[] | null) ?? []
 }
 
+export interface ClockEntryRow {
+  entry_id: string
+  member_id: string
+  member_name: string
+  clocked_in_at: string
+  clocked_out_at: string | null
+  duration_minutes: number | null
+  notes: string | null
+}
+
+/** Admin-only — historical shift log across the team, optionally
+ *  filtered to one member. Open shifts come back with
+ *  `clocked_out_at: null` and `duration_minutes: null`; the UI renders
+ *  those as the "ON SHIFT" pill. Sorted by clocked_in_at desc. */
+export async function fetchClockEntries(
+  memberId?: string | null,
+  limit = 100,
+): Promise<ClockEntryRow[]> {
+  const { data, error } = await supabase.rpc('admin_list_clock_entries', {
+    p_member_id: memberId ?? null,
+    p_limit: limit,
+  })
+  if (error) {
+    console.error(`${LOG_PREFIX} fetchClockEntries failed:`, error)
+    throw new Error(error.message)
+  }
+  return (data as ClockEntryRow[] | null) ?? []
+}
+
 // React-query key factory for cache coordination across widgets.
 export const timeClockKeys = {
   all: ['time-clock'] as const,
   myOpen: () => ['time-clock', 'my-open'] as const,
   currentlyClockedIn: () => ['time-clock', 'currently-clocked-in'] as const,
+  entries: (memberId?: string | null) =>
+    ['time-clock', 'entries', memberId ?? 'all'] as const,
 }
