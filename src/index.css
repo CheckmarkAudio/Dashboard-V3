@@ -119,14 +119,24 @@
    bg is `#e7e7eb` (~91% lightness vs prior `#f4f4f6` at ~96%) — a
    noticeably calmer cool grey. White cards still pop, but the page
    no longer feels like a flashlight on first load.
+
+   Lean 2 rev2 (PR #79 follow-up) — black-edge editorial pass per
+   user feedback + reference image: "more defined black edges for
+   light mode instead of gold; we can still use gold as an accent
+   color". Borders moved from soft grey to near-black `#1c1c22`
+   (matches text colour) so widget cards punch out as crisp
+   ink-lined panels against the cool grey body. Gold body wash
+   removed in favour of a flat shell + the violet pinch remains as
+   the only background tint. Gold token unchanged — still drives the
+   Clock In button, MemberHighlights pill ring, and other accents.
 */
 :root[data-theme='light'] {
   --color-bg: #e7e7eb;
   --color-surface: #ffffff;
   --color-surface-alt: #dfdfe4;
   --color-surface-hover: #d6d6db;
-  --color-border: #c7c7cc;
-  --color-border-light: #a3a3a9;
+  --color-border: #1c1c22;
+  --color-border-light: #5e5e66;
   --color-text: #1c1c22;
   --color-text-muted: #3f3f46;
   --color-text-light: #6b6b72;
@@ -163,17 +173,15 @@ body {
 }
 
 :root[data-theme='light'] body {
-  /* Lean 2 rev (PR #79 follow-up) — alphas + radial reach bumped per
-     user feedback ("hardly see a gradient, can you make it more
-     visible"). Gold 0.06 → 0.18, violet 0.03 → 0.10. Reach extended
-     32% → 48% / 38% → 52% so the tint covers a bigger arc of the
-     page. Still subtle enough that mid-page reading surfaces stay
-     near-flat — the tint sits in the corners, not behind the
-     widgets. Per Tier 3 locked decision #6: body-level only, never
-     on cards. */
+  /* Lean 2 rev2 (PR #79 follow-up) — gold radial removed for the
+     editorial black-edge look. The single violet pinch in the
+     bottom-right stays as the only tint so the body isn't pure flat
+     grey, but stays subtle enough that the crisp black card borders
+     are the dominant visual character. Gold returns as small
+     accents (Clock In button, member-highlight pill ring), not as
+     a body wash. Per Tier 3 locked decision #6: body-level only. */
   background:
-    radial-gradient(circle at top left,     rgba(201, 168, 76, 0.18), transparent 48%),
-    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.10), transparent 52%),
+    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.06), transparent 52%),
     var(--color-bg);
   color-scheme: light;
 }
@@ -264,17 +272,14 @@ body {
     position: relative;
   }
   :root[data-theme='light'] .dashboard-shell {
-    /* Lean 2 rev (PR #79 follow-up) — replaced flat white surface
-       with the body gradient stack so the gold + violet tints are
-       actually visible inside the shell (was being hidden behind a
-       pure-white plate before). Same alphas as the body rule so the
-       gradient reads consistently whether the shell is transparent
-       or opaque. Per Tier 3 locked decision #6: body / shell level
-       only, never on individual widget cards. */
-    background:
-      radial-gradient(circle at top left,     rgba(201, 168, 76, 0.18), transparent 48%),
-      radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.10), transparent 52%),
-      var(--color-surface);
+    /* Lean 2 rev2 (PR #79 follow-up) — editorial black-edge pass.
+       Shell goes back to flat white surface so the new near-black
+       border + black widget-card borders read as crisp ink lines.
+       The body keeps a faint violet pinch in the bottom-right; the
+       shell deliberately doesn't pick that up so the focal area
+       reads as a clean white "page" with sharp edges (reference
+       look the user shared). */
+    background: var(--color-surface);
     border-color: var(--color-border);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   }
