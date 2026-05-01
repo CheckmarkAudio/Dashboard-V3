@@ -209,9 +209,13 @@
    white cards + on translucent marigold pill backgrounds. Doesn't
    affect bg-gold / border-gold — those stay vibrant for buttons,
    bubbles, and other contained "gold-on-frame" usages. Specificity
-   (0,2,0) overrides the Tailwind utility (0,1,0). */
+   (0,2,0) overrides the Tailwind utility (0,1,0).
+   rev11: dropped from 41% L to 28% L per user feedback "darker the
+   font in the transluscent bubble still — its not destink enough".
+   Translucent gold pills (bg-gold/35 with vibrant #f0a623 base) can
+   now host text at solid contrast. */
 :root[data-theme='light'] .text-gold {
-  color: #b87a18; /* HSL 38°, 78%, 41° — readable amber for text */
+  color: #7a510f; /* HSL 38°, 78%, 27% — deep amber for high contrast */
 }
 
 body {
