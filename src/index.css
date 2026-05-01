@@ -193,17 +193,25 @@
   --color-text-muted:    #3f3f46; /* dark grey (unchanged)      */
   --color-text-light:    #6b6b72; /* neutral mid-grey           */
 
-  /* Vibrant marigold/amber — saturated enough that translucent uses
-     (bg-gold/10 etc) read as warm orange-yellow tints, and solid
-     buttons punch as rich marigold rather than muted gold.
-     rev9: nudged darker (54% L → 47% L) per user feedback "make
-     the font in the marigold bubbles a tad darker so they are
-     easier to see" — improves contrast for `text-gold` on white
-     cards + on translucent gold pill backgrounds, while keeping
-     buttons readably vibrant. */
-  --color-gold:          #d8941d; /* HSL 38°, 76%, 47% — deeper marigold */
-  --color-gold-muted:    #b87a18; /* darker hover state                  */
-  --color-gold-dim:      #8a5b12; /* darker still                        */
+  /* Vibrant marigold for backgrounds, buttons, borders, glows.
+     rev10: restored rev8's HSL(36°, 87%, 54%) #f0a623 base after
+     rev9's global darken made buttons murky. The user wants buttons
+     punchy + text readable — accomplished by splitting gold into
+     two CSS layers: this token drives bg/border/glow at full
+     vibrancy; a `text-gold` override below renders text in a
+     darker amber for readability. Hover/dim variants follow. */
+  --color-gold:          #f0a623; /* HSL 36°, 87%, 54° — vibrant marigold */
+  --color-gold-muted:    #d08819; /* darker hover state                   */
+  --color-gold-dim:      #a8691a; /* darker still                         */
+}
+
+/* Light-mode text-gold gets a darker amber so it stays readable on
+   white cards + on translucent marigold pill backgrounds. Doesn't
+   affect bg-gold / border-gold — those stay vibrant for buttons,
+   bubbles, and other contained "gold-on-frame" usages. Specificity
+   (0,2,0) overrides the Tailwind utility (0,1,0). */
+:root[data-theme='light'] .text-gold {
+  color: #b87a18; /* HSL 38°, 78%, 41° — readable amber for text */
 }
 
 body {
