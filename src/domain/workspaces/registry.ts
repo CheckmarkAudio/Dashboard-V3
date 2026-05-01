@@ -20,18 +20,24 @@ import type {
 //   Row 1: team_tasks (col 2)     + forum_notifications (col 1)
 //   Row 2: today_calendar (col 2) + booking_snapshot    (col 1)
 export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
+  // Layout follows the Workspace-UI-Draft mockup: a 2-column grid
+  // (left column wider, right narrower) where the four primary widgets
+  // all fit on one screen so the page reads as a true "overview".
+  //
+  //   Left  col:  My Tasks (rowSpan 2) → Calendar (rowSpan 1)
+  //   Right col:  Notifications (rowSpan 2) → Booking (rowSpan 1)
+  //
+  // Each widget owns one column (defaultSpan: 1); the asymmetric
+  // column ratio is set in WorkspacePanel.tsx on the lg breakpoint.
   {
     // Widget id stays `team_tasks` so saved layouts keep resolving;
     // the rendered component is now `MyTasksCard` (the same card that
     // lives on the /daily Tasks page) sharing state via MyTasksContext.
-    // Two row-span tall — the card has a header strip + filter pills +
-    // task list + Submit Completed bar, so a single row leaves room
-    // for only ~2 visible task rows. Doubling the row span gives ~6.
     id: 'team_tasks',
     title: 'My Tasks',
     description: 'Personal queue — synched with the Tasks page.',
-    defaultSpan: 2,
-    defaultRowSpan: 3,
+    defaultSpan: 1,
+    defaultRowSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
@@ -39,13 +45,15 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     title: 'Notifications',
     description: 'Unread messages across channels.',
     defaultSpan: 1,
+    defaultRowSpan: 2,
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
     id: 'today_calendar',
     title: 'Calendar',
     description: "Today's schedule.",
-    defaultSpan: 2,
+    defaultSpan: 1,
+    defaultRowSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
@@ -53,6 +61,7 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     title: 'Booking',
     description: 'Upcoming sessions and quick book.',
     defaultSpan: 1,
+    defaultRowSpan: 1,
     allowedRoles: ['member', 'admin', 'owner'],
   },
 ]
@@ -206,7 +215,14 @@ function buildDefaultWidgetState(
 // widget has room for ~10 task rows above the Submit Completed bar.
 // Bumping the version is the migration — saved v6 layouts get wiped
 // from localStorage on next load and rebuild from the new defaults.
-export const WORKSPACE_LAYOUT_VERSION = 7
+//
+// v8 (Apr 2026): pulled the Workspace-UI-Draft mockup proportions in
+// — all four primary member widgets are now defaultSpan: 1 with
+// rowSpans tuned to a 2x3 grid (Tasks/Notifications rowSpan 2 +
+// Calendar/Booking rowSpan 1). Combined with the asymmetric 1.4fr/1fr
+// columns set in WorkspacePanel.tsx, this fits the entire Overview on
+// one page so the word "overview" actually applies.
+export const WORKSPACE_LAYOUT_VERSION = 8
 
 // Default layouts per scope. The page passes its scope in, picks the
 // matching array, and produces widget state. Scope is used only for
