@@ -178,20 +178,26 @@
    back it up" — buttons and pills both have implicit framing).
 */
 :root[data-theme='light'] {
-  /* Lean 2 rev15 — un-reverse the body/card swap per user feedback:
-     "I thought I told you to make the widgets the grey and the box
-     behind them light". Goes back to rev7's almost-white body +
-     grey cards arrangement. Earlier rev8 swap mis-interpreted user
-     intent. */
-  --color-bg:            #f5f5f5; /* almost white — body        */
-  --color-surface:       #dcdcdc; /* light grey — widgets/cards */
-  --color-surface-alt:   #d0d0d0; /* darker grey (nests)        */
-  --color-surface-hover: #c4c4c4; /* hover state                */
-  --color-border:        #1c1c22; /* black ink (unchanged)      */
-  --color-border-light:  #9a9a9a; /* neutral mid-grey dividers  */
-  --color-text:          #1c1c22; /* black (unchanged)          */
-  --color-text-muted:    #3f3f46; /* dark grey (unchanged)      */
-  --color-text-light:    #6b6b72; /* neutral mid-grey           */
+  /* Lean 2 rev18 — inverted-chrome pass per user feedback: "make
+     the widgest and any grey boxes & assets including header and
+     menue alot darker grey and the font on them white".
+
+     Light mode now adopts dark-card chrome with a light body
+     visible only at the dashboard-shell edges (the page-gap
+     padding around the rounded shell). Inside the shell — header,
+     menu, page header, widget cards — everything is dark grey
+     with white text. Effectively a "dark-app-on-light-body"
+     hybrid: identical visual weight to the dark theme but with a
+     bright outer body color. */
+  --color-bg:            #f5f5f5; /* almost white — outer body  */
+  --color-surface:       #2a2a32; /* DARK grey — widgets/header */
+  --color-surface-alt:   #1c1c22; /* deeper dark for nests      */
+  --color-surface-hover: #3a3a42; /* lighter on hover           */
+  --color-border:        #3a3a42; /* subtle divider on dark     */
+  --color-border-light:  #5a5a64; /* mid-grey for inner dividers*/
+  --color-text:          #e8e8eb; /* near-white text on dark    */
+  --color-text-muted:    #a3a3a9; /* lighter grey muted         */
+  --color-text-light:    #7e7e88; /* mid-grey low emphasis      */
 
   /* Vibrant marigold for backgrounds, buttons, borders, glows.
      rev10: restored rev8's HSL(36°, 87%, 54%) #f0a623 base after
