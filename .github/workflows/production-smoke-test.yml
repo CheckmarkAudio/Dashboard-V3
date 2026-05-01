@@ -1,0 +1,106 @@
+name: Production smoke test
+
+# Why: Vercel deploys main automatically; env-var drift in the Vercel
+# dashboard isn't visible in git, so a misconfigured env (like the
+# `VITE_DEMO_MODE=true` incident that leaked into Production scope and
+# disabled the login page for ~8 days) wouldn't be caught by code review.
+# This workflow hits the live URL after each main push and asserts that
+# no auth-bypass markers ended up in the production bundle.
+#
+# If anyone re-introduces a `VITE_DEMO_MODE`-style env-gated bypass in the
+# future, this catches it on the very next deploy instead of on the user's
+# next session.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Daily at 13:00 UTC (7am MDT / 6am MST) — catches drift introduced
+    # by Vercel-side env changes that aren't tied to a git push.
+    - cron: '0 13 * * *'
+
+jobs:
+  smoke:
+    name: Production bundle smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wait for Vercel deploy
+        if: github.event_name == 'push'
+        # Vercel typically deploys main within 60-90s of push. Sleep
+        # ensures the new bundle is live before we assert against it.
+        run: sleep 90
+
+      - name: Fetch production HTML
+        id: html
+        run: |
+          curl --fail --silent --show-error \
+            -o prod.html \
+            -A 'github-actions-smoke-test' \
+            https://dashboard-v3-dusky.vercel.app/
+          test -s prod.html
+
+      - name: Extract main bundle path
+        id: bundle
+        run: |
+          path=$(grep -oE 'assets/[a-zA-Z0-9._-]+\.js' prod.html | head -1)
+          if [ -z "$path" ]; then
+            echo "❌ No main bundle found in production HTML — site may be down."
+            exit 1
+          fi
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "✅ Main bundle: $path"
+
+      - name: Fetch production JS bundle
+        run: |
+          curl --fail --silent --show-error \
+            -o prod-bundle.js \
+            -A 'github-actions-smoke-test' \
+            "https://dashboard-v3-dusky.vercel.app/${{ steps.bundle.outputs.path }}"
+          test -s prod-bundle.js
+          wc -c prod-bundle.js
+
+      - name: Assert no Dev Admin mock user
+        # The DevAuthProvider hard-codes `display_name: 'Dev Admin'`. If
+        # this string appears in the bundle, the dev mock got minified
+        # in — meaning the entire DevAuthProvider tree wasn't tree-shaken
+        # because some build path keeps it reachable. That would only
+        # happen if `import.meta.env.DEV` is somehow truthy in a Vercel
+        # build, OR if a future regression re-introduces an env-gated
+        # bypass.
+        run: |
+          if grep -q 'Dev Admin' prod-bundle.js; then
+            echo "❌ FAIL: 'Dev Admin' string found in production bundle."
+            echo "   This means the DevAuthProvider mock got included in the deploy."
+            echo "   Likely cause: a build path is reachable when import.meta.env.DEV is truthy,"
+            echo "   OR an env-gated auth bypass was reintroduced. Audit ProtectedRoute.tsx + AuthContext.tsx."
+            exit 1
+          fi
+          echo "✅ No Dev Admin mock in production bundle."
+
+      - name: Assert no VITE_DEMO_MODE env-gated bypass
+        # If anyone re-adds an env-gated bypass like the old
+        # `import.meta.env.VITE_DEMO_MODE === 'true'` check, the literal
+        # `VITE_DEMO_MODE` should NOT appear as a string check in the
+        # production bundle. (Vite inlines `import.meta.env.X` at build
+        # time, so reading the env in code becomes a literal value
+        # comparison — but the env var NAME itself shouldn't be a string
+        # constant in the bundle unless someone added a runtime read.)
+        run: |
+          if grep -q 'VITE_DEMO_MODE' prod-bundle.js; then
+            echo "❌ FAIL: 'VITE_DEMO_MODE' string found in production bundle."
+            echo "   This means an env-gated auth bypass was reintroduced."
+            echo "   The VITE_DEMO_MODE pattern was deliberately removed in PR #75 — see"
+            echo "   feedback_drift_detective_mode.md for context."
+            exit 1
+          fi
+          echo "✅ No VITE_DEMO_MODE bypass in production bundle."
+
+      - name: Assert login route still resolves
+        run: |
+          curl --fail --silent --show-error \
+            -o /dev/null \
+            -A 'github-actions-smoke-test' \
+            https://dashboard-v3-dusky.vercel.app/login
+          echo "✅ /login route returns 200."
