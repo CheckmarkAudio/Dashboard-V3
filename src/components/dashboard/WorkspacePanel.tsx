@@ -34,7 +34,6 @@ import type {
   WorkspaceScope,
   WorkspaceWidgetDefinition,
   WorkspaceWidgetId,
-  WorkspaceWidgetState,
   WidgetRowSpan,
 } from '../../domain/workspaces/types'
 import DashboardWidgetFrame, { type DragHandleProps } from './DashboardWidgetFrame'
