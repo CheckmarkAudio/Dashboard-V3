@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Building2,
@@ -6,11 +7,15 @@ import {
   CheckCircle2,
   Circle,
   Clock,
+  Hourglass,
+  Trash2,
   User as UserIcon,
 } from 'lucide-react'
 import FloatingDetailModal from '../FloatingDetailModal'
 import { useToast } from '../Toast'
+import { useAuth } from '../../contexts/AuthContext'
 import { completeAssignedTask } from '../../lib/queries/assignments'
+import { submitTaskDeleteRequest, taskRequestKeys } from '../../lib/queries/taskRequests'
 import type { AssignedTask } from '../../types/assignments'
 import { FLYWHEEL_STAGES, type FlywheelStage } from './requests/formAtoms'
 
@@ -41,6 +46,7 @@ export default function TaskDetailModal({
 }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const { profile } = useAuth()
 
   const toggleMutation = useMutation({
     mutationFn: () => completeAssignedTask(task.id, !task.is_completed),
@@ -55,8 +61,40 @@ export default function TaskDetailModal({
     },
   })
 
+  // Request-delete flow. Members (and admins viewing their own task)
+  // can ask admins to delete; the small inline reason form replaces
+  // the footer when open. Server enforces the can-request rules — UI
+  // just gates which users see the entry button (own member-scope
+  // task that isn't already completed).
+  const [requestingDelete, setRequestingDelete] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
+  const requestDeleteMutation = useMutation({
+    mutationFn: () => submitTaskDeleteRequest(task.id, deleteReason.trim() || null),
+    onSuccess: () => {
+      toast('Delete request sent — waiting for admin approval.', 'success')
+      void queryClient.invalidateQueries({ queryKey: taskRequestKeys.mine() })
+      void queryClient.invalidateQueries({ queryKey: taskRequestKeys.pending() })
+      onClose()
+    },
+    onError: (err) => {
+      toast(err instanceof Error ? err.message : 'Could not submit delete request', 'error')
+    },
+  })
+
   const done = task.is_completed
   const stage = FLYWHEEL_STAGES.find((s) => s.key === task.category) ?? null
+
+  // Only show "Request delete" when the task is the user's own member-
+  // scope task. Studio rows have no single owner (admin direct-delete
+  // is the only path; the RPC rejects member submissions for them).
+  // Hidden for completed tasks since deleting completed work skews
+  // the historical record — admins can still direct-delete via /admin/templates
+  // if absolutely needed.
+  const canRequestDelete =
+    !done &&
+    task.scope === 'member' &&
+    Boolean(profile?.id) &&
+    task.assigned_to === profile?.id
 
   const originLabel = (() => {
     if (task.source_type === 'daily_checklist') return 'Daily checklist'
@@ -73,6 +111,52 @@ export default function TaskDetailModal({
       maxWidth={560}
       ariaLabel="Task details"
       footer={
+        requestingDelete ? (
+          // Inline reason form replaces the default footer while the
+          // member is composing the request. Keeps the modal compact —
+          // no second floating dialog stacked on top of this one.
+          <div className="px-4 py-3 border-t border-border bg-rose-500/[0.04] rounded-b-[18px] space-y-2">
+            <div className="flex items-start gap-2">
+              <Hourglass size={12} className="text-rose-300 mt-1 shrink-0" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-bold text-text">Request admin to delete this task</p>
+                <p className="text-[11px] text-text-light mt-0.5">
+                  An admin reviews + approves; nothing is deleted yet.
+                </p>
+              </div>
+            </div>
+            <textarea
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              placeholder="Optional — why? (helps the admin decide)"
+              rows={2}
+              maxLength={500}
+              className="w-full bg-surface-alt border border-border rounded-lg px-3 py-2 text-[12px] placeholder:text-text-light focus:border-rose-400/60 focus:outline-none resize-none"
+              autoFocus
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setRequestingDelete(false)
+                  setDeleteReason('')
+                }}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-text-muted hover:text-text"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => requestDeleteMutation.mutate()}
+                disabled={requestDeleteMutation.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold bg-rose-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(244,63,94,0.25)] disabled:opacity-50"
+              >
+                <Trash2 size={11} aria-hidden="true" />
+                {requestDeleteMutation.isPending ? 'Sending…' : 'Send request'}
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border bg-surface-alt/40 rounded-b-[18px]">
           <p className="text-[11px] text-text-light">
             {task.can_complete
@@ -89,6 +173,17 @@ export default function TaskDetailModal({
             >
               Close
             </button>
+            {canRequestDelete && (
+              <button
+                type="button"
+                onClick={() => setRequestingDelete(true)}
+                title="Ask an admin to delete this task"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 transition-colors"
+              >
+                <Trash2 size={12} aria-hidden="true" />
+                Request delete
+              </button>
+            )}
             {task.can_complete && (
               <button
                 type="button"
@@ -115,6 +210,7 @@ export default function TaskDetailModal({
             )}
           </div>
         </div>
+        )
       }
     >
       <div className="space-y-4 px-4 py-3">

@@ -13,6 +13,10 @@ export const taskRequestKeys = {
 }
 
 export type TaskRequestStatus = 'pending' | 'approved' | 'rejected'
+// What the member is asking for. PR #82 (admin-side) shipped immediate
+// admin delete; this PR adds the member-request half. 'edit' is
+// reserved for the next PR — server raises 'unsupported' on approve.
+export type TaskRequestKind = 'create' | 'edit' | 'delete'
 
 /** Shape of the stored recurrence spec on a task request. `null` = one-shot. */
 export interface RecurrenceSpec {
@@ -30,6 +34,8 @@ export interface PendingTaskRequest {
   category: string | null
   due_date: string | null
   status: TaskRequestStatus
+  kind: TaskRequestKind
+  target_task_id: string | null
   is_required: boolean
   recurrence_spec: RecurrenceSpec | null
   created_at: string
@@ -43,6 +49,8 @@ export interface MyTaskRequest {
   category: string | null
   due_date: string | null
   status: TaskRequestStatus
+  kind: TaskRequestKind
+  target_task_id: string | null
   is_required: boolean
   recurrence_spec: RecurrenceSpec | null
   reviewer_note: string | null
@@ -138,4 +146,32 @@ export async function rejectTaskRequest(
     throw new Error(error.message)
   }
   return data as { request_id: string; notification_id: string }
+}
+
+/**
+ * Member submits a request to delete one of their OWN assigned tasks.
+ * Admin approves via approveTaskRequest (server dispatches on kind);
+ * the actual delete happens server-side at approve time, not at submit.
+ *
+ * Server enforces:
+ *   - caller authenticated
+ *   - task exists in caller's team
+ *   - task scope = 'member' AND assigned_to = caller
+ *
+ * Studio-scope tasks have no single owner — admin direct-delete is
+ * the only path; this RPC rejects with code 22023.
+ */
+export async function submitTaskDeleteRequest(
+  taskId: string,
+  reason: string | null = null,
+): Promise<{ request_id: string; notification_count: number }> {
+  const { data, error } = await supabase.rpc('submit_task_delete_request', {
+    p_task_id: taskId,
+    p_reason: reason,
+  })
+  if (error) {
+    console.error('[queries/taskRequests] submitTaskDeleteRequest failed:', error)
+    throw new Error(error.message)
+  }
+  return data as { request_id: string; notification_count: number }
 }
