@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, Check, CheckCircle2, Hourglass, Inbox, Loader2, Plus, X } from 'lucide-react'
+import {
+  AlertCircle,
+  ArrowRightLeft,
+  Check,
+  CheckCircle2,
+  Hourglass,
+  Inbox,
+  Loader2,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { completeAssignedTask, fetchMemberAssignedTasks } from '../../lib/queries/assignments'
 import {
@@ -8,6 +18,10 @@ import {
   taskRequestKeys,
   type MyTaskRequest,
 } from '../../lib/queries/taskRequests'
+import {
+  fetchMyOutgoingPendingReassignRequests,
+  taskReassignKeys,
+} from '../../lib/queries/taskReassign'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { supabase } from '../../lib/supabase'
 import type { AssignedTask } from '../../types/assignments'
@@ -36,6 +50,17 @@ interface MyTasksCardProps {
 const HIGHLIGHT_EVENT = 'highlight-task'
 const HIGHLIGHT_DURATION_MS = 1600
 
+// 2026-05-02 — pending-state shape per task id. A task can have
+// EITHER a pending transfer offer (caller wants to hand off) OR a
+// pending delete request (caller asked admin to delete) — never
+// both, because the server validations would reject the second.
+type PendingKind = 'transfer' | 'delete'
+interface PendingMeta {
+  kind: PendingKind
+  // Targeted recipient name for the transfer; null for delete (admin).
+  otherPartyName?: string | null
+}
+
 export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {}) {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
@@ -43,7 +68,6 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   const [showCompleted, setShowCompleted] = useState(false)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [requestModalOpen, setRequestModalOpen] = useState(false)
-  const [requestsExpanded, setRequestsExpanded] = useState(false)
   // PR #69 — replaces the stage filter (deferred to the flywheel-event-
   // ledger PR where stages will surface as real KPIs). Splits My Tasks
   // by who put the task in the queue: someone else (admin / approver)
@@ -57,11 +81,9 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   const [detailTask, setDetailTask] = useState<AssignedTask | null>(null)
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
-  // PR #16 — user can ask admin for a task. Fetch any outstanding
-  // requests so we can show a "Pending approval" affordance inline.
-  // Only the pending + recently-resolved window matters here; if the
-  // user has 50 old resolved requests we still only render the recent
-  // ones (RPC limit 20 matches our use case).
+  // Outgoing task_requests — covers the user's pending New Task
+  // requests (kind='create') AND the user's pending Delete requests
+  // (kind='delete', target_task_id refs an existing assigned_task).
   const myRequestsQuery = useQuery({
     queryKey: taskRequestKeys.mine(),
     queryFn: () => fetchMyTaskRequests(20),
@@ -70,7 +92,18 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     staleTime: 30_000,
   })
   const myRequests = myRequestsQuery.data ?? []
-  const pendingRequests = myRequests.filter((r) => r.status === 'pending')
+
+  // 2026-05-02 — outgoing pending reassign requests so MyTasksCard
+  // can mark tasks the user has offered to hand off to a teammate.
+  // Filtered server-side to status='pending' and to the OUTGOING
+  // direction the caller initiated.
+  const myOutgoingReassignsQuery = useQuery({
+    queryKey: taskReassignKeys.outgoing(),
+    queryFn: fetchMyOutgoingPendingReassignRequests,
+    enabled: Boolean(profile?.id),
+    staleTime: 30_000,
+  })
+  const myOutgoingReassigns = myOutgoingReassignsQuery.data ?? []
 
   const cacheKey = ['assigned-tasks', profile?.id ?? 'none'] as const
   const tasksQuery = useQuery({
@@ -94,6 +127,24 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         },
         () => {
           void queryClient.invalidateQueries({ queryKey: cacheKey })
+        },
+      )
+      // 2026-05-02 — also listen to the user's own task_requests +
+      // task_reassign_requests so the divider/pending section updates
+      // live when admin approves/declines or a peer accepts/declines.
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'task_requests' },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: taskRequestKeys.mine() })
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'task_reassign_requests' },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: taskReassignKeys.outgoing() })
+          void queryClient.invalidateQueries({ queryKey: taskReassignKeys.incoming() })
         },
       )
       .subscribe()
@@ -122,15 +173,6 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     window.addEventListener(HIGHLIGHT_EVENT, handler)
     return () => window.removeEventListener(HIGHLIGHT_EVENT, handler)
   }, [tasksQuery.data])
-
-  // PR #26 — dispatched when the user clicks a task_request_rejected
-  // notification. Open the pending-requests strip so the reviewer
-  // note is immediately visible.
-  useEffect(() => {
-    const handler = () => setRequestsExpanded(true)
-    window.addEventListener('expand-task-requests', handler)
-    return () => window.removeEventListener('expand-task-requests', handler)
-  }, [])
 
   // PR #37 — batch-submit mutation. Takes an array of {id, next}
   // pairs and fires completeAssignedTask for each in parallel.
@@ -203,6 +245,34 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     return m
   }, [membersQuery.data])
 
+  // 2026-05-02 — derive pending-state map from the two request
+  // queries. Each task can have at most one pending state (transfer
+  // OR delete; server enforces this). Transfer takes precedence in
+  // the (impossible) collision since it has a richer body line.
+  const pendingByTask = useMemo(() => {
+    const map = new Map<string, PendingMeta>()
+    for (const r of myOutgoingReassigns) {
+      if (r.direction !== 'transfer') continue
+      map.set(r.task_id, { kind: 'transfer', otherPartyName: r.other_party_name })
+    }
+    for (const r of myRequests) {
+      if (r.kind !== 'delete') continue
+      if (r.status !== 'pending') continue
+      if (!r.target_task_id) continue
+      if (map.has(r.target_task_id)) continue
+      map.set(r.target_task_id, { kind: 'delete', otherPartyName: null })
+    }
+    return map
+  }, [myOutgoingReassigns, myRequests])
+
+  // Pending NEW task requests — the member asked admin to add a task,
+  // pending approval. No materialized assigned_task row exists yet,
+  // so these render as their own row type below the divider.
+  const pendingNewRequests = useMemo(
+    () => myRequests.filter((r) => r.kind === 'create' && r.status === 'pending'),
+    [myRequests],
+  )
+
   // PR #69 — assigned/self counts driving the filter pill row.
   const sourceCounts = useMemo(() => {
     const c: Record<SourceFilter, number> = { all: openTasks.length, assigned: 0, self: 0 }
@@ -221,10 +291,24 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         ? preFilterVisible.filter((t) => isSelfAssigned(t))
         : preFilterVisible.filter((t) => !isSelfAssigned(t))
 
-  // PR #37 — no header strip. The widget frame already shows "My
-  // Tasks" up top; the "N open · M done" counter + completed toggle
-  // were extra noise inside the card. Pending-request chip + eye
-  // toggle now live in the footer alongside the + Task button.
+  // Split into active vs pending — pending rows render dimmer below
+  // a divider so the user's working list stays focused on what's
+  // actionable right now.
+  const { activeVisibleTasks, pendingVisibleTasks } = useMemo(() => {
+    const active: AssignedTask[] = []
+    const pending: AssignedTask[] = []
+    for (const t of visibleTasks) {
+      if (pendingByTask.has(t.id)) pending.push(t)
+      else active.push(t)
+    }
+    return { activeVisibleTasks: active, pendingVisibleTasks: pending }
+  }, [visibleTasks, pendingByTask])
+
+  // The pending section appears whenever there's anything in it —
+  // either a task with an outgoing pending request, or a brand-new
+  // task request awaiting admin approval. Hidden otherwise so an
+  // empty divider doesn't add noise.
+  const hasAnyPending = pendingVisibleTasks.length > 0 || pendingNewRequests.length > 0
 
   // Inline "+ Task" row. Sits inside the empty-state call-to-action;
   // the real footer below the list carries the same button at the
@@ -268,7 +352,11 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
 
   // Sticky bottom footer — two rows:
   //   - SubmitBar (greyed when pendingIds empty, gold when queued)
-  //   - + Task · pending-requests chip · Show-completed eye
+  //   - + Task · Show-completed eye
+  // The "N pending" expandable strip + chip have been retired —
+  // pending requests now render in a dedicated divider section
+  // above (always visible when non-empty), so the chip-toggle
+  // affordance is no longer needed.
   const footerBar = (
     <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t border-white/5">
       <SubmitBar
@@ -286,18 +374,6 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
           <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
           Task
         </button>
-        {pendingRequests.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setRequestsExpanded((v) => !v)}
-            className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 transition-colors"
-            aria-expanded={requestsExpanded}
-            title={`${pendingRequests.length} pending approval`}
-          >
-            <Hourglass size={11} aria-hidden="true" />
-            {pendingRequests.length}
-          </button>
-        )}
         <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
       </div>
     </div>
@@ -320,14 +396,6 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
       </div>
 
-      {/* PR #16 — pending-request strip. Collapsed by default; the
-          "N pending" chip in the header toggles it. Shows title +
-          status per request, plus a way to see admin's rejection
-          note when resolved. */}
-      {requestsExpanded && myRequests.length > 0 && (
-        <PendingRequestsList requests={myRequests} />
-      )}
-
       <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
         {tasksQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light py-6">
@@ -338,7 +406,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             <AlertCircle size={16} className="shrink-0" />
             <span>{(tasksQuery.error as Error).message}</span>
           </div>
-        ) : visibleTasks.length === 0 ? (
+        ) : activeVisibleTasks.length === 0 && !hasAnyPending ? (
           <div className="h-full flex flex-col items-center justify-center text-center py-6">
             <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
               <Inbox size={18} className="text-gold" aria-hidden="true" />
@@ -356,39 +424,83 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             {addTaskRow}
           </div>
         ) : (
-          visibleTasks.map((task) => {
-            const separatorBefore =
-              showCompleted && task.is_completed && openTasks.length > 0 && task.id === doneTasks[0]?.id
-            return (
-              <div key={task.id}>
-                {separatorBefore && (
-                  <div className="mx-2 my-2 flex items-center gap-2">
-                    <CheckCircle2 size={11} className="text-emerald-400/70" aria-hidden="true" />
-                    <p className="text-[11px] font-semibold tracking-[0.06em] text-emerald-400/70">COMPLETED</p>
-                    <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
-                  </div>
-                )}
-                <AssignedTaskRow
-                  task={task}
-                  highlighted={highlightedId === task.id}
-                  isPending={pendingIds.has(task.id)}
-                  onToggle={(nextTask) => togglePending(nextTask.id)}
-                  onOpenDetail={(nextTask) => setDetailTask(nextTask)}
-                  rowRef={(node) => {
-                    if (node) rowRefs.current.set(task.id, node)
-                    else rowRefs.current.delete(task.id)
-                  }}
-                  memberMap={memberMap}
-                />
-              </div>
-            )
-          })
+          <>
+            {activeVisibleTasks.map((task) => {
+              const separatorBefore =
+                showCompleted &&
+                task.is_completed &&
+                openTasks.length > 0 &&
+                task.id === doneTasks[0]?.id
+              return (
+                <div key={task.id}>
+                  {separatorBefore && (
+                    <div className="mx-2 my-2 flex items-center gap-2">
+                      <CheckCircle2 size={11} className="text-emerald-400/70" aria-hidden="true" />
+                      <p className="text-[11px] font-semibold tracking-[0.06em] text-emerald-400/70">COMPLETED</p>
+                      <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
+                    </div>
+                  )}
+                  <AssignedTaskRow
+                    task={task}
+                    highlighted={highlightedId === task.id}
+                    isPending={pendingIds.has(task.id)}
+                    pendingMeta={null}
+                    onToggle={(nextTask) => togglePending(nextTask.id)}
+                    onOpenDetail={(nextTask) => setDetailTask(nextTask)}
+                    rowRef={(node) => {
+                      if (node) rowRefs.current.set(task.id, node)
+                      else rowRefs.current.delete(task.id)
+                    }}
+                    memberMap={memberMap}
+                  />
+                </div>
+              )
+            })}
+
+            {/* 2026-05-02 — Pending section.
+                Divider with PENDING eyebrow; below: tasks with a
+                pending outgoing request (transfer / delete) at 60%
+                opacity + status badge, then any pending NEW task
+                requests (no materialized task yet). The whole block
+                is hidden when nothing is pending. */}
+            {hasAnyPending && (
+              <>
+                <div className="mx-2 my-2 flex items-center gap-2">
+                  <Hourglass size={11} className="text-amber-300/80" aria-hidden="true" />
+                  <p className="text-[11px] font-semibold tracking-[0.08em] text-amber-300/80 uppercase">
+                    Pending
+                  </p>
+                  <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
+                </div>
+
+                {pendingVisibleTasks.map((task) => (
+                  <AssignedTaskRow
+                    key={task.id}
+                    task={task}
+                    highlighted={highlightedId === task.id}
+                    isPending={pendingIds.has(task.id)}
+                    pendingMeta={pendingByTask.get(task.id) ?? null}
+                    onToggle={(nextTask) => togglePending(nextTask.id)}
+                    onOpenDetail={(nextTask) => setDetailTask(nextTask)}
+                    rowRef={(node) => {
+                      if (node) rowRefs.current.set(task.id, node)
+                      else rowRefs.current.delete(task.id)
+                    }}
+                    memberMap={memberMap}
+                  />
+                ))}
+
+                {pendingNewRequests.map((req) => (
+                  <PendingCreateRequestRow key={req.id} request={req} />
+                ))}
+              </>
+            )}
+          </>
         )}
       </div>
 
-      {/* PR #37 — sticky footer with + Task, pending-requests chip
-          (if any), and the show-completed eye. Stays below the scroll
-          area so the eye is always reachable. */}
+      {/* PR #37 — sticky footer with + Task + show-completed eye.
+          Stays below the scroll area so the eye is always reachable. */}
       {footerBar}
     </>
   )
@@ -410,54 +522,45 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
 }
 
 /**
- * PendingRequestsList — compact strip of the user's task requests,
- * grouped by status. Shown inline in MyTasksCard when the user
- * toggles the "pending approval" chip.
+ * 2026-05-02 — Row variant for a pending NEW task request that
+ * doesn't have a materialized assigned_task row yet. Same dimmer
+ * visual rhythm as a pending-state assigned task; rejected requests
+ * stay visible so the member can read the admin's note.
  */
-function PendingRequestsList({ requests }: { requests: MyTaskRequest[] }) {
-  const ordered = [...requests].sort((a, b) => {
-    // pending first, then rejected (with note), then approved
-    const weight = (s: MyTaskRequest['status']) =>
-      s === 'pending' ? 0 : s === 'rejected' ? 1 : 2
-    if (weight(a.status) !== weight(b.status)) return weight(a.status) - weight(b.status)
-    return b.created_at.localeCompare(a.created_at)
-  })
+function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
+  const isRejected = request.status === 'rejected'
   return (
-    <div className="px-3 pb-2 space-y-1.5">
-      {ordered.slice(0, 6).map((r) => (
-        <RequestRow key={r.id} request={r} />
-      ))}
-    </div>
-  )
-}
-
-function RequestRow({ request }: { request: MyTaskRequest }) {
-  const tone =
-    request.status === 'pending'
-      ? 'bg-amber-500/10 ring-amber-500/30 text-amber-200'
-      : request.status === 'approved'
-        ? 'bg-emerald-500/10 ring-emerald-500/30 text-emerald-200'
-        : 'bg-rose-500/10 ring-rose-500/30 text-rose-200'
-  const icon =
-    request.status === 'pending' ? (
-      <Hourglass size={11} aria-hidden="true" />
-    ) : request.status === 'approved' ? (
-      <Check size={11} aria-hidden="true" />
-    ) : (
-      <X size={11} aria-hidden="true" />
-    )
-  return (
-    <div className={`rounded-lg ring-1 px-2.5 py-1.5 text-[12px] ${tone}`}>
-      <div className="flex items-center gap-1.5 font-semibold">
-        {icon}
-        <span className="truncate">{request.title}</span>
-        <span className="ml-auto text-[10px] uppercase tracking-wider opacity-70">
-          {request.status}
-        </span>
+    <div
+      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent ${
+        isRejected
+          ? 'bg-rose-500/[0.05] opacity-90'
+          : 'bg-white/[0.018] opacity-60'
+      }`}
+    >
+      <span
+        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md flex items-center justify-center ${
+          isRejected
+            ? 'bg-rose-500/15 ring-1 ring-rose-500/30 text-rose-300'
+            : 'bg-amber-500/15 ring-1 ring-amber-500/30 text-amber-300'
+        }`}
+        aria-hidden="true"
+      >
+        {isRejected ? <Hourglass size={10} /> : <Plus size={10} strokeWidth={3} />}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[13px] font-semibold text-text/90 truncate">{request.title}</p>
+        <p
+          className={`text-[10px] mt-0.5 ${
+            isRejected ? 'text-rose-300/80' : 'text-amber-200/80'
+          }`}
+        >
+          {isRejected ? 'Declined' : 'New task — pending admin approval'}
+          {isRejected && request.reviewer_note ? ` · "${request.reviewer_note}"` : ''}
+        </p>
       </div>
-      {request.status === 'rejected' && request.reviewer_note && (
-        <p className="mt-0.5 text-[11px] opacity-90">{request.reviewer_note}</p>
-      )}
+      <span className="text-[10px] uppercase tracking-wider text-text-light/70 whitespace-nowrap mt-[2px]">
+        {request.status}
+      </span>
     </div>
   )
 }
@@ -466,6 +569,7 @@ function AssignedTaskRow({
   task,
   highlighted,
   isPending,
+  pendingMeta,
   onToggle,
   onOpenDetail,
   rowRef,
@@ -474,6 +578,11 @@ function AssignedTaskRow({
   task: AssignedTask
   highlighted: boolean
   isPending: boolean
+  // 2026-05-02 — when set, render the row in the dimmer "pending"
+  // state and show a status badge ("Awaiting transfer to X" /
+  // "Awaiting admin to delete"). Disables the Submit-Completed
+  // queue toggle since the task is mid-flight.
+  pendingMeta: PendingMeta | null
   onToggle: (task: AssignedTask) => void
   onOpenDetail: (task: AssignedTask) => void
   rowRef: (node: HTMLDivElement | null) => void
@@ -487,6 +596,7 @@ function AssignedTaskRow({
   const dueLabel = formatDueShort(task.due_date)
   const isNew =
     !done &&
+    !pendingMeta &&
     Boolean(task.batch?.created_at) &&
     Date.now() - new Date(task.batch!.created_at).getTime() < 24 * 60 * 60 * 1000
 
@@ -498,6 +608,12 @@ function AssignedTaskRow({
   const assignee = task.assigned_to ? memberMap.get(task.assigned_to) : undefined
   const roleLabel = rolePositionFor(assignee?.position)
   const shortName = formatShortName(task.assigned_to_name)
+
+  // Toggling complete on a task that's mid-request would race with
+  // the admin/peer's decision. Suppress the queue toggle for pending
+  // tasks; click body still opens detail so the user can read the
+  // pending state in context.
+  const canQueue = task.can_complete && !pendingMeta
 
   // PR #25 — split click surfaces. Checkbox toggles completion;
   // body-click opens the detail modal. Keyboard: Space toggles
@@ -516,7 +632,7 @@ function AssignedTaskRow({
         if (event.key === 'Enter') {
           event.preventDefault()
           onOpenDetail(task)
-        } else if (event.key === ' ' && task.can_complete) {
+        } else if (event.key === ' ' && canQueue) {
           event.preventDefault()
           onToggle(task)
         }
@@ -524,11 +640,13 @@ function AssignedTaskRow({
       className={`group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left cursor-pointer ${
         highlighted
           ? 'bg-gold/20 ring-2 ring-gold animate-[pulse_0.8s_ease-in-out_2]'
-          : done
-            ? 'bg-white/[0.018] opacity-60 hover:opacity-80'
-            : isNew
-              ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
-              : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
+          : pendingMeta
+            ? 'bg-white/[0.018] opacity-60 hover:opacity-80 hover:bg-white/[0.03]'
+            : done
+              ? 'bg-white/[0.018] opacity-60 hover:opacity-80'
+              : isNew
+                ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
+                : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
       }`}
     >
       {/* Checkbox — independent click target. stopPropagation so the
@@ -539,9 +657,9 @@ function AssignedTaskRow({
         type="button"
         onClick={(event) => {
           event.stopPropagation()
-          if (task.can_complete) onToggle(task)
+          if (canQueue) onToggle(task)
         }}
-        disabled={!task.can_complete}
+        disabled={!canQueue}
         aria-label={done ? 'Mark incomplete' : 'Mark complete'}
         aria-pressed={checkVisual}
         className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md flex items-center justify-center transition-colors ${
@@ -550,7 +668,7 @@ function AssignedTaskRow({
             : done
               ? 'bg-emerald-500/80 border border-emerald-500/80 text-white'
               : 'bg-surface-alt border border-border-light group-hover:border-gold/50'
-        } ${task.can_complete ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
+        } ${canQueue ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
       >
         {checkVisual && <Check size={12} strokeWidth={3} aria-hidden="true" />}
       </button>
@@ -568,16 +686,30 @@ function AssignedTaskRow({
             <span className="shrink-0 text-[10px] uppercase tracking-wider text-cyan-300 font-bold">Studio</span>
           )}
         </div>
-        {/* PR #69 — task description is intentionally not rendered
-            inline (PR #61). The metadata row now reads as
-            `[role] · First L.` — the date column header above shows
-            "Due" so readers know the right-side label is the due
-            date, not assignment date. */}
-        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-light flex-wrap">
-          {roleLabel && <span className="lowercase">{roleLabel}</span>}
-          {roleLabel && shortName && <span aria-hidden="true">·</span>}
-          {shortName && <span>{shortName}</span>}
-        </div>
+        {/* PR #69 — `[role] · First L.` line. When the row is in a
+            pending state, this line is replaced by a status badge
+            so the user immediately sees what's mid-flight. */}
+        {pendingMeta ? (
+          <div className="flex items-center gap-1.5 mt-0.5 text-[10px] flex-wrap">
+            {pendingMeta.kind === 'transfer' ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gold/15 ring-1 ring-gold/30 text-gold/90 font-semibold">
+                <ArrowRightLeft size={9} strokeWidth={2.5} aria-hidden="true" />
+                Awaiting {pendingMeta.otherPartyName ?? 'teammate'}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/15 ring-1 ring-rose-500/30 text-rose-300 font-semibold">
+                <Trash2 size={9} strokeWidth={2.5} aria-hidden="true" />
+                Awaiting admin to delete
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-light flex-wrap">
+            {roleLabel && <span className="lowercase">{roleLabel}</span>}
+            {roleLabel && shortName && <span aria-hidden="true">·</span>}
+            {shortName && <span>{shortName}</span>}
+          </div>
+        )}
       </div>
 
       {/* Due date — right column of the grid, vertically top-aligned
