@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Check, Inbox, Loader2, X } from 'lucide-react'
+import { AlertCircle, Check, Inbox, Loader2, Trash2, X } from 'lucide-react'
 import {
   adminLogKeys,
   fetchRecentApprovals,
@@ -59,17 +59,30 @@ export default function AdminApprovalLogWidget() {
 
 function ApprovalRow({ row }: { row: RecentApprovalRow }) {
   const isApproved = row.status === 'approved'
-  const Icon = isApproved ? Check : X
-  const iconClass = isApproved
-    ? 'text-emerald-400/80 shrink-0'
-    : 'text-rose-400/80 shrink-0'
+  const isDeleteApproved = isApproved && row.kind === 'delete'
+  // Approved-delete rows render with a rose Trash2 icon so the
+  // "destructive but admin-blessed" outcome reads at a glance, distinct
+  // from approved-create (emerald check) and rejected (rose X).
+  const Icon = isDeleteApproved ? Trash2 : isApproved ? Check : X
+  const iconClass = isDeleteApproved
+    ? 'text-rose-400/90 shrink-0'
+    : isApproved
+      ? 'text-emerald-400/80 shrink-0'
+      : 'text-rose-400/80 shrink-0'
   const initialed = formatRequesterName(row.requester_name)
   const when = formatRelative(row.resolved_at)
   return (
     <div className="px-2 py-1.5 rounded-lg hover:bg-white/[0.025] transition-colors">
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2">
         <Icon size={12} className={iconClass} aria-hidden="true" strokeWidth={3} />
-        <p className="text-[12px] text-text truncate">{row.title}</p>
+        <p className="text-[12px] text-text truncate">
+          {isDeleteApproved && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-rose-300 mr-1.5">
+              Deleted
+            </span>
+          )}
+          {row.title}
+        </p>
         <span className="text-[11px] text-text-light whitespace-nowrap">{initialed}</span>
         <span className="text-[10px] text-text-light/70 whitespace-nowrap">{when}</span>
       </div>
