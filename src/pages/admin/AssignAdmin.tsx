@@ -27,6 +27,7 @@ import type {
   TaskTemplateLibraryEntry,
 } from '../../types/assignments'
 import MultiTaskCreateModal from '../../components/tasks/requests/MultiTaskCreateModal'
+import { supabase } from '../../lib/supabase'
 import type { TeamMember } from '../../types'
 import type { AssignedTask } from '../../types/assignments'
 
@@ -115,6 +116,39 @@ export default function AssignAdmin() {
     enabled: Boolean(selectedMember?.id),
   })
   const tasks = tasksQuery.data ?? []
+
+  // 2026-05-02 — realtime sync for the selected member's task list.
+  // Without this, a task the member completes/edits/deletes from
+  // their My Tasks widget on a parallel session sat stale on the
+  // admin's open AssignAdmin until React Query's default 5min
+  // invalidation. Filter on assigned_to so we only fire on rows
+  // for the currently-viewed member. Requires assigned_tasks in
+  // supabase_realtime publication w/ REPLICA IDENTITY FULL —
+  // shipped in migration 20260502180000_realtime_task_sync.sql.
+  useEffect(() => {
+    if (!selectedMember?.id) return
+    const memberId = selectedMember.id
+    const sub = supabase
+      .channel(`assign-admin:${memberId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'assigned_tasks',
+          filter: `assigned_to=eq.${memberId}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({
+            queryKey: ['assign-page-member-tasks', memberId],
+          })
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(sub)
+    }
+  }, [selectedMember?.id, queryClient])
 
   // ─── Templates (real fetch for the dropdown) ────────────────────
   const templatesQuery = useQuery({

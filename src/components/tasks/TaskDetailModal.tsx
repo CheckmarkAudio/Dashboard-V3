@@ -126,7 +126,7 @@ export default function TaskDetailModal({
       onClose()
     },
     onError: (err) => {
-      toast(err instanceof Error ? err.message : 'Could not send transfer.', 'error')
+      handleStaleTaskError(err, 'Could not send transfer.')
     },
   })
 
@@ -144,9 +144,29 @@ export default function TaskDetailModal({
       onClose()
     },
     onError: (err) => {
-      toast(err instanceof Error ? err.message : 'Could not submit delete request', 'error')
+      handleStaleTaskError(err, 'Could not submit delete request.')
     },
   })
+
+  // Shared error handler — when the server reports the task is gone
+  // (admin direct-delete from /admin/templates raced our request),
+  // refresh local caches + close the modal with a friendly message
+  // instead of the scary raw 'task not found'. Realtime should usually
+  // beat us to it (PR added pub for assigned_tasks 2026-05-02), but
+  // this defensive path catches any cache-race window.
+  function handleStaleTaskError(err: unknown, fallbackMsg: string) {
+    const message = err instanceof Error ? err.message : ''
+    if (message.toLowerCase().includes('task not found')) {
+      toast('This task was already removed by an admin.', 'success')
+      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
+      closeCompose()
+      onClose()
+      return
+    }
+    toast(message || fallbackMsg, 'error')
+  }
 
   // Forum-style keyboard shortcuts inside any open composer. Capture
   // phase so we beat react-modal/escape-handlers higher in the tree.

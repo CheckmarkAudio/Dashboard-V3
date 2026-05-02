@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, ArrowRightLeft, Check, Inbox, Loader2 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -9,6 +9,7 @@ import {
 } from '../../lib/queries/assignments'
 import { requestTaskReassignment } from '../../lib/queries/taskReassign'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
+import { supabase } from '../../lib/supabase'
 import type { AssignedTask } from '../../types/assignments'
 import type { TeamMember } from '../../types'
 import {
@@ -84,6 +85,33 @@ function AssignmentBoardBody({
     enabled: Boolean(profile?.id),
     refetchInterval: 60_000,
   })
+
+  // 2026-05-02 — realtime sync. MyTasksCard already had a per-user
+  // subscription; the team + studio boards relied on the 60s
+  // refetchInterval, which let an admin's delete-from-AssignAdmin
+  // sit stale for up to a minute on every other open client.
+  // Listen to ALL DML on assigned_tasks (no filter — both boards
+  // show team-wide rows, so any change can affect the visible
+  // list) and invalidate the cache. Requires assigned_tasks to be
+  // in supabase_realtime publication with REPLICA IDENTITY FULL —
+  // shipped in migration 20260502180000_realtime_task_sync.sql.
+  const realtimeTopicRef = useRef(`board-${queryKeyPrefix}-${crypto.randomUUID()}`)
+  useEffect(() => {
+    if (!profile?.id) return
+    const sub = supabase
+      .channel(realtimeTopicRef.current)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'assigned_tasks' },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: [queryKeyPrefix, profile.id] })
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(sub)
+    }
+  }, [profile?.id, queryClient, queryKeyPrefix])
 
   // PR #37 — pending → Submit pattern. Checking a row adds its id to
   // `pendingIds`; Submit Completed commits all queued toggles at once.
