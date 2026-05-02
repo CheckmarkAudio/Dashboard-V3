@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Clock, Inbox, Loader2, Repeat, Trash2, UserCircle2, X } from 'lucide-react'
 import { useToast } from '../../Toast'
@@ -9,6 +9,7 @@ import {
   taskRequestKeys,
   type PendingTaskRequest,
 } from '../../../lib/queries/taskRequests'
+import { supabase } from '../../../lib/supabase'
 import { FlywheelStagePicker, type FlywheelStage } from '../../tasks/requests/formAtoms'
 
 /**
@@ -29,12 +30,37 @@ import { FlywheelStagePicker, type FlywheelStage } from '../../tasks/requests/fo
  */
 
 export default function PendingTaskRequestsWidget() {
+  const queryClient = useQueryClient()
   const queue = useQuery({
     queryKey: taskRequestKeys.pending(),
     queryFn: fetchPendingTaskRequests,
     refetchInterval: 60_000,
   })
   const requests = queue.data ?? []
+
+  // 2026-05-02 — realtime sync. A member submitting a task_request
+  // (delete or create) now pops into the admin queue instantly
+  // instead of waiting up to 60s for the refetchInterval. Listen to
+  // ALL DML on task_requests; resolved rows leaving the queue also
+  // get picked up. Requires task_requests in supabase_realtime
+  // publication w/ REPLICA IDENTITY FULL — shipped in
+  // migration 20260502180000_realtime_task_sync.sql.
+  useEffect(() => {
+    const sub = supabase
+      .channel('admin-pending-task-requests')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'task_requests' },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: taskRequestKeys.pending() })
+          void queryClient.invalidateQueries({ queryKey: ['admin-log'] })
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(sub)
+    }
+  }, [queryClient])
 
   return (
     <div className="flex flex-col h-full min-h-0">
