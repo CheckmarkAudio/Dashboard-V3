@@ -267,29 +267,30 @@ export default function TaskDetailModal({
               >
                 Close
               </button>
-              {/* Member request actions — small icon-only buttons.
-                  Trash = ask admin to delete. ArrowRightLeft = hand
-                  off to a teammate. Tooltip explains; click opens
-                  the matching inline composer. */}
+              {/* Member request actions — small pill buttons (icon +
+                  label) so the action reads at a glance instead of
+                  forcing the user to read tooltips. Trash = ask admin
+                  to delete; ArrowRightLeft = hand off to a teammate.
+                  Click opens the matching inline composer. */}
               {canRequest && (
                 <>
                   <button
                     type="button"
                     onClick={() => setCompose('delete')}
-                    title="Request admin to delete this task"
                     aria-label="Request admin to delete this task"
-                    className="p-2 rounded-xl text-rose-300/70 hover:text-rose-200 hover:bg-rose-500/10 transition-colors focus-ring"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-rose-300 bg-rose-500/10 ring-1 ring-rose-500/25 hover:bg-rose-500/20 hover:text-rose-200 transition-colors focus-ring"
                   >
-                    <Trash2 size={15} aria-hidden="true" />
+                    <Trash2 size={12} aria-hidden="true" />
+                    Delete
                   </button>
                   <button
                     type="button"
                     onClick={() => setCompose('transfer')}
-                    title="Hand off this task to a teammate"
                     aria-label="Hand off this task to a teammate"
-                    className="p-2 rounded-xl text-gold/80 hover:text-gold hover:bg-gold/10 transition-colors focus-ring"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-gold bg-gold/10 ring-1 ring-gold/25 hover:bg-gold/20 transition-colors focus-ring"
                   >
-                    <ArrowRightLeft size={15} aria-hidden="true" />
+                    <ArrowRightLeft size={12} aria-hidden="true" />
+                    Transfer
                   </button>
                 </>
               )}

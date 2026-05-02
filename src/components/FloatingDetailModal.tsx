@@ -125,7 +125,12 @@ export default function FloatingDetailModal({
         ref={panelRef}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-h-[85vh] rounded-3xl border border-white/10 bg-gradient-to-b from-[rgba(22,24,31,0.98)] to-[rgba(15,17,22,0.98)] shadow-[0_22px_70px_rgba(0,0,0,0.55)] overflow-hidden flex flex-col outline-none focus:outline-none animate-slide-up"
+        // 2026-05-02 — `90dvh` (dynamic viewport height) instead of
+        // `85vh` so the modal accounts for mobile/desktop browser
+        // chrome (address bars, toolbars) and never anchors off the
+        // visible viewport. Browsers without dvh support fall back
+        // to vh via the second value.
+        className="relative w-full max-h-[90dvh] max-h-[90vh] rounded-3xl border border-white/10 bg-gradient-to-b from-[rgba(22,24,31,0.98)] to-[rgba(15,17,22,0.98)] shadow-[0_22px_70px_rgba(0,0,0,0.55)] overflow-hidden flex flex-col outline-none focus:outline-none animate-slide-up"
         style={{ maxWidth: typeof maxWidth === 'number' ? `${maxWidth}px` : maxWidth }}
       >
         {/* Header */}
