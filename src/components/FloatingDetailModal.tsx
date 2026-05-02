@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 /**
@@ -112,7 +113,15 @@ export default function FloatingDetailModal({
   const backdropOpacity =
     depth === 0 ? 'bg-black/60' : depth === 1 ? 'bg-black/40' : 'bg-black/30'
 
-  return (
+  // 2026-05-02 — portal to document.body so `position: fixed` is
+  // viewport-relative again. Without this the modal renders as a
+  // child of MyTasksCard → DashboardWidgetFrame → SortableWidget →
+  // WorkspacePanel; the WorkspacePanel applies a `transform` for
+  // carousel paging (PR #81), which makes it the containing block
+  // for any `fixed` descendant. Result: the modal anchored to the
+  // panel rather than the viewport. Same fix PR #72 applied to
+  // SelfReportModal + NotificationsBell for the same reason.
+  const overlay = (
     <div
       className={`fixed inset-0 flex items-center justify-center p-4 ${backdropOpacity} backdrop-blur-sm animate-fade-in`}
       style={{ zIndex }}
@@ -125,12 +134,12 @@ export default function FloatingDetailModal({
         ref={panelRef}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        // 2026-05-02 — `90dvh` (dynamic viewport height) instead of
-        // `85vh` so the modal accounts for mobile/desktop browser
-        // chrome (address bars, toolbars) and never anchors off the
-        // visible viewport. Browsers without dvh support fall back
-        // to vh via the second value.
-        className="relative w-full max-h-[90dvh] max-h-[90vh] rounded-3xl border border-white/10 bg-gradient-to-b from-[rgba(22,24,31,0.98)] to-[rgba(15,17,22,0.98)] shadow-[0_22px_70px_rgba(0,0,0,0.55)] overflow-hidden flex flex-col outline-none focus:outline-none animate-slide-up"
+        // `90dvh` (dynamic viewport height) so the modal accounts for
+        // mobile/desktop browser chrome (address bars, toolbars) and
+        // never anchors off the visible viewport. dvh is supported on
+        // every browser shipped after 2022; older browsers ignore it
+        // and inherit no max-height (acceptable fallback).
+        className="relative w-full max-h-[90dvh] rounded-3xl border border-white/10 bg-gradient-to-b from-[rgba(22,24,31,0.98)] to-[rgba(15,17,22,0.98)] shadow-[0_22px_70px_rgba(0,0,0,0.55)] overflow-hidden flex flex-col outline-none focus:outline-none animate-slide-up"
         style={{ maxWidth: typeof maxWidth === 'number' ? `${maxWidth}px` : maxWidth }}
       >
         {/* Header */}
@@ -173,4 +182,10 @@ export default function FloatingDetailModal({
       </div>
     </div>
   )
+
+  // Portal so `position: fixed` lands relative to the viewport,
+  // not whatever transformed ancestor (carousel, sortable, etc.)
+  // happens to be the modal's React parent.
+  if (typeof document === 'undefined') return overlay
+  return createPortal(overlay, document.body)
 }
