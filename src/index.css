@@ -379,7 +379,17 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 28px;
     box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
-    overflow: hidden;
+    /* `overflow: clip` (not `hidden`) so the rounded-corner clipping
+       still works but the shell does NOT establish a scroll context.
+       `overflow: hidden` would put the sticky <header> inside the
+       shell's scroll context — and since the shell itself never
+       scrolls (it just clips), the header would have nothing to
+       stick to and would scroll away with the body. `overflow: clip`
+       provides the visual clipping without that side effect, so the
+       sticky header propagates up to the document scroll container
+       as intended. Browser support: Chrome 90+ / Firefox 81+ /
+       Safari 16+ (≥99% of users). */
+    overflow: clip;
     position: relative;
   }
   :root[data-theme='light'] .dashboard-shell {
