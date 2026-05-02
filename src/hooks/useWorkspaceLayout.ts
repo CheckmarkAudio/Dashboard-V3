@@ -24,6 +24,11 @@ function sortWidgets(widgets: WorkspaceWidgetState[]): WorkspaceWidgetState[] {
   return [...widgets].sort((a, b) => a.order - b.order)
 }
 
+// Lean 3 — collapse the prior (col, order) tuple to a single flat
+// `order` sequence. `col` is preserved on each state row as a sort
+// hint when migrating from a multi-column layout, but the renderer
+// uses only `order`. Sanitization re-indexes `order` so values are
+// always 0..N-1 across the full visible set.
 function sanitizeLayout(
   layout: WorkspaceLayout,
   scope: WorkspaceScope,
@@ -39,7 +44,8 @@ function sanitizeLayout(
   const defaults = getDefaultWorkspaceLayout(scope)
   const defaultById = new Map(defaults.widgets.map((w) => [w.id, w]))
 
-  // PR #32 — backfill `col` for widgets that pre-date v15 column-snap.
+  // Backfill `col` on any pre-Lean-3 state rows missing it. Used only
+  // as a stable sort key when re-flattening.
   const existing = sortWidgets(layout.widgets)
     .filter((widget) => allowedIds.has(widget.id))
     .map((widget) => {
@@ -50,24 +56,17 @@ function sanitizeLayout(
   const existingIds = new Set(existing.map((widget) => widget.id))
   const missing = defaults.widgets.filter((widget) => !existingIds.has(widget.id))
 
-  // Re-index `order` per column so values are always contiguous 0..N-1
-  // within each column regardless of user shuffles or appended missing
-  // widgets.
+  // Flatten into one sequence sorted by (col asc, order asc) — this
+  // mirrors how the prior 3-column grid read row-by-row when scanned
+  // top-to-bottom, left-to-right. Re-index `order` to 0..N-1.
   const combined = [...existing, ...missing]
-  const perColumnSeq: Record<number, number> = { 1: 0, 2: 0, 3: 0 }
-  const nextWidgets = combined
     .slice()
     .sort((a, b) => (a.col - b.col) || (a.order - b.order))
-    .map((widget) => {
-      const col = widget.col ?? 1
-      const order = perColumnSeq[col] ?? 0
-      perColumnSeq[col] = order + 1
-      return { ...widget, col, order }
-    })
+    .map((widget, index) => ({ ...widget, order: index }))
 
   return {
     ...defaults,
-    widgets: nextWidgets,
+    widgets: combined,
   }
 }
 
@@ -95,24 +94,6 @@ export function useWorkspaceLayout({
     [layout.widgets],
   )
 
-  const moveWidget = (id: WorkspaceWidgetState['id'], direction: 'up' | 'down') => {
-    setLayout((current) => {
-      const widgets = sortWidgets(current.widgets)
-      const index = widgets.findIndex((widget) => widget.id === id)
-      if (index === -1) return current
-      const target = direction === 'up' ? index - 1 : index + 1
-      if (target < 0 || target >= widgets.length) return current
-      const next = [...widgets]
-      const [item] = next.splice(index, 1)
-      if (!item) return current
-      next.splice(target, 0, item)
-      return {
-        ...current,
-        widgets: next.map((widget, order) => ({ ...widget, order })),
-      }
-    })
-  }
-
   const toggleWidgetVisibility = (id: WorkspaceWidgetState['id']) => {
     setLayout((current) => ({
       ...current,
@@ -126,114 +107,9 @@ export function useWorkspaceLayout({
     setLayout(getDefaultWorkspaceLayout(scope))
   }
 
-  // Replace the full widget order with a new id sequence (drag-and-drop
-  // callers hand us the complete, already-reordered list). Ids that
-  // aren't in `orderedIds` get appended so nothing disappears if the
-  // caller passed a stale list.
-  const reorderWidgets = (orderedIds: WorkspaceWidgetState['id'][]) => {
-    setLayout((current) => {
-      const byId = new Map(current.widgets.map((w) => [w.id, w]))
-      const reordered = orderedIds
-        .map((id) => byId.get(id))
-        .filter((w): w is WorkspaceWidgetState => !!w)
-      const leftovers = current.widgets.filter((w) => !orderedIds.includes(w.id))
-      const combined = [...reordered, ...leftovers]
-      return {
-        ...current,
-        widgets: combined.map((w, i) => ({ ...w, order: i })),
-      }
-    })
-  }
-
-  // PR #32 — move a widget based on a dnd-kit drop target. `overId`
-  // can be either a column droppable id (`col-N`) or another widget's
-  // id. The move is computed from the FRESHEST state inside setLayout's
-  // functional update, so rapid-fire calls from onDragOver don't race.
-  //
-  // Same (col, index) as source → no-op so calling this on every drag
-  // tick is safe.
-  const moveWidgetByDropTarget = (
-    activeId: WorkspaceWidgetState['id'],
-    overId: string | number,
-  ) => {
-    setLayout((current) => {
-      const active = current.widgets.find((w) => w.id === activeId)
-      if (!active) return current
-
-      // Group VISIBLE widgets by column. Hidden widgets are preserved
-      // untouched — we only reorder what's actually on screen.
-      const hiddenWidgets = current.widgets.filter((w) => !w.visible)
-      const byCol = new Map<number, WorkspaceWidgetState[]>()
-      for (const w of current.widgets) {
-        if (!w.visible) continue
-        const list = byCol.get(w.col) ?? []
-        list.push(w)
-        byCol.set(w.col, list)
-      }
-      for (const list of byCol.values()) list.sort((a, b) => a.order - b.order)
-
-      // Locate active within its current column.
-      const sourceCol = active.col
-      const sourceList = byCol.get(sourceCol) ?? []
-      const sourceIdx = sourceList.findIndex((w) => w.id === activeId)
-      if (sourceIdx < 0) return current
-
-      // Resolve destination from overId.
-      let destCol: number
-      let destIdx: number
-      const overIdStr = typeof overId === 'string' ? overId : String(overId)
-      const colMatch = /^col-(\d+)$/.exec(overIdStr)
-      if (colMatch) {
-        destCol = Number(colMatch[1])
-        destIdx = (byCol.get(destCol) ?? []).length
-      } else {
-        let found: { col: number; idx: number } | null = null
-        for (const [col, list] of byCol.entries()) {
-          const idx = list.findIndex((w) => w.id === overIdStr)
-          if (idx !== -1) {
-            found = { col, idx }
-            break
-          }
-        }
-        if (!found) return current
-        destCol = found.col
-        destIdx = found.idx
-      }
-
-      // No-op if identical to current position.
-      if (destCol === sourceCol && destIdx === sourceIdx) return current
-
-      // Remove from source.
-      sourceList.splice(sourceIdx, 1)
-      byCol.set(sourceCol, sourceList)
-
-      // Adjust destIdx when same-column-and-moving-forward (removing
-      // source shifts later indices down by 1).
-      const insertIdx =
-        destCol === sourceCol && destIdx > sourceIdx ? destIdx - 1 : destIdx
-
-      const destList = byCol.get(destCol) ?? []
-      const clampedIdx = Math.max(0, Math.min(insertIdx, destList.length))
-      destList.splice(clampedIdx, 0, { ...active, col: destCol })
-      byCol.set(destCol, destList)
-
-      // Flatten + re-assign contiguous orders per column. Hidden
-      // widgets kept as-is at the end of the array (the render layer
-      // doesn't depend on overall array order — it groups by col +
-      // order at render time).
-      const nextVisible: WorkspaceWidgetState[] = []
-      for (const [col, list] of byCol.entries()) {
-        list.forEach((w, idx) => nextVisible.push({ ...w, col, order: idx }))
-      }
-      return { ...current, widgets: [...nextVisible, ...hiddenWidgets] }
-    })
-  }
-
-  // PR #34 — direct 1-for-1 swap between two widgets. Used for
-  // cross-column drag-over: instead of "A pushes B down," A takes B's
-  // slot and B takes A's old slot in one atomic move. Intra-column
-  // reorder still uses moveWidgetByDropTarget (insert + shift) because
-  // list-style reorder feels right for a sorted stack.
+  // Lean 3 — direct 1-for-1 swap by `order`. Used by the carousel
+  // drag-end handler. `col` rides along (for backwards-compat sort
+  // hints) but is no longer load-bearing.
   const swapWidgets = (
     aId: WorkspaceWidgetState['id'],
     bId: WorkspaceWidgetState['id'],
@@ -242,12 +118,12 @@ export function useWorkspaceLayout({
       const a = current.widgets.find((w) => w.id === aId)
       const b = current.widgets.find((w) => w.id === bId)
       if (!a || !b) return current
-      if (a.col === b.col && a.order === b.order) return current
+      if (a.order === b.order) return current
       return {
         ...current,
         widgets: current.widgets.map((w) => {
-          if (w.id === aId) return { ...w, col: b.col, order: b.order }
-          if (w.id === bId) return { ...w, col: a.col, order: a.order }
+          if (w.id === aId) return { ...w, order: b.order, col: b.col }
+          if (w.id === bId) return { ...w, order: a.order, col: a.col }
           return w
         }),
       }
@@ -257,10 +133,7 @@ export function useWorkspaceLayout({
   return {
     layout,
     visibleWidgets,
-    moveWidget,
-    moveWidgetByDropTarget,
     swapWidgets,
-    reorderWidgets,
     toggleWidgetVisibility,
     resetLayout,
   }
