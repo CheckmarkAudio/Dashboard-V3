@@ -12,6 +12,14 @@ export interface IncomingReassignRequest {
   id: string
   task_id: string
   task_title: string | null
+  // 2026-05-02 — direction added so the modal can render appropriate
+  // copy ("X wants to take Y" vs "X wants to give you Y"). Optional
+  // for backwards-compat with legacy rows; default-to-'take' if absent.
+  direction?: 'take' | 'transfer'
+  // The OTHER PARTY (initiator from the caller's perspective).
+  other_party_id?: string | null
+  other_party_name?: string | null
+  // Legacy fields — preserved for any caller still reading them.
   requester_id: string
   requester_name: string | null
   note: string | null
@@ -19,9 +27,28 @@ export interface IncomingReassignRequest {
   created_at: string
 }
 
+/**
+ * 2026-05-02 — outgoing pending reassigns (the symmetric view of
+ * IncomingReassignRequest). Used by MyTasksCard to badge tasks the
+ * caller has either: (a) requested to take from a peer, or (b)
+ * offered to transfer to a peer.
+ */
+export interface OutgoingReassignRequest {
+  id: string
+  task_id: string
+  task_title: string | null
+  direction: 'take' | 'transfer'
+  other_party_id: string | null
+  other_party_name: string | null
+  note: string | null
+  status: 'pending'
+  created_at: string
+}
+
 export const taskReassignKeys = {
   all: ['task-reassign-requests'] as const,
   incoming: () => [...taskReassignKeys.all, 'incoming'] as const,
+  outgoing: () => [...taskReassignKeys.all, 'outgoing'] as const,
 }
 
 function requireMessage(error: { message?: string } | null, fallback: string): Error {
@@ -98,4 +125,18 @@ export async function fetchIncomingReassignRequests(): Promise<IncomingReassignR
   }
   if (!Array.isArray(data)) return []
   return data as IncomingReassignRequest[]
+}
+
+/**
+ * 2026-05-02 — outgoing reassign requests the caller has open. Used
+ * by MyTasksCard to badge tasks pending peer/admin response.
+ */
+export async function fetchMyOutgoingPendingReassignRequests(): Promise<OutgoingReassignRequest[]> {
+  const { data, error } = await supabase.rpc('get_my_outgoing_pending_reassign_requests')
+  if (error) {
+    console.error('[queries/taskReassign] fetch outgoing failed:', error)
+    throw requireMessage(error, 'Could not load your outgoing transfer requests.')
+  }
+  if (!Array.isArray(data)) return []
+  return data as OutgoingReassignRequest[]
 }
