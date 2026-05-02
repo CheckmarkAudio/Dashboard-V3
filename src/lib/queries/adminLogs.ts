@@ -24,6 +24,9 @@ export const adminLogKeys = {
 export interface RecentApprovalRow {
   id: string
   status: 'approved' | 'rejected'
+  // Surfaced 2026-05-02 alongside the member-side request-to-delete
+  // flow: an approved 'delete' row reads "✓ Deleted" not "✓ Approved".
+  kind: 'create' | 'edit' | 'delete'
   title: string
   requester_id: string
   requester_name: string | null

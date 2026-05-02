@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Clock, Inbox, Loader2, Repeat, UserCircle2, X } from 'lucide-react'
+import { Check, Clock, Inbox, Loader2, Repeat, Trash2, UserCircle2, X } from 'lucide-react'
 import { useToast } from '../../Toast'
 import {
   approveTaskRequest,
@@ -102,19 +102,30 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
     void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
     void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
     void queryClient.invalidateQueries({ queryKey: ['overview-assignment-notifications'] })
+    // Approve-delete also clears the row from the admin Edit Tasks
+    // library + AssignAdmin per-member view caches.
+    void queryClient.invalidateQueries({ queryKey: ['admin-assigned-tasks'] })
+    void queryClient.invalidateQueries({ queryKey: ['assign-page-member-tasks'] })
     // PR #45 — Approval Log feed reads under this prefix; refresh
     // it so the just-resolved request appears in the log.
     void queryClient.invalidateQueries({ queryKey: ['admin-log'] })
   }
 
   const approveMutation = useMutation({
-    mutationFn: () => approveTaskRequest(request.id, stage),
+    mutationFn: () => approveTaskRequest(request.id, request.kind === 'delete' ? null : stage),
     onSuccess: () => {
-      const stagePart = stage ? ` · tagged ${stage}` : ''
-      toast(
-        `Approved — "${request.title}" added to ${request.requester_name}'s tasks${stagePart}.`,
-        'success',
-      )
+      if (request.kind === 'delete') {
+        toast(
+          `Deleted — "${request.title}" removed from ${request.requester_name}'s tasks.`,
+          'success',
+        )
+      } else {
+        const stagePart = stage ? ` · tagged ${stage}` : ''
+        toast(
+          `Approved — "${request.title}" added to ${request.requester_name}'s tasks${stagePart}.`,
+          'success',
+        )
+      }
       setApproveOpen(false)
       invalidate()
     },
@@ -139,14 +150,36 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
     minute: '2-digit',
   })
 
+  // Kind-driven chrome: rose for delete, amber for create. The kind
+  // badge tells the admin at a glance which RPC will fire on approve.
+  const isDelete = request.kind === 'delete'
+  const iconBgClass = isDelete
+    ? 'bg-rose-500/15 ring-1 ring-rose-500/30 text-rose-300'
+    : 'bg-amber-500/15 ring-1 ring-amber-500/30 text-amber-300'
+
   return (
     <div className="rounded-lg bg-surface-alt/40 ring-1 ring-white/5 px-2.5 py-2">
       <div className="flex items-start gap-2">
-        <div className="shrink-0 w-7 h-7 rounded-lg bg-amber-500/15 ring-1 ring-amber-500/30 text-amber-300 flex items-center justify-center">
-          <UserCircle2 size={14} aria-hidden="true" />
+        <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${iconBgClass}`}>
+          {isDelete ? (
+            <Trash2 size={14} aria-hidden="true" />
+          ) : (
+            <UserCircle2 size={14} aria-hidden="true" />
+          )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-semibold text-text truncate">{request.title}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span
+              className={`shrink-0 text-[9px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded ${
+                isDelete
+                  ? 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30'
+                  : 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'
+              }`}
+            >
+              {isDelete ? 'Delete' : 'New task'}
+            </span>
+            <p className="text-[13px] font-semibold text-text truncate">{request.title}</p>
+          </div>
           <div className="flex items-center gap-1.5 text-[11px] text-text-light mt-0.5 flex-wrap">
             <span>{request.requester_name}</span>
             <span>·</span>
@@ -154,7 +187,7 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
               <Clock size={10} aria-hidden="true" />
               {when}
             </span>
-            {request.due_date && (
+            {!isDelete && request.due_date && (
               <>
                 <span>·</span>
                 <span>
@@ -165,9 +198,7 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
                 </span>
               </>
             )}
-            {/* PR #70 — `Priority` chip retired (urgency mechanic
-                deferred per user note). */}
-            {request.recurrence_spec && (
+            {!isDelete && request.recurrence_spec && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gold/15 ring-1 ring-gold/30 text-gold font-semibold uppercase tracking-wider text-[10px]">
                 <Repeat size={9} aria-hidden="true" />
                 {request.recurrence_spec.frequency}
@@ -175,9 +206,13 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
             )}
           </div>
           {request.description && (
-            <p className="text-[12px] text-text-muted mt-1 leading-snug">
+            <p className={`text-[12px] mt-1 leading-snug ${isDelete ? 'text-text italic' : 'text-text-muted'}`}>
+              {isDelete && <span className="text-text-light not-italic">Reason: </span>}
               {request.description}
             </p>
+          )}
+          {isDelete && !request.description && (
+            <p className="text-[11px] text-text-light/70 mt-1 italic">No reason provided.</p>
           )}
         </div>
       </div>
@@ -216,11 +251,21 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
         </div>
       ) : approveOpen ? (
         <div className="mt-2 space-y-2 pl-9">
-          <FlywheelStagePicker
-            value={stage}
-            onChange={setStage}
-            label="Tag with flywheel stage (optional)"
-          />
+          {/* Delete-kind approve has no flywheel stage to set — the row
+              is being removed. Skip the picker and go straight to the
+              confirm. Create-kind keeps the stage tagger from PR #17. */}
+          {!isDelete && (
+            <FlywheelStagePicker
+              value={stage}
+              onChange={setStage}
+              label="Tag with flywheel stage (optional)"
+            />
+          )}
+          {isDelete && (
+            <p className="text-[11px] text-rose-300">
+              On approve, the task will be deleted permanently. The requester is notified.
+            </p>
+          )}
           <div className="flex items-center justify-end gap-1.5">
             <button
               type="button"
@@ -233,10 +278,22 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
               type="button"
               onClick={() => approveMutation.mutate()}
               disabled={approveMutation.isPending}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 text-[11px] font-bold hover:bg-emerald-500/30"
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                isDelete
+                  ? 'bg-rose-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(244,63,94,0.25)]'
+                  : 'bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30'
+              }`}
             >
-              <Check size={11} aria-hidden="true" />
-              {approveMutation.isPending ? 'Approving…' : 'Confirm approve'}
+              {isDelete ? (
+                <Trash2 size={11} aria-hidden="true" />
+              ) : (
+                <Check size={11} aria-hidden="true" />
+              )}
+              {approveMutation.isPending
+                ? 'Approving…'
+                : isDelete
+                  ? 'Approve delete'
+                  : 'Confirm approve'}
             </button>
           </div>
         </div>
@@ -255,10 +312,18 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
             type="button"
             onClick={() => setApproveOpen(true)}
             disabled={approveMutation.isPending}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 text-[11px] font-bold hover:bg-emerald-500/30 disabled:opacity-50"
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold disabled:opacity-50 ${
+              isDelete
+                ? 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30 hover:bg-rose-500/25'
+                : 'bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30'
+            }`}
           >
-            <Check size={11} aria-hidden="true" />
-            Approve…
+            {isDelete ? (
+              <Trash2 size={11} aria-hidden="true" />
+            ) : (
+              <Check size={11} aria-hidden="true" />
+            )}
+            {isDelete ? 'Approve delete…' : 'Approve…'}
           </button>
         </div>
       )}
