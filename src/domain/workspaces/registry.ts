@@ -559,7 +559,7 @@ function buildDefaultWidgetStateForScope(
 // Notifications-only at rs2. Member overview unchanged at the
 // registry level — version bump still resets any user-customized
 // member layouts that might have dragged bank widgets in.
-export const WORKSPACE_LAYOUT_VERSION = 34
+export const WORKSPACE_LAYOUT_VERSION = 35
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
