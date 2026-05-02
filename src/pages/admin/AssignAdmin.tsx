@@ -2,9 +2,9 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertCircle, Archive, Calendar as CalendarIcon, ChevronDown, ChevronRight,
+  AlertCircle, Archive, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronRight,
   ClipboardList, Edit2, Layers, Loader2, Plus, Save, Settings,
-  Sparkles, Tag, Users, X,
+  Sparkles, Tag, Trash2, Users, X,
 } from 'lucide-react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
@@ -14,7 +14,7 @@ import {
   completeAssignedTask,
   fetchMemberAssignedTasks,
 } from '../../lib/queries/assignments'
-import { adminUpdateAssignedTask } from '../../lib/queries/adminTasks'
+import { adminDeleteAssignedTasks, adminUpdateAssignedTask } from '../../lib/queries/adminTasks'
 import {
   addTaskTemplateItem,
   assignTemplateItemsToMembers,
@@ -190,8 +190,85 @@ export default function AssignAdmin() {
     setEditTask(task)
   }, [])
 
+  // ─── Bulk select + delete ──────────────────────────────────────
+  // Two state machines:
+  //   - selectMode: false → rows render normally with hover-only Trash
+  //                 true  → rows render a select-checkbox on the far
+  //                         left + the top action bar swaps to
+  //                         "N selected · Select all · Delete · Cancel"
+  //   - selectedIds: which rows the admin checked while in selectMode
+  // Reset both whenever the selected member changes — bulk delete is
+  // strictly scoped to the currently-viewed member per locked
+  // decision #8.
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  useEffect(() => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+    setBulkConfirm(false)
+  }, [selectedMember?.id])
+
+  const deleteMutation = useMutation({
+    mutationFn: (taskIds: string[]) => adminDeleteAssignedTasks(taskIds),
+    onSuccess: ({ deleted_count }) => {
+      const key = ['assign-page-member-tasks', selectedMember?.id ?? 'none']
+      void queryClient.invalidateQueries({ queryKey: key })
+      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin-assigned-tasks'] })
+      // Member-side caches that show the same task rows from the
+      // assignee's perspective.
+      void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
+      toast(
+        `Deleted ${deleted_count} task${deleted_count === 1 ? '' : 's'}.`,
+        'success',
+      )
+      setSelectMode(false)
+      setSelectedIds(new Set())
+      setBulkConfirm(false)
+    },
+    onError: (err) => {
+      toast(`Delete failed: ${(err as Error).message}`, 'error')
+      setBulkConfirm(false)
+    },
+  })
+
+  const handleDelete = useCallback(
+    (task: AssignedTask) => {
+      if (!window.confirm(`Delete "${task.title}"? This can't be undone.`)) return
+      deleteMutation.mutate([task.id])
+    },
+    [deleteMutation],
+  )
+
+  const handleToggleSelect = useCallback((task: AssignedTask) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(task.id)) next.delete(task.id)
+      else next.add(task.id)
+      return next
+    })
+  }, [])
+
   const memberHasNoTasks = !tasksQuery.isLoading && tasks.length === 0
   const completedCount = tasks.filter((t) => t.completed_at).length
+  const allSelected = tasks.length > 0 && selectedIds.size === tasks.length
+  const someSelected = selectedIds.size > 0
+  const handleSelectAll = () => {
+    if (allSelected) setSelectedIds(new Set())
+    else setSelectedIds(new Set(tasks.map((t) => t.id)))
+  }
+  const handleBulkDelete = () => {
+    if (!someSelected) return
+    if (!bulkConfirm) {
+      setBulkConfirm(true)
+      // Reset the confirm prompt if the admin walks away without acting.
+      setTimeout(() => setBulkConfirm(false), 4000)
+      return
+    }
+    deleteMutation.mutate(Array.from(selectedIds))
+  }
 
   return (
     <div className="max-w-[1400px] mx-auto animate-fade-in">
@@ -325,9 +402,58 @@ export default function AssignAdmin() {
 
         {/* ─── Main content ──────────────────────────────────────── */}
         <main className="rounded-xl border border-border bg-surface p-5">
-          {/* Top action bar — Settings · Save as Template · Templates ▾.
+          {/* Top action bar.
+              Default mode  → Settings · Save as Template · Select · Templates ▾
+              Select mode   → N selected · Select all · Delete · Cancel
               Lives INSIDE the main card so the right pane starts at the same
               Y as the sidebar (mirrors Settings page rhythm). */}
+          {selectMode ? (
+            <div className="flex items-center gap-2 mb-4 flex-wrap pb-4 border-b border-border/60">
+              <span className="text-[13px] font-semibold text-text">
+                {selectedIds.size} selected
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                iconLeft={<CheckSquare size={14} aria-hidden="true" />}
+                onClick={handleSelectAll}
+                disabled={tasks.length === 0}
+              >
+                {allSelected ? 'Clear all' : 'Select all'}
+              </Button>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleBulkDelete}
+                  disabled={!someSelected || deleteMutation.isPending}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all ${
+                    !someSelected
+                      ? 'bg-rose-500/5 text-rose-400/40 border border-rose-500/15 cursor-not-allowed'
+                      : bulkConfirm
+                        ? 'bg-rose-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(244,63,94,0.25)]'
+                        : 'bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25'
+                  }`}
+                >
+                  <Trash2 size={12} aria-hidden="true" />
+                  {bulkConfirm
+                    ? `Confirm delete ${selectedIds.size}`
+                    : `Delete${someSelected ? ` (${selectedIds.size})` : ''}`}
+                </button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  iconLeft={<X size={14} aria-hidden="true" />}
+                  onClick={() => {
+                    setSelectMode(false)
+                    setSelectedIds(new Set())
+                    setBulkConfirm(false)
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
           <div className="flex items-center gap-2 mb-4 flex-wrap pb-4 border-b border-border/60">
             <Button
               variant="ghost"
@@ -353,6 +479,20 @@ export default function AssignAdmin() {
               }
             >
               Save as Template
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              iconLeft={<CheckSquare size={14} aria-hidden="true" />}
+              onClick={() => setSelectMode(true)}
+              disabled={!selectedMember || tasks.length === 0}
+              title={
+                tasks.length === 0
+                  ? 'No tasks to select'
+                  : 'Select tasks for bulk delete'
+              }
+            >
+              Select
             </Button>
 
             <div className="ml-auto relative" ref={tplDropdownRef}>
@@ -420,6 +560,7 @@ export default function AssignAdmin() {
               )}
             </div>
           </div>
+          )}
 
           {/* Title row — chrome stripped since this lives inside the main
               card now (was a double-box otherwise). */}
@@ -480,8 +621,12 @@ export default function AssignAdmin() {
                   <TaskRow
                     key={t.id}
                     task={t}
+                    selectMode={selectMode}
+                    isSelected={selectedIds.has(t.id)}
                     onToggle={handleToggle}
                     onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onSelect={handleToggleSelect}
                   />
                 ))}
               </div>
@@ -564,16 +709,40 @@ export default function AssignAdmin() {
 
 const TaskRow = memo(function TaskRow({
   task,
+  selectMode,
+  isSelected,
   onToggle,
   onEdit,
+  onDelete,
+  onSelect,
 }: {
   task: AssignedTask
+  selectMode: boolean
+  isSelected: boolean
   onToggle: (task: AssignedTask) => void
   onEdit: (task: AssignedTask) => void
+  onDelete: (task: AssignedTask) => void
+  onSelect: (task: AssignedTask) => void
 }) {
   const done = Boolean(task.completed_at)
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-hover transition-colors group">
+    <div
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors group ${
+        isSelected ? 'bg-rose-500/10 ring-1 ring-rose-500/25' : 'hover:bg-surface-hover'
+      }`}
+    >
+      {/* Bulk-select checkbox — only renders in select mode. Sits to
+          the LEFT of the existing complete-toggle so it's the first
+          thing the eye lands on when scanning for what's checked. */}
+      {selectMode && (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onSelect(task)}
+          aria-label={`Select task ${task.title}`}
+          className="w-4 h-4 rounded border-border accent-rose-500 cursor-pointer"
+        />
+      )}
       <input
         type="checkbox"
         checked={done}
@@ -594,15 +763,31 @@ const TaskRow = memo(function TaskRow({
           {formatDueShort(task.due_date)}
         </span>
       )}
-      <button
-        type="button"
-        onClick={() => onEdit(task)}
-        title={`Edit "${task.title}"`}
-        aria-label={`Edit ${task.title}`}
-        className="p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface hover:text-gold transition-all focus-ring"
-      >
-        <Edit2 size={12} aria-hidden="true" />
-      </button>
+      {/* Per-row actions — hidden until hover so the row stays clean
+          on glance. Suppressed in select mode so the bulk bar is the
+          one place the admin acts from. */}
+      {!selectMode && (
+        <>
+          <button
+            type="button"
+            onClick={() => onEdit(task)}
+            title={`Edit "${task.title}"`}
+            aria-label={`Edit ${task.title}`}
+            className="p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface hover:text-gold transition-all focus-ring"
+          >
+            <Edit2 size={12} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(task)}
+            title={`Delete "${task.title}"`}
+            aria-label={`Delete ${task.title}`}
+            className="p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-300 transition-all focus-ring"
+          >
+            <Trash2 size={12} aria-hidden="true" />
+          </button>
+        </>
+      )}
     </div>
   )
 })

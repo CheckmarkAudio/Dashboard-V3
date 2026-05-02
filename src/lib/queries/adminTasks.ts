@@ -64,3 +64,24 @@ export async function adminUpdateAssignedTask(
   }
   return data as AssignedTask
 }
+
+/**
+ * Admin direct-delete for one or many assigned tasks. Bulk RPC takes
+ * a uuid[] so per-row delete (single id) and bulk select-and-delete
+ * (N ids) hit the same code path. Server enforces is_team_admin() +
+ * team scope; cross-team ids are silently ignored, deleted_count
+ * reflects only rows the caller's team actually owned.
+ */
+export async function adminDeleteAssignedTasks(
+  taskIds: string[],
+): Promise<{ deleted_count: number }> {
+  if (taskIds.length === 0) return { deleted_count: 0 }
+  const { data, error } = await supabase.rpc('admin_delete_assigned_tasks', {
+    p_task_ids: taskIds,
+  })
+  if (error) {
+    console.error('[queries/adminTasks] adminDeleteAssignedTasks failed:', error)
+    throw new Error(error.message)
+  }
+  return data as { deleted_count: number }
+}
