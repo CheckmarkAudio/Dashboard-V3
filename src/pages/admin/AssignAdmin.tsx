@@ -234,12 +234,15 @@ export default function AssignAdmin() {
     },
   })
 
+  // Per-row delete is fired by the TaskRow's own two-step inline
+  // confirm pill (matches the bulk-Delete UX); no window.confirm
+  // dialog. Parent just runs the mutation.
+  const deleteMutate = deleteMutation.mutate
   const handleDelete = useCallback(
     (task: AssignedTask) => {
-      if (!window.confirm(`Delete "${task.title}"? This can't be undone.`)) return
-      deleteMutation.mutate([task.id])
+      deleteMutate([task.id])
     },
-    [deleteMutation],
+    [deleteMutate],
   )
 
   const handleToggleSelect = useCallback((task: AssignedTask) => {
@@ -725,16 +728,34 @@ const TaskRow = memo(function TaskRow({
   onSelect: (task: AssignedTask) => void
 }) {
   const done = Boolean(task.completed_at)
+  // Per-row inline two-step delete confirm — first click on the trash
+  // icon flips the row into a rose-filled "Confirm delete" pill (same
+  // pattern as the bulk Delete button), second click commits. Auto-
+  // resets after 4s if the admin walks away. Replaces the prior
+  // window.confirm dialog so the UX matches the bulk path.
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  useEffect(() => {
+    if (!confirmDelete) return
+    const t = setTimeout(() => setConfirmDelete(false), 4000)
+    return () => clearTimeout(t)
+  }, [confirmDelete])
+  // Reset the confirm prompt if the admin enters bulk select mode mid-confirm.
+  useEffect(() => {
+    if (selectMode) setConfirmDelete(false)
+  }, [selectMode])
+
   return (
     <div
       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors group ${
         isSelected ? 'bg-rose-500/10 ring-1 ring-rose-500/25' : 'hover:bg-surface-hover'
       }`}
     >
-      {/* Bulk-select checkbox — only renders in select mode. Sits to
-          the LEFT of the existing complete-toggle so it's the first
-          thing the eye lands on when scanning for what's checked. */}
-      {selectMode && (
+      {/* In select mode the row shows ONLY the rose select-checkbox,
+          NOT the gold complete-toggle. (Pre-fix the row showed both,
+          which made every row read as having two checkboxes side by
+          side — confusing.) Outside select mode, only the gold
+          complete-toggle shows. One mode, one checkbox per row. */}
+      {selectMode ? (
         <input
           type="checkbox"
           checked={isSelected}
@@ -742,14 +763,15 @@ const TaskRow = memo(function TaskRow({
           aria-label={`Select task ${task.title}`}
           className="w-4 h-4 rounded border-border accent-rose-500 cursor-pointer"
         />
+      ) : (
+        <input
+          type="checkbox"
+          checked={done}
+          onChange={() => onToggle(task)}
+          aria-label={`${done ? 'Completed' : 'Open'} — ${task.title}`}
+          className="w-4 h-4 rounded border-border accent-gold cursor-pointer"
+        />
       )}
-      <input
-        type="checkbox"
-        checked={done}
-        onChange={() => onToggle(task)}
-        aria-label={`${done ? 'Completed' : 'Open'} — ${task.title}`}
-        className="w-4 h-4 rounded border-border accent-gold cursor-pointer"
-      />
       <span
         className={`flex-1 min-w-0 text-[13px] truncate ${
           done ? 'line-through text-text-light' : 'text-text'
@@ -757,16 +779,16 @@ const TaskRow = memo(function TaskRow({
       >
         {task.title}
       </span>
-      {task.due_date && (
+      {task.due_date && !confirmDelete && (
         <span className="text-[10px] text-text-light tabular-nums shrink-0 inline-flex items-center gap-1">
           <CalendarIcon size={10} aria-hidden="true" />
           {formatDueShort(task.due_date)}
         </span>
       )}
-      {/* Per-row actions — hidden until hover so the row stays clean
-          on glance. Suppressed in select mode so the bulk bar is the
-          one place the admin acts from. */}
-      {!selectMode && (
+      {/* Per-row actions — Edit + Trash hidden until hover so the row
+          stays clean on glance. Suppressed in select mode so the bulk
+          bar is the one place the admin acts from. */}
+      {!selectMode && !confirmDelete && (
         <>
           <button
             type="button"
@@ -779,12 +801,39 @@ const TaskRow = memo(function TaskRow({
           </button>
           <button
             type="button"
-            onClick={() => onDelete(task)}
+            onClick={() => setConfirmDelete(true)}
             title={`Delete "${task.title}"`}
             aria-label={`Delete ${task.title}`}
             className="p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-300 transition-all focus-ring"
           >
             <Trash2 size={12} aria-hidden="true" />
+          </button>
+        </>
+      )}
+      {/* Inline rose-filled "Confirm delete" pill replaces the trash
+          icon on first click. Same shape + shadow as the bulk Delete
+          confirm. Auto-resets after 4s. */}
+      {!selectMode && confirmDelete && (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmDelete(false)
+              onDelete(task)
+            }}
+            aria-label={`Confirm delete ${task.title}`}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(244,63,94,0.25)]"
+          >
+            <Trash2 size={11} aria-hidden="true" />
+            Confirm delete
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(false)}
+            aria-label="Cancel delete"
+            className="p-1 rounded-md text-text-muted hover:text-text"
+          >
+            <X size={12} aria-hidden="true" />
           </button>
         </>
       )}
