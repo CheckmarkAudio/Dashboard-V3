@@ -1,16 +1,22 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  ArrowRightLeft,
   Building2,
   Calendar as CalendarIcon,
   Check,
   CheckCircle2,
   Circle,
   Clock,
+  Send,
   User as UserIcon,
 } from 'lucide-react'
 import FloatingDetailModal from '../FloatingDetailModal'
 import { useToast } from '../Toast'
+import { useAuth } from '../../contexts/AuthContext'
 import { completeAssignedTask } from '../../lib/queries/assignments'
+import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
+import { submitTaskTransferRequest, taskReassignKeys } from '../../lib/queries/taskReassign'
 import type { AssignedTask } from '../../types/assignments'
 import { FLYWHEEL_STAGES, type FlywheelStage } from './requests/formAtoms'
 
@@ -41,6 +47,7 @@ export default function TaskDetailModal({
 }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const { profile } = useAuth()
 
   const toggleMutation = useMutation({
     mutationFn: () => completeAssignedTask(task.id, !task.is_completed),
@@ -58,6 +65,84 @@ export default function TaskDetailModal({
   const done = task.is_completed
   const stage = FLYWHEEL_STAGES.find((s) => s.key === task.category) ?? null
 
+  // ─── Hand-off / transfer flow ──────────────────────────────────
+  // Symmetric to the existing "Request to take" peer flow: the
+  // current owner offers the task to a specific teammate; the
+  // teammate accepts/declines. Reason is required (per user spec —
+  // "nobody loses track of the reason and admin can view it later").
+  // Visual pattern mirrors the forum quick-reply: rounded text input,
+  // dim secondary action on the left, Cancel + filled Send on the
+  // right, keyboard hint below.
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferTargetId, setTransferTargetId] = useState('')
+  const [transferReason, setTransferReason] = useState('')
+
+  const teamMembersQuery = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+    staleTime: 60_000,
+    enabled: transferOpen,
+  })
+  const eligibleTargets = useMemo(() => {
+    const all = teamMembersQuery.data ?? []
+    return all.filter(
+      (m) =>
+        m.id !== profile?.id &&
+        (m.status?.toLowerCase() ?? 'active') !== 'inactive',
+    )
+  }, [teamMembersQuery.data, profile?.id])
+
+  const transferMutation = useMutation({
+    mutationFn: () =>
+      submitTaskTransferRequest(task.id, transferTargetId, transferReason.trim()),
+    onSuccess: () => {
+      const targetName =
+        eligibleTargets.find((m) => m.id === transferTargetId)?.display_name ??
+        'your teammate'
+      toast(`Transfer offer sent to ${targetName}.`, 'success')
+      void queryClient.invalidateQueries({ queryKey: taskReassignKeys.all })
+      setTransferOpen(false)
+      setTransferTargetId('')
+      setTransferReason('')
+      onClose()
+    },
+    onError: (err) => {
+      toast(err instanceof Error ? err.message : 'Could not send transfer.', 'error')
+    },
+  })
+
+  // Forum-style keyboard shortcuts inside the composer.
+  useEffect(() => {
+    if (!transferOpen) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        setTransferOpen(false)
+        setTransferTargetId('')
+        setTransferReason('')
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault()
+        if (transferTargetId && transferReason.trim() && !transferMutation.isPending) {
+          transferMutation.mutate()
+        }
+      }
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [transferOpen, transferTargetId, transferReason, transferMutation])
+
+  // Only show "Hand off to…" when the task is the current user's own
+  // active member-scope task. Studio rows have no single owner; the
+  // RPC would reject anyway. Hidden for completed tasks since the
+  // server rejects those too.
+  const canTransfer =
+    !done &&
+    task.scope === 'member' &&
+    Boolean(profile?.id) &&
+    task.assigned_to === profile?.id
+
+  const transferReady = Boolean(transferTargetId && transferReason.trim())
+
   const originLabel = (() => {
     if (task.source_type === 'daily_checklist') return 'Daily checklist'
     if (task.source_type === 'custom') return 'Assigned directly'
@@ -73,6 +158,76 @@ export default function TaskDetailModal({
       maxWidth={560}
       ariaLabel="Task details"
       footer={
+        transferOpen ? (
+          // Inline forum-quick-reply-style composer. Replaces the
+          // default footer while the user is composing the offer so
+          // the modal stays compact (no second floating dialog
+          // stacked on top of this one).
+          <div className="px-4 py-3 border-t border-border bg-surface-alt/40 rounded-b-[18px] space-y-2">
+            <div className="flex items-start gap-2">
+              <ArrowRightLeft size={12} className="text-gold mt-1 shrink-0" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-bold text-text">Hand off this task</p>
+                <p className="text-[11px] text-text-light mt-0.5">
+                  Pick a teammate and add a quick reason. They accept or decline; admins are notified once it's accepted.
+                </p>
+              </div>
+            </div>
+            <select
+              value={transferTargetId}
+              onChange={(e) => setTransferTargetId(e.target.value)}
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] focus:border-gold focus:outline-none"
+              autoFocus
+            >
+              <option value="">
+                {teamMembersQuery.isLoading ? 'Loading teammates…' : 'Choose a teammate…'}
+              </option>
+              {eligibleTargets.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.display_name}
+                  {m.position ? ` · ${m.position.replace(/_/g, ' ')}` : ''}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={transferReason}
+              onChange={(e) => setTransferReason(e.target.value)}
+              placeholder="Reason for the hand-off (required)"
+              maxLength={500}
+              className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-[14px] placeholder:text-text-light focus:border-gold focus:outline-none"
+            />
+            <div className="flex items-center justify-end gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setTransferOpen(false)
+                  setTransferTargetId('')
+                  setTransferReason('')
+                }}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-text-muted hover:text-text"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => transferMutation.mutate()}
+                disabled={!transferReady || transferMutation.isPending}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-bold transition-all ${
+                  !transferReady
+                    ? 'bg-surface-alt text-text-light border border-border cursor-not-allowed'
+                    : 'bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(214,170,55,0.18)]'
+                } disabled:opacity-50`}
+              >
+                <Send size={12} aria-hidden="true" />
+                {transferMutation.isPending ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+            <p className="text-[10px] text-text-light/70 pt-0.5">
+              ⌘/Ctrl + Enter to send · Esc to cancel
+            </p>
+          </div>
+        ) : (
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border bg-surface-alt/40 rounded-b-[18px]">
           <p className="text-[11px] text-text-light">
             {task.can_complete
@@ -89,6 +244,17 @@ export default function TaskDetailModal({
             >
               Close
             </button>
+            {canTransfer && (
+              <button
+                type="button"
+                onClick={() => setTransferOpen(true)}
+                title="Offer this task to another teammate"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/10 transition-colors"
+              >
+                <ArrowRightLeft size={12} aria-hidden="true" />
+                Hand off to…
+              </button>
+            )}
             {task.can_complete && (
               <button
                 type="button"
@@ -115,6 +281,7 @@ export default function TaskDetailModal({
             )}
           </div>
         </div>
+        )
       }
     >
       <div className="space-y-4 px-4 py-3">

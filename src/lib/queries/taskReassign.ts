@@ -67,6 +67,29 @@ export async function declineTaskReassignment(
   }
 }
 
+/**
+ * 2026-05-02 — owner-initiated transfer (the symmetric "request to
+ * hand off" of `requestTaskReassignment`'s "request to take"). Caller
+ * must own the task; target must be on the same team and not self;
+ * reason note is REQUIRED. The target accepts via the existing
+ * approveTaskReassignment / declineTaskReassignment paths.
+ */
+export async function submitTaskTransferRequest(
+  taskId: string,
+  targetMemberId: string,
+  note: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('submit_task_transfer_request', {
+    p_task_id: taskId,
+    p_target_member_id: targetMemberId,
+    p_note: note,
+  })
+  if (error) {
+    console.error('[queries/taskReassign] transfer submit failed:', error)
+    throw requireMessage(error, 'Could not send the transfer request.')
+  }
+}
+
 export async function fetchIncomingReassignRequests(): Promise<IncomingReassignRequest[]> {
   const { data, error } = await supabase.rpc('get_my_incoming_reassign_requests')
   if (error) {
