@@ -9,6 +9,7 @@ import {
   Hourglass,
   Inbox,
   Loader2,
+  Minus,
   Plus,
   Trash2,
 } from 'lucide-react'
@@ -556,14 +557,16 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
     return () => window.clearTimeout(id)
   }, [cancelConfirm])
 
+  // Mirror AssignedTaskRow's pending shape so create / edit / delete
+  // pending rows all read with the same rhythm: leading 18px square +
+  // title + status badge + optional cancel pill + due-date column.
+  const dueLabel = formatDueShort(request.due_date)
+
   return (
-    <div
-      className={`group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent ${
-        isRejected
-          ? 'bg-rose-500/[0.05] opacity-90'
-          : 'bg-white/[0.018] opacity-60 hover:opacity-80'
-      }`}
-    >
+    <div className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent bg-white/[0.018] opacity-60 hover:opacity-80">
+      {/* Leading square — visually substitutes for the row's normal
+          checkbox. Plus icon (amber) for pending; Hourglass (rose)
+          for rejected — same colors as the badge for consistency. */}
       <span
         className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md flex items-center justify-center ${
           isRejected
@@ -574,56 +577,75 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
       >
         {isRejected ? <Hourglass size={10} /> : <Plus size={10} strokeWidth={3} />}
       </span>
+
       <div className="min-w-0">
-        <p className="text-[13px] font-semibold text-text/90 truncate">{request.title}</p>
         <p
-          className={`text-[10px] mt-0.5 ${
-            isRejected ? 'text-rose-300/80' : 'text-amber-200/80'
+          className={`text-[13px] truncate ${
+            isRejected ? 'text-text/80' : 'font-semibold text-text/90'
           }`}
         >
-          {isRejected ? 'Declined' : 'New task — pending admin approval'}
-          {isRejected && request.reviewer_note ? ` · "${request.reviewer_note}"` : ''}
+          {request.title}
         </p>
+        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] flex-wrap">
+          {isRejected ? (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/15 ring-1 ring-rose-500/30 text-rose-300 font-semibold">
+              <Hourglass size={9} strokeWidth={2.5} aria-hidden="true" />
+              Declined
+              {request.reviewer_note && (
+                <span className="font-normal italic text-rose-300/80 ml-1 truncate max-w-[18ch]">
+                  · "{request.reviewer_note}"
+                </span>
+              )}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 ring-1 ring-amber-500/30 text-amber-300 font-semibold">
+              <Plus size={9} strokeWidth={3} aria-hidden="true" />
+              Awaiting new task approval
+            </span>
+          )}
+          {isPending && (
+            cancelConfirm ? (
+              <span className="inline-flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => cancelMutation.mutate()}
+                  disabled={cancelMutation.isPending}
+                  className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-rose-500/80 hover:brightness-110"
+                >
+                  {cancelMutation.isPending ? '…' : 'Cancel?'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCancelConfirm(false)}
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-text-light hover:text-text"
+                >
+                  Keep
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCancelConfirm(true)}
+                aria-label="Cancel this request"
+                title="Cancel this request"
+                className="inline-flex items-center justify-center w-5 h-5 rounded text-rose-300/70 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+              >
+                <Trash2 size={12} strokeWidth={2.25} aria-hidden="true" />
+              </button>
+            )
+          )}
+        </div>
       </div>
-      {/* Cancel UX mirrors AssignedTaskRow's pending-cancel pattern:
-          visible Trash2 → click → "Cancel?" rose pill → second
-          click commits. Pending only; rejected rows show their
-          final-state pill. */}
-      {isPending ? (
-        cancelConfirm ? (
-          <span className="inline-flex items-center gap-1 mt-[2px]">
-            <button
-              type="button"
-              onClick={() => cancelMutation.mutate()}
-              disabled={cancelMutation.isPending}
-              className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-rose-500/80 hover:brightness-110"
-            >
-              {cancelMutation.isPending ? '…' : 'Cancel?'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCancelConfirm(false)}
-              className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-text-light hover:text-text"
-            >
-              Keep
-            </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setCancelConfirm(true)}
-            aria-label="Cancel this request"
-            title="Cancel this request"
-            className="inline-flex items-center justify-center w-5 h-5 mt-[2px] rounded text-rose-300/70 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
-          >
-            <Trash2 size={12} strokeWidth={2.25} aria-hidden="true" />
-          </button>
-        )
-      ) : (
-        <span className="text-[10px] uppercase tracking-wider text-text-light/70 whitespace-nowrap mt-[2px]">
-          {request.status}
-        </span>
-      )}
+
+      {/* Right column matches AssignedTaskRow's due-date slot: real
+          date if the requester set one, em-dash placeholder otherwise. */}
+      <span
+        className={`shrink-0 text-[12px] tabular-nums whitespace-nowrap mt-[2px] ${
+          dueLabel ? 'text-text-muted' : 'text-text-light/40'
+        }`}
+      >
+        {dueLabel ?? '—'}
+      </span>
     </div>
   )
 }
@@ -790,12 +812,16 @@ function AssignedTaskRow({
             ) : pendingMeta.kind === 'edit' ? (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gold/15 ring-1 ring-gold/30 text-gold/90 font-semibold">
                 <Edit2 size={9} strokeWidth={2.5} aria-hidden="true" />
-                Awaiting admin to edit
+                Awaiting edit approval
               </span>
             ) : (
+              // Delete badge uses Minus (not Trash2) because the
+              // cancel button to the right is already a Trash icon —
+              // double-Trash would visually conflate "this is a
+              // delete request" with "click to cancel."
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/15 ring-1 ring-rose-500/30 text-rose-300 font-semibold">
-                <Trash2 size={9} strokeWidth={2.5} aria-hidden="true" />
-                Awaiting admin to delete
+                <Minus size={9} strokeWidth={3} aria-hidden="true" />
+                Awaiting deletion approval
               </span>
             )}
             {/* Cancel-request inline action for delete/edit kinds.
