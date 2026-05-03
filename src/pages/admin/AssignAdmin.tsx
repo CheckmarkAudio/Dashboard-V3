@@ -244,9 +244,24 @@ export default function AssignAdmin() {
   }, [selectedMember?.id])
 
   const deleteMutation = useMutation({
-    mutationFn: (taskIds: string[]) => adminDeleteAssignedTasks(taskIds),
-    onSuccess: ({ deleted_count }) => {
-      const key = ['assign-page-member-tasks', selectedMember?.id ?? 'none']
+    mutationFn: async (taskIds: string[]) => ({
+      requestedIds: taskIds,
+      result: await adminDeleteAssignedTasks(taskIds),
+    }),
+    onSuccess: ({ requestedIds, result }) => {
+      const { deleted_count, deleted_ids } = result
+      const key = ['assign-page-member-tasks', selectedMember?.id ?? 'none'] as const
+      if (deleted_ids.length > 0) {
+        const deleted = new Set(deleted_ids)
+        queryClient.setQueryData<AssignedTask[]>(key, (current = []) =>
+          current.filter((task) => !deleted.has(task.id)),
+        )
+        setSelectedIds((prev) => {
+          const next = new Set(prev)
+          for (const id of deleted) next.delete(id)
+          return next
+        })
+      }
       void queryClient.invalidateQueries({ queryKey: key })
       void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
       void queryClient.invalidateQueries({ queryKey: ['admin-assigned-tasks'] })
@@ -254,12 +269,16 @@ export default function AssignAdmin() {
       // assignee's perspective.
       void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
       void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
-      toast(
-        `Deleted ${deleted_count} task${deleted_count === 1 ? '' : 's'}.`,
-        'success',
-      )
-      setSelectMode(false)
-      setSelectedIds(new Set())
+      const requestedCount = requestedIds.length
+      if (deleted_count === 0) {
+        toast('No tasks were deleted. Refreshing the list now.', 'error')
+      } else if (deleted_count < requestedCount) {
+        toast(`Deleted ${deleted_count} of ${requestedCount} selected tasks. Refreshing the list now.`, 'error')
+      } else {
+        toast(`Deleted ${deleted_count} task${deleted_count === 1 ? '' : 's'}.`, 'success')
+        setSelectMode(false)
+        setSelectedIds(new Set())
+      }
       setBulkConfirm(false)
     },
     onError: (err) => {

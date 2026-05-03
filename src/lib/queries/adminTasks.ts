@@ -74,8 +74,8 @@ export async function adminUpdateAssignedTask(
  */
 export async function adminDeleteAssignedTasks(
   taskIds: string[],
-): Promise<{ deleted_count: number }> {
-  if (taskIds.length === 0) return { deleted_count: 0 }
+): Promise<{ deleted_count: number; deleted_ids: string[] }> {
+  if (taskIds.length === 0) return { deleted_count: 0, deleted_ids: [] }
   const { data, error } = await supabase.rpc('admin_delete_assigned_tasks', {
     p_task_ids: taskIds,
   })
@@ -83,5 +83,9 @@ export async function adminDeleteAssignedTasks(
     console.error('[queries/adminTasks] adminDeleteAssignedTasks failed:', error)
     throw new Error(error.message)
   }
-  return data as { deleted_count: number }
+  const result = data as { deleted_count?: number; deleted_ids?: string[] }
+  return {
+    deleted_count: result.deleted_count ?? 0,
+    deleted_ids: Array.isArray(result.deleted_ids) ? result.deleted_ids : [],
+  }
 }
