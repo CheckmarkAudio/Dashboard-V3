@@ -812,9 +812,14 @@ function AssignedTaskRow({
             ) : pendingMeta.kind === 'edit' ? (
               // Orange (not gold) so the three pending kinds each
               // pop visually: rose=delete, marigold/amber=create,
-              // orange=edit. Gold reads too close to the create
-              // amber on a quick scan.
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-500/15 ring-1 ring-orange-500/40 text-orange-300 font-semibold">
+              // orange=edit. Uses text-orange-400 (#fb923c — true
+              // orange) instead of text-orange-300 (#fdba74 — peach)
+              // because orange's lighter shades read paler than
+              // amber-300 / rose-300 on the same dim background;
+              // bumping a step keeps all three at equal visual
+              // weight. Surface formula (bg/15 + ring/30) matches
+              // the amber + rose badges exactly.
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-500/15 ring-1 ring-orange-500/30 text-orange-400 font-semibold">
                 <Edit2 size={9} strokeWidth={2.5} aria-hidden="true" />
                 Awaiting edit approval
               </span>
