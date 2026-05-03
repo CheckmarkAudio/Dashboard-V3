@@ -11,6 +11,7 @@ import {
 } from '../../../lib/queries/taskRequests'
 import { supabase } from '../../../lib/supabase'
 import { FlywheelStagePicker, type FlywheelStage } from '../../tasks/requests/formAtoms'
+import RequestDetailModal from './RequestDetailModal'
 
 /**
  * PendingTaskRequestsWidget — admin approval queue for user-submitted
@@ -108,6 +109,7 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
   const queryClient = useQueryClient()
   const [rejectOpen, setRejectOpen] = useState(false)
   const [approveOpen, setApproveOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
   const [note, setNote] = useState('')
   // PR #17 — admin tags the approved task with a flywheel stage
   // during review; `null` means inherit whatever the requester set
@@ -202,6 +204,7 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
   const badgeLabel = isDelete ? 'Delete' : isEdit ? 'Edit' : 'New task'
 
   return (
+    <>
     <div className="rounded-lg bg-surface-alt/40 ring-1 ring-white/5 px-2.5 py-2">
       <div className="flex items-start gap-2">
         <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${iconBgClass}`}>
@@ -218,7 +221,14 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
             <span className={`shrink-0 text-[9px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded ${badgeClass}`}>
               {badgeLabel}
             </span>
-            <p className="text-[13px] font-semibold text-text truncate">{request.title}</p>
+            <button
+              type="button"
+              onClick={() => setDetailOpen(true)}
+              aria-label={`Open details for "${request.title}"`}
+              className="text-[13px] font-semibold text-text truncate text-left hover:text-gold focus-ring rounded"
+            >
+              {request.title}
+            </button>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-text-light mt-0.5 flex-wrap">
             <span>{request.requester_name}</span>
@@ -390,6 +400,10 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
         </div>
       )}
     </div>
+    {detailOpen && (
+      <RequestDetailModal request={request} onClose={() => setDetailOpen(false)} />
+    )}
+    </>
   )
 }
 
