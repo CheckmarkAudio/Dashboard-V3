@@ -12,7 +12,7 @@ export const taskRequestKeys = {
   mine: () => [...taskRequestKeys.all, 'mine'] as const,
 }
 
-export type TaskRequestStatus = 'pending' | 'approved' | 'rejected'
+export type TaskRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
 // What the member is asking for. PR #82 (admin-side) shipped immediate
 // admin delete; PR #85 added member-request delete + transfer. The 'edit'
 // kind closes the triad (this PR) — server applies COALESCE/CASE updates
@@ -236,6 +236,31 @@ export async function submitTaskEditRequest(
   })
   if (error) {
     console.error('[queries/taskRequests] submitTaskEditRequest failed:', error)
+    throw new Error(error.message)
+  }
+  return data as { request_id: string; notification_count: number }
+}
+
+/**
+ * Member withdraws one of their OWN pending task requests (any kind:
+ * create / edit / delete). The row stays in the audit log via
+ * admin_recent_approvals (status='cancelled') so admins can see what
+ * was withdrawn, but disappears from the pending queue + the
+ * member's own pending-row badge immediately.
+ *
+ * Server enforces:
+ *   - caller authenticated
+ *   - request.requester_id = caller
+ *   - request.status = 'pending'
+ */
+export async function cancelMyTaskRequest(
+  requestId: string,
+): Promise<{ request_id: string; notification_count: number }> {
+  const { data, error } = await supabase.rpc('cancel_my_task_request', {
+    p_request_id: requestId,
+  })
+  if (error) {
+    console.error('[queries/taskRequests] cancelMyTaskRequest failed:', error)
     throw new Error(error.message)
   }
   return data as { request_id: string; notification_count: number }

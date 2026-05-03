@@ -23,7 +23,9 @@ export const adminLogKeys = {
 
 export interface RecentApprovalRow {
   id: string
-  status: 'approved' | 'rejected'
+  // 'cancelled' added 2026-05-03 — member-withdrawn requests still
+  // surface in the resolution log for the audit trail.
+  status: 'approved' | 'rejected' | 'cancelled'
   // Surfaced 2026-05-02 alongside the member-side request-to-delete
   // flow: an approved 'delete' row reads "✓ Deleted" not "✓ Approved".
   kind: 'create' | 'edit' | 'delete'

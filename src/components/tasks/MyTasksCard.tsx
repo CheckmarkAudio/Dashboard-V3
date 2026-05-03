@@ -11,14 +11,17 @@ import {
   Loader2,
   Plus,
   Trash2,
+  X,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { completeAssignedTask, fetchMemberAssignedTasks } from '../../lib/queries/assignments'
 import {
+  cancelMyTaskRequest,
   fetchMyTaskRequests,
   taskRequestKeys,
   type MyTaskRequest,
 } from '../../lib/queries/taskRequests'
+import { useToast } from '../Toast'
 import {
   fetchMyOutgoingPendingReassignRequests,
   taskReassignKeys,
@@ -61,6 +64,10 @@ interface PendingMeta {
   kind: PendingKind
   // Targeted recipient name for the transfer; null for delete + edit (admin).
   otherPartyName?: string | null
+  // Set for kind='delete'/'edit' (rows from task_requests) so the
+  // row's hover-X cancel button can call cancel_my_task_request.
+  // Null for kind='transfer' — transfer cancel ships separately.
+  requestId?: string | null
 }
 
 export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {}) {
@@ -262,7 +269,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
       if (r.status !== 'pending') continue
       if (!r.target_task_id) continue
       if (map.has(r.target_task_id)) continue
-      map.set(r.target_task_id, { kind: r.kind, otherPartyName: null })
+      map.set(r.target_task_id, { kind: r.kind, otherPartyName: null, requestId: r.id })
     }
     return map
   }, [myOutgoingReassigns, myRequests])
@@ -531,12 +538,31 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
  */
 function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
   const isRejected = request.status === 'rejected'
+  const isPending = request.status === 'pending'
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const [cancelConfirm, setCancelConfirm] = useState(false)
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelMyTaskRequest(request.id),
+    onSuccess: () => {
+      toast('Request cancelled.', 'success')
+      void queryClient.invalidateQueries({ queryKey: taskRequestKeys.all })
+      void queryClient.invalidateQueries({ queryKey: ['admin-log'] })
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Cancel failed', 'error'),
+  })
+  useEffect(() => {
+    if (!cancelConfirm) return
+    const id = window.setTimeout(() => setCancelConfirm(false), 4000)
+    return () => window.clearTimeout(id)
+  }, [cancelConfirm])
+
   return (
     <div
-      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent ${
+      className={`group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent ${
         isRejected
           ? 'bg-rose-500/[0.05] opacity-90'
-          : 'bg-white/[0.018] opacity-60'
+          : 'bg-white/[0.018] opacity-60 hover:opacity-80'
       }`}
     >
       <span
@@ -560,9 +586,42 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
           {isRejected && request.reviewer_note ? ` · "${request.reviewer_note}"` : ''}
         </p>
       </div>
-      <span className="text-[10px] uppercase tracking-wider text-text-light/70 whitespace-nowrap mt-[2px]">
-        {request.status}
-      </span>
+      {/* Cancel UX mirrors AssignedTaskRow's pending-cancel pattern.
+          Pending only; rejected rows show their final-state pill. */}
+      {isPending ? (
+        cancelConfirm ? (
+          <span className="inline-flex items-center gap-1 mt-[2px]">
+            <button
+              type="button"
+              onClick={() => cancelMutation.mutate()}
+              disabled={cancelMutation.isPending}
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-text bg-rose-500/80 hover:brightness-110"
+            >
+              {cancelMutation.isPending ? '…' : 'Cancel'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCancelConfirm(false)}
+              className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-semibold text-text-light hover:text-text"
+            >
+              Keep
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCancelConfirm(true)}
+            aria-label="Cancel this request"
+            className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center w-4 h-4 mt-[2px] rounded text-text-light hover:text-rose-300 hover:bg-rose-500/10"
+          >
+            <X size={10} strokeWidth={2.5} aria-hidden="true" />
+          </button>
+        )
+      ) : (
+        <span className="text-[10px] uppercase tracking-wider text-text-light/70 whitespace-nowrap mt-[2px]">
+          {request.status}
+        </span>
+      )}
     </div>
   )
 }
@@ -616,6 +675,34 @@ function AssignedTaskRow({
   // tasks; click body still opens detail so the user can read the
   // pending state in context.
   const canQueue = task.can_complete && !pendingMeta
+
+  // Cancel-pending-request UX. Two-step inline confirm so a
+  // mis-click doesn't pop the request out of the queue. Only
+  // available for delete/edit kinds — transfer cancel is a
+  // separate flow on task_reassign_requests.
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const [cancelConfirm, setCancelConfirm] = useState(false)
+  const cancelMutation = useMutation({
+    mutationFn: () => {
+      if (!pendingMeta?.requestId) throw new Error('no request id')
+      return cancelMyTaskRequest(pendingMeta.requestId)
+    },
+    onSuccess: () => {
+      toast('Request cancelled.', 'success')
+      void queryClient.invalidateQueries({ queryKey: taskRequestKeys.all })
+      void queryClient.invalidateQueries({ queryKey: ['admin-log'] })
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Cancel failed', 'error'),
+  })
+  const canCancelRequest =
+    pendingMeta?.requestId && (pendingMeta.kind === 'delete' || pendingMeta.kind === 'edit')
+  // Auto-reset the inline confirm if the user walks away.
+  useEffect(() => {
+    if (!cancelConfirm) return
+    const id = window.setTimeout(() => setCancelConfirm(false), 4000)
+    return () => window.clearTimeout(id)
+  }, [cancelConfirm])
 
   // PR #25 — split click surfaces. Checkbox toggles completion;
   // body-click opens the detail modal. Keyboard: Space toggles
@@ -708,6 +795,48 @@ function AssignedTaskRow({
                 <Trash2 size={9} strokeWidth={2.5} aria-hidden="true" />
                 Awaiting admin to delete
               </span>
+            )}
+            {/* Cancel-request inline action for delete/edit kinds.
+                Two-step: hover-X → click → "Cancel request?" pill →
+                second click commits via cancel_my_task_request. */}
+            {canCancelRequest && (
+              cancelConfirm ? (
+                <span className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      cancelMutation.mutate()
+                    }}
+                    disabled={cancelMutation.isPending}
+                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-text bg-rose-500/80 hover:brightness-110 transition-all"
+                  >
+                    {cancelMutation.isPending ? '…' : 'Cancel request'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setCancelConfirm(false)
+                    }}
+                    className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-semibold text-text-light hover:text-text"
+                  >
+                    Keep
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setCancelConfirm(true)
+                  }}
+                  aria-label="Cancel this request"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center w-4 h-4 rounded text-text-light hover:text-rose-300 hover:bg-rose-500/10"
+                >
+                  <X size={10} strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              )
             )}
           </div>
         ) : (

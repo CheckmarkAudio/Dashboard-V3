@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Check, Edit2, Inbox, Loader2, Trash2, X } from 'lucide-react'
+import { AlertCircle, Ban, Check, Edit2, Inbox, Loader2, Trash2, X } from 'lucide-react'
 import {
   adminLogKeys,
   fetchRecentApprovals,
@@ -59,23 +59,42 @@ export default function AdminApprovalLogWidget() {
 
 function ApprovalRow({ row }: { row: RecentApprovalRow }) {
   const isApproved = row.status === 'approved'
+  const isCancelled = row.status === 'cancelled'
   const isDeleteApproved = isApproved && row.kind === 'delete'
   const isEditApproved = isApproved && row.kind === 'edit'
-  // Approved rows render with a kind-specific icon so the outcome
-  // reads at a glance: rose Trash2 for delete, gold Edit2 for edit,
-  // emerald check for create. Rejected rows always render the rose X.
-  const Icon = !isApproved ? X : isDeleteApproved ? Trash2 : isEditApproved ? Edit2 : Check
-  const iconClass = !isApproved
-    ? 'text-rose-400/80 shrink-0'
-    : isDeleteApproved
-      ? 'text-rose-400/90 shrink-0'
-      : isEditApproved
-        ? 'text-gold/90 shrink-0'
-        : 'text-emerald-400/80 shrink-0'
+  // Outcome-specific icon so the row reads at a glance:
+  //   - approved create  → emerald check
+  //   - approved delete  → rose Trash2 ("Deleted" tag)
+  //   - approved edit    → gold Edit2 ("Edited" tag)
+  //   - rejected (any)   → rose X
+  //   - cancelled (any)  → muted Ban ("Cancelled" tag) — withdrawn by requester
+  const Icon = isCancelled
+    ? Ban
+    : !isApproved
+      ? X
+      : isDeleteApproved
+        ? Trash2
+        : isEditApproved
+          ? Edit2
+          : Check
+  const iconClass = isCancelled
+    ? 'text-text-light/60 shrink-0'
+    : !isApproved
+      ? 'text-rose-400/80 shrink-0'
+      : isDeleteApproved
+        ? 'text-rose-400/90 shrink-0'
+        : isEditApproved
+          ? 'text-gold/90 shrink-0'
+          : 'text-emerald-400/80 shrink-0'
   const initialed = formatRequesterName(row.requester_name)
   const when = formatRelative(row.resolved_at)
+  const dimmedRow = isCancelled
   return (
-    <div className="px-2 py-1.5 rounded-lg hover:bg-white/[0.025] transition-colors">
+    <div
+      className={`px-2 py-1.5 rounded-lg hover:bg-white/[0.025] transition-colors ${
+        dimmedRow ? 'opacity-70' : ''
+      }`}
+    >
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2">
         <Icon size={12} className={iconClass} aria-hidden="true" strokeWidth={3} />
         <p className="text-[12px] text-text truncate">
@@ -89,12 +108,17 @@ function ApprovalRow({ row }: { row: RecentApprovalRow }) {
               Edited
             </span>
           )}
+          {isCancelled && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-text-light/70 mr-1.5">
+              Cancelled
+            </span>
+          )}
           {row.title}
         </p>
         <span className="text-[11px] text-text-light whitespace-nowrap">{initialed}</span>
         <span className="text-[10px] text-text-light/70 whitespace-nowrap">{when}</span>
       </div>
-      {!isApproved && row.reviewer_note && (
+      {!isApproved && !isCancelled && row.reviewer_note && (
         <p className="ml-5 mt-0.5 text-[11px] italic text-rose-300/70 line-clamp-2">
           “{row.reviewer_note}”
         </p>
