@@ -810,7 +810,11 @@ function AssignedTaskRow({
                 Awaiting {pendingMeta.otherPartyName ?? 'teammate'}
               </span>
             ) : pendingMeta.kind === 'edit' ? (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gold/15 ring-1 ring-gold/30 text-gold/90 font-semibold">
+              // Orange (not gold) so the three pending kinds each
+              // pop visually: rose=delete, marigold/amber=create,
+              // orange=edit. Gold reads too close to the create
+              // amber on a quick scan.
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-500/15 ring-1 ring-orange-500/40 text-orange-300 font-semibold">
                 <Edit2 size={9} strokeWidth={2.5} aria-hidden="true" />
                 Awaiting edit approval
               </span>

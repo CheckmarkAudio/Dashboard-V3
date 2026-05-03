@@ -206,7 +206,26 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
   return (
     <>
     <div className="rounded-lg bg-surface-alt/40 ring-1 ring-white/5 px-2.5 py-2">
-      <div className="flex items-start gap-2">
+      {/* Whole icon+content cluster is clickable so the user doesn't
+          have to thread the needle on the title text — bigger target,
+          and removes a click-target edge case where the create-kind
+          row's title button could shrink to ~0px width inside its
+          flex-wrap parent (rev17 user report). Inline action buttons
+          live below this block in the action row, so they aren't
+          intercepted. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setDetailOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            setDetailOpen(true)
+          }
+        }}
+        aria-label={`Open details for "${request.title}"`}
+        className="flex items-start gap-2 cursor-pointer rounded-md hover:bg-white/[0.02] -mx-1 px-1 py-0.5 focus-ring"
+      >
         <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${iconBgClass}`}>
           {isDelete ? (
             <Trash2 size={14} aria-hidden="true" />
@@ -221,14 +240,9 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
             <span className={`shrink-0 text-[9px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded ${badgeClass}`}>
               {badgeLabel}
             </span>
-            <button
-              type="button"
-              onClick={() => setDetailOpen(true)}
-              aria-label={`Open details for "${request.title}"`}
-              className="text-[13px] font-semibold text-text truncate text-left hover:text-gold focus-ring rounded"
-            >
+            <p className="text-[13px] font-semibold text-text truncate">
               {request.title}
-            </button>
+            </p>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-text-light mt-0.5 flex-wrap">
             <span>{request.requester_name}</span>
