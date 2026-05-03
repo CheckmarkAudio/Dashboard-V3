@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle, Archive, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronRight,
-  ClipboardList, Edit2, Layers, Loader2, Plus, Save, Settings,
+  ClipboardList, Edit2, Layers, Loader2, Plus, Save,
   Sparkles, Tag, Trash2, Users, X,
 } from 'lucide-react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
@@ -43,7 +43,7 @@ import type { AssignedTask } from '../../types/assignments'
  *
  * Layout:
  *   - Left sidebar (260px): Members list · Templates link · Other
- *   - Main content: Settings · Save as Template · Templates ▾ bar;
+ *   - Main content: Save as Template · Select · Templates ▾ bar;
  *     "All Tasks for {selected member}" title; two-column task list
  *     with checkbox + label + Edit per row.
  *
@@ -60,8 +60,6 @@ import type { AssignedTask } from '../../types/assignments'
  *   - "Save as Template" → name + role tag prompt, creates a
  *     `task_template`, then loops `add_task_template_item` for each
  *     of the selected member's current tasks.
- *   - "Settings for Tasks" → reserved for future global task
- *     settings (currently disabled).
  *
  * Mounted at the canonical Assign route (`/admin/templates`) and
  * also at `/admin/assign-mockup` for any saved bookmark from the
@@ -459,7 +457,7 @@ export default function AssignAdmin() {
         {/* ─── Main content ──────────────────────────────────────── */}
         <main className="rounded-xl border border-border bg-surface p-5">
           {/* Top action bar.
-              Default mode  → Settings · Save as Template · Select · Templates ▾
+              Default mode  → Save as Template · Select · Templates ▾
               Select mode   → N selected · Select all · Delete · Cancel
               Lives INSIDE the main card so the right pane starts at the same
               Y as the sidebar (mirrors Settings page rhythm). */}
@@ -511,15 +509,6 @@ export default function AssignAdmin() {
             </div>
           ) : (
           <div className="flex items-center gap-2 mb-4 flex-wrap pb-4 border-b border-border/60">
-            <Button
-              variant="ghost"
-              size="sm"
-              iconLeft={<Settings size={14} aria-hidden="true" />}
-              disabled
-              title="Coming soon"
-            >
-              Settings for Tasks
-            </Button>
             <Button
               variant="ghost"
               size="sm"
