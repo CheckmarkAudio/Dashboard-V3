@@ -27,6 +27,7 @@ import type {
   TaskTemplateLibraryEntry,
 } from '../../types/assignments'
 import MultiTaskCreateModal from '../../components/tasks/requests/MultiTaskCreateModal'
+import TemplateLibrary from './TemplateLibrary'
 import { supabase } from '../../lib/supabase'
 import type { TeamMember } from '../../types'
 import type { AssignedTask } from '../../types/assignments'
@@ -82,29 +83,51 @@ export default function AssignAdmin() {
     [members],
   )
 
-  // ─── Selected member + persisted-in-URL hash so refresh stays put.
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(
-    () => (typeof window !== 'undefined' ? window.location.hash.slice(1) || null : null),
+  // ─── Sidebar view + selected member.
+  // The sidebar acts like a tab strip: a member tab swaps the main
+  // pane to that member's task editor; the Templates tab swaps it to
+  // the embedded TemplateLibrary. URL hash mirrors the selection so
+  // deep links survive refresh: `#templates` or `#<memberId>`.
+  const TEMPLATES_HASH = 'templates'
+  const initialHash =
+    typeof window !== 'undefined' ? window.location.hash.slice(1) : ''
+  const [view, setView] = useState<'member' | 'templates'>(
+    initialHash === TEMPLATES_HASH ? 'templates' : 'member',
   )
-  // Default to first member once the list loads + nothing was hashed.
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(
+    initialHash && initialHash !== TEMPLATES_HASH ? initialHash : null,
+  )
+  // Default to first member once the list loads + nothing was hashed
+  // and we're not on Templates.
   useEffect(() => {
+    if (view === 'templates') return
     if (selectedMemberId) return
     const first = activeMembers[0]
     if (!first) return
     setSelectedMemberId(first.id)
-  }, [selectedMemberId, activeMembers])
+  }, [view, selectedMemberId, activeMembers])
   // Reflect the selection in the URL hash so a deep link works.
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (!selectedMemberId) return
-    if (window.location.hash !== `#${selectedMemberId}`) {
-      history.replaceState(null, '', `#${selectedMemberId}`)
+    const desired =
+      view === 'templates'
+        ? `#${TEMPLATES_HASH}`
+        : selectedMemberId
+          ? `#${selectedMemberId}`
+          : ''
+    if (desired && window.location.hash !== desired) {
+      history.replaceState(null, '', desired)
     }
-  }, [selectedMemberId])
+  }, [view, selectedMemberId])
 
   const selectedMember = activeMembers.find((m) => m.id === selectedMemberId)
     ?? activeMembers[0]
     ?? null
+
+  const selectMember = useCallback((id: string) => {
+    setSelectedMemberId(id)
+    setView('member')
+  }, [])
 
   // ─── Tasks for the selected member ──────────────────────────────
   const tasksQuery = useQuery({
@@ -359,13 +382,13 @@ export default function AssignAdmin() {
             ) : (
               <ul className="space-y-1">
                 {activeMembers.map((m) => {
-                  const isSelected = selectedMember?.id === m.id
+                  const isSelected = view === 'member' && selectedMember?.id === m.id
                   const initial = m.display_name?.charAt(0)?.toUpperCase() ?? '?'
                   return (
                     <li key={m.id}>
                       <button
                         type="button"
-                        onClick={() => setSelectedMemberId(m.id)}
+                        onClick={() => selectMember(m.id)}
                         aria-current={isSelected ? 'true' : undefined}
                         className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-all text-left ${
                           isSelected
@@ -407,24 +430,45 @@ export default function AssignAdmin() {
             )}
           </div>
 
-          {/* Templates link — PR #56 points at the dedicated full-
-              page Templates manager (`/admin/template-library`).
-              Same functionality as the legacy widget but with more
-              breathing room. The legacy widget version is still
-              reachable via the "Legacy Assign" link below for
-              reference. */}
+          {/* Templates tab — clicking swaps the main pane to the
+              embedded TemplateLibrary instead of routing away. The
+              standalone page at `/admin/template-library` still
+              works for deep links and shares the React Query cache,
+              so both views stay in sync. */}
           <div className="mt-4 pt-3 border-t border-border/60">
-            <Link
-              to="/admin/template-library"
-              className="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-surface-hover transition-colors group"
+            <button
+              type="button"
+              onClick={() => setView('templates')}
+              aria-current={view === 'templates' ? 'true' : undefined}
+              className={`w-full flex items-center gap-2 px-2 py-2 rounded-xl transition-all text-left ${
+                view === 'templates'
+                  ? 'bg-gold/12 ring-1 ring-gold/30'
+                  : 'hover:bg-surface-hover'
+              }`}
             >
-              <Layers size={14} className="text-gold/70 group-hover:text-gold" aria-hidden="true" />
+              <Layers
+                size={14}
+                className={view === 'templates' ? 'text-gold' : 'text-gold/70'}
+                aria-hidden="true"
+              />
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold text-text">Templates</p>
-                <p className="text-[10px] text-text-light">Manage on dedicated page</p>
+                <p
+                  className={`text-[13px] ${
+                    view === 'templates' ? 'font-bold text-text' : 'font-semibold text-text'
+                  }`}
+                >
+                  Templates
+                </p>
+                <p className="text-[10px] text-text-light">
+                  {view === 'templates' ? 'Open' : 'Manage in this pane'}
+                </p>
               </div>
-              <ChevronRight size={12} className="text-text-light shrink-0" aria-hidden="true" />
-            </Link>
+              {view === 'templates' ? (
+                <ChevronRight size={12} className="text-gold shrink-0" aria-hidden="true" />
+              ) : (
+                <ChevronRight size={12} className="text-text-light shrink-0" aria-hidden="true" />
+              )}
+            </button>
           </div>
 
           {/* Other — clickable path to the preserved legacy widget
@@ -456,6 +500,10 @@ export default function AssignAdmin() {
 
         {/* ─── Main content ──────────────────────────────────────── */}
         <main className="rounded-xl border border-border bg-surface p-5">
+          {view === 'templates' ? (
+            <TemplateLibrary embedded />
+          ) : (
+          <>
           {/* Top action bar.
               Default mode  → Save as Template · Select · Templates ▾
               Select mode   → N selected · Select all · Delete · Cancel
@@ -677,6 +725,8 @@ export default function AssignAdmin() {
               </div>
             )}
           </div>
+          </>
+          )}
         </main>
       </div>
 
