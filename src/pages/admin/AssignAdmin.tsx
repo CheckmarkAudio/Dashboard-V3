@@ -1,8 +1,8 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertCircle, Archive, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronLeft, ChevronRight,
+  AlertCircle, Archive, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronRight,
   ClipboardList, Edit2, Layers, Loader2, Plus, Save,
   Sparkles, Tag, Trash2, Users, X,
 } from 'lucide-react'
@@ -49,9 +49,8 @@ import type { AssignedTask } from '../../types/assignments'
  *     either side at 1440 viewport):
  *       - Left  (260px): Members sidebar  — anchored
  *       - Mid   (432px): Main Assign card — anchored
- *       - Right (432px): Logs carousel    — pages between Assign
- *                                            Log + Approval Log via
- *                                            arrows + dots
+ *       - Right 1 (432px): Assign Log  — standard widget
+ *       - Right 2 (432px): Approval Log — standard widget
  *   - All three boxes use widget-card chrome to match Overview/Hub.
  *   - Main Assign task list is single-column (constrained by the
  *     432px width); rows scroll inside the card.
@@ -334,22 +333,23 @@ export default function AssignAdmin() {
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto animate-fade-in">
+    <div className="max-w-[1604px] mx-auto animate-fade-in">
       {/* Page header — mirrors Settings page rhythm so headers align across admin */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Assign</h1>
       </div>
 
-      {/* Three-column rework (2026-05-03): sidebar (260) + main
-          assign card (432) + logs carousel (432). All fixed widths +
-          696px tall + widget-card chrome so the page reads as three
-          consistent surfaces. `justify-center` centers the 1156px
-          grid inside the page shell so leftover horizontal space
+      {/* Four-surface Assign workspace (2026-05-03): sidebar (260)
+          + Tasks (432) + Assign Log (432) + Approval Log (432).
+          The three task/log surfaces intentionally share the same
+          432×696 widget footprint as the rest of the site. `justify-center`
+          centers the grid
+          inside the page shell so leftover horizontal space
           sits as breathing room on either side (matches the way
           Hub/Overview leave whitespace around their widget rows). */}
       <div
-        className="grid gap-4 items-stretch justify-center"
-        style={{ gridTemplateColumns: '260px 432px 432px' }}
+        className="grid gap-4 items-stretch justify-center overflow-x-auto pb-1"
+        style={{ gridTemplateColumns: '260px 432px 432px 432px' }}
       >
         {/* ─── Sidebar (anchored, 260 × 696) ───────────────────── */}
         <aside className="widget-card flex flex-col h-[696px] overflow-hidden p-3">
@@ -694,14 +694,10 @@ export default function AssignAdmin() {
           </div>
         </main>
 
-        {/* ─── Logs carousel (carouseled, 432 × 696) ─────────────
-            Pages between the Assign Log + Approval Log widgets that
-            already exist in the legacy admin/assign-classic widget
-            grid. The widgets render body-only (no header chrome of
-            their own) — LogsCarousel wraps them in a widget-card
-            shell with title + arrows + page dots so the surface
-            matches Hub/Overview widgets. */}
-        <LogsCarousel />
+        {/* ─── Log widgets (matched, visible together) ───────────
+            Assign Log + Approval Log are each first-class widgets
+            with the same 432×696 footprint as the Tasks widget. */}
+        <AssignLogGrid />
       </div>
 
       {/* ─── Modals ─────────────────────────────────────────────── */}
@@ -1395,83 +1391,41 @@ function TemplatePreviewBeforeApplyModal({
 }
 
 
-// ─── LogsCarousel ───────────────────────────────────────────────
+// ─── AssignLogGrid ──────────────────────────────────────────────
 //
-// Right column of the Assign-page rework. Pages between the two
-// log widgets that already power the legacy /admin/assign-classic
-// view (`AdminAssignLogWidget` + `AdminApprovalLogWidget`).
-//
-// The widgets are designed as widget-frame body content (no header
-// chrome of their own), so this shell provides the same widget-
-// card look the other surfaces use plus title + arrow buttons +
-// page-dot indicator. Mirrors the carousel grammar from PR #81's
-// WorkspacePanel without coupling to that component (these two
-// widgets aren't in the workspace registry).
-//
-// Two pages, hard-coded order. If a third log widget lands later
-// the PAGES array is the single edit point.
-//
-// Accessibility: arrows have aria-labels; dots are buttons with
-// aria-current on the active one and aria-label per page.
+// Matched log widgets for the Assign page. The fragment keeps these
+// as direct grid children so each log card is exactly the same width
+// and height as the main Tasks widget.
 
-const LOG_PAGES = [
-  { key: 'assign', label: 'Assign Log', Component: AdminAssignLogWidget },
-  { key: 'approval', label: 'Approval Log', Component: AdminApprovalLogWidget },
-] as const
-
-function LogsCarousel() {
-  const [page, setPage] = useState(0)
-  const total = LOG_PAGES.length
-  const active = LOG_PAGES[page] ?? LOG_PAGES[0]
-  const ActiveComponent = active.Component
-  const goPrev = () => setPage((p) => Math.max(0, p - 1))
-  const goNext = () => setPage((p) => Math.min(total - 1, p + 1))
-
+function AssignLogGrid() {
   return (
-    <section className="widget-card flex flex-col h-[696px] overflow-hidden p-3 relative">
+    <>
+      <LogWidget title="Assign Log" icon={<ClipboardList size={14} className="text-gold" aria-hidden="true" />}>
+        <AdminAssignLogWidget />
+      </LogWidget>
+      <LogWidget title="Approval Log" icon={<CheckSquare size={14} className="text-gold" aria-hidden="true" />}>
+        <AdminApprovalLogWidget />
+      </LogWidget>
+    </>
+  )
+}
+
+function LogWidget({
+  title,
+  icon,
+  children,
+}: {
+  title: string
+  icon: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="widget-card flex h-[696px] w-[432px] min-w-0 flex-col overflow-hidden p-3">
       <div className="flex items-center gap-2 px-2 pb-2 mb-2 border-b border-border/60 shrink-0">
-        <ClipboardList size={14} className="text-gold" aria-hidden="true" />
-        <h2 className="text-sm font-bold text-text">{active.label}</h2>
+        {icon}
+        <h2 className="text-sm font-bold text-text">{title}</h2>
       </div>
-
-      <div className="flex-1 min-h-0 px-1">
-        <ActiveComponent />
-      </div>
-
-      <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-border/60 shrink-0">
-        <button
-          type="button"
-          onClick={goPrev}
-          disabled={page === 0}
-          aria-label="Previous log"
-          className="p-1.5 rounded-md text-text-muted hover:text-gold hover:bg-surface-hover disabled:opacity-30 disabled:hover:text-text-muted disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronLeft size={14} aria-hidden="true" />
-        </button>
-        <div className="flex items-center gap-1.5">
-          {LOG_PAGES.map((p, i) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => setPage(i)}
-              aria-current={i === page ? 'true' : undefined}
-              aria-label={`Show ${p.label}`}
-              className={`h-1.5 rounded-full transition-all ${
-                i === page ? 'w-6 bg-gold' : 'w-1.5 bg-text-light/30 hover:bg-text-light/60'
-              }`}
-            />
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={goNext}
-          disabled={page >= total - 1}
-          aria-label="Next log"
-          className="p-1.5 rounded-md text-text-muted hover:text-gold hover:bg-surface-hover disabled:opacity-30 disabled:hover:text-text-muted disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronRight size={14} aria-hidden="true" />
-        </button>
-      </div>
+      <div className="flex-1 min-h-0 px-1">{children}</div>
     </section>
   )
 }
