@@ -563,7 +563,7 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
   const dueLabel = formatDueShort(request.due_date)
 
   return (
-    <div className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent bg-white/[0.018] opacity-60 hover:opacity-80">
+    <div className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent bg-white/[0.025] hover:bg-white/[0.04]">
       {/* Leading square — visually substitutes for the row's normal
           checkbox. Plus icon (amber) for pending; Hourglass (rose)
           for rejected — same colors as the badge for consistency. */}
@@ -581,7 +581,7 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
       <div className="min-w-0">
         <p
           className={`text-[13px] truncate ${
-            isRejected ? 'text-text/80' : 'font-semibold text-text/90'
+            isRejected ? 'text-text/80' : 'font-semibold text-text-muted'
           }`}
         >
           {request.title}
@@ -754,7 +754,7 @@ function AssignedTaskRow({
         highlighted
           ? 'bg-gold/20 ring-2 ring-gold animate-[pulse_0.8s_ease-in-out_2]'
           : pendingMeta
-            ? 'bg-white/[0.018] opacity-60 hover:opacity-80 hover:bg-white/[0.03]'
+            ? 'bg-white/[0.025] hover:bg-white/[0.04]'
             : done
               ? 'bg-white/[0.018] opacity-60 hover:opacity-80'
               : isNew
@@ -788,7 +788,15 @@ function AssignedTaskRow({
 
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className={`text-[13px] truncate ${done ? 'line-through text-text-muted' : 'font-semibold text-text'}`}>
+          <p
+            className={`text-[13px] truncate ${
+              done
+                ? 'line-through text-text-muted'
+                : pendingMeta
+                  ? 'font-semibold text-text-muted'
+                  : 'font-semibold text-text'
+            }`}
+          >
             {task.title}
           </p>
           {/* PR #70 — `New` + `Required` tags retired. The new-row gold
@@ -812,14 +820,12 @@ function AssignedTaskRow({
             ) : pendingMeta.kind === 'edit' ? (
               // Orange (not gold) so the three pending kinds each
               // pop visually: rose=delete, marigold/amber=create,
-              // orange=edit. Uses text-orange-400 (#fb923c — true
-              // orange) instead of text-orange-300 (#fdba74 — peach)
-              // because orange's lighter shades read paler than
-              // amber-300 / rose-300 on the same dim background;
-              // bumping a step keeps all three at equal visual
-              // weight. Surface formula (bg/15 + ring/30) matches
-              // the amber + rose badges exactly.
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-500/15 ring-1 ring-orange-500/30 text-orange-400 font-semibold">
+              // orange=edit. Surface formula matches amber + rose
+              // exactly (bg/15 + ring/30 + text-{color}-300) — the
+              // row no longer sits at opacity-60, so badges render
+              // at full saturation and read at equal weight to the
+              // admin queue.
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-500/15 ring-1 ring-orange-500/30 text-orange-300 font-semibold">
                 <Edit2 size={9} strokeWidth={2.5} aria-hidden="true" />
                 Awaiting edit approval
               </span>
