@@ -11,7 +11,6 @@ import {
   Loader2,
   Plus,
   Trash2,
-  X,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { completeAssignedTask, fetchMemberAssignedTasks } from '../../lib/queries/assignments'
@@ -586,8 +585,10 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
           {isRejected && request.reviewer_note ? ` · "${request.reviewer_note}"` : ''}
         </p>
       </div>
-      {/* Cancel UX mirrors AssignedTaskRow's pending-cancel pattern.
-          Pending only; rejected rows show their final-state pill. */}
+      {/* Cancel UX mirrors AssignedTaskRow's pending-cancel pattern:
+          visible Trash2 → click → "Cancel?" rose pill → second
+          click commits. Pending only; rejected rows show their
+          final-state pill. */}
       {isPending ? (
         cancelConfirm ? (
           <span className="inline-flex items-center gap-1 mt-[2px]">
@@ -595,14 +596,14 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
               type="button"
               onClick={() => cancelMutation.mutate()}
               disabled={cancelMutation.isPending}
-              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-text bg-rose-500/80 hover:brightness-110"
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-rose-500/80 hover:brightness-110"
             >
-              {cancelMutation.isPending ? '…' : 'Cancel'}
+              {cancelMutation.isPending ? '…' : 'Cancel?'}
             </button>
             <button
               type="button"
               onClick={() => setCancelConfirm(false)}
-              className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-semibold text-text-light hover:text-text"
+              className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-text-light hover:text-text"
             >
               Keep
             </button>
@@ -612,9 +613,10 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
             type="button"
             onClick={() => setCancelConfirm(true)}
             aria-label="Cancel this request"
-            className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center w-4 h-4 mt-[2px] rounded text-text-light hover:text-rose-300 hover:bg-rose-500/10"
+            title="Cancel this request"
+            className="inline-flex items-center justify-center w-5 h-5 mt-[2px] rounded text-rose-300/70 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
           >
-            <X size={10} strokeWidth={2.5} aria-hidden="true" />
+            <Trash2 size={12} strokeWidth={2.25} aria-hidden="true" />
           </button>
         )
       ) : (
@@ -797,8 +799,11 @@ function AssignedTaskRow({
               </span>
             )}
             {/* Cancel-request inline action for delete/edit kinds.
-                Two-step: hover-X → click → "Cancel request?" pill →
-                second click commits via cancel_my_task_request. */}
+                Two-step: visible Trash2 icon → click → "Cancel?"
+                rose pill → second click commits via
+                cancel_my_task_request. Always visible (not
+                hover-gated) since the row is already pending and
+                the action is destructive but reversible (re-submit). */}
             {canCancelRequest && (
               cancelConfirm ? (
                 <span className="inline-flex items-center gap-1">
@@ -809,9 +814,9 @@ function AssignedTaskRow({
                       cancelMutation.mutate()
                     }}
                     disabled={cancelMutation.isPending}
-                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-text bg-rose-500/80 hover:brightness-110 transition-all"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-rose-500/80 hover:brightness-110 transition-all"
                   >
-                    {cancelMutation.isPending ? '…' : 'Cancel request'}
+                    {cancelMutation.isPending ? '…' : 'Cancel?'}
                   </button>
                   <button
                     type="button"
@@ -819,7 +824,7 @@ function AssignedTaskRow({
                       event.stopPropagation()
                       setCancelConfirm(false)
                     }}
-                    className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-semibold text-text-light hover:text-text"
+                    className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-text-light hover:text-text"
                   >
                     Keep
                   </button>
@@ -832,9 +837,10 @@ function AssignedTaskRow({
                     setCancelConfirm(true)
                   }}
                   aria-label="Cancel this request"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center w-4 h-4 rounded text-text-light hover:text-rose-300 hover:bg-rose-500/10"
+                  title="Cancel this request"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-rose-300/70 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
                 >
-                  <X size={10} strokeWidth={2.5} aria-hidden="true" />
+                  <Trash2 size={12} strokeWidth={2.25} aria-hidden="true" />
                 </button>
               )
             )}
