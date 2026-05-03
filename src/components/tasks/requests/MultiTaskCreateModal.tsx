@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Building2, FileText, Loader2, Plus, Send, Trash2, Users } from 'lucide-react'
+import { Building2, FileText, Loader2, Plus, Repeat, Send, Trash2, Users } from 'lucide-react'
 import FloatingDetailModal from '../../FloatingDetailModal'
 import { useToast } from '../../Toast'
 import MemberMultiSelect from '../../members/MemberMultiSelect'
@@ -8,9 +8,12 @@ import {
   assignCustomTasksToMembers,
   type CustomTaskDraft,
 } from '../../../lib/queries/assignments'
+import { STUDIO_SPACES, type StudioSpace } from '../../../lib/queries/adminTasks'
 import type { AssignedTaskScope } from '../../../types/assignments'
 import { Field, FlywheelStagePicker, type FlywheelStage } from './formAtoms'
 import AddFromTemplateModal from './AddFromTemplateModal'
+
+type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
 
 /**
  * MultiTaskCreateModal — PR #42.
@@ -46,11 +49,17 @@ interface DraftRow {
   title: string
   description: string
   stage: FlywheelStage | null
+  // Studio-scope only — persisted as `studio_space` on the row.
+  // Member scope rows ignore this field.
+  studioSpace: StudioSpace | null
+  // Studio-scope only — captured as `recurrence_spec` on the row.
+  // `null` = one-shot. Member rows leave it null.
+  recurrence: RecurrenceFrequency | null
   dueDate: string
   isRequired: boolean
 }
 
-function emptyRow(): DraftRow {
+function emptyRow(initialStudioSpace: StudioSpace | null = null): DraftRow {
   return {
     tempId:
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -59,6 +68,8 @@ function emptyRow(): DraftRow {
     title: '',
     description: '',
     stage: null,
+    studioSpace: initialStudioSpace,
+    recurrence: null,
     dueDate: '',
     isRequired: false,
   }
@@ -68,6 +79,7 @@ export default function MultiTaskCreateModal({
   onClose,
   initialScope = 'member',
   defaultRecipientIds,
+  initialStudioSpace = null,
 }: {
   onClose: () => void
   initialScope?: AssignedTaskScope
@@ -76,12 +88,18 @@ export default function MultiTaskCreateModal({
   // recipient. Pass an empty array (or omit) for the default
   // empty-set behaviour used by the Hub Quick Assign flow.
   defaultRecipientIds?: string[]
+  // PR #102 — when the modal opens from the Studio tab, optionally
+  // pre-fill the first draft row's studio_space (e.g., admin
+  // clicks +Add inside Control Room → opens modal with Control
+  // Room already selected on draft 1). Subsequent rows the admin
+  // adds default to "All / no specific room" so they pick per row.
+  initialStudioSpace?: StudioSpace | null
 }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
   const [scope, setScope] = useState<AssignedTaskScope>(initialScope)
-  const [drafts, setDrafts] = useState<DraftRow[]>(() => [emptyRow()])
+  const [drafts, setDrafts] = useState<DraftRow[]>(() => [emptyRow(initialStudioSpace)])
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(
     () => new Set(defaultRecipientIds ?? []),
   )
@@ -123,10 +141,18 @@ export default function MultiTaskCreateModal({
         .map((d) => ({
           title: d.title.trim(),
           description: d.description.trim() || null,
-          category: d.stage,
+          // Studio rows don't expose Flywheel stage — server stores
+          // category=NULL for them. Member rows keep the existing
+          // FlywheelStagePicker behaviour.
+          category: scope === 'studio' ? null : d.stage,
           due_date: d.dueDate || null,
           is_required: d.isRequired,
           show_on_overview: true,
+          studio_space: scope === 'studio' ? d.studioSpace : null,
+          recurrence_spec:
+            scope === 'studio' && d.recurrence
+              ? { frequency: d.recurrence, interval: 1 }
+              : null,
         }))
       return assignCustomTasksToMembers(
         scope === 'studio' ? [] : Array.from(selectedMemberIds),
@@ -204,6 +230,7 @@ export default function MultiTaskCreateModal({
                 key={d.tempId}
                 index={i}
                 draft={d}
+                scope={scope}
                 canRemove={drafts.length > 1}
                 onChange={(patch) => updateDraft(d.tempId, patch)}
                 onRemove={() => removeDraft(d.tempId)}
@@ -314,16 +341,19 @@ function ScopeButton({
 function DraftRowCard({
   index,
   draft,
+  scope,
   canRemove,
   onChange,
   onRemove,
 }: {
   index: number
   draft: DraftRow
+  scope: AssignedTaskScope
   canRemove: boolean
   onChange: (patch: Partial<DraftRow>) => void
   onRemove: () => void
 }) {
+  const isStudio = scope === 'studio'
   return (
     <div className="rounded-xl border border-border bg-surface-alt/40 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -359,11 +389,29 @@ function DraftRowCard({
         className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[12px] text-text placeholder:text-text-muted focus:outline-none focus:border-gold/50 resize-none"
       />
 
-      <FlywheelStagePicker
-        value={draft.stage}
-        onChange={(next) => onChange({ stage: next })}
-        label="Flywheel stage"
-      />
+      {/* Studio mode swaps Flywheel stage for the room picker, since
+          studio tasks are room-tagged and not flywheel-tracked. */}
+      {isStudio ? (
+        <StudioSpacePicker
+          value={draft.studioSpace}
+          onChange={(next) => onChange({ studioSpace: next })}
+        />
+      ) : (
+        <FlywheelStagePicker
+          value={draft.stage}
+          onChange={(next) => onChange({ stage: next })}
+          label="Flywheel stage"
+        />
+      )}
+
+      {/* Recurrence picker — studio scope only (column accepts member
+          rows too; UI extension is a future change). */}
+      {isStudio && (
+        <RecurrencePicker
+          value={draft.recurrence}
+          onChange={(next) => onChange({ recurrence: next })}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <div>
@@ -386,6 +434,111 @@ function DraftRowCard({
           />
           Required
         </label>
+      </div>
+    </div>
+  )
+}
+
+// ─── Studio space pills ─────────────────────────────────────────────
+//
+// [All] [Control Room] [Studio A] [Studio B]
+//
+// "All" maps to studio_space=NULL — a task that isn't tied to a
+// specific room (it'll surface in the StudioTasksPane "(no space set)"
+// section, which doubles as the catch-all bucket). One task can't be
+// in two rooms simultaneously, so [All] = "no specific room" rather
+// than "create one task per room."
+
+function StudioSpacePicker({
+  value,
+  onChange,
+}: {
+  value: StudioSpace | null
+  onChange: (next: StudioSpace | null) => void
+}) {
+  return (
+    <div>
+      <label className="block text-[10px] font-semibold uppercase tracking-wider text-text-light mb-1.5">
+        Studio space
+      </label>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <SpacePill label="All" active={value === null} onClick={() => onChange(null)} />
+        {STUDIO_SPACES.map((space) => (
+          <SpacePill
+            key={space}
+            label={space}
+            active={value === space}
+            onClick={() => onChange(space)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SpacePill({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 transition-colors ${
+        active
+          ? 'bg-gold/15 text-gold ring-gold/40'
+          : 'bg-surface-alt text-text-muted ring-border hover:text-text hover:bg-surface-hover'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+// ─── Recurrence pills ───────────────────────────────────────────────
+//
+// [None] [Daily] [Weekly] [Monthly]
+//
+// Captures the cadence on the row; the actual auto-recreate engine
+// is a future feature. Persisted as `recurrence_spec = {frequency,
+// interval: 1}` (server CHECK enforces the frequency enum).
+
+function RecurrencePicker({
+  value,
+  onChange,
+}: {
+  value: RecurrenceFrequency | null
+  onChange: (next: RecurrenceFrequency | null) => void
+}) {
+  const options: { key: RecurrenceFrequency; label: string }[] = [
+    { key: 'daily', label: 'Daily' },
+    { key: 'weekly', label: 'Weekly' },
+    { key: 'monthly', label: 'Monthly' },
+  ]
+  return (
+    <div>
+      <label className="block text-[10px] font-semibold uppercase tracking-wider text-text-light mb-1.5">
+        <span className="inline-flex items-center gap-1">
+          <Repeat size={9} aria-hidden="true" />
+          Recurrence
+        </span>
+      </label>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <SpacePill label="None" active={value === null} onClick={() => onChange(null)} />
+        {options.map((opt) => (
+          <SpacePill
+            key={opt.key}
+            label={opt.label}
+            active={value === opt.key}
+            onClick={() => onChange(opt.key)}
+          />
+        ))}
       </div>
     </div>
   )

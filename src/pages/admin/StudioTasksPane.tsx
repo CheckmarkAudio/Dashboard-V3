@@ -6,12 +6,12 @@ import {
   Edit2,
   Loader2,
   Plus,
+  Repeat,
   Trash2,
   X,
   type LucideIcon,
 } from 'lucide-react'
 import {
-  assignCustomTasksToMembers,
   completeAssignedTask,
   fetchStudioAssignedTasks,
 } from '../../lib/queries/assignments'
@@ -25,6 +25,7 @@ import { useToast } from '../../components/Toast'
 import { useAuth } from '../../contexts/AuthContext'
 import { Button, Input } from '../../components/ui'
 import { supabase } from '../../lib/supabase'
+import MultiTaskCreateModal from '../../components/tasks/requests/MultiTaskCreateModal'
 import type { AssignedTask } from '../../types/assignments'
 
 /**
@@ -59,6 +60,7 @@ export default function StudioTasksPane() {
   const { profile } = useAuth()
   const { toast } = useToast()
   const [editTask, setEditTask] = useState<AssignedTask | null>(null)
+  const [addModalOpen, setAddModalOpen] = useState(false)
 
   const tasksQuery = useQuery({
     queryKey: STUDIO_TASKS_KEY,
@@ -112,7 +114,20 @@ export default function StudioTasksPane() {
             Around-the-studio work — cleaning, patch bay resets, mic stand stage, etc.
           </p>
         </div>
-        {tasksQuery.isLoading && <Loader2 size={14} className="animate-spin text-text-light" />}
+        <div className="flex items-center gap-2">
+          {tasksQuery.isLoading && <Loader2 size={14} className="animate-spin text-text-light" />}
+          {/* Single top +Add task button — opens MultiTaskCreateModal
+              pre-toggled to Studio scope. Mirrors how the Members tab
+              uses the same modal for consistency. */}
+          <Button
+            variant="primary"
+            size="sm"
+            iconLeft={<Plus size={14} aria-hidden="true" />}
+            onClick={() => setAddModalOpen(true)}
+          >
+            Add task
+          </Button>
+        </div>
       </div>
 
       {tasksQuery.error ? (
@@ -129,7 +144,6 @@ export default function StudioTasksPane() {
               label="No space set"
               labelDim
               tasks={grouped.get(NO_SPACE_KEY) ?? []}
-              targetSpace={null}
               onEdit={setEditTask}
             />
           )}
@@ -138,7 +152,6 @@ export default function StudioTasksPane() {
               key={space}
               label={space}
               tasks={grouped.get(space) ?? []}
-              targetSpace={space}
               onEdit={setEditTask}
             />
           ))}
@@ -157,6 +170,17 @@ export default function StudioTasksPane() {
           }}
         />
       )}
+
+      {addModalOpen && (
+        <MultiTaskCreateModal
+          initialScope="studio"
+          onClose={() => {
+            setAddModalOpen(false)
+            void queryClient.invalidateQueries({ queryKey: STUDIO_TASKS_KEY })
+            void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -167,125 +191,38 @@ function SpaceSection({
   label,
   labelDim,
   tasks,
-  targetSpace,
   onEdit,
 }: {
   label: string
   labelDim?: boolean
   tasks: AssignedTask[]
-  /** The space that newly-added tasks in this section will be tagged
-   * with. NULL when this is the "(no space set)" backfill section —
-   * +Add is hidden there since you'd just be adding more untagged rows. */
-  targetSpace: StudioSpace | null
   onEdit: (task: AssignedTask) => void
 }) {
-  const queryClient = useQueryClient()
-  const { toast } = useToast()
-  const [composerOpen, setComposerOpen] = useState(false)
-  const [draft, setDraft] = useState('')
-
-  const addMutation = useMutation({
-    mutationFn: () => {
-      if (!targetSpace) throw new Error('cannot add to no-space section')
-      return assignCustomTasksToMembers(
-        [],
-        [{ title: draft.trim(), studio_space: targetSpace }],
-        { scope: 'studio' },
-      )
-    },
-    onSuccess: () => {
-      toast(`Task added to ${targetSpace}`, 'success')
-      setDraft('')
-      setComposerOpen(false)
-      void queryClient.invalidateQueries({ queryKey: STUDIO_TASKS_KEY })
-      void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
-    },
-    onError: (err: Error) => toast(err.message, 'error'),
-  })
-
-  const canSend = draft.trim().length > 0 && !addMutation.isPending
-
   // Active rows first so the section doesn't bury what still needs doing.
   const sorted = useMemo(() => {
     return [...tasks].sort((a, b) => {
       if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1
       const da = a.due_date ?? ''
       const db = b.due_date ?? ''
-      if (da !== db) return da.localeCompare(db) // empty sorts first; flip if undesired
+      if (da !== db) return da.localeCompare(db)
       return a.sort_order - b.sort_order
     })
   }, [tasks])
 
   return (
     <section>
-      <div className="flex items-center justify-between gap-2 px-1 pb-1.5">
-        <div className="flex items-center gap-2">
-          <h3
-            className={`text-[10px] font-bold uppercase tracking-[0.08em] ${
-              labelDim ? 'text-text-light/70' : 'text-gold'
-            }`}
-          >
-            {label}
-          </h3>
-          <span className="tabular-nums text-[10px] font-bold text-text-light/70 px-1.5 py-0.5 rounded-full bg-surface-alt ring-1 ring-border">
-            {tasks.length}
-          </span>
-        </div>
-        {targetSpace && !composerOpen && (
-          <button
-            type="button"
-            onClick={() => setComposerOpen(true)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-text-light hover:text-gold hover:bg-surface-hover focus-ring"
-          >
-            <Plus size={11} aria-hidden="true" />
-            Add task
-          </button>
-        )}
+      <div className="flex items-center gap-2 px-1 pb-1.5">
+        <h3
+          className={`text-[10px] font-bold uppercase tracking-[0.08em] ${
+            labelDim ? 'text-text-light/70' : 'text-gold'
+          }`}
+        >
+          {label}
+        </h3>
+        <span className="tabular-nums text-[10px] font-bold text-text-light/70 px-1.5 py-0.5 rounded-full bg-surface-alt ring-1 ring-border">
+          {tasks.length}
+        </span>
       </div>
-
-      {composerOpen && targetSpace && (
-        <div className="mb-2 px-2 py-2 rounded-xl bg-surface-alt/40 border border-border space-y-1.5">
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={`New task for ${targetSpace}…`}
-            maxLength={200}
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && canSend) {
-                e.preventDefault()
-                addMutation.mutate()
-              } else if (e.key === 'Escape') {
-                setDraft('')
-                setComposerOpen(false)
-              }
-            }}
-            className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-[13px] placeholder:text-text-light focus:border-gold focus:outline-none"
-          />
-          <div className="flex items-center justify-end gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setDraft('')
-                setComposerOpen(false)
-              }}
-              className="px-2 py-1 rounded text-[11px] font-semibold text-text-light hover:text-text"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => addMutation.mutate()}
-              disabled={!canSend}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-50"
-            >
-              <Plus size={11} aria-hidden="true" />
-              {addMutation.isPending ? 'Adding…' : 'Add'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {sorted.length === 0 ? (
         <p className="text-[11px] text-text-light/70 italic px-2 py-1.5">
@@ -359,6 +296,12 @@ function StudioTaskRow({
       >
         {task.title}
       </span>
+      {task.recurrence_spec && !confirmDelete && (
+        <span className="text-[10px] text-gold/80 shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gold/10 ring-1 ring-gold/25 font-semibold uppercase tracking-wider">
+          <Repeat size={10} aria-hidden="true" />
+          {task.recurrence_spec.frequency}
+        </span>
+      )}
       {task.due_date && !confirmDelete && (
         <span className="text-[10px] text-text-light tabular-nums shrink-0 inline-flex items-center gap-1">
           <CalendarIcon size={10} aria-hidden="true" />
