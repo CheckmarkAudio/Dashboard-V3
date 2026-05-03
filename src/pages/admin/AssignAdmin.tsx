@@ -2,10 +2,12 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertCircle, Archive, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronRight,
+  AlertCircle, Archive, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronLeft, ChevronRight,
   ClipboardList, Edit2, Layers, Loader2, Plus, Save,
   Sparkles, Tag, Trash2, Users, X,
 } from 'lucide-react'
+import AdminAssignLogWidget from '../../components/admin/assign/AdminAssignLogWidget'
+import AdminApprovalLogWidget from '../../components/admin/assign/AdminApprovalLogWidget'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
 import { Button, Input } from '../../components/ui'
@@ -41,11 +43,18 @@ import type { AssignedTask } from '../../types/assignments'
  * + components stay reachable for the planned "tabs" integration on
  * this page.
  *
- * Layout:
- *   - Left sidebar (260px): Members list · Templates link · Other
- *   - Main content: Save as Template · Select · Templates ▾ bar;
- *     "All Tasks for {selected member}" title; two-column task list
- *     with checkbox + label + Edit per row.
+ * Layout (rework 2026-05-03):
+ *   - Three side-by-side cards at standard widget height (696px),
+ *     centered horizontally in a 1156px grid (97px breathing room
+ *     either side at 1440 viewport):
+ *       - Left  (260px): Members sidebar  — anchored
+ *       - Mid   (432px): Main Assign card — anchored
+ *       - Right (432px): Logs carousel    — pages between Assign
+ *                                            Log + Approval Log via
+ *                                            arrows + dots
+ *   - All three boxes use widget-card chrome to match Overview/Hub.
+ *   - Main Assign task list is single-column (constrained by the
+ *     432px width); rows scroll inside the card.
  *
  * Wiring:
  *   - Members + tasks fetched from real DB (`team_members`,
@@ -331,15 +340,20 @@ export default function AssignAdmin() {
         <h1 className="text-2xl font-bold">Assign</h1>
       </div>
 
-      {/* Two-column shell: Sidebar | Main content.
-          PR #63 — `items-stretch` so the sidebar grows to the same height
-          as the main pane (bottom borders flush). Mirrors the `/calendar`
-          pattern (`grid-cols-[300px_1fr] gap-3 items-stretch`). The aside
-          loses `h-fit sticky top-4` because that pinned the sidebar at
-          its content height and broke the bottom-flush requirement. */}
-      <div className="grid grid-cols-[260px_1fr] gap-6 items-stretch">
-        {/* ─── Sidebar ───────────────────────────────────────────── */}
-        <aside className="rounded-xl border border-border bg-surface p-3">
+      {/* Three-column rework (2026-05-03): sidebar (260) + main
+          assign card (432) + logs carousel (432). All fixed widths +
+          696px tall + widget-card chrome so the page reads as three
+          consistent surfaces. `justify-center` centers the 1156px
+          grid inside the page shell so leftover horizontal space
+          sits as breathing room on either side (matches the way
+          Hub/Overview leave whitespace around their widget rows). */}
+      <div
+        className="grid gap-4 items-stretch justify-center"
+        style={{ gridTemplateColumns: '260px 432px 432px' }}
+      >
+        {/* ─── Sidebar (anchored, 260 × 696) ───────────────────── */}
+        <aside className="widget-card flex flex-col h-[696px] overflow-hidden p-3">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Members */}
           <div>
             <div className="flex items-center gap-2 px-2 pb-2 mb-2 border-b border-border/60">
@@ -452,10 +466,11 @@ export default function AssignAdmin() {
               </li>
             </ul>
           </div>
+        </div>
         </aside>
 
-        {/* ─── Main content ──────────────────────────────────────── */}
-        <main className="rounded-xl border border-border bg-surface p-5">
+        {/* ─── Main Assign card (anchored, 432 × 696) ─────────── */}
+        <main className="widget-card flex flex-col h-[696px] overflow-hidden p-5">
           {/* Top action bar.
               Default mode  → Save as Template · Select · Templates ▾
               Select mode   → N selected · Select all · Delete · Cancel
@@ -607,15 +622,15 @@ export default function AssignAdmin() {
           </div>
           )}
 
-          {/* Title row — chrome stripped since this lives inside the main
-              card now (was a double-box otherwise). */}
-          <div>
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          {/* Title row + scrollable task list. The title pins; the
+              task list scrolls inside the 696px main card. */}
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-3 shrink-0">
               <div className="min-w-0">
-                <h1 className="text-xl font-bold text-text truncate">
+                <h1 className="text-base font-bold text-text truncate">
                   All Tasks for {selectedMember?.display_name ?? 'Selected Member'}
                 </h1>
-                <p className="text-[12px] text-text-muted mt-0.5">
+                <p className="text-[11px] text-text-muted mt-0.5">
                   {tasks.length} task{tasks.length === 1 ? '' : 's'} · {completedCount} complete
                 </p>
               </div>
@@ -630,6 +645,7 @@ export default function AssignAdmin() {
               </Button>
             </div>
 
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
             {tasksQuery.isLoading ? (
               <div className="py-10 flex items-center justify-center text-text-light">
                 <Loader2 size={18} className="animate-spin mr-2" />
@@ -656,12 +672,10 @@ export default function AssignAdmin() {
                 </p>
               </div>
             ) : (
-              // Two-column task list with vertical divider per sketch.
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 relative">
-                <div
-                  className="absolute left-1/2 top-0 bottom-0 w-px bg-border/60 -translate-x-1/2"
-                  aria-hidden="true"
-                />
+              // Single-column task list — the rework constrains the
+              // main card to 432px so the prior 2-col grid no longer
+              // fits. Scroll lives on the parent flex-1 wrapper above.
+              <div className="space-y-1">
                 {tasks.map((t) => (
                   <TaskRow
                     key={t.id}
@@ -676,8 +690,18 @@ export default function AssignAdmin() {
                 ))}
               </div>
             )}
+            </div>
           </div>
         </main>
+
+        {/* ─── Logs carousel (carouseled, 432 × 696) ─────────────
+            Pages between the Assign Log + Approval Log widgets that
+            already exist in the legacy admin/assign-classic widget
+            grid. The widgets render body-only (no header chrome of
+            their own) — LogsCarousel wraps them in a widget-card
+            shell with title + arrows + page dots so the surface
+            matches Hub/Overview widgets. */}
+        <LogsCarousel />
       </div>
 
       {/* ─── Modals ─────────────────────────────────────────────── */}
@@ -1367,5 +1391,87 @@ function TemplatePreviewBeforeApplyModal({
         )}
       </div>
     </div>
+  )
+}
+
+
+// ─── LogsCarousel ───────────────────────────────────────────────
+//
+// Right column of the Assign-page rework. Pages between the two
+// log widgets that already power the legacy /admin/assign-classic
+// view (`AdminAssignLogWidget` + `AdminApprovalLogWidget`).
+//
+// The widgets are designed as widget-frame body content (no header
+// chrome of their own), so this shell provides the same widget-
+// card look the other surfaces use plus title + arrow buttons +
+// page-dot indicator. Mirrors the carousel grammar from PR #81's
+// WorkspacePanel without coupling to that component (these two
+// widgets aren't in the workspace registry).
+//
+// Two pages, hard-coded order. If a third log widget lands later
+// the PAGES array is the single edit point.
+//
+// Accessibility: arrows have aria-labels; dots are buttons with
+// aria-current on the active one and aria-label per page.
+
+const LOG_PAGES = [
+  { key: 'assign', label: 'Assign Log', Component: AdminAssignLogWidget },
+  { key: 'approval', label: 'Approval Log', Component: AdminApprovalLogWidget },
+] as const
+
+function LogsCarousel() {
+  const [page, setPage] = useState(0)
+  const total = LOG_PAGES.length
+  const active = LOG_PAGES[page] ?? LOG_PAGES[0]
+  const ActiveComponent = active.Component
+  const goPrev = () => setPage((p) => Math.max(0, p - 1))
+  const goNext = () => setPage((p) => Math.min(total - 1, p + 1))
+
+  return (
+    <section className="widget-card flex flex-col h-[696px] overflow-hidden p-3 relative">
+      <div className="flex items-center gap-2 px-2 pb-2 mb-2 border-b border-border/60 shrink-0">
+        <ClipboardList size={14} className="text-gold" aria-hidden="true" />
+        <h2 className="text-sm font-bold text-text">{active.label}</h2>
+      </div>
+
+      <div className="flex-1 min-h-0 px-1">
+        <ActiveComponent />
+      </div>
+
+      <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-border/60 shrink-0">
+        <button
+          type="button"
+          onClick={goPrev}
+          disabled={page === 0}
+          aria-label="Previous log"
+          className="p-1.5 rounded-md text-text-muted hover:text-gold hover:bg-surface-hover disabled:opacity-30 disabled:hover:text-text-muted disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronLeft size={14} aria-hidden="true" />
+        </button>
+        <div className="flex items-center gap-1.5">
+          {LOG_PAGES.map((p, i) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => setPage(i)}
+              aria-current={i === page ? 'true' : undefined}
+              aria-label={`Show ${p.label}`}
+              className={`h-1.5 rounded-full transition-all ${
+                i === page ? 'w-6 bg-gold' : 'w-1.5 bg-text-light/30 hover:bg-text-light/60'
+              }`}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={goNext}
+          disabled={page >= total - 1}
+          aria-label="Next log"
+          className="p-1.5 rounded-md text-text-muted hover:text-gold hover:bg-surface-hover disabled:opacity-30 disabled:hover:text-text-muted disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronRight size={14} aria-hidden="true" />
+        </button>
+      </div>
+    </section>
   )
 }
