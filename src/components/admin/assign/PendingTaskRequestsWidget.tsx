@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, Check, Clock, Edit2, Inbox, Loader2, Repeat, Trash2, UserCircle2, X } from 'lucide-react'
+import { ArrowRight, Check, Clock, Edit2, Inbox, Loader2, Minus, Plus, Repeat, X } from 'lucide-react'
 import { useToast } from '../../Toast'
 import {
   approveTaskRequest,
@@ -232,11 +232,11 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
       >
         <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${iconBgClass}`}>
           {isDelete ? (
-            <Trash2 size={14} aria-hidden="true" />
+            <Minus size={14} strokeWidth={3} aria-hidden="true" />
           ) : isEdit ? (
             <Edit2 size={14} aria-hidden="true" />
           ) : (
-            <UserCircle2 size={14} aria-hidden="true" />
+            <Plus size={14} strokeWidth={3} aria-hidden="true" />
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -358,28 +358,10 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
               type="button"
               onClick={() => approveMutation.mutate()}
               disabled={approveMutation.isPending}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
-                isDelete
-                  ? 'bg-rose-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(244,63,94,0.25)]'
-                  : isEdit
-                    ? 'bg-orange-500 text-black hover:bg-orange-400 shadow-[0_4px_12px_rgba(249,115,22,0.25)]'
-                    : 'bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30'
-              }`}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30"
             >
-              {isDelete ? (
-                <Trash2 size={11} aria-hidden="true" />
-              ) : isEdit ? (
-                <Edit2 size={11} aria-hidden="true" />
-              ) : (
-                <Check size={11} aria-hidden="true" />
-              )}
-              {approveMutation.isPending
-                ? 'Approving…'
-                : isDelete
-                  ? 'Approve delete'
-                  : isEdit
-                    ? 'Apply edit'
-                    : 'Confirm approve'}
+              <Check size={11} aria-hidden="true" />
+              {approveMutation.isPending ? 'Approving…' : 'Confirm approve'}
             </button>
           </div>
         </div>
@@ -398,22 +380,10 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
             type="button"
             onClick={() => setApproveOpen(true)}
             disabled={approveMutation.isPending}
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold disabled:opacity-50 ${
-              isDelete
-                ? 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30 hover:bg-rose-500/25'
-                : isEdit
-                  ? 'bg-orange-500/15 text-orange-300 ring-1 ring-orange-500/30 hover:bg-orange-500/25'
-                  : 'bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30'
-            }`}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold disabled:opacity-50 bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30"
           >
-            {isDelete ? (
-              <Trash2 size={11} aria-hidden="true" />
-            ) : isEdit ? (
-              <Edit2 size={11} aria-hidden="true" />
-            ) : (
-              <Check size={11} aria-hidden="true" />
-            )}
-            {isDelete ? 'Approve delete…' : isEdit ? 'Apply edit…' : 'Approve…'}
+            <Check size={11} aria-hidden="true" />
+            Approve…
           </button>
         </div>
       )}
@@ -455,7 +425,7 @@ function EditDiff({ request }: { request: PendingTaskRequest }) {
   }
 
   return (
-    <div className="mt-1.5 rounded-md bg-orange-500/[0.08] ring-1 ring-orange-500/25 px-2 py-1.5 space-y-0.5">
+    <div className="mt-1.5 px-1 py-1 space-y-0.5">
       {keys.map((k) => (
         <div key={k} className="flex items-start gap-1.5 text-[11px] leading-snug">
           <span className="shrink-0 font-semibold text-orange-300 min-w-[44px]">{labelFor(k)}:</span>

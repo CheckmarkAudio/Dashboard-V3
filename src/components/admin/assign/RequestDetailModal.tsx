@@ -4,8 +4,8 @@ import {
   ArrowRight,
   Check,
   Edit2,
-  Trash2,
-  UserCircle2,
+  Minus,
+  Plus,
   X,
 } from 'lucide-react'
 import FloatingDetailModal from '../../FloatingDetailModal'
@@ -91,7 +91,8 @@ export default function RequestDetailModal({
     onError: (err) => toast(err instanceof Error ? err.message : 'Decline failed', 'error'),
   })
 
-  const KindIcon = isDelete ? Trash2 : isEdit ? Edit2 : UserCircle2
+  // Sitewide pending-symbol palette: − (delete) · 🖉 (edit) · + (create).
+  const KindIcon = isDelete ? Minus : isEdit ? Edit2 : Plus
   // System-wide kind palette: rose (delete) · orange (edit) · amber (create).
   const kindAccent = isDelete
     ? 'text-rose-300 bg-rose-500/15 ring-rose-500/30'
@@ -183,22 +184,10 @@ export default function RequestDetailModal({
                 type="button"
                 onClick={() => approveMutation.mutate()}
                 disabled={approveMutation.isPending}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-50 ${
-                  isDelete
-                    ? 'bg-rose-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(244,63,94,0.25)]'
-                    : isEdit
-                      ? 'bg-orange-500 text-black hover:bg-orange-400 shadow-[0_4px_12px_rgba(249,115,22,0.25)]'
-                      : 'bg-emerald-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(16,185,129,0.25)]'
-                }`}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-50 bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30"
               >
-                {isDelete ? <Trash2 size={11} aria-hidden="true" /> : isEdit ? <Edit2 size={11} aria-hidden="true" /> : <Check size={11} aria-hidden="true" />}
-                {approveMutation.isPending
-                  ? 'Working…'
-                  : isDelete
-                    ? 'Confirm delete'
-                    : isEdit
-                      ? 'Apply edit'
-                      : 'Confirm approve'}
+                <Check size={11} aria-hidden="true" />
+                {approveMutation.isPending ? 'Working…' : 'Confirm approve'}
               </button>
             </div>
           </div>
@@ -225,16 +214,10 @@ export default function RequestDetailModal({
                 type="button"
                 onClick={() => setConfirmMode('approve')}
                 disabled={approveMutation.isPending || rejectMutation.isPending}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold disabled:opacity-50 ${
-                  isDelete
-                    ? 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30 hover:bg-rose-500/25'
-                    : isEdit
-                      ? 'bg-orange-500/15 text-orange-300 ring-1 ring-orange-500/30 hover:bg-orange-500/25'
-                      : 'bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30'
-                }`}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold disabled:opacity-50 bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30"
               >
-                {isDelete ? <Trash2 size={12} aria-hidden="true" /> : isEdit ? <Edit2 size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
-                {isDelete ? 'Approve delete…' : isEdit ? 'Apply edit…' : 'Approve…'}
+                <Check size={12} aria-hidden="true" />
+                Approve…
               </button>
             </div>
           </div>
@@ -340,7 +323,7 @@ function EditDiffBlock({ request }: { request: PendingTaskRequest }) {
   return (
     <section>
       <Label>Proposed changes</Label>
-      <div className="mt-1 rounded-lg bg-orange-500/[0.08] ring-1 ring-orange-500/25 px-3 py-2 space-y-1">
+      <div className="mt-1 px-1 py-1 space-y-1">
         {keys.map((k) => (
           <div key={k} className="grid grid-cols-[64px_1fr_auto_1fr] items-start gap-2 text-[12px] leading-snug">
             <span className="font-semibold text-orange-300">{labelFor(k)}</span>
