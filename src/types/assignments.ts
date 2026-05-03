@@ -85,6 +85,11 @@ export interface AssignedTask {
   // specific assignment batch (e.g. future daily-checklist fold-in), so
   // the UI has to tolerate a null batch gracefully.
   batch: AssignmentBatchRef | null
+  // Physical room tag for studio-scope tasks (Control Room / Studio A /
+  // Studio B). NULL for member-scope tasks (CHECK enforced server-side)
+  // and NULL for studio tasks created before the studio_space rollout
+  // until an admin backfills them.
+  studio_space?: 'Control Room' | 'Studio A' | 'Studio B' | null
 }
 
 // Embedded session summary on session-assign notifications.

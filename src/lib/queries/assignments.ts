@@ -278,6 +278,7 @@ function normalizeAssignedTask(task: Partial<AssignedTask>): AssignedTask {
     assigned_to_name: task.assigned_to_name ?? null,
     can_complete: task.can_complete ?? false,
     batch: task.batch ?? null,
+    studio_space: task.studio_space ?? null,
   }
 }
 
@@ -447,6 +448,10 @@ export interface CustomTaskDraft {
   due_date?: string | null
   is_required?: boolean
   show_on_overview?: boolean
+  /** Only meaningful for studio-scope tasks. Server CHECK enforces it
+   * is one of `'Control Room' | 'Studio A' | 'Studio B'` and that the
+   * surrounding scope is `'studio'`. Member-scope drafts ignore it. */
+  studio_space?: 'Control Room' | 'Studio A' | 'Studio B' | null
 }
 
 export async function assignCustomTasksToMembers(
