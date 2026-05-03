@@ -28,6 +28,10 @@ docs updated in the same PR, Supabase migrations handled separately
 from Vercel, accessibility checked, and backend mutations confirmed
 instead of hidden by optimistic UI.
 
+For Assign, Tasks, task requests, approvals, and related RPC work, use
+`docs/assign-engine-spec-2026-05-03.md` as the behavior contract.
+Layout experiments should not redefine task semantics.
+
 ### Change provenance tags
 
 When writing handoff notes, use these tags so future Claude/Codex sessions
