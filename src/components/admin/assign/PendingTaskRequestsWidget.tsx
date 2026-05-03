@@ -186,27 +186,50 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
     minute: '2-digit',
   })
 
-  // Kind-driven chrome: rose for delete, gold for edit, amber for
-  // create. The kind badge tells the admin at a glance which RPC
-  // will fire on approve.
+  // Kind-driven chrome (system-wide palette): rose=delete · orange=edit
+  // · amber=create. The kind badge tells the admin at a glance which
+  // RPC will fire on approve.
   const isDelete = request.kind === 'delete'
   const isEdit = request.kind === 'edit'
+  // System-wide kind palette (matches the member-side pending badges):
+  //   delete = rose · edit = orange · create = amber.
+  // Each pair uses bg-{color}-500/15 + ring-{color}-500/30 + text-{color}-300
+  // so all three read at equal visual weight.
   const iconBgClass = isDelete
     ? 'bg-rose-500/15 ring-1 ring-rose-500/30 text-rose-300'
     : isEdit
-      ? 'bg-gold/15 ring-1 ring-gold/30 text-gold'
+      ? 'bg-orange-500/15 ring-1 ring-orange-500/30 text-orange-300'
       : 'bg-amber-500/15 ring-1 ring-amber-500/30 text-amber-300'
   const badgeClass = isDelete
     ? 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30'
     : isEdit
-      ? 'bg-gold/15 text-gold ring-1 ring-gold/30'
+      ? 'bg-orange-500/15 text-orange-300 ring-1 ring-orange-500/30'
       : 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'
   const badgeLabel = isDelete ? 'Delete' : isEdit ? 'Edit' : 'New task'
 
   return (
     <>
     <div className="rounded-lg bg-surface-alt/40 ring-1 ring-white/5 px-2.5 py-2">
-      <div className="flex items-start gap-2">
+      {/* Whole icon+content cluster is clickable so the user doesn't
+          have to thread the needle on the title text — bigger target,
+          and removes a click-target edge case where the create-kind
+          row's title button could shrink to ~0px width inside its
+          flex-wrap parent (rev17 user report). Inline action buttons
+          live below this block in the action row, so they aren't
+          intercepted. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setDetailOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            setDetailOpen(true)
+          }
+        }}
+        aria-label={`Open details for "${request.title}"`}
+        className="flex items-start gap-2 cursor-pointer rounded-md hover:bg-white/[0.02] -mx-1 px-1 py-0.5 focus-ring"
+      >
         <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${iconBgClass}`}>
           {isDelete ? (
             <Trash2 size={14} aria-hidden="true" />
@@ -221,14 +244,9 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
             <span className={`shrink-0 text-[9px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded ${badgeClass}`}>
               {badgeLabel}
             </span>
-            <button
-              type="button"
-              onClick={() => setDetailOpen(true)}
-              aria-label={`Open details for "${request.title}"`}
-              className="text-[13px] font-semibold text-text truncate text-left hover:text-gold focus-ring rounded"
-            >
+            <p className="text-[13px] font-semibold text-text truncate">
               {request.title}
-            </button>
+            </p>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-text-light mt-0.5 flex-wrap">
             <span>{request.requester_name}</span>
@@ -324,7 +342,7 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
             </p>
           )}
           {isEdit && (
-            <p className="text-[11px] text-gold/90">
+            <p className="text-[11px] text-orange-300/90">
               On approve, the proposed changes above will be applied to this task. The requester is notified.
             </p>
           )}
@@ -344,7 +362,7 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
                 isDelete
                   ? 'bg-rose-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(244,63,94,0.25)]'
                   : isEdit
-                    ? 'bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(214,170,55,0.18)]'
+                    ? 'bg-orange-500 text-black hover:bg-orange-400 shadow-[0_4px_12px_rgba(249,115,22,0.25)]'
                     : 'bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30'
               }`}
             >
@@ -384,7 +402,7 @@ function RequestRow({ request }: { request: PendingTaskRequest }) {
               isDelete
                 ? 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30 hover:bg-rose-500/25'
                 : isEdit
-                  ? 'bg-gold/15 text-gold ring-1 ring-gold/30 hover:bg-gold/25'
+                  ? 'bg-orange-500/15 text-orange-300 ring-1 ring-orange-500/30 hover:bg-orange-500/25'
                   : 'bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30'
             }`}
           >
@@ -437,12 +455,12 @@ function EditDiff({ request }: { request: PendingTaskRequest }) {
   }
 
   return (
-    <div className="mt-1.5 rounded-md bg-gold/[0.06] ring-1 ring-gold/20 px-2 py-1.5 space-y-0.5">
+    <div className="mt-1.5 rounded-md bg-orange-500/[0.08] ring-1 ring-orange-500/25 px-2 py-1.5 space-y-0.5">
       {keys.map((k) => (
         <div key={k} className="flex items-start gap-1.5 text-[11px] leading-snug">
-          <span className="shrink-0 font-semibold text-gold/80 min-w-[44px]">{labelFor(k)}:</span>
+          <span className="shrink-0 font-semibold text-orange-300 min-w-[44px]">{labelFor(k)}:</span>
           <span className="text-text-light truncate">{renderValue(current?.[k])}</span>
-          <ArrowRight size={10} className="shrink-0 mt-0.5 text-gold/60" aria-hidden="true" />
+          <ArrowRight size={10} className="shrink-0 mt-0.5 text-orange-400/70" aria-hidden="true" />
           <span className="text-text font-medium truncate">{renderValue(proposed[k])}</span>
         </div>
       ))}
