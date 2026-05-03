@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Check, Inbox, Loader2, Trash2, X } from 'lucide-react'
+import { AlertCircle, Check, Edit2, Inbox, Loader2, Trash2, X } from 'lucide-react'
 import {
   adminLogKeys,
   fetchRecentApprovals,
@@ -60,15 +60,18 @@ export default function AdminApprovalLogWidget() {
 function ApprovalRow({ row }: { row: RecentApprovalRow }) {
   const isApproved = row.status === 'approved'
   const isDeleteApproved = isApproved && row.kind === 'delete'
-  // Approved-delete rows render with a rose Trash2 icon so the
-  // "destructive but admin-blessed" outcome reads at a glance, distinct
-  // from approved-create (emerald check) and rejected (rose X).
-  const Icon = isDeleteApproved ? Trash2 : isApproved ? Check : X
-  const iconClass = isDeleteApproved
-    ? 'text-rose-400/90 shrink-0'
-    : isApproved
-      ? 'text-emerald-400/80 shrink-0'
-      : 'text-rose-400/80 shrink-0'
+  const isEditApproved = isApproved && row.kind === 'edit'
+  // Approved rows render with a kind-specific icon so the outcome
+  // reads at a glance: rose Trash2 for delete, gold Edit2 for edit,
+  // emerald check for create. Rejected rows always render the rose X.
+  const Icon = !isApproved ? X : isDeleteApproved ? Trash2 : isEditApproved ? Edit2 : Check
+  const iconClass = !isApproved
+    ? 'text-rose-400/80 shrink-0'
+    : isDeleteApproved
+      ? 'text-rose-400/90 shrink-0'
+      : isEditApproved
+        ? 'text-gold/90 shrink-0'
+        : 'text-emerald-400/80 shrink-0'
   const initialed = formatRequesterName(row.requester_name)
   const when = formatRelative(row.resolved_at)
   return (
@@ -79,6 +82,11 @@ function ApprovalRow({ row }: { row: RecentApprovalRow }) {
           {isDeleteApproved && (
             <span className="text-[9px] font-bold uppercase tracking-wider text-rose-300 mr-1.5">
               Deleted
+            </span>
+          )}
+          {isEditApproved && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-gold mr-1.5">
+              Edited
             </span>
           )}
           {row.title}

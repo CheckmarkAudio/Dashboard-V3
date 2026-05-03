@@ -14,9 +14,37 @@ export const taskRequestKeys = {
 
 export type TaskRequestStatus = 'pending' | 'approved' | 'rejected'
 // What the member is asking for. PR #82 (admin-side) shipped immediate
-// admin delete; this PR adds the member-request half. 'edit' is
-// reserved for the next PR — server raises 'unsupported' on approve.
+// admin delete; PR #85 added member-request delete + transfer. The 'edit'
+// kind closes the triad (this PR) — server applies COALESCE/CASE updates
+// from `proposed` jsonb at approve time.
 export type TaskRequestKind = 'create' | 'edit' | 'delete'
+
+/**
+ * Editable fields a member can propose changing on their own task.
+ * Mirrors the admin SingleTaskEditModal surface. Absent key = leave
+ * unchanged. Explicit `null` or empty string = clear the field
+ * (description, category, due_date only — title is required).
+ */
+export interface ProposedTaskEdit {
+  title?: string
+  description?: string | null
+  category?: string | null
+  /** YYYY-MM-DD or null/empty to clear. */
+  due_date?: string | null
+}
+
+/**
+ * Snapshot of the target task's current editable fields, returned
+ * alongside `proposed` on edit-kind pending requests so the admin
+ * queue can render a Current → Proposed diff without an extra round
+ * trip per row.
+ */
+export interface CurrentTaskSnapshot {
+  title: string
+  description: string | null
+  category: string | null
+  due_date: string | null
+}
 
 /** Shape of the stored recurrence spec on a task request. `null` = one-shot. */
 export interface RecurrenceSpec {
@@ -38,6 +66,10 @@ export interface PendingTaskRequest {
   target_task_id: string | null
   is_required: boolean
   recurrence_spec: RecurrenceSpec | null
+  /** Set only on kind='edit' rows. */
+  proposed: ProposedTaskEdit | null
+  /** Snapshot of the target task at fetch time; set only on kind='edit'. */
+  current: CurrentTaskSnapshot | null
   created_at: string
 }
 
@@ -53,6 +85,8 @@ export interface MyTaskRequest {
   target_task_id: string | null
   is_required: boolean
   recurrence_spec: RecurrenceSpec | null
+  /** Set only on kind='edit' rows. */
+  proposed: ProposedTaskEdit | null
   reviewer_note: string | null
   reviewed_at: string | null
   approved_task_id: string | null
@@ -171,6 +205,37 @@ export async function submitTaskDeleteRequest(
   })
   if (error) {
     console.error('[queries/taskRequests] submitTaskDeleteRequest failed:', error)
+    throw new Error(error.message)
+  }
+  return data as { request_id: string; notification_count: number }
+}
+
+/**
+ * Member submits a request to edit one of their OWN assigned tasks.
+ * `proposed` carries only the fields the member wants to change —
+ * absent keys are left alone server-side. Approval applies the
+ * proposed changes via approve_task_request's edit branch.
+ *
+ * Server enforces:
+ *   - caller authenticated
+ *   - task exists in caller's team
+ *   - task scope = 'member' AND assigned_to = caller
+ *   - proposed is a non-empty object containing only allowed keys
+ *     (title, description, category, due_date)
+ *   - per-key type validation; title cannot be cleared
+ */
+export async function submitTaskEditRequest(
+  taskId: string,
+  proposed: ProposedTaskEdit,
+  reason: string | null = null,
+): Promise<{ request_id: string; notification_count: number }> {
+  const { data, error } = await supabase.rpc('submit_task_edit_request', {
+    p_task_id: taskId,
+    p_proposed: proposed,
+    p_reason: reason,
+  })
+  if (error) {
+    console.error('[queries/taskRequests] submitTaskEditRequest failed:', error)
     throw new Error(error.message)
   }
   return data as { request_id: string; notification_count: number }

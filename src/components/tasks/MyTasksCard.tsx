@@ -5,6 +5,7 @@ import {
   ArrowRightLeft,
   Check,
   CheckCircle2,
+  Edit2,
   Hourglass,
   Inbox,
   Loader2,
@@ -52,12 +53,13 @@ const HIGHLIGHT_DURATION_MS = 1600
 
 // 2026-05-02 — pending-state shape per task id. A task can have
 // EITHER a pending transfer offer (caller wants to hand off) OR a
-// pending delete request (caller asked admin to delete) — never
-// both, because the server validations would reject the second.
-type PendingKind = 'transfer' | 'delete'
+// pending delete request (caller asked admin to delete) or pending
+// edit request (caller asked admin to apply field changes) — never
+// more than one, because the server validations would reject extras.
+type PendingKind = 'transfer' | 'delete' | 'edit'
 interface PendingMeta {
   kind: PendingKind
-  // Targeted recipient name for the transfer; null for delete (admin).
+  // Targeted recipient name for the transfer; null for delete + edit (admin).
   otherPartyName?: string | null
 }
 
@@ -256,11 +258,11 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
       map.set(r.task_id, { kind: 'transfer', otherPartyName: r.other_party_name })
     }
     for (const r of myRequests) {
-      if (r.kind !== 'delete') continue
+      if (r.kind !== 'delete' && r.kind !== 'edit') continue
       if (r.status !== 'pending') continue
       if (!r.target_task_id) continue
       if (map.has(r.target_task_id)) continue
-      map.set(r.target_task_id, { kind: 'delete', otherPartyName: null })
+      map.set(r.target_task_id, { kind: r.kind, otherPartyName: null })
     }
     return map
   }, [myOutgoingReassigns, myRequests])
@@ -695,6 +697,11 @@ function AssignedTaskRow({
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gold/15 ring-1 ring-gold/30 text-gold/90 font-semibold">
                 <ArrowRightLeft size={9} strokeWidth={2.5} aria-hidden="true" />
                 Awaiting {pendingMeta.otherPartyName ?? 'teammate'}
+              </span>
+            ) : pendingMeta.kind === 'edit' ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gold/15 ring-1 ring-gold/30 text-gold/90 font-semibold">
+                <Edit2 size={9} strokeWidth={2.5} aria-hidden="true" />
+                Awaiting admin to edit
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/15 ring-1 ring-rose-500/30 text-rose-300 font-semibold">

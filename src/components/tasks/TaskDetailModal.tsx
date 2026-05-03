@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Circle,
   Clock,
+  Edit2,
   Send,
   Trash2,
   User as UserIcon,
@@ -18,7 +19,12 @@ import { useToast } from '../Toast'
 import { useAuth } from '../../contexts/AuthContext'
 import { completeAssignedTask } from '../../lib/queries/assignments'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
-import { submitTaskDeleteRequest, taskRequestKeys } from '../../lib/queries/taskRequests'
+import {
+  submitTaskDeleteRequest,
+  submitTaskEditRequest,
+  taskRequestKeys,
+  type ProposedTaskEdit,
+} from '../../lib/queries/taskRequests'
 import { submitTaskTransferRequest, taskReassignKeys } from '../../lib/queries/taskReassign'
 import type { AssignedTask } from '../../types/assignments'
 import { FLYWHEEL_STAGES, type FlywheelStage } from './requests/formAtoms'
@@ -49,7 +55,7 @@ import { FLYWHEEL_STAGES, type FlywheelStage } from './requests/formAtoms'
  * for users who can't act on the task.
  */
 
-type Compose = null | 'transfer' | 'delete'
+type Compose = null | 'transfer' | 'delete' | 'edit'
 
 export default function TaskDetailModal({
   task,
@@ -79,19 +85,36 @@ export default function TaskDetailModal({
   const done = task.is_completed
   const stage = FLYWHEEL_STAGES.find((s) => s.key === task.category) ?? null
 
-  // ─── Composer state — single state machine for both flows ───────
+  // ─── Composer state — single state machine for all flows ────────
   // Only one composer can be open at a time; opening one auto-closes
-  // the other so the footer never tries to render two side by side.
+  // the others so the footer never tries to render two side by side.
   const [compose, setCompose] = useState<Compose>(null)
   const [transferTargetId, setTransferTargetId] = useState('')
   const [transferReason, setTransferReason] = useState('')
   const [deleteReason, setDeleteReason] = useState('')
+  // Edit fields pre-fill from the current task on open. Diff vs. these
+  // current values determines what goes in `proposed`.
+  const [editTitle, setEditTitle] = useState(task.title)
+  const [editDescription, setEditDescription] = useState(task.description ?? '')
+  const [editDueDate, setEditDueDate] = useState(task.due_date ?? '')
+  const [editCategory, setEditCategory] = useState<string>(task.category ?? '')
+  const [editReason, setEditReason] = useState('')
+
+  const openEdit = () => {
+    setEditTitle(task.title)
+    setEditDescription(task.description ?? '')
+    setEditDueDate(task.due_date ?? '')
+    setEditCategory(task.category ?? '')
+    setEditReason('')
+    setCompose('edit')
+  }
 
   const closeCompose = () => {
     setCompose(null)
     setTransferTargetId('')
     setTransferReason('')
     setDeleteReason('')
+    setEditReason('')
   }
 
   // ─── Hand-off / transfer flow ──────────────────────────────────
@@ -148,6 +171,49 @@ export default function TaskDetailModal({
     },
   })
 
+  // ─── Request edit flow ──────────────────────────────────────────
+  // Member proposes changes to title/description/due/category. Only
+  // fields that differ from current go in `proposed` — server applies
+  // the diff at approve time. Same approve_task_request dispatcher.
+  const editProposed = useMemo<ProposedTaskEdit>(() => {
+    const out: ProposedTaskEdit = {}
+    const trimmedTitle = editTitle.trim()
+    if (trimmedTitle.length > 0 && trimmedTitle !== task.title) {
+      out.title = trimmedTitle
+    }
+    const desc = editDescription.trim()
+    const currentDesc = (task.description ?? '').trim()
+    if (desc !== currentDesc) {
+      out.description = desc.length === 0 ? null : desc
+    }
+    const due = editDueDate.trim()
+    const currentDue = task.due_date ?? ''
+    if (due !== currentDue) {
+      out.due_date = due.length === 0 ? null : due
+    }
+    const currentCat = task.category ?? ''
+    if (editCategory !== currentCat) {
+      out.category = editCategory.length === 0 ? null : editCategory
+    }
+    return out
+  }, [editTitle, editDescription, editDueDate, editCategory, task.title, task.description, task.due_date, task.category])
+
+  const editHasChanges = Object.keys(editProposed).length > 0
+
+  const requestEditMutation = useMutation({
+    mutationFn: () => submitTaskEditRequest(task.id, editProposed, editReason.trim() || null),
+    onSuccess: () => {
+      toast('Edit request sent — waiting for admin approval.', 'success')
+      void queryClient.invalidateQueries({ queryKey: taskRequestKeys.mine() })
+      void queryClient.invalidateQueries({ queryKey: taskRequestKeys.pending() })
+      closeCompose()
+      onClose()
+    },
+    onError: (err) => {
+      handleStaleTaskError(err, 'Could not submit edit request.')
+    },
+  })
+
   // Shared error handler — when the server reports the task is gone
   // (admin direct-delete from /admin/templates raced our request),
   // refresh local caches + close the modal with a friendly message
@@ -183,12 +249,14 @@ export default function TaskDetailModal({
           transferMutation.mutate()
         } else if (compose === 'delete' && !requestDeleteMutation.isPending) {
           requestDeleteMutation.mutate()
+        } else if (compose === 'edit' && editHasChanges && !requestEditMutation.isPending) {
+          requestEditMutation.mutate()
         }
       }
     }
     window.addEventListener('keydown', handler, true)
     return () => window.removeEventListener('keydown', handler, true)
-  }, [compose, transferReady, transferMutation, requestDeleteMutation])
+  }, [compose, transferReady, editHasChanges, transferMutation, requestDeleteMutation, requestEditMutation])
 
   // Member-only entry points: own active member-scope tasks. Server
   // RPCs enforce the same rules.
@@ -270,6 +338,74 @@ export default function TaskDetailModal({
               className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-rose-400/60 focus:outline-none"
             />
           </ComposerShell>
+        ) : compose === 'edit' ? (
+          <ComposerShell
+            tone="gold"
+            icon={<Edit2 size={11} aria-hidden="true" />}
+            label="Propose edits to this task"
+            shortcutHint
+            onCancel={closeCompose}
+            onSend={() => requestEditMutation.mutate()}
+            sendDisabled={!editHasChanges || requestEditMutation.isPending}
+            sendLabel={
+              requestEditMutation.isPending
+                ? 'Sending…'
+                : editHasChanges
+                  ? 'Send'
+                  : 'No changes'
+            }
+          >
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="Title"
+              maxLength={200}
+              aria-label="Title"
+              autoFocus
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-gold focus:outline-none"
+            />
+            <textarea
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              placeholder="Description (optional)"
+              maxLength={1000}
+              rows={2}
+              aria-label="Description"
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-gold focus:outline-none resize-y min-h-[44px]"
+            />
+            <div className="grid grid-cols-2 gap-1.5">
+              <input
+                type="date"
+                value={editDueDate}
+                onChange={(e) => setEditDueDate(e.target.value)}
+                aria-label="Due date"
+                className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] focus:border-gold focus:outline-none"
+              />
+              <select
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value)}
+                aria-label="Flywheel stage"
+                className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] focus:border-gold focus:outline-none"
+              >
+                <option value="">No stage</option>
+                {FLYWHEEL_STAGES.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <input
+              type="text"
+              value={editReason}
+              onChange={(e) => setEditReason(e.target.value)}
+              placeholder="Reason (optional, helps the admin decide)"
+              maxLength={500}
+              aria-label="Reason"
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-gold focus:outline-none"
+            />
+          </ComposerShell>
         ) : (
           <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border bg-surface-alt/40 rounded-b-[18px]">
             <p className="text-[11px] text-text-light truncate">
@@ -290,8 +426,9 @@ export default function TaskDetailModal({
               {/* Member request actions — small pill buttons (icon +
                   label) so the action reads at a glance instead of
                   forcing the user to read tooltips. Trash = ask admin
-                  to delete; ArrowRightLeft = hand off to a teammate.
-                  Click opens the matching inline composer. */}
+                  to delete; Edit = propose changes; ArrowRightLeft =
+                  hand off to a teammate. Click opens the matching
+                  inline composer. */}
               {canRequest && (
                 <>
                   <button
@@ -302,6 +439,15 @@ export default function TaskDetailModal({
                   >
                     <Trash2 size={12} aria-hidden="true" />
                     Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openEdit}
+                    aria-label="Propose edits to this task"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-gold bg-gold/10 ring-1 ring-gold/25 hover:bg-gold/20 transition-colors focus-ring"
+                  >
+                    <Edit2 size={12} aria-hidden="true" />
+                    Edit
                   </button>
                   <button
                     type="button"
