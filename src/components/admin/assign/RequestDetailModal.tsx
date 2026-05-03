@@ -92,10 +92,11 @@ export default function RequestDetailModal({
   })
 
   const KindIcon = isDelete ? Trash2 : isEdit ? Edit2 : UserCircle2
+  // System-wide kind palette: rose (delete) · orange (edit) · amber (create).
   const kindAccent = isDelete
     ? 'text-rose-300 bg-rose-500/15 ring-rose-500/30'
     : isEdit
-      ? 'text-gold bg-gold/15 ring-gold/30'
+      ? 'text-orange-300 bg-orange-500/15 ring-orange-500/30'
       : 'text-amber-300 bg-amber-500/15 ring-amber-500/30'
   const kindLabel = isDelete ? 'Delete' : isEdit ? 'Edit' : 'New task'
 
@@ -144,7 +145,15 @@ export default function RequestDetailModal({
             </div>
           </div>
         ) : confirmMode === 'approve' ? (
-          <div className="px-4 py-2.5 border-t border-border bg-gold/[0.04] rounded-b-[18px] space-y-2">
+          <div
+            className={`px-4 py-2.5 border-t border-border rounded-b-[18px] space-y-2 ${
+              isDelete
+                ? 'bg-rose-500/[0.04]'
+                : isEdit
+                  ? 'bg-orange-500/[0.05]'
+                  : 'bg-surface-alt/40'
+            }`}
+          >
             {isCreate && (
               <FlywheelStagePicker
                 value={stage}
@@ -158,7 +167,7 @@ export default function RequestDetailModal({
               </p>
             )}
             {isEdit && (
-              <p className="text-[11px] text-gold/90">
+              <p className="text-[11px] text-orange-300/90">
                 On approve, the proposed changes will be applied. The requester is notified.
               </p>
             )}
@@ -178,7 +187,7 @@ export default function RequestDetailModal({
                   isDelete
                     ? 'bg-rose-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(244,63,94,0.25)]'
                     : isEdit
-                      ? 'bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(214,170,55,0.18)]'
+                      ? 'bg-orange-500 text-black hover:bg-orange-400 shadow-[0_4px_12px_rgba(249,115,22,0.25)]'
                       : 'bg-emerald-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(16,185,129,0.25)]'
                 }`}
               >
@@ -220,7 +229,7 @@ export default function RequestDetailModal({
                   isDelete
                     ? 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30 hover:bg-rose-500/25'
                     : isEdit
-                      ? 'bg-gold/15 text-gold ring-1 ring-gold/30 hover:bg-gold/25'
+                      ? 'bg-orange-500/15 text-orange-300 ring-1 ring-orange-500/30 hover:bg-orange-500/25'
                       : 'bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30'
                 }`}
               >
@@ -331,12 +340,12 @@ function EditDiffBlock({ request }: { request: PendingTaskRequest }) {
   return (
     <section>
       <Label>Proposed changes</Label>
-      <div className="mt-1 rounded-lg bg-gold/[0.06] ring-1 ring-gold/20 px-3 py-2 space-y-1">
+      <div className="mt-1 rounded-lg bg-orange-500/[0.08] ring-1 ring-orange-500/25 px-3 py-2 space-y-1">
         {keys.map((k) => (
           <div key={k} className="grid grid-cols-[64px_1fr_auto_1fr] items-start gap-2 text-[12px] leading-snug">
-            <span className="font-semibold text-gold/80">{labelFor(k)}</span>
+            <span className="font-semibold text-orange-300">{labelFor(k)}</span>
             <span className="text-text-light truncate">{renderValue(current?.[k])}</span>
-            <ArrowRight size={11} className="mt-1 text-gold/60" aria-hidden="true" />
+            <ArrowRight size={11} className="mt-1 text-orange-400/70" aria-hidden="true" />
             <span className="text-text font-medium">{renderValue(proposed[k])}</span>
           </div>
         ))}

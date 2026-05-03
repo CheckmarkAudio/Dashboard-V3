@@ -65,7 +65,7 @@ function ApprovalRow({ row }: { row: RecentApprovalRow }) {
   // Outcome-specific icon so the row reads at a glance:
   //   - approved create  → emerald check
   //   - approved delete  → rose Trash2 ("Deleted" tag)
-  //   - approved edit    → gold Edit2 ("Edited" tag)
+  //   - approved edit    → orange Edit2 ("Edited" tag)
   //   - rejected (any)   → rose X
   //   - cancelled (any)  → muted Ban ("Cancelled" tag) — withdrawn by requester
   const Icon = isCancelled
@@ -84,7 +84,7 @@ function ApprovalRow({ row }: { row: RecentApprovalRow }) {
       : isDeleteApproved
         ? 'text-rose-400/90 shrink-0'
         : isEditApproved
-          ? 'text-gold/90 shrink-0'
+          ? 'text-orange-300 shrink-0'
           : 'text-emerald-400/80 shrink-0'
   const initialed = formatRequesterName(row.requester_name)
   const when = formatRelative(row.resolved_at)
@@ -104,7 +104,7 @@ function ApprovalRow({ row }: { row: RecentApprovalRow }) {
             </span>
           )}
           {isEditApproved && (
-            <span className="text-[9px] font-bold uppercase tracking-wider text-gold mr-1.5">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-orange-300 mr-1.5">
               Edited
             </span>
           )}

@@ -340,7 +340,7 @@ export default function TaskDetailModal({
           </ComposerShell>
         ) : compose === 'edit' ? (
           <ComposerShell
-            tone="gold"
+            tone="orange"
             icon={<Edit2 size={11} aria-hidden="true" />}
             label="Propose edits to this task"
             shortcutHint
@@ -363,7 +363,7 @@ export default function TaskDetailModal({
               maxLength={200}
               aria-label="Title"
               autoFocus
-              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-gold focus:outline-none"
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-orange-400/60 focus:outline-none"
             />
             <textarea
               value={editDescription}
@@ -372,7 +372,7 @@ export default function TaskDetailModal({
               maxLength={1000}
               rows={2}
               aria-label="Description"
-              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-gold focus:outline-none resize-y min-h-[44px]"
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-orange-400/60 focus:outline-none resize-y min-h-[44px]"
             />
             <div className="grid grid-cols-2 gap-1.5">
               <input
@@ -380,13 +380,13 @@ export default function TaskDetailModal({
                 value={editDueDate}
                 onChange={(e) => setEditDueDate(e.target.value)}
                 aria-label="Due date"
-                className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] focus:border-gold focus:outline-none"
+                className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] focus:border-orange-400/60 focus:outline-none"
               />
               <select
                 value={editCategory}
                 onChange={(e) => setEditCategory(e.target.value)}
                 aria-label="Flywheel stage"
-                className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] focus:border-gold focus:outline-none"
+                className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] focus:border-orange-400/60 focus:outline-none"
               >
                 <option value="">No stage</option>
                 {FLYWHEEL_STAGES.map((s) => (
@@ -403,7 +403,7 @@ export default function TaskDetailModal({
               placeholder="Reason (optional, helps the admin decide)"
               maxLength={500}
               aria-label="Reason"
-              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-gold focus:outline-none"
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-orange-400/60 focus:outline-none"
             />
           </ComposerShell>
         ) : (
@@ -444,7 +444,7 @@ export default function TaskDetailModal({
                     type="button"
                     onClick={openEdit}
                     aria-label="Propose edits to this task"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-gold bg-gold/10 ring-1 ring-gold/25 hover:bg-gold/20 transition-colors focus-ring"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-orange-300 bg-orange-500/10 ring-1 ring-orange-500/30 hover:bg-orange-500/20 transition-colors focus-ring"
                   >
                     <Edit2 size={12} aria-hidden="true" />
                     Edit
@@ -586,7 +586,8 @@ function ComposerShell({
   sendLabel,
   children,
 }: {
-  tone: 'gold' | 'rose'
+  // System-wide kind palette: rose=delete · gold=transfer · orange=edit.
+  tone: 'gold' | 'rose' | 'orange'
   icon: React.ReactNode
   label: string
   shortcutHint?: boolean
@@ -599,13 +600,18 @@ function ComposerShell({
   const sendClass =
     tone === 'rose'
       ? 'bg-rose-500/80 text-white hover:brightness-110 shadow-[0_4px_12px_rgba(244,63,94,0.25)]'
-      : 'bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(214,170,55,0.18)]'
+      : tone === 'orange'
+        ? 'bg-orange-500 text-black hover:bg-orange-400 shadow-[0_4px_12px_rgba(249,115,22,0.25)]'
+        : 'bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(214,170,55,0.18)]'
   const disabledClass = 'bg-surface-alt text-text-light border border-border cursor-not-allowed'
-  const accentText = tone === 'rose' ? 'text-rose-300' : 'text-gold'
+  const accentText =
+    tone === 'rose' ? 'text-rose-300' : tone === 'orange' ? 'text-orange-300' : 'text-gold'
   const bgClass =
     tone === 'rose'
       ? 'bg-rose-500/[0.04]'
-      : 'bg-surface-alt/40'
+      : tone === 'orange'
+        ? 'bg-orange-500/[0.05]'
+        : 'bg-surface-alt/40'
 
   return (
     <div className={`px-4 py-2.5 border-t border-border rounded-b-[18px] space-y-1.5 ${bgClass}`}>
