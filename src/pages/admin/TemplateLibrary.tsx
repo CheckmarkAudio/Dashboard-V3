@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowDownAZ,
@@ -12,7 +12,6 @@ import {
   Search,
   Tag,
 } from 'lucide-react'
-import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { Button, PageHeader } from '../../components/ui'
 import {
   fetchTaskTemplateLibrary,
@@ -52,8 +51,28 @@ const ARRANGE_OPTIONS: { value: ArrangeBy; label: string; icon: typeof ArrowDown
   { value: 'role',  label: 'Role',   icon: Tag         },
 ]
 
-export default function TemplateLibrary() {
-  useDocumentTitle('Templates - Checkmark Workspace')
+/**
+ * `embedded` — when mounted inline inside another page (e.g. the
+ * Assign sidebar's Templates tab), drop the full-page chrome:
+ *   - skip `useDocumentTitle` (host page owns the title)
+ *   - swap the big `<PageHeader>` for a slim inline header bar
+ *   - drop the `max-w-[1400px] mx-auto` wrapper so the host's pane
+ *     controls width
+ *   - tighten the card grid (3-up max instead of 4-up) so cards
+ *     don't squish in a narrower main pane
+ *
+ * Behaviour, queries, modals, filters, and sort are identical in
+ * both modes — same React Query cache, so embedded + standalone
+ * mounts stay in sync.
+ */
+export default function TemplateLibrary({ embedded = false }: { embedded?: boolean } = {}) {
+  // Standalone owns the document title; embedded mounts let the host page own it.
+  useEffect(() => {
+    if (embedded) return
+    const prev = document.title
+    document.title = 'Templates - Checkmark Workspace'
+    return () => { document.title = prev }
+  }, [embedded])
 
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string | null>(null)
@@ -143,27 +162,52 @@ export default function TemplateLibrary() {
   const total = poolQuery.data?.length ?? 0
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-5 animate-fade-in">
-      <PageHeader
-        icon={Layers}
-        title={
-          <span className="inline-flex items-center gap-2">
-            Templates
-            <span className="text-sm font-medium text-text-muted bg-surface-alt px-2.5 py-0.5 rounded-full">
-              {total}
-            </span>
+    <div
+      className={
+        embedded
+          ? 'space-y-4'
+          : 'max-w-[1400px] mx-auto space-y-5 animate-fade-in'
+      }
+    >
+      {embedded ? (
+        <div className="flex items-center gap-3 pb-3 border-b border-border/60">
+          <Layers size={16} className="text-gold" aria-hidden="true" />
+          <h2 className="text-base font-bold text-text">Templates</h2>
+          <span className="text-[11px] font-medium text-text-muted bg-surface-alt px-2 py-0.5 rounded-full tabular-nums">
+            {total}
           </span>
-        }
-        actions={
           <Button
             variant="primary"
-            iconLeft={<Plus size={16} aria-hidden="true" />}
+            size="sm"
+            iconLeft={<Plus size={14} aria-hidden="true" />}
             onClick={() => setEditorOpen(true)}
+            className="ml-auto"
           >
             New Template
           </Button>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          icon={Layers}
+          title={
+            <span className="inline-flex items-center gap-2">
+              Templates
+              <span className="text-sm font-medium text-text-muted bg-surface-alt px-2.5 py-0.5 rounded-full">
+                {total}
+              </span>
+            </span>
+          }
+          actions={
+            <Button
+              variant="primary"
+              iconLeft={<Plus size={16} aria-hidden="true" />}
+              onClick={() => setEditorOpen(true)}
+            >
+              New Template
+            </Button>
+          }
+        />
+      )}
 
       {/* ─── Toolbar ───────────────────────────────────────────── */}
       <div className="bg-surface rounded-2xl border border-border p-4 space-y-3">
@@ -291,7 +335,13 @@ export default function TemplateLibrary() {
                 </span>
                 <div className="flex-1 h-px bg-border/60" aria-hidden="true" />
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div
+                className={
+                  embedded
+                    ? 'grid grid-cols-2 lg:grid-cols-3 gap-3'
+                    : 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3'
+                }
+              >
                 {g.items.map((t) => (
                   <BigThumbnail
                     key={t.id}
@@ -304,7 +354,13 @@ export default function TemplateLibrary() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div
+          className={
+            embedded
+              ? 'grid grid-cols-2 lg:grid-cols-3 gap-3'
+              : 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3'
+          }
+        >
           {templates.map((t) => (
             <BigThumbnail
               key={t.id}
