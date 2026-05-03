@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertCircle, Archive, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronRight,
+  AlertCircle, Archive, Building2, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronRight,
   ClipboardList, Edit2, Layers, Loader2, Plus, Save,
   Sparkles, Tag, Trash2, Users, X,
 } from 'lucide-react'
@@ -28,6 +28,7 @@ import type {
 } from '../../types/assignments'
 import MultiTaskCreateModal from '../../components/tasks/requests/MultiTaskCreateModal'
 import TemplateLibrary from './TemplateLibrary'
+import StudioTasksPane from './StudioTasksPane'
 import { supabase } from '../../lib/supabase'
 import type { TeamMember } from '../../types'
 import type { AssignedTask } from '../../types/assignments'
@@ -85,22 +86,31 @@ export default function AssignAdmin() {
 
   // ─── Sidebar view + selected member.
   // The sidebar acts like a tab strip: a member tab swaps the main
-  // pane to that member's task editor; the Templates tab swaps it to
-  // the embedded TemplateLibrary. URL hash mirrors the selection so
-  // deep links survive refresh: `#templates` or `#<memberId>`.
+  // pane to that member's task editor; the Studio tab swaps it to the
+  // embedded StudioTasksPane (rooms-grouped studio-scope tasks); the
+  // Templates tab swaps it to the embedded TemplateLibrary. URL hash
+  // mirrors the selection so deep links survive refresh:
+  // `#templates`, `#studio`, or `#<memberId>`.
   const TEMPLATES_HASH = 'templates'
+  const STUDIO_HASH = 'studio'
   const initialHash =
     typeof window !== 'undefined' ? window.location.hash.slice(1) : ''
-  const [view, setView] = useState<'member' | 'templates'>(
-    initialHash === TEMPLATES_HASH ? 'templates' : 'member',
+  const [view, setView] = useState<'member' | 'templates' | 'studio'>(
+    initialHash === TEMPLATES_HASH
+      ? 'templates'
+      : initialHash === STUDIO_HASH
+        ? 'studio'
+        : 'member',
   )
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(
-    initialHash && initialHash !== TEMPLATES_HASH ? initialHash : null,
+    initialHash && initialHash !== TEMPLATES_HASH && initialHash !== STUDIO_HASH
+      ? initialHash
+      : null,
   )
   // Default to first member once the list loads + nothing was hashed
-  // and we're not on Templates.
+  // and we're not on a non-member tab.
   useEffect(() => {
-    if (view === 'templates') return
+    if (view !== 'member') return
     if (selectedMemberId) return
     const first = activeMembers[0]
     if (!first) return
@@ -112,9 +122,11 @@ export default function AssignAdmin() {
     const desired =
       view === 'templates'
         ? `#${TEMPLATES_HASH}`
-        : selectedMemberId
-          ? `#${selectedMemberId}`
-          : ''
+        : view === 'studio'
+          ? `#${STUDIO_HASH}`
+          : selectedMemberId
+            ? `#${selectedMemberId}`
+            : ''
     if (desired && window.location.hash !== desired) {
       history.replaceState(null, '', desired)
     }
@@ -430,6 +442,46 @@ export default function AssignAdmin() {
             )}
           </div>
 
+          {/* Studio tab — clicking swaps the main pane to the
+              embedded StudioTasksPane: studio-scope tasks grouped by
+              physical room (Control Room · Studio A · Studio B). New
+              tab in PR (this) — same chrome pattern as Templates. */}
+          <div className="mt-4 pt-3 border-t border-border/60">
+            <button
+              type="button"
+              onClick={() => setView('studio')}
+              aria-current={view === 'studio' ? 'true' : undefined}
+              className={`w-full flex items-center gap-2 px-2 py-2 rounded-xl transition-all text-left ${
+                view === 'studio'
+                  ? 'bg-gold/12 ring-1 ring-gold/30'
+                  : 'hover:bg-surface-hover'
+              }`}
+            >
+              <Building2
+                size={14}
+                className={view === 'studio' ? 'text-gold' : 'text-gold/70'}
+                aria-hidden="true"
+              />
+              <div className="flex-1 min-w-0">
+                <p
+                  className={`text-[13px] ${
+                    view === 'studio' ? 'font-bold text-text' : 'font-semibold text-text'
+                  }`}
+                >
+                  Studio
+                </p>
+                <p className="text-[10px] text-text-light">
+                  {view === 'studio' ? 'Open' : 'Tasks by room'}
+                </p>
+              </div>
+              <ChevronRight
+                size={12}
+                className={`shrink-0 ${view === 'studio' ? 'text-gold' : 'text-text-light'}`}
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+
           {/* Templates tab — clicking swaps the main pane to the
               embedded TemplateLibrary instead of routing away. The
               standalone page at `/admin/template-library` still
@@ -502,6 +554,8 @@ export default function AssignAdmin() {
         <main className="rounded-xl border border-border bg-surface p-5">
           {view === 'templates' ? (
             <TemplateLibrary embedded />
+          ) : view === 'studio' ? (
+            <StudioTasksPane />
           ) : (
           <>
           {/* Top action bar.

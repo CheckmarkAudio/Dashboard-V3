@@ -39,10 +39,24 @@ export interface AdminUpdateTaskPayload {
   description?: string
   category?: string | null
   due_date?: string | null  // YYYY-MM-DD
+  /** Only valid for `scope='studio'` tasks; server raises if set on a member task. */
+  studio_space?: StudioSpace | null
   clearDescription?: boolean
   clearCategory?: boolean
   clearDue?: boolean
+  clearStudioSpace?: boolean
 }
+
+/** Physical room for a studio-scope task. Distinct from the booking
+ * `StudioSpace` enum — bookings can happen at Home Visit / Venue, but
+ * studio TASKS only live in physical rooms. */
+export type StudioSpace = 'Control Room' | 'Studio A' | 'Studio B'
+
+export const STUDIO_SPACES: readonly StudioSpace[] = [
+  'Control Room',
+  'Studio A',
+  'Studio B',
+] as const
 
 export async function adminUpdateAssignedTask(
   taskId: string,
@@ -57,6 +71,8 @@ export async function adminUpdateAssignedTask(
     p_clear_due: payload.clearDue ?? false,
     p_clear_description: payload.clearDescription ?? false,
     p_clear_category: payload.clearCategory ?? false,
+    p_studio_space: payload.studio_space ?? null,
+    p_clear_studio_space: payload.clearStudioSpace ?? false,
   })
   if (error) {
     console.error('[queries/adminTasks] adminUpdateAssignedTask failed:', error)
