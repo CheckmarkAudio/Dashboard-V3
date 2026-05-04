@@ -80,6 +80,7 @@ export default function MultiTaskCreateModal({
   initialScope = 'member',
   defaultRecipientIds,
   initialStudioSpace = null,
+  initialDrafts,
 }: {
   onClose: () => void
   initialScope?: AssignedTaskScope
@@ -94,12 +95,30 @@ export default function MultiTaskCreateModal({
   // Room already selected on draft 1). Subsequent rows the admin
   // adds default to "All / no specific room" so they pick per row.
   initialStudioSpace?: StudioSpace | null
+  // PR #102 — when invoked from a Templates dropdown, pre-load
+  // the template's items as draft rows so the admin can review
+  // before sending. Each draft inherits stage/description/etc
+  // from the template item; admin can edit before submit.
+  initialDrafts?: CustomTaskDraft[]
 }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
   const [scope, setScope] = useState<AssignedTaskScope>(initialScope)
-  const [drafts, setDrafts] = useState<DraftRow[]>(() => [emptyRow(initialStudioSpace)])
+  const [drafts, setDrafts] = useState<DraftRow[]>(() => {
+    if (initialDrafts && initialDrafts.length > 0) {
+      return initialDrafts.map((d) => ({
+        ...emptyRow(initialStudioSpace),
+        title: d.title,
+        description: d.description ?? '',
+        stage: (d.category as FlywheelStage) ?? null,
+        studioSpace: (d.studio_space as StudioSpace | null) ?? initialStudioSpace,
+        recurrence: d.recurrence_spec?.frequency ?? null,
+        isRequired: d.is_required ?? false,
+      }))
+    }
+    return [emptyRow(initialStudioSpace)]
+  })
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(
     () => new Set(defaultRecipientIds ?? []),
   )
