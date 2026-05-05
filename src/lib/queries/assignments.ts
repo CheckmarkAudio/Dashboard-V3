@@ -279,6 +279,7 @@ function normalizeAssignedTask(task: Partial<AssignedTask>): AssignedTask {
     can_complete: task.can_complete ?? false,
     batch: task.batch ?? null,
     studio_space: task.studio_space ?? null,
+    recurrence_spec: task.recurrence_spec ?? null,
   }
 }
 
@@ -452,6 +453,10 @@ export interface CustomTaskDraft {
    * is one of `'Control Room' | 'Studio A' | 'Studio B'` and that the
    * surrounding scope is `'studio'`. Member-scope drafts ignore it. */
   studio_space?: 'Control Room' | 'Studio A' | 'Studio B' | null
+  /** Optional cadence — when set, the task will auto-recreate on the
+   * frequency once the recurrence engine ships. Server CHECK enforces
+   * `frequency ∈ {'daily','weekly','monthly'}`. */
+  recurrence_spec?: { frequency: 'daily' | 'weekly' | 'monthly'; interval: number } | null
 }
 
 export async function assignCustomTasksToMembers(

@@ -90,6 +90,19 @@ export interface AssignedTask {
   // and NULL for studio tasks created before the studio_space rollout
   // until an admin backfills them.
   studio_space?: 'Control Room' | 'Studio A' | 'Studio B' | null
+  // Recurrence spec for tasks that should repeat on a cadence (initial
+  // surface = studio scope only). The auto-recreate engine isn't built
+  // yet — this PR captures the spec on the row so the engine has
+  // something to read when it ships.
+  recurrence_spec?: AssignedTaskRecurrenceSpec | null
+}
+
+/** Mirrors task_requests.recurrence_spec — shape kept identical so the
+ * future scheduler can read both tables uniformly. `interval` defaults
+ * to 1 in the modal but the column accepts any positive integer. */
+export interface AssignedTaskRecurrenceSpec {
+  frequency: 'daily' | 'weekly' | 'monthly'
+  interval: number
 }
 
 // Embedded session summary on session-assign notifications.
