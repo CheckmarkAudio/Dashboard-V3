@@ -178,20 +178,36 @@
    back it up" — buttons and pills both have implicit framing).
 */
 :root[data-theme='light'] {
-  /* Lean 2 rev15 — un-reverse the body/card swap per user feedback:
-     "I thought I told you to make the widgets the grey and the box
-     behind them light". Goes back to rev7's almost-white body +
-     grey cards arrangement. Earlier rev8 swap mis-interpreted user
-     intent. */
-  --color-bg:            #f5f5f5; /* almost white — body        */
-  --color-surface:       #dcdcdc; /* light grey — widgets/cards */
-  --color-surface-alt:   #d0d0d0; /* darker grey (nests)        */
-  --color-surface-hover: #c4c4c4; /* hover state                */
-  --color-border:        #1c1c22; /* black ink (unchanged)      */
-  --color-border-light:  #9a9a9a; /* neutral mid-grey dividers  */
-  --color-text:          #1c1c22; /* black (unchanged)          */
-  --color-text-muted:    #3f3f46; /* dark grey (unchanged)      */
-  --color-text-light:    #6b6b72; /* neutral mid-grey           */
+  /* Light-mode revamp 2026-05-04 — soften the harshness.
+     User reported the rev17 light mode was "horrible." Root cause:
+     `#1c1c22` black-ink borders on every card created a stamped,
+     cluttered look. Plus the body/card grey relationship was too
+     close (#f5f5f5 vs #dcdcdc), making cards feel like dirty sheets
+     of paper instead of floating surfaces.
+
+     Fixes (preserves the user's earlier rev15 ask of "widgets grey,
+     box behind light" — direction is right, execution was harsh):
+       • Borders: `#1c1c22` black ink → `#e5e5e7` soft grey (almost
+         invisible, lets cards float instead of being stamped)
+       • Body: `#f5f5f5` clinical near-white → `#f5f5f7` slightly
+         warmer Apple-tone (tiny shift; reads softer to the eye)
+       • Cards: `#dcdcdc` heavy grey → `#ebebed` lighter grey (more
+         contrast between body + card so cards lift visually)
+       • surface-alt + hover: lifted to match the new card lightness
+       • border-light: stays as dividers, slightly softer
+       • Text: black for headlines, slightly lighter muted/light tones
+         to ease scan-density on the new lighter cards
+     A subtle widget-card shadow lower in this file gives soft depth
+     without the harsh ink lines. */
+  --color-bg:            #f5f5f7; /* warm near-white body            */
+  --color-surface:       #ebebed; /* light grey cards (lifts on body) */
+  --color-surface-alt:   #e0e0e3; /* nested surface (subtle)         */
+  --color-surface-hover: #d6d6da; /* hover (one step darker)         */
+  --color-border:        #e5e5e7; /* SOFT grey — not black ink       */
+  --color-border-light:  #ededef; /* even softer for dividers        */
+  --color-text:          #1c1c22; /* black for max headline contrast */
+  --color-text-muted:    #4a4a52; /* slightly lighter than rev17     */
+  --color-text-light:    #76767d; /* lighter mid-grey for meta lines */
 
   /* Vibrant marigold for backgrounds, buttons, borders, glows.
      rev10: restored rev8's HSL(36°, 87%, 54%) #f0a623 base after
@@ -422,7 +438,10 @@ body {
   :root[data-theme='light'] .widget-card {
     background: var(--color-surface);
     border-color: var(--color-border);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    /* Slightly bumped shadow (from 0.05 → 0.08 alpha) so cards still
+       lift off the body now that the border is soft grey instead of
+       black ink. The shadow does most of the visual separation work. */
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
   }
 
   /* -------- Semantic typography scale --------
