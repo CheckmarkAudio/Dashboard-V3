@@ -22,6 +22,16 @@
      to keep / avoid)
 4. Commit this doc with any substantive change.
 
+Before merging meaningful PRs, use `docs/pr-acceptance-checklist.md`.
+It captures the current approval standard: Vercel preview verified,
+docs updated in the same PR, Supabase migrations handled separately
+from Vercel, accessibility checked, and backend mutations confirmed
+instead of hidden by optimistic UI.
+
+For Assign, Tasks, task requests, approvals, and related RPC work, use
+`docs/assign-engine-spec-2026-05-03.md` as the behavior contract.
+Layout experiments should not redefine task semantics.
+
 ### Change provenance tags
 
 When writing handoff notes, use these tags so future Claude/Codex sessions
