@@ -105,6 +105,15 @@ export default function FloatingDetailModal({
     panelRef.current?.focus()
   }, [])
 
+  // Track where mouseDown fires so we don't close on text-selection
+  // drags. Reported 2026-05-04: clicking into the +Add task title
+  // field and dragging to select text would sometimes mouseUp on the
+  // backdrop (because the cursor left the input bounds), triggering
+  // the overlay's onClick={onClose} and dismissing the modal mid-edit.
+  // Pattern: only close on click if BOTH mouseDown and the click
+  // landed on the overlay container itself, not the panel.
+  const mouseDownOnBackdropRef = useRef(false)
+
   // Derived stacking + chrome for nested modals:
   //   depth 0 (topmost root) = z-[60], full backdrop opacity
   //   depth 1 (first child)  = z-[70], lighter backdrop so parent peeks
@@ -125,7 +134,20 @@ export default function FloatingDetailModal({
     <div
       className={`fixed inset-0 flex items-center justify-center p-4 ${backdropOpacity} backdrop-blur-sm animate-fade-in`}
       style={{ zIndex }}
-      onClick={onClose}
+      onMouseDown={(e) => {
+        mouseDownOnBackdropRef.current = e.target === e.currentTarget
+      }}
+      onClick={(e) => {
+        // Only close if BOTH the mouseDown AND the click landed on the
+        // backdrop itself. Catches the text-selection-drag case where
+        // mouseDown is inside an input and mouseUp lands on the
+        // backdrop — the resulting click would otherwise dismiss the
+        // modal mid-edit.
+        if (e.target === e.currentTarget && mouseDownOnBackdropRef.current) {
+          onClose()
+        }
+        mouseDownOnBackdropRef.current = false
+      }}
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel ?? title ?? 'Detail view'}
@@ -134,6 +156,7 @@ export default function FloatingDetailModal({
         ref={panelRef}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
         // `90dvh` (dynamic viewport height) so the modal accounts for
         // mobile/desktop browser chrome (address bars, toolbars) and
         // never anchors off the visible viewport. dvh is supported on

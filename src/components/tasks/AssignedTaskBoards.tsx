@@ -42,24 +42,35 @@ export function TeamAssignedTasksCard() {
 export function StudioAssignedTasksCard() {
   return (
     <AssignmentBoardBody
-      emptyTitle="No studio tasks"
-      emptyBody="Studio tasks need the scope migration before shared tasks can flow here."
+      emptyTitle="No studio tasks yet"
+      emptyBody="Add room-tagged tasks from Assign → Studio. They'll group here under Control Room · Studio A · Studio B."
       queryKeyPrefix="studio-assigned-tasks"
       queryFn={fetchStudioAssignedTasks}
+      sectionedByStudioSpace
     />
   )
 }
+
+// PR #102 follow-up — Studio variant on /daily groups visible rows
+// under per-room section headers (Control Room · Studio A · Studio B
+// + an optional "(no space set)" bucket for legacy untagged rows),
+// matching the admin Studio pane. Team Board passes nothing here and
+// renders the flat list as before.
+const STUDIO_SECTION_KEYS = ['Control Room', 'Studio A', 'Studio B'] as const
+const NO_SPACE_KEY = '__no_space__'
 
 function AssignmentBoardBody({
   emptyTitle,
   emptyBody,
   queryKeyPrefix,
   queryFn,
+  sectionedByStudioSpace = false,
 }: {
   emptyTitle: string
   emptyBody: string
   queryKeyPrefix: string
   queryFn: (userId: string, opts?: { includeCompleted?: boolean }) => Promise<AssignedTask[]>
+  sectionedByStudioSpace?: boolean
 }) {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
@@ -169,6 +180,25 @@ function AssignmentBoardBody({
     })
   }, [showCompleted, tasksQuery.data])
 
+  // For the Studio Tasks widget: group visible tasks by studio_space.
+  // Sections render in a fixed order (Control Room · Studio A · Studio B)
+  // followed by a backfill bucket for any rows still without a tag.
+  // Empty sections are HIDDEN here (different from the admin pane —
+  // the /daily widget is space-constrained and shouldn't waste rows
+  // on "no tasks yet" labels per room).
+  const sectionedVisibleTasks = useMemo(() => {
+    if (!sectionedByStudioSpace) return null
+    const buckets = new Map<string, AssignedTask[]>()
+    for (const key of STUDIO_SECTION_KEYS) buckets.set(key, [])
+    buckets.set(NO_SPACE_KEY, [])
+    for (const t of visibleTasks) {
+      const key = (t.studio_space ?? NO_SPACE_KEY) as string
+      const bucket = buckets.get(key) ?? buckets.get(NO_SPACE_KEY)!
+      bucket.push(t)
+    }
+    return buckets
+  }, [sectionedByStudioSpace, visibleTasks])
+
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* PR #69 — `Due` column header anchors the right-side date so
@@ -198,6 +228,44 @@ function AssignmentBoardBody({
             <p className="text-[14px] font-medium text-text">{emptyTitle}</p>
             <p className="text-[12px] text-text-light mt-0.5 max-w-[28ch]">{emptyBody}</p>
           </div>
+        ) : sectionedVisibleTasks ? (
+          // Studio variant — render each non-empty section with a
+          // header + per-section row list.
+          <>
+            {/* Backfill bucket first so admins notice untagged rows. */}
+            {(sectionedVisibleTasks.get(NO_SPACE_KEY) ?? []).length > 0 && (
+              <SectionedRows
+                label="No space set"
+                labelDim
+                tasks={sectionedVisibleTasks.get(NO_SPACE_KEY) ?? []}
+                pendingIds={pendingIds}
+                requestedTaskIds={requestedTaskIds}
+                togglePending={togglePending}
+                reassignMutation={reassignMutation}
+                submitMutationPending={submitMutation.isPending}
+                memberMap={memberMap}
+                profileId={profile?.id ?? null}
+              />
+            )}
+            {STUDIO_SECTION_KEYS.map((key) => {
+              const bucket = sectionedVisibleTasks.get(key) ?? []
+              if (bucket.length === 0) return null
+              return (
+                <SectionedRows
+                  key={key}
+                  label={key}
+                  tasks={bucket}
+                  pendingIds={pendingIds}
+                  requestedTaskIds={requestedTaskIds}
+                  togglePending={togglePending}
+                  reassignMutation={reassignMutation}
+                  submitMutationPending={submitMutation.isPending}
+                  memberMap={memberMap}
+                  profileId={profile?.id ?? null}
+                />
+              )
+            })}
+          </>
         ) : (
           visibleTasks.map((task) => {
             const dueLabel = formatDueShort(task.due_date)
@@ -390,5 +458,84 @@ function TeamTaskRow({
     >
       {rowContent}
     </button>
+  )
+}
+
+// ─── Section header + per-section rows (Studio variant) ────────────
+//
+// Used by StudioAssignedTasksCard to render visible rows under
+// Control Room · Studio A · Studio B headers (plus an optional
+// "(no space set)" group at the top). Reuses TeamTaskRow verbatim
+// so the per-row interactions (pending toggle, request-to-take
+// overlay) are identical to the flat Team Board layout.
+
+function SectionedRows({
+  label,
+  labelDim,
+  tasks,
+  pendingIds,
+  requestedTaskIds,
+  togglePending,
+  reassignMutation,
+  submitMutationPending,
+  memberMap,
+  profileId,
+}: {
+  label: string
+  labelDim?: boolean
+  tasks: AssignedTask[]
+  pendingIds: Set<string>
+  requestedTaskIds: Set<string>
+  togglePending: (taskId: string) => void
+  reassignMutation: { mutate: (taskId: string) => void; isPending: boolean }
+  submitMutationPending: boolean
+  memberMap: Map<string, TeamMember>
+  profileId: string | null
+}) {
+  return (
+    <section>
+      <div className="flex items-center gap-2 px-1 pb-1">
+        <h3
+          className={`text-[10px] font-bold uppercase tracking-[0.08em] ${
+            labelDim ? 'text-text-light/70' : 'text-gold'
+          }`}
+        >
+          {label}
+        </h3>
+        <span className="tabular-nums text-[10px] font-bold text-text-light/70 px-1.5 py-0.5 rounded-full bg-surface-alt ring-1 ring-border">
+          {tasks.length}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {tasks.map((task) => {
+          const dueLabel = formatDueShort(task.due_date)
+          const isPending = pendingIds.has(task.id)
+          const checkVisual = task.is_completed !== isPending
+          const canRequestTransfer =
+            !task.can_complete &&
+            !task.is_completed &&
+            task.scope === 'member' &&
+            Boolean(task.assigned_to) &&
+            task.assigned_to !== profileId
+          const alreadyRequested = requestedTaskIds.has(task.id)
+          return (
+            <TeamTaskRow
+              key={task.id}
+              task={task}
+              dueLabel={dueLabel}
+              isPending={isPending}
+              checkVisual={checkVisual}
+              canRequestTransfer={canRequestTransfer}
+              alreadyRequested={alreadyRequested}
+              isRequesting={reassignMutation.isPending}
+              disableCheckbox={!task.can_complete || submitMutationPending}
+              onTogglePending={() => togglePending(task.id)}
+              onRequestTake={() => reassignMutation.mutate(task.id)}
+              memberMap={memberMap}
+            />
+          )
+        })}
+      </div>
+    </section>
   )
 }
