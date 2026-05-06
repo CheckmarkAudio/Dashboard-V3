@@ -150,20 +150,23 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
       href={channel.href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex items-center gap-2 shrink-0 rounded-xl px-2 py-1 -mx-2 -my-1 focus-ring transition-colors hover:bg-gold/10"
+      className="group inline-flex items-center gap-2.5 shrink-0 rounded-xl focus-ring"
       aria-label={`${channel.label} — ${formatCount(channel.count)} followers`}
       title={`${channel.label} — ${formatCount(channel.count)} followers`}
     >
-      {/* 2026-05-06 — TRANSPARENT background per user feedback. The
-          previous solid 40×40 yellow tile was visually loud and the
-          hard square edges cut into surrounding text. Now: just the
-          brand glyph rendered in `text-text` (deep contrast in both
-          themes) with a subtle gold-tinted hover region around the
-          whole link. The clickable surface stays generous via the
-          negative-margin / padding trick (the link's hit area
-          extends past the visible glyph + count so this still feels
-          tappable). */}
-      <span className="flex items-center justify-center text-text group-hover:text-gold transition-colors shrink-0">
+      {/* 2026-05-06 — translucent gold-tinted BUBBLE per user direction:
+          icons need to be encased in a bubble that's visible in both
+          light AND dark mode. Previous attempts:
+            • solid yellow tile → too loud, hard edges cut into text
+            • fully transparent → invisible against the page wash
+          This: bg-gold/15 + ring-gold/30 — soft yellow tint that
+          reads as a clickable bubble in BOTH themes (gold token is
+          bright yellow in light mode, marigold in dark mode; both
+          are visible at /15 + /30 against their respective bg).
+          Glyph stays `text-text` so it inherits the theme's body
+          color (black on light bubble, light on dark bubble). Hover
+          deepens the bubble + brightens the glyph for tactile cue. */}
+      <span className="flex w-10 h-10 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/30 text-text group-hover:bg-gold/25 group-hover:text-gold transition-colors shrink-0">
         <PlatformIcon platform={channel.platform} size={22} />
       </span>
       <span className="text-[22px] font-bold text-text group-hover:text-gold transition-colors tabular-nums whitespace-nowrap leading-none">
