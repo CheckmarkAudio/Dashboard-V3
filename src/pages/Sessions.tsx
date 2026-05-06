@@ -237,20 +237,30 @@ export default function Sessions() {
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            {loading ? (
-              <div className="px-5 py-10 flex items-center justify-center text-text-light">
-                <Loader2 size={18} className="animate-spin" />
-              </div>
-            ) : error ? (
-              <div className="px-5 py-8 flex items-center gap-2 text-sm text-amber-300">
-                <AlertCircle size={16} />
-                <span>{error}</span>
-              </div>
-            ) : (
+          {/* Skin pass 2026-05-06 — wrap the data table in a nested
+              bordered panel so row dividers visibly clip at the
+              panel edge instead of running full-width through the
+              widget-card. Padding around the panel separates the
+              two borders so the nesting reads. `divide-theme` was
+              also softened in light mode (border-light) so the row
+              lines feel like needle-thin separators inside the
+              nested panel rather than full divisions. */}
+          <div className="p-4 sm:p-5">
+            <div className="rounded-xl border border-border overflow-hidden">
+              <div className="overflow-x-auto">
+                {loading ? (
+                  <div className="px-5 py-10 flex items-center justify-center text-text-light">
+                    <Loader2 size={18} className="animate-spin" />
+                  </div>
+                ) : error ? (
+                  <div className="px-5 py-8 flex items-center gap-2 text-sm text-amber-300">
+                    <AlertCircle size={16} />
+                    <span>{error}</span>
+                  </div>
+                ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b theme-divider">
+                  <tr className="border-b theme-divider bg-surface-alt/40">
                     <th className="px-5 py-3 text-left text-label">Client</th>
                     <th className="px-5 py-3 text-left text-label">Date</th>
                     <th className="px-5 py-3 text-left text-label">Engineer</th>
@@ -297,7 +307,9 @@ export default function Sessions() {
                   )}
                 </tbody>
               </table>
-            )}
+                )}
+              </div>
+            </div>
           </div>
         </div>
       ) : (
