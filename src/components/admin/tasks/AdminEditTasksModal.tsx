@@ -295,7 +295,7 @@ function EditableRow({
           type="button"
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending || title.trim() === ''}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-bold bg-gradient-to-b from-gold to-gold-muted text-black hover:brightness-105 disabled:opacity-50"
+          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-bold bg-gold text-black hover:bg-gold-muted disabled:opacity-50"
         >
           {saveMutation.isPending ? (
             <Loader2 size={13} className="animate-spin" />

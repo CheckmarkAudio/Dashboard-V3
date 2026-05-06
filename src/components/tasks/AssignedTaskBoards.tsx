@@ -431,7 +431,7 @@ function TeamTaskRow({
               type="button"
               onClick={onRequestTake}
               disabled={isRequesting}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold bg-gradient-to-b from-gold to-gold-muted text-black hover:brightness-105 shadow-[0_6px_14px_rgba(214,170,55,0.25)] disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(0,0,0,0.08)] disabled:opacity-60"
             >
               <ArrowRightLeft size={12} strokeWidth={2.5} />
               Request to take this task

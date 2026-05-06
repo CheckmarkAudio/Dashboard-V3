@@ -150,21 +150,20 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
       href={channel.href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex items-center gap-2.5 shrink-0 rounded-xl focus-ring transition-colors"
+      className="group inline-flex items-center gap-2 shrink-0 rounded-xl px-2 py-1 -mx-2 -my-1 focus-ring transition-colors hover:bg-gold/10"
       aria-label={`${channel.label} — ${formatCount(channel.count)} followers`}
       title={`${channel.label} — ${formatCount(channel.count)} followers`}
     >
-      {/* Solid icon body — inverse-color so it pops in both themes.
-          Uses explicit CSS-var arbitrary values because the
-          `bg-text` / `text-bg` Tailwind shortcuts collide with
-          2026-05-04 — flipped per user direction: tiles are GOLD by
-          default with dark glyphs (matches the fintech reference
-          where social/CTA accents are the bright yellow). Hover
-          deepens to gold-muted for a tactile cue. Previous default
-          was inverse (black tile, light glyph) which fought with
-          the light-mode wash + pulled visual weight away from the
-          actual page content. */}
-      <span className="flex w-10 h-10 items-center justify-center rounded-xl bg-gold text-black group-hover:bg-gold-muted transition-colors shrink-0">
+      {/* 2026-05-06 — TRANSPARENT background per user feedback. The
+          previous solid 40×40 yellow tile was visually loud and the
+          hard square edges cut into surrounding text. Now: just the
+          brand glyph rendered in `text-text` (deep contrast in both
+          themes) with a subtle gold-tinted hover region around the
+          whole link. The clickable surface stays generous via the
+          negative-margin / padding trick (the link's hit area
+          extends past the visible glyph + count so this still feels
+          tappable). */}
+      <span className="flex items-center justify-center text-text group-hover:text-gold transition-colors shrink-0">
         <PlatformIcon platform={channel.platform} size={22} />
       </span>
       <span className="text-[22px] font-bold text-text group-hover:text-gold transition-colors tabular-nums whitespace-nowrap leading-none">

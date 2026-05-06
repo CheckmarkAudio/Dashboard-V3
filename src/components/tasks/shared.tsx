@@ -226,7 +226,7 @@ export function SubmitBar({
       className={`w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-bold tracking-tight transition-all ${
         disabled
           ? 'bg-white/[0.04] text-text-light/50 ring-1 ring-white/5 cursor-not-allowed'
-          : 'bg-gradient-to-b from-gold to-gold-muted text-black hover:brightness-105 shadow-[0_10px_20px_rgba(214,170,55,0.18)]'
+          : 'bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(0,0,0,0.08)]'
       }`}
     >
       <Check size={12} strokeWidth={3} />
