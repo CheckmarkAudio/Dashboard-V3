@@ -6,6 +6,10 @@ This is the canonical styling standard for Checkmark Audio Dashboard. Use it bef
 
 The purpose is consistency: when a visual choice changes, it should update site-wide through shared tokens, shared CSS classes, or shared components instead of one-off page edits.
 
+For light/dark mode boundaries and theme-specific implementation rules, also read `docs/light-dark-theme-handoff.md`.
+
+For the current visual skin, use the Booking page (`/sessions`, `src/pages/Sessions.tsx`) and My Tasks widget (`src/components/tasks/MyTasksCard.tsx`) as live anchors alongside `docs/CANONICAL-MOCKUPS.md`.
+
 ## Source Of Truth
 
 Use these in order:
