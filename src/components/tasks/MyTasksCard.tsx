@@ -367,7 +367,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   // above (always visible when non-empty), so the chip-toggle
   // affordance is no longer needed.
   const footerBar = (
-    <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t border-white/5">
+    <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t theme-divider">
       <SubmitBar
         count={pendingIds.size}
         isSubmitting={submitMutation.isPending}
@@ -405,7 +405,18 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
+      {/* Skin pass 2026-05-06 — wrap the scrollable task list in
+          `.inset-panel` (matches booking + Task Requests + Notifications).
+          Inside, `divide-y divide-theme` provides hairline separators
+          between every direct child — rows, section eyebrows
+          (COMPLETED, PENDING), and the wrapping divs around active
+          tasks. The `space-y-1.5` gap is dropped so rows sit flush
+          with hairlines between them, like the booking table. Each
+          AssignedTaskRow and PendingCreateRequestRow had its own
+          `rounded-xl border border-transparent` card chrome flattened
+          to flat row + theme-aware bg-tint state. */}
+      <div className="flex-1 min-h-0 inset-panel">
+        <div className="h-full overflow-y-auto divide-y divide-theme">
         {tasksQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light py-6">
             <Loader2 size={18} className="animate-spin" />
@@ -446,7 +457,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
                     <div className="mx-2 my-2 flex items-center gap-2">
                       <CheckCircle2 size={11} className="text-emerald-400/70" aria-hidden="true" />
                       <p className="text-[11px] font-semibold tracking-[0.06em] text-emerald-400/70">COMPLETED</p>
-                      <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
+                      <div className="flex-1 h-px bg-border" aria-hidden="true" />
                     </div>
                   )}
                   <AssignedTaskRow
@@ -506,6 +517,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             )}
           </>
         )}
+        </div>
       </div>
 
       {/* PR #37 — sticky footer with + Task + show-completed eye.
@@ -563,7 +575,7 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
   const dueLabel = formatDueShort(request.due_date)
 
   return (
-    <div className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent bg-white/[0.025] hover:bg-white/[0.04]">
+    <div className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-3 py-2 bg-surface-alt/40 hover:bg-surface-hover transition-colors">
       {/* Leading square — visually substitutes for the row's normal
           checkbox. Plus icon (amber) for pending; Hourglass (rose)
           for rejected — same colors as the badge for consistency. */}
@@ -750,16 +762,20 @@ function AssignedTaskRow({
           onToggle(task)
         }
       }}
-      className={`group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left cursor-pointer ${
+      // Skin pass 2026-05-06 — flattened from rounded-xl border card
+      // to flat row inside MyTasksCard's inset-panel + divide-theme
+      // stack. State (highlighted/pending/done/new/default) now
+      // communicated by bg tint alone with theme-aware tokens.
+      className={`group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-3 py-2 transition-all text-left cursor-pointer ${
         highlighted
-          ? 'bg-gold/20 ring-2 ring-gold animate-[pulse_0.8s_ease-in-out_2]'
+          ? 'bg-gold/20 ring-2 ring-gold ring-inset animate-[pulse_0.8s_ease-in-out_2]'
           : pendingMeta
-            ? 'bg-white/[0.025] hover:bg-white/[0.04]'
+            ? 'bg-surface-alt/40 hover:bg-surface-hover'
             : done
-              ? 'bg-white/[0.018] opacity-60 hover:opacity-80'
+              ? 'bg-surface-alt/30 opacity-60 hover:opacity-80'
               : isNew
-                ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
-                : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
+                ? 'bg-gold/8 hover:bg-gold/12'
+                : 'hover:bg-surface-hover'
       }`}
     >
       {/* Checkbox — independent click target. stopPropagation so the
