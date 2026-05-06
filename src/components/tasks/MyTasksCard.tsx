@@ -691,11 +691,12 @@ function AssignedTaskRow({
   // truth: true when either completed OR pending, false otherwise.
   const checkVisual = done !== isPending  // XOR: pending flips the visual
   const dueLabel = formatDueShort(task.due_date)
-  const isNew =
-    !done &&
-    !pendingMeta &&
-    Boolean(task.batch?.created_at) &&
-    Date.now() - new Date(task.batch!.created_at).getTime() < 24 * 60 * 60 * 1000
+  // Skin pass 2026-05-06 — `isNew` (auto-tint rows whose batch was
+  // created in the last 24h) removed per user feedback: there's no
+  // surrounding UI explaining the gold tint, so it just looked like
+  // random rows were highlighted. The transient `highlighted` flash
+  // (notification-click → 1.6s gold ring) is preserved — that one
+  // IS communicating something specific.
 
   // PR #69 — replaced "from {template}" / "Assigned directly" subtext
   // with the assignee's role tag (looked up from the team_members
@@ -773,9 +774,7 @@ function AssignedTaskRow({
             ? 'bg-surface-alt/40 hover:bg-surface-hover'
             : done
               ? 'bg-surface-alt/30 opacity-60 hover:opacity-80'
-              : isNew
-                ? 'bg-gold/8 hover:bg-gold/12'
-                : 'hover:bg-surface-hover'
+              : 'hover:bg-surface-hover'
       }`}
     >
       {/* Checkbox — independent click target. stopPropagation so the
