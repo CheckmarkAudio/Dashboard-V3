@@ -70,10 +70,10 @@ export default function MemberMultiSelect({
                 }`}
               >
                 <span
-                  className={`shrink-0 w-[18px] h-[18px] rounded-md flex items-center justify-center ${
+                  className={`shrink-0 w-[18px] h-[18px] rounded-md border-[1.5px] flex items-center justify-center transition-colors ${
                     active
-                      ? 'bg-gold border border-gold text-black'
-                      : 'bg-surface border border-border-light'
+                      ? 'bg-gold border-gold text-black'
+                      : 'checkbox-empty'
                   }`}
                   aria-hidden="true"
                 >

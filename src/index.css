@@ -763,6 +763,34 @@ body {
     border-color: var(--color-border);
   }
 
+  /* Empty-checkbox visual — used by every task-row checkbox so the
+     "untoggled" state is unmistakable in BOTH themes. The active
+     (pending / done) variants stay inline at each call site since
+     they carry per-surface semantics (gold pending, gold-dim done,
+     emerald confirmed, etc.).
+     2026-05-06 per user direction:
+       • Light mode: greyed-out fill + thin near-black border so the
+         square pops against the white widget body.
+       • Dark mode: subtle surface-alt fill + a clearly lighter border
+         (#7e7e88 — the text-light grey, well above the default
+         border tone) so the square reads against the dark widget. */
+  .checkbox-empty {
+    background-color: rgba(126, 126, 136, 0.10);
+    border-color: #7e7e88;
+  }
+  .checkbox-empty:hover,
+  .group:hover .checkbox-empty {
+    border-color: var(--color-gold);
+  }
+  :root[data-theme='light'] .checkbox-empty {
+    background-color: #e4e4e7;
+    border-color: #3a3a44;
+  }
+  :root[data-theme='light'] .checkbox-empty:hover,
+  :root[data-theme='light'] .group:hover .checkbox-empty {
+    border-color: var(--color-gold-muted);
+  }
+
   /* Theme-aware logo — the bundled checkmark-audio-logo.png is a
      white-on-transparent monochrome glyph designed for the dark
      surface. In light mode the white pixels become invisible, so we

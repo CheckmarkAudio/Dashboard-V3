@@ -797,12 +797,12 @@ function AssignedTaskRow({
         disabled={!canQueue}
         aria-label={done ? 'Mark incomplete' : 'Mark complete'}
         aria-pressed={checkVisual}
-        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md flex items-center justify-center transition-colors ${
+        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md border-[1.5px] flex items-center justify-center transition-colors ${
           isPending
-            ? 'bg-gold/30 border border-gold text-gold'
+            ? 'bg-gold/30 border-gold text-gold'
             : done
-              ? 'bg-emerald-500/80 border border-emerald-500/80 text-white'
-              : 'bg-surface-alt border border-border-light group-hover:border-gold/50'
+              ? 'bg-emerald-500/80 border-emerald-500/80 text-white'
+              : 'checkbox-empty'
         } ${canQueue ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
       >
         {checkVisual && <Check size={12} strokeWidth={3} aria-hidden="true" />}
