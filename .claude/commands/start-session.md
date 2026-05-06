@@ -22,16 +22,18 @@ Read these files in order:
 4. `docs/pr-acceptance-checklist.md`
 5. `.claude/skills/ui-consistency/SKILL.md`
 6. `docs/ui-standards.md`
+7. `docs/light-dark-theme-handoff.md`
+8. `docs/ui-change-request-template.md`
 
 If the requested task touches UI, layout, theme, widget chrome, spacing, borders, typography, or visual polish, explicitly say that the `ui-consistency` skill is active.
 
 If the requested task touches Assign, Tasks, task requests, approvals, or related RPCs, also read:
 
-7. `docs/assign-engine-spec-2026-05-03.md`
+9. `docs/assign-engine-spec-2026-05-03.md`
 
 If the requested task touches a page with canonical visuals, also read:
 
-8. `docs/CANONICAL-MOCKUPS.md`
+10. `docs/CANONICAL-MOCKUPS.md`
 
 ## 2. Check Repo State
 
@@ -118,6 +120,7 @@ When you do implement:
 
 - prefer shared tokens/classes/components over local visual patches
 - verify the whole page, not only the edited element
+- use `.claude/commands/visual-qa.md` before calling UI/theme/layout work done
 - use Vercel preview for meaningful visual validation
 - apply and verify Supabase migrations separately from Vercel
 - update docs in the same PR for meaningful behavior/schema/security/workflow changes

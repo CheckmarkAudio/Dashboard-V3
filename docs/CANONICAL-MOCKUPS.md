@@ -21,6 +21,19 @@ All paths are **from the repository root**. Open these PNGs side-by-side with co
 | **Booking Agent** | `docs/pages/Booking Agent/booking-agent-v1.5.png` | `booking-agent-v1.4.png` … `booking-agent-v1.0.png` |
 | **Idea Board** | `docs/pages/Idea Board/idea-board-v1.1.png` | `idea-board-v1.0.png` |
 
+## Current Live Visual Anchors
+
+Use these live app surfaces as the highest-priority visual references for the current Checkmark UI skin:
+
+| Anchor | Route | Source | What To Preserve |
+|--------|-------|--------|------------------|
+| **Booking page** | `/sessions` | `src/pages/Sessions.tsx` | Light-mode structure, clean table/list lines, calm surface contrast, gold CTA, token-backed borders, no noisy chrome. |
+| **My Tasks widget** | `/daily` and Overview widget grid | `src/components/tasks/MyTasksCard.tsx` via `TeamTasksWidget` | Widget rhythm, compact title-first task rows, pending divider behavior, row metadata discipline, embedded body-only pattern inside `DashboardWidgetFrame`. |
+
+When a mockup and a current live anchor disagree, do not guess. Preserve the live anchor unless the user explicitly asks to move away from it.
+
+For light-mode border/nesting work, the desired family resemblance is: Booking page line structure + My Tasks row/widget rhythm.
+
 ## Extra reference images (optional context)
 
 | File | Notes |
