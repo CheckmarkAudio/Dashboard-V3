@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
@@ -233,7 +234,17 @@ export function SocialStatsBar() {
   )
 }
 
-export default function MemberHighlights() {
+/**
+ * MemberHighlights — the row of member pills (avatar + first name)
+ * inside a single bordered panel beneath the page title.
+ *
+ * Optional `actions` slot renders to the right of the panel on the
+ * same row (used by Dashboard to put +Book a Session right next to
+ * the team avatars). When `actions` is set, the panel only takes
+ * its content width — the actions sit immediately to the right
+ * with `gap-3` between, leaving the rest of the row free.
+ */
+export default function MemberHighlights({ actions }: { actions?: ReactNode } = {}) {
   const { data: members = [] } = useQuery({
     queryKey: teamMemberKeys.list(),
     queryFn: fetchTeamMembers,
@@ -241,20 +252,24 @@ export default function MemberHighlights() {
   })
 
   const active = members.filter((m) => (m.status ?? 'active') === 'active')
-  if (active.length === 0) return null
+  if (active.length === 0 && !actions) return null
 
-  // Skin pass 2026-05-06 — wrap the row in a single bordered
-  // container per user feedback "nest all the members in a singular
-  // border box." Per-pill borders dropped (see MemberPill); this
-  // outer panel carries the chrome, members live inside as flat
-  // tiles with hover-only feedback.
+  // Skin pass 2026-05-06 — outer flex container so the bordered
+  // member panel auto-sizes to its content (members), and the
+  // optional `actions` slot sits immediately to the right.
+  // `min-w-0` on the panel allows it to shrink (with internal
+  // overflow-x-auto handling many members) before crowding the
+  // actions off the row.
   return (
-    <div className="rounded-xl border border-border bg-surface px-2 py-1.5">
-      <div className="flex gap-1 overflow-x-auto min-w-0 [scrollbar-width:thin]">
-        {active.map((member) => (
-          <MemberPill key={member.id} member={member} />
-        ))}
+    <div className="flex items-center gap-3">
+      <div className="rounded-xl border border-border bg-surface px-2 py-1.5 min-w-0">
+        <div className="flex gap-1 overflow-x-auto [scrollbar-width:thin]">
+          {active.map((member) => (
+            <MemberPill key={member.id} member={member} />
+          ))}
+        </div>
       </div>
+      {actions && <div className="shrink-0">{actions}</div>}
     </div>
   )
 }
