@@ -450,7 +450,7 @@ export function AdminTeamWidget() {
           // Top-aligned empty state to match the Assign widget — keeps
           // the widget from looking hollowed out when the team is empty.
           <div className="flex items-start gap-2.5 px-1 py-1">
-            <div className="shrink-0 w-8 h-8 rounded-lg bg-gold/10 ring-1 ring-gold/20 flex items-center justify-center">
+            <div className="icon-tile-gold w-8 h-8">
               <Users size={15} className="text-gold" aria-hidden="true" />
             </div>
             <div>
