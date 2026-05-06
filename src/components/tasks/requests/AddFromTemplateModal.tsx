@@ -188,11 +188,6 @@ export default function AddFromTemplateModal({
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-semibold text-text truncate">{item.title}</p>
-                        {item.description && (
-                          <p className="text-[11px] text-text-muted mt-0.5 line-clamp-2">
-                            {item.description}
-                          </p>
-                        )}
                         {item.category && (
                           <div className="flex items-center gap-2 mt-1 text-[10px] text-text-light flex-wrap">
                             <span>{item.category}</span>

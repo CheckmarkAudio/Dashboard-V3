@@ -468,9 +468,9 @@ function Toggle({
 
 /**
  * BigThumbnail — page-scaled version of the widget's friendly tile.
- * Larger icon bubble (w-16 h-16), bigger title (14px), more padding,
- * description preview when available. Whole tile opens the preview
- * modal. Same role-icon mapping as the widget.
+ * Larger icon bubble (w-16 h-16), bigger title (14px), more padding.
+ * Whole tile opens the preview modal. Same role-icon mapping as the
+ * widget.
  */
 function BigThumbnail({
   template,
@@ -479,7 +479,7 @@ function BigThumbnail({
   template: TaskTemplateLibraryEntry
   onClick: () => void
 }) {
-  const { name, description, item_count, is_active, role_tag } = template
+  const { name, item_count, is_active, role_tag } = template
   const muted = !is_active
   const Icon = iconForRole(role_tag)
   return (
@@ -501,11 +501,6 @@ function BigThumbnail({
       <span className="text-[14px] font-bold text-text leading-tight text-center line-clamp-2 w-full">
         {name}
       </span>
-      {description && (
-        <span className="text-[11px] text-text-light leading-snug text-center line-clamp-2 w-full">
-          {description}
-        </span>
-      )}
       <span className="inline-flex items-center gap-1 tabular-nums text-[11px] font-bold text-text-muted mt-auto pt-1">
         <FileText size={10} aria-hidden="true" />
         {item_count} {item_count === 1 ? 'task' : 'tasks'}

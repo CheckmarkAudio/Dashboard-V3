@@ -50,6 +50,7 @@ Do not scatter new hard-coded radii, font sizes, colors, shadows, or borders acr
 - Widget grids use `WorkspacePanel`.
 - Focus states use `.focus-ring` or the base form focus styles.
 - Typography should use semantic classes from `src/index.css` before arbitrary `text-[...]` values.
+- Passive subtext/descriptions are not a default visual pattern; keep rows/cards title-first unless description text is required for accessibility, errors, or destructive-action safety.
 - Buttons should reuse the existing primary/secondary/destructive hierarchy.
 - Accessibility is part of done, not a follow-up.
 

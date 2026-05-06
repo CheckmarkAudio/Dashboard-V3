@@ -219,12 +219,6 @@ export default function TemplatePreviewModal({
               )}
             </div>
 
-            {template.description && (
-              <p className="text-[13px] text-text-muted mb-4 leading-relaxed">
-                {template.description}
-              </p>
-            )}
-
             {/* Items list */}
             <div className="flex items-baseline justify-between mb-2">
               <h3 className="text-[13px] font-bold text-text">
@@ -254,9 +248,6 @@ export default function TemplatePreviewModal({
                         {item.title}
                         {/* PR #70 — `Required` tag retired sitewide. */}
                       </p>
-                      {item.description && (
-                        <p className="text-[12px] text-text-light mt-0.5">{item.description}</p>
-                      )}
                       <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-light">
                         {item.category && <span>{item.category}</span>}
                         {item.category && item.default_due_offset_days != null && (
