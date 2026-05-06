@@ -147,7 +147,7 @@ export default function Sessions() {
         <button
           type="button"
           onClick={() => setShowBooking(true)}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold tracking-tight hover:brightness-105 transition-all shadow-[0_6px_14px_rgba(214,170,55,0.18)] focus-ring"
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
         >
           <Plus size={14} strokeWidth={2.4} />
           Book a Session
@@ -157,7 +157,7 @@ export default function Sessions() {
       <button
         type="button"
         onClick={() => openAddClientRef.current?.()}
-        className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold tracking-tight hover:brightness-105 transition-all shadow-[0_6px_14px_rgba(214,170,55,0.18)] focus-ring"
+        className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
       >
         <Plus size={14} strokeWidth={2.4} />
         Add Client

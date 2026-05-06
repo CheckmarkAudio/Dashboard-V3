@@ -563,7 +563,7 @@ export default function Layout() {
               <button
                 onClick={() => clockInMutation.mutate()}
                 disabled={clockInMutation.isPending || openShiftQuery.isLoading}
-                className="flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-b from-gold to-gold-muted text-black text-[13px] font-extrabold tracking-tight hover:brightness-105 transition-all shadow-[0_6px_14px_rgba(214,170,55,0.18)] focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 h-10 px-4 rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {clockInMutation.isPending ? (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />

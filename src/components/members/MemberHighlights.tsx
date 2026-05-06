@@ -27,10 +27,12 @@ import type { TeamMember } from '../../types'
 // pill rail rather than separate widgets.
 
 type SocialChannel = {
-  platform: 'instagram' | 'tiktok' | 'youtube'
+  platform: 'instagram' | 'tiktok' | 'youtube' | 'facebook'
   label: string
   href: string
-  /** Follower / subscriber count. Manual until APIs wire up. */
+  /** Follower / subscriber count. Manual until APIs wire up.
+   * Update the numbers here whenever the brand counts shift —
+   * each platform was last hand-checked 2026-05-06. */
   count: number
 }
 
@@ -39,19 +41,25 @@ const SOCIAL_CHANNELS: SocialChannel[] = [
     platform: 'instagram',
     label: 'Instagram',
     href: 'https://www.instagram.com/checkmark_audio',
-    count: 1240,
+    count: 502,
   },
   {
     platform: 'tiktok',
     label: 'TikTok',
     href: 'https://www.tiktok.com/@checkmarkaudio',
-    count: 560,
+    count: 28,
   },
   {
     platform: 'youtube',
     label: 'YouTube',
     href: 'https://www.youtube.com/@checkmarkAudio',
-    count: 95,
+    count: 8,
+  },
+  {
+    platform: 'facebook',
+    label: 'Facebook',
+    href: 'https://www.facebook.com/CheckmarkAudio/',
+    count: 75,
   },
 ]
 
@@ -91,9 +99,18 @@ function YoutubeGlyph({ size = 32 }: { size?: number }) {
   )
 }
 
+function FacebookGlyph({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z"/>
+    </svg>
+  )
+}
+
 function PlatformIcon({ platform, size = 32 }: { platform: SocialChannel['platform']; size?: number }) {
   if (platform === 'instagram') return <InstagramGlyph size={size} />
   if (platform === 'youtube') return <YoutubeGlyph size={size} />
+  if (platform === 'facebook') return <FacebookGlyph size={size} />
   return <TikTokGlyph size={size} />
 }
 
@@ -150,21 +167,23 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
       href={channel.href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex items-center gap-2.5 shrink-0 rounded-xl focus-ring transition-colors"
+      className="group inline-flex items-center gap-2.5 shrink-0 rounded-xl focus-ring"
       aria-label={`${channel.label} — ${formatCount(channel.count)} followers`}
       title={`${channel.label} — ${formatCount(channel.count)} followers`}
     >
-      {/* Solid icon body — inverse-color so it pops in both themes.
-          Uses explicit CSS-var arbitrary values because the
-          `bg-text` / `text-bg` Tailwind shortcuts collide with
-          2026-05-04 — flipped per user direction: tiles are GOLD by
-          default with dark glyphs (matches the fintech reference
-          where social/CTA accents are the bright yellow). Hover
-          deepens to gold-muted for a tactile cue. Previous default
-          was inverse (black tile, light glyph) which fought with
-          the light-mode wash + pulled visual weight away from the
-          actual page content. */}
-      <span className="flex w-10 h-10 items-center justify-center rounded-xl bg-gold text-black group-hover:bg-gold-muted transition-colors shrink-0">
+      {/* 2026-05-06 — translucent gold-tinted BUBBLE per user direction:
+          icons need to be encased in a bubble that's visible in both
+          light AND dark mode. Previous attempts:
+            • solid yellow tile → too loud, hard edges cut into text
+            • fully transparent → invisible against the page wash
+          This: bg-gold/15 + ring-gold/30 — soft yellow tint that
+          reads as a clickable bubble in BOTH themes (gold token is
+          bright yellow in light mode, marigold in dark mode; both
+          are visible at /15 + /30 against their respective bg).
+          Glyph stays `text-text` so it inherits the theme's body
+          color (black on light bubble, light on dark bubble). Hover
+          deepens the bubble + brightens the glyph for tactile cue. */}
+      <span className="flex w-10 h-10 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/30 text-text group-hover:bg-gold/25 group-hover:text-gold transition-colors shrink-0">
         <PlatformIcon platform={channel.platform} size={22} />
       </span>
       <span className="text-[22px] font-bold text-text group-hover:text-gold transition-colors tabular-nums whitespace-nowrap leading-none">
