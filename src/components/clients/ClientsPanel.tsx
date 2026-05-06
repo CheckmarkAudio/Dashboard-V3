@@ -183,7 +183,7 @@ export default function ClientsPanel({ registerAddClient }: ClientsPanelProps) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-white/5">
+                <tr className="border-b theme-divider">
                   <ClHeaderCell>Client</ClHeaderCell>
                   <ClHeaderCell>Email</ClHeaderCell>
                   <ClHeaderCell>Phone</ClHeaderCell>
@@ -200,14 +200,14 @@ export default function ClientsPanel({ registerAddClient }: ClientsPanelProps) {
                   return (
                     <tr
                       key={c.id}
-                      className={`border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors group ${
+                      className={`border-b theme-divider last:border-0 hover:bg-surface-hover transition-colors group ${
                         c.archived ? 'opacity-50' : ''
                       }`}
                     >
                       {/* Name + initial */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-surface-alt border-[2px] border-white/12 text-gold flex items-center justify-center text-[14px] font-bold shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-surface-alt border-[2px] border-border text-gold flex items-center justify-center text-[14px] font-bold shrink-0">
                             {initial}
                           </div>
                           <div className="min-w-0">
