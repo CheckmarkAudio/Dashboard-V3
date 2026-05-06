@@ -180,9 +180,11 @@ function MemberPill({ member }: { member: TeamMember }) {
  *   • reduced kerning between bubbles (gap dropped from 16px → 8px
  *     in the parent SocialStatsBar)
  *
- * Bubble bg stays the soft `bg-gold/15` + `ring-gold/30` — gives a
- * consistent Checkmark-gold container that reads in both light + dark
- * while the brand-colored glyph inside provides per-platform identity.
+ * Bubble bg uses `bg-surface` + `ring-border` (theme-aware) so the
+ * bubble looks like a small white "widget card" against the page
+ * wash — matches the widget surfaces beneath. Hover deepens the
+ * ring with a gold hint for tactile feedback. The brand-colored
+ * glyph inside provides per-platform identity.
  */
 function SocialStat({ channel }: { channel: SocialChannel }) {
   return (
@@ -194,7 +196,7 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
       aria-label={`${channel.label} — ${formatCount(channel.count)} followers`}
       title={`${channel.label} — ${formatCount(channel.count)} followers`}
     >
-      <span className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-gold/15 ring-1 ring-gold/30 group-hover:bg-gold/25 group-hover:ring-gold/50 transition-colors shrink-0 leading-none">
+      <span className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-surface ring-1 ring-border group-hover:ring-gold/40 group-hover:bg-surface-hover transition-colors shrink-0 leading-none">
         <span className={PLATFORM_COLOR[channel.platform]}>
           <PlatformIcon platform={channel.platform} size={18} />
         </span>
