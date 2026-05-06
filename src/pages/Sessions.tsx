@@ -218,7 +218,10 @@ export default function Sessions() {
                   // border-gold-muted (full-opacity darker gold) so the
                   // outline reads as a real "lined" button in light
                   // mode instead of blending into the gold/12 wash.
-                  className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border-2 border-gold-muted bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/20 hover:border-gold transition-all focus-ring"
+                  // Width matched to BookButton + QuickAssign + Book a
+                  // Session (248px = 4×w-14 + 3×gap-2) so the three
+                  // gold pills stack as a coherent button family.
+                  className="inline-flex items-center justify-center gap-2 h-10 px-4 w-[248px] rounded-2xl border-2 border-gold-muted bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/20 hover:border-gold transition-all focus-ring"
                   title="Edit or cancel existing bookings"
                 >
                   <Pencil size={14} strokeWidth={2.2} />
