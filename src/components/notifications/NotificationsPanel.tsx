@@ -196,6 +196,20 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   const channelUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
   const assignments = assignmentsQuery.data ?? []
   const assignmentUnread = assignments.filter((n) => !n.is_read).length
+
+  // Skin pass 2026-05-06 — "High Priority" filter. Currently aliased
+  // to "unread": for channels = `unread_count > 0`, for assignments =
+  // `!is_read`. When a real `priority` field gets added to either
+  // table, swap the predicate here. Filter UI is the toggle button
+  // in the panel header (next to "Mark all read"). Default OFF so
+  // the panel still shows the full list on first render.
+  const [highPriorityOnly, setHighPriorityOnly] = useState(false)
+  const visibleChannels = highPriorityOnly
+    ? channels.filter((c) => c.unread_count > 0)
+    : channels
+  const visibleAssignments = highPriorityOnly
+    ? assignments.filter((n) => !n.is_read)
+    : assignments
   const totalUnread = channelUnread + assignmentUnread
 
   const handleMarkAllRead = () => {
@@ -294,6 +308,23 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
       <div className="flex items-center justify-between mb-2 shrink-0 px-1">
         {eyebrow ?? <span />}
         <div className="flex items-center gap-1.5">
+          {/* Skin pass 2026-05-06 — High Priority filter. Toggles
+              `highPriorityOnly`; currently aliased to "unread only"
+              for both channels and assignments. The pill flips to a
+              rose-tinted active state when on. */}
+          <button
+            type="button"
+            onClick={() => setHighPriorityOnly((v) => !v)}
+            aria-pressed={highPriorityOnly}
+            title={highPriorityOnly ? 'Showing high-priority only — click to show all' : 'Show high-priority only'}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase ring-1 transition-colors focus-ring ${
+              highPriorityOnly
+                ? 'bg-rose-500/15 ring-rose-500/40 text-rose-400'
+                : 'bg-surface ring-border text-text-muted hover:text-rose-400 hover:ring-rose-500/40'
+            }`}
+          >
+            High Priority
+          </button>
           {totalUnread > 0 && (
             <button
               type="button"
@@ -333,7 +364,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             <AlertCircle size={16} className="shrink-0" />
             <span className="truncate">Could not load notifications</span>
           </div>
-        ) : channels.length === 0 ? (
+        ) : visibleChannels.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center px-4 py-6">
             <div className="icon-tile-gold w-10 h-10 mb-2">
               <MessageSquare size={18} className="text-gold" aria-hidden="true" />
@@ -358,7 +389,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
               </p>
             </div>
             <div className="divide-y divide-theme">
-            {channels.map((c) => {
+            {visibleChannels.map((c) => {
             const hasMessage = !!c.latest_id
             const unread = c.unread_count > 0
             const isExpanded = expandedChannelId === c.channel_id
@@ -578,7 +609,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
           </>
         )}
 
-        {assignments.length > 0 && (
+        {visibleAssignments.length > 0 && (
           <>
             {/* Skin pass — section header for ASSIGNMENTS gets its own
                 divider via border-t theme-divider + a soft surface-alt
@@ -591,7 +622,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
               </p>
             </div>
             <div className="divide-y divide-theme">
-            {assignments.map((n) => {
+            {visibleAssignments.map((n) => {
               const unread = !n.is_read
               const cat = categoryFor(n)
               return (
@@ -648,7 +679,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
           </>
         )}
 
-        {channels.length === 0 && assignments.length === 0 && !notifQuery.isLoading && !notifQuery.error && (
+        {visibleChannels.length === 0 && visibleAssignments.length === 0 && !notifQuery.isLoading && !notifQuery.error && (
           <div className="flex flex-col items-center justify-center text-center px-4 py-8 text-text-light">
             <Inbox size={20} className="mb-2" aria-hidden="true" />
             <p className="text-[12px]">All caught up.</p>
