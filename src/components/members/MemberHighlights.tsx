@@ -256,10 +256,10 @@ export default function MemberHighlights({ actions }: { actions?: ReactNode } = 
 
   // Skin pass 2026-05-06 — outer flex container so the bordered
   // member panel auto-sizes to its content (members), and the
-  // optional `actions` slot sits immediately to the right.
-  // `min-w-0` on the panel allows it to shrink (with internal
-  // overflow-x-auto handling many members) before crowding the
-  // actions off the row.
+  // optional `actions` slot is RIGHT-justified to the far edge
+  // of the row via `ml-auto`. `min-w-0` on the panel still allows
+  // it to shrink (with internal overflow-x-auto handling many
+  // members) before the actions get crowded off-row.
   return (
     <div className="flex items-center gap-3">
       <div className="rounded-xl border border-border bg-surface px-2 py-1.5 min-w-0">
@@ -269,7 +269,7 @@ export default function MemberHighlights({ actions }: { actions?: ReactNode } = 
           ))}
         </div>
       </div>
-      {actions && <div className="shrink-0">{actions}</div>}
+      {actions && <div className="shrink-0 ml-auto">{actions}</div>}
     </div>
   )
 }
