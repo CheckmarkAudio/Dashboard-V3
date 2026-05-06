@@ -728,14 +728,17 @@ body {
 
      Tailwind's `divide-y` adds the border-top-width to all-but-
      first row pseudo-children; this class supplies the color.
-     Dark mode: original `rgba(255,255,255,0.05)`; light mode:
-     `var(--color-border)` (#dedee5 — same hairline used by Forum
-     + Analytics). */
+     Dark mode: original `rgba(255,255,255,0.05)`. Light mode:
+     `var(--color-border-light)` (#ededef) — a step softer than
+     `--color-border` (#dedee5) so table rows feel like needle-
+     thin separators rather than full panel divisions. Use the
+     `theme-divider` (border-border) for major section boundaries
+     and `divide-theme` for the higher-density row lines. */
   .divide-theme > :not([hidden]) ~ :not([hidden]) {
     border-color: rgba(255, 255, 255, 0.05);
   }
   :root[data-theme='light'] .divide-theme > :not([hidden]) ~ :not([hidden]) {
-    border-color: var(--color-border);
+    border-color: var(--color-border-light);
   }
 
   /* Subtle ghost button — replaces the scattered
