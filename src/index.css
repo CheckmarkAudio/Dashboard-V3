@@ -223,15 +223,15 @@
      enough to lift the white cards softly above the grey body. */
   --color-bg:            #e8e8ec; /* light warm grey body            */
   --color-surface:       #ffffff; /* WHITE cards (flipped from rev1) */
-  /* Skin pass 2026-05-06 (rev3) — bumped `surface-alt` from `#f5f5f7`
-     (only ~3% darker than white) to `#ebebef` (~8% darker). This is
-     what `.widget-card` uses in light mode; the previous value was
-     so close to pure white that a nested `<ListPanel>` (which sits
-     on `--color-surface = #ffffff`) was visually indistinguishable
-     from the widget body. The new value gives the inner panel a
-     clear lift while still reading as "calm off-white" rather than
-     "visible grey card." */
-  --color-surface-alt:   #ebebef; /* off-white nest — clearer contrast */
+  /* Skin pass 2026-05-06 (rev4) — REVERTED back from #ebebef →
+     #f5f5f7 per user feedback "the grey on the widgets is a big
+     yikes." Widgets are now pure white again to match the chrome
+     used on Assign / Members / Analytics pages
+     (`bg-surface rounded-xl border border-border`). The nested
+     `.list-panel` pattern still reads as nested via its own
+     drop-shadow + visible `border-strong` hairline — color
+     contrast is no longer the lift cue. */
+  --color-surface-alt:   #f5f5f7; /* very subtle off-white nest      */
   --color-surface-hover: #f0f0f3; /* card hover (slightly off-white) */
   /* Light-mode `surface-lifted` = pure white. Same token resolves
      to the right "lifted card" color in both themes. */
@@ -574,14 +574,15 @@ body {
     overflow: hidden;
   }
   :root[data-theme='light'] .widget-card {
-    /* Skin pass 2026-05-06 (rev2) — widget body is now `surface-alt`
-       (subtle off-white), NOT pure white. This is what makes nested
-       `.list-panel` cards (which stay on pure `surface`) visibly pop
-       inside a widget frame. Without the dim, a list panel inside a
-       widget frame would be white-on-white = invisible boundary.
-       Mockup pattern: outer container is the slightly-creamy
-       `.system-preview`, inner panel is pure `var(--surface)`. */
-    background: var(--color-surface-alt);
+    /* Skin pass 2026-05-06 (rev4) — REVERTED back to pure
+       `--color-surface` (#ffffff) per user feedback "the grey on the
+       widgets is a big yikes — get it white and uniform with Assign,
+       Analytics, Members." Those admin pages use plain
+       `bg-surface rounded-xl border border-border`; widgets now
+       match. The nested `.list-panel` pattern still reads as nested
+       via its own drop-shadow + visible `border-strong` hairline —
+       see `.list-panel` below. */
+    background: var(--color-surface);
     border-color: var(--color-border);
     box-shadow: 0 8px 26px rgba(20, 20, 28, 0.06);
   }
