@@ -244,7 +244,17 @@
      panel dots) the mockup uses on the editorial surfaces. */
   --color-border:        #dedee5; /* soft grey — barely visible      */
   --color-border-light:  #ededef; /* even softer for dividers        */
-  --color-border-strong: #c9c9d3; /* visible hairline — controls/dots */
+  /* Skin pass 2026-05-06 (rev6) — bumped #c9c9d3 → #b4b4c0 per
+     user feedback "I cant even see the lines on the calendar."
+     Old value was ~21% darker than white — perceptually faint on
+     bright surfaces. New value is ~30% darker — still grey, not
+     black, but actually reads as a hairline at any zoom. This is
+     the canonical "visible divider line" tier; use it anywhere a
+     line MUST be perceptible (panel-inside-panel borders, row
+     dividers, the .list-panel__head separator). The softer
+     `--color-border` (#dedee5) stays for outer-card chrome where
+     subtlety is wanted. */
+  --color-border-strong: #b4b4c0; /* clearly visible hairline      */
   /* Text tiers — primary stays pure black; secondary + meta were
      previously pushed near-black (1c1c22 / 3f3f46) for maximum
      contrast, which made them collide visually with the title. The
@@ -631,12 +641,13 @@ body {
   /* Row-list — the "thin divider line between rows" pattern in the
      mockup's `.issue` blocks. Apply to the PARENT element that holds
      the row siblings; each row past the first picks up a hairline
-     top border. `--color-border-light` keeps the divider visibly
-     present without going heavy. Pairs naturally with row children
-     like `<div class="flex items-center px-3 py-3 ...">` — no need
-     for the row itself to declare a border. */
+     top border. Uses `--color-border-strong` (rev6) so the divider
+     actually reads on white surfaces — the prior `border-light`
+     was so faded users couldn't see the separation. Pairs naturally
+     with row children like `<div class="flex items-center px-3 py-3
+     ...">` — no need for the row itself to declare a border. */
   .row-list > * + * {
-    border-top: 1px solid var(--color-border-light);
+    border-top: 1px solid var(--color-border-strong);
   }
 
   /* -------- List-panel pattern --------
@@ -677,10 +688,18 @@ body {
     justify-content: space-between;
     gap: 0.875rem;
     padding: 0.875rem 1rem;
-    border-bottom: 1px solid var(--color-border);
+    /* rev6 — switched from --color-border to --color-border-strong
+       so the head/body separator line is actually visible against
+       white widgets (--color-border at #dedee5 was barely
+       perceptible). */
+    border-bottom: 1px solid var(--color-border-strong);
   }
   .list-panel__rows > * + * {
-    border-top: 1px solid var(--color-border-light);
+    /* rev6 — switched from --color-border-light to
+       --color-border-strong. Row dividers were rendering nearly
+       invisible (#ededef = ~7% darker than white) — now they read
+       as proper hairlines. */
+    border-top: 1px solid var(--color-border-strong);
   }
   .list-row {
     /* Three-column grid: icon (auto) · body (1fr) · right (auto).
