@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
@@ -221,7 +222,17 @@ export function SocialStatsBar() {
   )
 }
 
-export default function MemberHighlights() {
+/**
+ * MemberHighlights — the row of member pills (avatar + first name)
+ * that lives beneath the page title on Dashboard / Hub.
+ *
+ * Optional `actions` slot (added 2026-05-06) renders right-justified
+ * on the same row — used by Dashboard to put the Book a Session
+ * button beside the member pills. Empty member list + no actions =
+ * the strip stays out of the DOM (returns null) so we don't reserve
+ * a phantom row.
+ */
+export default function MemberHighlights({ actions }: { actions?: ReactNode } = {}) {
   const { data: members = [] } = useQuery({
     queryKey: teamMemberKeys.list(),
     queryFn: fetchTeamMembers,
@@ -229,16 +240,19 @@ export default function MemberHighlights() {
   })
 
   const active = members.filter((m) => (m.status ?? 'active') === 'active')
-  if (active.length === 0) return null
+  if (active.length === 0 && !actions) return null
 
   return (
     <div className="flex items-center gap-4">
-      {/* Members — scrolls horizontally if the team grows. */}
+      {/* Members — scrolls horizontally if the team grows. flex-1
+          so the actions slot stays right-justified even when the
+          member list is short or empty. */}
       <div className="flex gap-2 overflow-x-auto min-w-0 flex-1 pb-1 -mx-1 px-1 [scrollbar-width:thin]">
         {active.map((member) => (
           <MemberPill key={member.id} member={member} />
         ))}
       </div>
+      {actions && <div className="shrink-0">{actions}</div>}
     </div>
   )
 }

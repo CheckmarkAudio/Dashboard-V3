@@ -54,14 +54,9 @@ export default function Dashboard() {
         <PageHeader
           icon={LayoutDashboard}
           title="Overview"
-          actions={
-            <>
-              <SocialStatsBar />
-              <BookButton />
-            </>
-          }
+          actions={<SocialStatsBar />}
         />
-        <MemberHighlights />
+        <MemberHighlights actions={<BookButton />} />
         <WorkspacePanel
           role={appRole}
           userId={profile?.id ?? 'guest'}
