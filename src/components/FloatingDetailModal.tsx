@@ -162,12 +162,23 @@ export default function FloatingDetailModal({
         // never anchors off the visible viewport. dvh is supported on
         // every browser shipped after 2022; older browsers ignore it
         // and inherit no max-height (acceptable fallback).
-        className="relative w-full max-h-[90dvh] rounded-3xl border border-white/10 bg-gradient-to-b from-[rgba(22,24,31,0.98)] to-[rgba(15,17,22,0.98)] shadow-[0_22px_70px_rgba(0,0,0,0.55)] overflow-hidden flex flex-col outline-none focus:outline-none animate-slide-up"
+        //
+        // Skin pass 2026-05-06 — pulled the hand-rolled dark gradient
+        // chrome (`border border-white/10 bg-gradient-to-b
+        // from-[rgba(22,24,31,0.98)] to-[rgba(15,17,22,0.98)]
+        // shadow-[0_22px_70px_rgba(0,0,0,0.55)]`) into the shared
+        // `.modal-panel` class so the modal renders as a white card
+        // with a soft border in light mode while preserving the
+        // exact dark-mode appearance. Header/footer dividers also
+        // moved to `.theme-divider` for the same reason. Close
+        // button hover swapped to `hover:bg-surface-hover` (token-
+        // backed). Per docs/light-dark-theme-handoff.md.
+        className="relative w-full max-h-[90dvh] rounded-3xl modal-panel overflow-hidden flex flex-col outline-none focus:outline-none animate-slide-up"
         style={{ maxWidth: typeof maxWidth === 'number' ? `${maxWidth}px` : maxWidth }}
       >
         {/* Header */}
         {(header || title || eyebrow) && (
-          <div className="px-6 pt-6 pb-4 border-b border-white/5 flex items-start justify-between gap-4 shrink-0">
+          <div className="px-6 pt-6 pb-4 border-b theme-divider flex items-start justify-between gap-4 shrink-0">
             <div className="min-w-0">
               {header ?? (
                 <>
@@ -187,7 +198,7 @@ export default function FloatingDetailModal({
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 p-2 rounded-lg text-text-light hover:text-gold hover:bg-white/[0.05] transition-colors focus-ring"
+              className="shrink-0 p-2 rounded-lg text-text-light hover:text-gold hover:bg-surface-hover transition-colors focus-ring"
               aria-label="Close"
             >
               <X size={16} aria-hidden="true" />
@@ -200,7 +211,7 @@ export default function FloatingDetailModal({
 
         {/* Optional footer */}
         {footer && (
-          <div className="px-6 py-4 border-t border-white/5 shrink-0">{footer}</div>
+          <div className="px-6 py-4 border-t theme-divider shrink-0">{footer}</div>
         )}
       </div>
     </div>

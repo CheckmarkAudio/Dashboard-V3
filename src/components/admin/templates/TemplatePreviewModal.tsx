@@ -213,7 +213,7 @@ export default function TemplatePreviewModal({
                 </span>
               )}
               {isArchived && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/[0.05] text-text-light text-[10px] font-bold uppercase tracking-wider">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-alt text-text-light text-[10px] font-bold uppercase tracking-wider">
                   Archived
                 </span>
               )}
