@@ -37,15 +37,20 @@ export default function AdminHub() {
   return (
     <AdminOverviewProvider>
       <div className="max-w-[1440px] mx-auto space-y-3 animate-fade-in">
+        {/* Skin pass 2026-05-06 — SocialStatsBar moved DOWN to the
+            member-row actions slot (mirrors the Overview swap).
+            PageHeader actions slot left empty on Hub since admin
+            doesn't surface a member-facing CTA like Book a Session.
+            If a Hub-level CTA gets added later, drop it into
+            `actions={...}` here. */}
         <PageHeader
           icon={UsersRound}
           title="Dashboard"
-          actions={<SocialStatsBar />}
         />
         {/* Lean 7 (PR #78) — instagram-story-style member bubbles
             above the widget grid, mirroring the member Overview
             pattern from PR #61. Same component, same query cache. */}
-        <MemberHighlights />
+        <MemberHighlights actions={<SocialStatsBar />} />
         <WorkspacePanel
           role={appRole}
           userId={profile?.id ?? 'guest'}

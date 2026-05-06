@@ -50,16 +50,17 @@ export default function Dashboard() {
   return (
     <div className="max-w-[1440px] mx-auto animate-fade-in space-y-3">
       <MemberOverviewProvider>
+        {/* Skin pass 2026-05-06 — swapped: +Book a Session moved
+            UP to the page-header actions (top-right, beside the
+            "Overview" title); SocialStatsBar moved DOWN to the
+            member-row actions (right-justified next to the member
+            panel). Per user direction. */}
         <PageHeader
           icon={LayoutDashboard}
           title="Overview"
-          actions={<SocialStatsBar />}
+          actions={<BookButton />}
         />
-        {/* Book a Session lives to the right of the member panel via
-            MemberHighlights' `actions` slot. The panel auto-shrinks to
-            fit just the member names, freeing the rest of the row for
-            the gold CTA. */}
-        <MemberHighlights actions={<BookButton />} />
+        <MemberHighlights actions={<SocialStatsBar />} />
         <WorkspacePanel
           role={appRole}
           userId={profile?.id ?? 'guest'}
