@@ -1,12 +1,16 @@
-import { useState, type ChangeEvent } from 'react'
+import { useEffect, useState, type ChangeEvent } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useQuickKeys } from '../../hooks/useQuickKeys'
 import AccountAccessPanel from '../../components/admin/AccountAccessPanel'
 import WidgetBank from '../../components/admin/WidgetBank'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
+import { fetchSocialSettings, socialSettingsKeys, updateSocialSettings } from '../../lib/queries/socialSettings'
+import { DEFAULT_SOCIAL_CHANNELS, type SocialChannelSetting } from '../../lib/socialChannels'
+import { SocialIconTile } from '../../components/social/SocialIcon'
 import {
-  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid,
+  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid, Share2,
 } from 'lucide-react'
 
 /**
@@ -19,6 +23,7 @@ type SectionKey =
   | 'widgets'
   | 'theme'
   | 'branding'
+  | 'social'
   | 'quick-keys'
   | 'organization'
   | 'notifications'
@@ -31,6 +36,7 @@ const SECTIONS: Section[] = [
   { key: 'widgets',        icon: LayoutGrid,  title: 'Widgets',        subtitle: 'Toggle widgets on Overview + Hub' },
   { key: 'theme',          icon: Sun,         title: 'Theme',          subtitle: 'Colors and appearance' },
   { key: 'branding',       icon: ImageIcon,   title: 'Branding',       subtitle: 'Logos and header' },
+  { key: 'social',         icon: Share2,      title: 'Social Links',   subtitle: 'Public links and counts' },
   { key: 'quick-keys',     icon: Keyboard,    title: 'Quick Keys',     subtitle: 'Keyboard shortcuts' },
   { key: 'organization',   icon: Globe,       title: 'Organization',   subtitle: 'Name and branding' },
   { key: 'notifications',  icon: Bell,        title: 'Notifications',  subtitle: 'Alerts and preferences' },
@@ -68,6 +74,7 @@ function KeyCapInput({
 export default function AdminSettings() {
   useDocumentTitle('Settings - Checkmark Workspace')
   const { profile } = useAuth()
+  const queryClient = useQueryClient()
   const [activeSection, setActiveSection] = useState<SectionKey>('account-access')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -90,16 +97,50 @@ export default function AdminSettings() {
   const [headerOpacity, setHeaderOpacity] = useState(100)
   const [headerFit, setHeaderFit] = useState<'original' | 'cover' | 'contain'>('original')
 
+  const socialQuery = useQuery({
+    queryKey: socialSettingsKeys.all,
+    queryFn: fetchSocialSettings,
+    staleTime: 60_000,
+  })
+  const [socialSettings, setSocialSettings] = useState<SocialChannelSetting[]>(DEFAULT_SOCIAL_CHANNELS)
+  useEffect(() => {
+    if (socialQuery.data) setSocialSettings(socialQuery.data)
+  }, [socialQuery.data])
+  const socialMutation = useMutation({
+    mutationFn: updateSocialSettings,
+    onSuccess: (next) => {
+      setSocialSettings(next)
+      queryClient.setQueryData(socialSettingsKeys.all, next)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    },
+  })
+
   // Quick keys
   const { actions, bindings, setBinding, resetDefaults } = useQuickKeys()
 
   const handleSave = async () => {
+    if (activeSection === 'social') {
+      socialMutation.mutate(socialSettings)
+      return
+    }
     setSaving(true)
     // Settings would be persisted to a settings table in Supabase
     await new Promise(r => setTimeout(r, 500))
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
+  }
+
+  const updateSocialDraft = (
+    platform: SocialChannelSetting['platform'],
+    patch: Partial<Pick<SocialChannelSetting, 'url' | 'follower_count'>>,
+  ) => {
+    setSocialSettings((prev) =>
+      prev.map((channel) =>
+        channel.platform === platform ? { ...channel, ...patch } : channel,
+      ),
+    )
   }
 
   const handleHeaderImageChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -315,6 +356,82 @@ export default function AdminSettings() {
             </div>
           )}
 
+          {activeSection === 'social' && (
+            <div className="space-y-5">
+              <header>
+                <h2 className="text-lg font-bold">Social Links</h2>
+                <p className="text-[13px] text-text-muted mt-1">
+                  These links and count snapshots power the top bar and member highlights.
+                </p>
+              </header>
+
+              {socialQuery.isLoading ? (
+                <div className="py-8 flex items-center justify-center text-text-light">
+                  <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {socialSettings.map((channel) => (
+                    <div
+                      key={channel.platform}
+                      className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_160px] items-end p-3 rounded-lg border border-border bg-surface-alt"
+                    >
+                      <div className="flex items-center gap-3 min-w-[140px]">
+                        <SocialIconTile platform={channel.platform} size={42} iconSize={22} />
+                        <div>
+                          <p className="text-sm font-bold text-text">{channel.label}</p>
+                          <p className="text-[11px] text-text-muted">Public profile</p>
+                        </div>
+                      </div>
+                      <div>
+                        <label
+                          htmlFor={`admin-settings-social-${channel.platform}-url`}
+                          className="block text-xs font-semibold text-text-muted uppercase tracking-wide mb-1.5"
+                        >
+                          URL
+                        </label>
+                        <input
+                          id={`admin-settings-social-${channel.platform}-url`}
+                          type="url"
+                          value={channel.url}
+                          onChange={(e) => updateSocialDraft(channel.platform, { url: e.target.value })}
+                          placeholder="https://..."
+                          className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor={`admin-settings-social-${channel.platform}-count`}
+                          className="block text-xs font-semibold text-text-muted uppercase tracking-wide mb-1.5"
+                        >
+                          Followers
+                        </label>
+                        <input
+                          id={`admin-settings-social-${channel.platform}-count`}
+                          type="number"
+                          min={0}
+                          value={channel.follower_count}
+                          onChange={(e) =>
+                            updateSocialDraft(channel.platform, {
+                              follower_count: Math.max(0, Number(e.target.value) || 0),
+                            })
+                          }
+                          className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-sm tabular-nums"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {socialMutation.error && (
+                <p className="text-sm text-rose-400" role="alert">
+                  {(socialMutation.error as Error).message}
+                </p>
+              )}
+            </div>
+          )}
+
           {activeSection === 'organization' && (
             <div className="space-y-5">
               <header>
@@ -426,10 +543,10 @@ export default function AdminSettings() {
           )}
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || socialMutation.isPending}
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm disabled:opacity-50"
           >
-            {saving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
+            {saving || socialMutation.isPending ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
             Save Settings
           </button>
         </div>
