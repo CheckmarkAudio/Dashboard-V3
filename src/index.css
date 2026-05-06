@@ -600,11 +600,24 @@ body {
      Matches the v1 Workspace-UI-Draft mockup: soft gradient fill,
      hairline white border, tall shadow, 28px radius. The shell is
      max-width'd so on wide monitors the app reads as a contained
-     surface rather than edge-to-edge chrome. */
+     surface rather than edge-to-edge chrome.
+
+     Dark-mode background (2026-05-06) — purple → yellow → black
+     gradient per user direction "we need to put a nice gradient on
+     the page behind the widgets, lets do purple yellow black
+     gradient." Two radials (purple top-left, yellow bottom-right)
+     ride over a charcoal linear base. Alphas at ~22% so the wash
+     reads BEHIND the widget grid without overpowering the cards
+     (widgets have their own opaque dark surface so they sit cleanly
+     on top of the wash). The dark-mode lock is being temporarily
+     relaxed for this gradient change at the user's explicit request. */
   .dashboard-shell {
     max-width: 1440px;
     margin: 0 auto;
-    background: linear-gradient(180deg, rgba(18, 20, 27, 0.94), rgba(10, 11, 15, 0.94));
+    background:
+      radial-gradient(ellipse 75% 65% at 0% 0%,        rgba(139, 92, 246, 0.22), transparent 75%),
+      radial-gradient(ellipse 75% 65% at 100% 100%,    rgba(201, 168, 76, 0.22), transparent 75%),
+      linear-gradient(180deg, #111118 0%, #0b0b10 70%);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 28px;
     box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
