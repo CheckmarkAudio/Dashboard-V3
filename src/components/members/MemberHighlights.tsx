@@ -27,10 +27,12 @@ import type { TeamMember } from '../../types'
 // pill rail rather than separate widgets.
 
 type SocialChannel = {
-  platform: 'instagram' | 'tiktok' | 'youtube'
+  platform: 'instagram' | 'tiktok' | 'youtube' | 'facebook'
   label: string
   href: string
-  /** Follower / subscriber count. Manual until APIs wire up. */
+  /** Follower / subscriber count. Manual until APIs wire up.
+   * Update the numbers here whenever the brand counts shift —
+   * each platform was last hand-checked 2026-05-06. */
   count: number
 }
 
@@ -39,19 +41,25 @@ const SOCIAL_CHANNELS: SocialChannel[] = [
     platform: 'instagram',
     label: 'Instagram',
     href: 'https://www.instagram.com/checkmark_audio',
-    count: 1240,
+    count: 502,
   },
   {
     platform: 'tiktok',
     label: 'TikTok',
     href: 'https://www.tiktok.com/@checkmarkaudio',
-    count: 560,
+    count: 28,
   },
   {
     platform: 'youtube',
     label: 'YouTube',
     href: 'https://www.youtube.com/@checkmarkAudio',
-    count: 95,
+    count: 8,
+  },
+  {
+    platform: 'facebook',
+    label: 'Facebook',
+    href: 'https://www.facebook.com/CheckmarkAudio/',
+    count: 75,
   },
 ]
 
@@ -91,9 +99,18 @@ function YoutubeGlyph({ size = 32 }: { size?: number }) {
   )
 }
 
+function FacebookGlyph({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z"/>
+    </svg>
+  )
+}
+
 function PlatformIcon({ platform, size = 32 }: { platform: SocialChannel['platform']; size?: number }) {
   if (platform === 'instagram') return <InstagramGlyph size={size} />
   if (platform === 'youtube') return <YoutubeGlyph size={size} />
+  if (platform === 'facebook') return <FacebookGlyph size={size} />
   return <TikTokGlyph size={size} />
 }
 
