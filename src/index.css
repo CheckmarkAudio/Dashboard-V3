@@ -368,13 +368,31 @@ body {
 }
 
 :root[data-theme='light'] body {
-  /* Lean 2 rev3 (PR #79 follow-up) — flat warm-cream body to match
-     the Replit reference. No radial tint: the warm cream + grey-on-
-     cream card contrast + black ink borders do all the work; adding
-     a coloured tint would muddy the editorial look. The dark theme
-     keeps its gold + violet gradient — that's atmospheric depth,
-     not chrome character. */
-  background: var(--color-bg);
+  /* Light-mode revamp 2026-05-04 (rev3) — soft fintech-style wash.
+     User reference: clean Apple-tone fintech UI with a multi-tonal
+     background (warm cream/peach top-left → near-white center →
+     light cool grey bottom-right). White cards float on top of this
+     wash with a subtle shadow.
+
+     Implementation: layered radial gradients on top of a neutral
+     base so cards (`bg-surface = #ffffff`) stay pure white and
+     un-tinted. Tints kept VERY subtle (<14% alpha) so the wash
+     feels like ambient sunlight rather than a coloured background.
+
+     Base: `--color-bg` (#e8e8ec light grey) — what shows through
+     when the wash fades to transparent.
+
+     Stops:
+       • Top-left:     warm cream/peach `rgba(255, 224, 168, 0.45)`
+                       transparent by 36% — the "sunlight" patch
+       • Bottom-right: cool grey `rgba(208, 211, 219, 0.55)`
+                       transparent by 38% — the "shaded" patch
+     Both fade into the neutral base by mid-canvas, leaving a
+     near-white center that feels softly lit. */
+  background:
+    radial-gradient(circle at top left,     rgba(255, 224, 168, 0.45), transparent 36%),
+    radial-gradient(circle at bottom right, rgba(208, 211, 219, 0.55), transparent 38%),
+    var(--color-bg);
   color-scheme: light;
 }
 
@@ -503,10 +521,12 @@ body {
   :root[data-theme='light'] .widget-card {
     background: var(--color-surface);
     border-color: var(--color-border);
-    /* Slightly bumped shadow (from 0.05 → 0.08 alpha) so cards still
-       lift off the body now that the border is soft grey instead of
-       black ink. The shadow does most of the visual separation work. */
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    /* Light-mode rev3 — bumped to a softer falloff with bigger
+       spread so white cards float convincingly above the warm
+       wash background (matches the fintech reference's lifted
+       credit-card feel). Border stays barely visible — shadow is
+       what does the visual separation now. */
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   }
 
   /* -------- Semantic typography scale --------
