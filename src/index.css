@@ -28,9 +28,23 @@
   --color-surface-hover: #2e2e36;
   --color-border: #34343d;
   --color-border-light: #4d4d57;
+  /* `border-strong` is the more-visible divider — used for segmented
+     control rails, decorative dots, and any spot that needs a hairline
+     to actually read against `surface`. Dark-mode value sits one step
+     above `border` so it's distinguishable without being heavy. The
+     light-mode override is set in the `[data-theme='light']` block. */
+  --color-border-strong: #4d4d57;
   --color-text: #e2e2ea;
   --color-text-muted: #bcbcc6;
   --color-text-light: #7e7e88;
+  /* `ink` is the near-black tile used for icon chips, brand marks,
+     and avatar backgrounds — the "dark/black icon tile with gold
+     icon" pattern from the UI skin direction mockup
+     (docs/mockups/checkmark-ui-skin-direction.html). In dark mode it
+     resolves to a slightly-darker-than-surface charcoal so the tile
+     still has a visible edge against widget cards. Light mode sets it
+     to true near-black for the "black ink on white card" treatment. */
+  --color-ink: #0a0a10;
 
   /* -------- Semantic status colors (for chips, badges, toasts, alerts) --------
      Each status has a foreground (-text) and a translucent surface (-bg) so
@@ -202,11 +216,28 @@
   --color-surface:       #ffffff; /* WHITE cards (flipped from rev1) */
   --color-surface-alt:   #f5f5f7; /* very subtle off-white nest      */
   --color-surface-hover: #f0f0f3; /* card hover (slightly off-white) */
-  --color-border:        #e5e5e7; /* soft grey — barely visible      */
+  /* Skin pass 2026-05-06 — bumped border one step darker (e5e5e7 →
+     dedee5) per the UI skin direction mockup. Still barely visible on
+     white cards, but reads cleanly when sibling panels sit edge-to-
+     edge. `border-strong` introduced as a parallel token for the
+     decorative-but-visible hairlines (segmented controls, mini-rail,
+     panel dots) the mockup uses on the editorial surfaces. */
+  --color-border:        #dedee5; /* soft grey — barely visible      */
   --color-border-light:  #ededef; /* even softer for dividers        */
+  --color-border-strong: #c9c9d3; /* visible hairline — controls/dots */
+  /* Text tiers — primary stays pure black; secondary + meta were
+     previously pushed near-black (1c1c22 / 3f3f46) for maximum
+     contrast, which made them collide visually with the title. The
+     mockup uses zinc-600 / zinc-500 for those tiers so descriptions,
+     metadata, and captions read as clearly secondary instead of
+     "title-with-slightly-less-weight". Primary copy is unaffected. */
   --color-text:          #000000; /* PURE black for max contrast     */
-  --color-text-muted:    #1c1c22; /* near-black for body text        */
-  --color-text-light:    #3f3f46; /* dark grey for meta lines        */
+  --color-text-muted:    #52525b; /* zinc-600 — secondary copy       */
+  --color-text-light:    #7a7a85; /* faint — meta lines, timestamps  */
+  /* Light-mode `ink`: true near-black for the icon-tile / avatar
+     treatment shown in the mockup. Pairs with `text-gold` content
+     for the "black tile, yellow icon" rhythm. */
+  --color-ink:           #121217;
 
   /* Light-mode rev5 (2026-05-04) — bright punchy yellow for
      backgrounds (buttons, social media tiles, accent badges,
@@ -372,11 +403,22 @@ body {
 }
 
 :root[data-theme='light'] body {
-  /* Light-mode rev4 — body returns to flat grey; the wash now lives
-     on `.dashboard-shell` (see below) so it shows up INSIDE the
-     rounded page area where content actually lives. The body grey
-     just frames the shell with the small page-gap padding. */
-  background: var(--color-bg);
+  /* Skin pass 2026-05-06 — restore a faint warm/cool wash on the
+     body so the area AROUND the shell (the page-gap padding) carries
+     identity instead of reading as flat dead grey. Mockup pattern
+     (docs/mockups/checkmark-ui-skin-direction.html):
+       radial-gradient(ellipse 72% 62% at 0% 0%, rgba(255,214,10,.22), transparent 72%),
+       radial-gradient(ellipse 72% 66% at 100% 100%, rgba(139,124,255,.14), transparent 70%),
+       var(--bg)
+     The shell still has its own (denser) wash on top — the two layers
+     compose so the wash continues out beyond the shell edges. Alphas
+     intentionally low so existing white cards sitting on the shell
+     don't pick up unintended tint through the layers. */
+  background:
+    radial-gradient(ellipse 72% 62% at 0% 0%,     rgba(255, 214, 10, 0.18), transparent 72%),
+    radial-gradient(ellipse 72% 66% at 100% 100%, rgba(139, 124, 255, 0.12), transparent 70%),
+    var(--color-bg);
+  background-attachment: fixed;
   color-scheme: light;
 }
 
@@ -489,7 +531,11 @@ body {
       var(--color-bg);
     background-attachment: fixed;
     border-color: var(--color-border);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    /* Skin pass 2026-05-06 — deeper, richer ground shadow per mockup
+       (`box-shadow: 0 18px 70px rgba(20,20,28,.13)`). The shell now
+       reads as a lifted product surface against the wash body
+       instead of a flat grey card on a flat grey body. */
+    box-shadow: 0 18px 70px rgba(20, 20, 28, 0.13);
   }
   @media (max-width: 640px) {
     .dashboard-shell {
@@ -510,12 +556,11 @@ body {
   :root[data-theme='light'] .widget-card {
     background: var(--color-surface);
     border-color: var(--color-border);
-    /* Light-mode rev3 — bumped to a softer falloff with bigger
-       spread so white cards float convincingly above the warm
-       wash background (matches the fintech reference's lifted
-       credit-card feel). Border stays barely visible — shadow is
-       what does the visual separation now. */
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    /* Skin pass 2026-05-06 — slightly bigger Y-offset + spread
+       (matches the mockup `box-shadow: 0 8px 26px rgba(20,20,28,.06)`).
+       Same alpha as before so the cards don't get heavier — they just
+       sit a hair more off the wash. Border stays barely visible. */
+    box-shadow: 0 8px 26px rgba(20, 20, 28, 0.06);
   }
 
   /* -------- Semantic typography scale --------
