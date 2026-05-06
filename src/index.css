@@ -718,6 +718,26 @@ body {
     border-color: var(--color-border);
   }
 
+  /* Theme-aware `divide-y` color — pair with Tailwind's `divide-y`
+     to get hairline dividers between table rows / list items that
+     read in BOTH themes. Replaces `divide-white/5` (dark-tuned;
+     invisible in light over white surfaces).
+
+     Caller writes:
+       <table className="divide-y divide-theme">
+
+     Tailwind's `divide-y` adds the border-top-width to all-but-
+     first row pseudo-children; this class supplies the color.
+     Dark mode: original `rgba(255,255,255,0.05)`; light mode:
+     `var(--color-border)` (#dedee5 — same hairline used by Forum
+     + Analytics). */
+  .divide-theme > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgba(255, 255, 255, 0.05);
+  }
+  :root[data-theme='light'] .divide-theme > :not([hidden]) ~ :not([hidden]) {
+    border-color: var(--color-border);
+  }
+
   /* Subtle ghost button — replaces the scattered
      `bg-white/[0.04] text-text-light hover:text-text hover:bg-white/[0.08]`
      pattern that's repeated across modal footers (Cancel buttons,

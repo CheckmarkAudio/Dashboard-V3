@@ -217,7 +217,7 @@ export default function Sessions() {
                   className={`inline-flex items-center h-9 px-3.5 rounded-[22px] text-[13px] font-semibold transition-all focus-ring whitespace-nowrap ${
                     active
                       ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-                      : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
+                      : 'text-text-muted hover:text-text hover:bg-surface-hover'
                   }`}
                 >
                   {cat}
@@ -230,7 +230,7 @@ export default function Sessions() {
 
       {view === 'bookings' ? (
         <div className="widget-card overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between gap-3 flex-wrap">
+          <div className="px-5 py-4 border-b theme-divider flex items-center justify-between gap-3 flex-wrap">
             <h2 className="text-section text-text">Current bookings</h2>
             <span className="text-caption">
               {loading ? '…' : `${filtered.length} result${filtered.length === 1 ? '' : 's'}`}
@@ -250,14 +250,14 @@ export default function Sessions() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/5">
+                  <tr className="border-b theme-divider">
                     <th className="px-5 py-3 text-left text-label">Client</th>
                     <th className="px-5 py-3 text-left text-label">Date</th>
                     <th className="px-5 py-3 text-left text-label">Engineer</th>
                     <th className="px-5 py-3 text-left text-label">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-theme">
                   {filtered.map((booking) => (
                     <tr
                       key={booking.id}
@@ -265,7 +265,7 @@ export default function Sessions() {
                         if (node) rowRefs.current.set(booking.id, node)
                         else rowRefs.current.delete(booking.id)
                       }}
-                      className={`hover:bg-white/[0.03] transition-colors ${
+                      className={`hover:bg-surface-hover transition-colors ${
                         highlightedId === booking.id
                           ? 'ring-2 ring-gold/80 ring-inset bg-gold/5'
                           : ''
@@ -331,7 +331,7 @@ function ViewToggleButton({
       className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[22px] text-[13px] font-semibold transition-all focus-ring whitespace-nowrap ${
         active
           ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-          : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
+          : 'text-text-muted hover:text-text hover:bg-surface-hover'
       }`}
     >
       {icon}
