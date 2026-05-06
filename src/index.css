@@ -661,10 +661,19 @@ body {
   }
 
   /* Widget card — per-widget surface used inside DashboardWidgetFrame.
-     Subtle top-to-bottom gradient, 22px radius, 1px hairline border,
-     tiny inner highlight line. Matches the mockup's widget cards. */
+     22px radius, 1px hairline border, tiny inner highlight line.
+     Matches the mockup's widget cards.
+     2026-05-06 (rev9) — dark-mode background was a hardcoded
+     rgba(22,24,31)→rgba(16,17,23) gradient (both darker than
+     --color-surface = #1e1e25). After the dashboard-shell got the
+     purple/yellow/black gradient, widgets read as near-pitch-black
+     against the wash and lost contrast vs. the Assign / Members page
+     chrome (which uses bg-surface directly). Switched to a subtle
+     two-stop within the lifted-surface range so widgets read as the
+     SAME dark grey as the rest of the app's flat surfaces — slight
+     gradient preserved for depth. */
   .widget-card {
-    background: linear-gradient(180deg, rgba(22, 24, 31, 0.95), rgba(16, 17, 23, 0.94));
+    background: linear-gradient(180deg, var(--color-surface-alt), var(--color-surface));
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 22px;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
@@ -702,7 +711,11 @@ body {
          `ConfirmModal`, and `SelfReportModal` already render
          correctly in light. */
   .modal-panel {
-    background: linear-gradient(180deg, rgba(22, 24, 31, 0.98), rgba(15, 17, 22, 0.98));
+    /* 2026-05-06 (rev9) — same fix as .widget-card. Was a hardcoded
+       darker-than-surface gradient; now follows the surface tokens
+       so floating modals read against the dashboard wash with the
+       same dark grey as the rest of the app's flat surfaces. */
+    background: linear-gradient(180deg, var(--color-surface-alt), var(--color-surface));
     border: 1px solid rgba(255, 255, 255, 0.10);
     box-shadow: 0 22px 70px rgba(0, 0, 0, 0.55);
   }
