@@ -65,25 +65,14 @@ export default function PendingTaskRequestsWidget() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between gap-3 pb-2.5 mb-2 border-b theme-divider shrink-0">
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.06em] text-text-light">
-            APPROVALS
-            {requests.length > 0 && (
-              <span className="ml-2 text-amber-300">· {requests.length} pending</span>
-            )}
-          </p>
-          <h2 className="text-[15px] font-bold tracking-tight text-text">Task requests</h2>
-        </div>
-      </div>
-
-      {/* Skin pass 2026-05-06 — wrap the scrollable request list in
-          the shared `.inset-panel` chrome (matches the booking-table
-          nested panel pattern from Sessions.tsx). The scrollable
-          container is INSIDE the panel so `overflow: hidden` on the
-          panel doesn't clip the scroll, and `overflow-y-auto` on
-          the inner div keeps row scrolling working as before. The
-          per-row `space-y-1.5` rhythm is preserved. */}
+      {/* Skin pass 2026-05-06 — inner header dropped (was: eyebrow
+          "APPROVALS · X pending" + h2 "Task requests" + divider).
+          The DashboardWidgetFrame already renders "Task requests" as
+          the widget title so the inner h2 was redundant. The pending
+          count was nice-to-have but the user can read it from the
+          list itself; if it needs to come back, surface it via the
+          widget frame title (registry) or as a small chip in the
+          right-action slot of the frame. */}
       <div className="flex-1 min-h-0 inset-panel">
         <div className="h-full overflow-y-auto p-2 space-y-1.5">
         {queue.isLoading ? (
