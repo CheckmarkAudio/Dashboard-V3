@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { APP_ROUTES } from '../../app/routes'
 import { useAdminOverviewContext } from '../../contexts/AdminOverviewContext'
+import { Badge, ListPanel, ListRow } from '../ui'
 
 function formatTimeLabel(value?: string | null): string {
   if (!value) return 'All day'
@@ -174,24 +175,36 @@ export function AdminScheduleWidget() {
     )
   }
 
+  // Skin pass 2026-05-06 (rev2) — full nested-panel pattern: a pure-
+  // white `<ListPanel>` with its own bold title + subtitle, sitting
+  // inside the slightly-dimmed widget frame. The frame's own title
+  // is suppressed via `hideTitle: true` in the registry so we don't
+  // duplicate the heading. Each event is a `<ListRow>` with the
+  // calendar icon on the left and the time as a neutral pill on the
+  // right — needle-thin dividers between rows.
   return (
-    <div className="space-y-2">
+    <ListPanel title="Today's sessions">
       {events.map((event) => (
-        <div key={event.id} className="rounded-xl border border-border/70 bg-surface-alt/40 px-3 py-2.5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-text">{event.title}</p>
-              <p className="mt-1 text-[11px] text-text-light">
-                {[event.member_name, event.subtitle].filter(Boolean).join(' · ') || 'Studio event'}
-              </p>
-            </div>
-            <span className="text-xs font-semibold text-gold shrink-0">
-              {formatTimeLabel(event.start_time)}
+        <ListRow
+          key={event.id}
+          icon={
+            <span className="icon-tile-gold w-8 h-8">
+              <CalendarDays size={14} className="text-gold" aria-hidden="true" />
             </span>
-          </div>
-        </div>
+          }
+          title={event.title}
+          meta={
+            [event.member_name, event.subtitle].filter(Boolean).join(' · ') ||
+            'Studio event'
+          }
+          right={
+            <Badge variant="neutral" size="sm">
+              {formatTimeLabel(event.start_time)}
+            </Badge>
+          }
+        />
       ))}
-    </div>
+    </ListPanel>
   )
 }
 
@@ -203,21 +216,26 @@ export function AdminShortcutsWidget() {
     { to: APP_ROUTES.member.calendar, label: 'Calendar', icon: CalendarDays },
   ]
 
+  // Skin pass 2026-05-06 (rev2) — nested-panel pattern: pure-white
+  // `<ListPanel>` with its own title + subtitle, inside the dimmed
+  // widget frame (frame title suppressed via `hideTitle: true`).
+  // Each shortcut is a `<ListRow to={…}>` so `ListRow` renders a
+  // real `<Link>` with hover + focus.
   return (
-    <div className="space-y-2">
+    <ListPanel title="Quick links">
       {links.map(({ to, label, icon: Icon }) => (
-        <Link
+        <ListRow
           key={to}
           to={to}
-          className="flex items-center justify-between rounded-xl border border-border/70 bg-surface-alt/40 px-3 py-3 text-sm font-medium text-text transition-colors hover:border-gold/40 hover:text-gold"
-        >
-          <span className="flex items-center gap-2">
-            <Icon size={15} className="text-gold" />
-            {label}
-          </span>
-          <ArrowRight size={14} />
-        </Link>
+          icon={
+            <span className="icon-tile-gold w-8 h-8">
+              <Icon size={14} className="text-gold" aria-hidden="true" />
+            </span>
+          }
+          title={label}
+          right={<ArrowRight size={14} className="text-text-light" aria-hidden="true" />}
+        />
       ))}
-    </div>
+    </ListPanel>
   )
 }

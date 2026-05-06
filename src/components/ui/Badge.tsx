@@ -30,7 +30,11 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
  *   <Badge variant="stage-deliver" icon={<Package size={12} />}>Deliver</Badge>
  */
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
-  neutral:         'bg-surface-alt text-text-muted',
+  // Hairline border on neutral so the pill reads as a defined chip
+  // on white cards (matches the UI skin direction mockup `.tag`).
+  // Other variants stay borderless — their tinted bg already gives
+  // them a clear edge.
+  neutral:         'bg-surface-alt text-text-muted ring-1 ring-border',
   success:         'bg-[--color-status-success-bg] text-[--color-status-success-text]',
   warning:         'bg-[--color-status-warning-bg] text-[--color-status-warning-text]',
   danger:          'bg-[--color-status-danger-bg]  text-[--color-status-danger-text]',

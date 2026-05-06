@@ -26,11 +26,34 @@
   --color-surface: #1e1e25;
   --color-surface-alt: #26262d;
   --color-surface-hover: #2e2e36;
+  /* `surface-lifted` is the "card on top of another card" surface —
+     deliberately BRIGHTER than `surface` in BOTH themes so the same
+     token always means "this sits visually above its parent." Dark
+     mode lifts to a noticeably lighter charcoal (#2e2e36 — same hue
+     as `surface-hover`); light mode lifts to pure white. The
+     light-mode override is set in the `[data-theme='light']` block.
+     Used by `.list-panel` so a nested list-panel always reads as a
+     lifted card regardless of theme. */
+  --color-surface-lifted: #2e2e36;
   --color-border: #34343d;
   --color-border-light: #4d4d57;
+  /* `border-strong` is the more-visible divider — used for segmented
+     control rails, decorative dots, and any spot that needs a hairline
+     to actually read against `surface`. Dark-mode value sits one step
+     above `border` so it's distinguishable without being heavy. The
+     light-mode override is set in the `[data-theme='light']` block. */
+  --color-border-strong: #4d4d57;
   --color-text: #e2e2ea;
   --color-text-muted: #bcbcc6;
   --color-text-light: #7e7e88;
+  /* `ink` is the near-black tile used for icon chips, brand marks,
+     and avatar backgrounds — the "dark/black icon tile with gold
+     icon" pattern from the UI skin direction mockup
+     (docs/mockups/checkmark-ui-skin-direction.html). In dark mode it
+     resolves to a slightly-darker-than-surface charcoal so the tile
+     still has a visible edge against widget cards. Light mode sets it
+     to true near-black for the "black ink on white card" treatment. */
+  --color-ink: #0a0a10;
 
   /* -------- Semantic status colors (for chips, badges, toasts, alerts) --------
      Each status has a foreground (-text) and a translucent surface (-bg) so
@@ -200,13 +223,41 @@
      enough to lift the white cards softly above the grey body. */
   --color-bg:            #e8e8ec; /* light warm grey body            */
   --color-surface:       #ffffff; /* WHITE cards (flipped from rev1) */
-  --color-surface-alt:   #f5f5f7; /* very subtle off-white nest      */
+  /* Skin pass 2026-05-06 (rev3) — bumped `surface-alt` from `#f5f5f7`
+     (only ~3% darker than white) to `#ebebef` (~8% darker). This is
+     what `.widget-card` uses in light mode; the previous value was
+     so close to pure white that a nested `<ListPanel>` (which sits
+     on `--color-surface = #ffffff`) was visually indistinguishable
+     from the widget body. The new value gives the inner panel a
+     clear lift while still reading as "calm off-white" rather than
+     "visible grey card." */
+  --color-surface-alt:   #ebebef; /* off-white nest — clearer contrast */
   --color-surface-hover: #f0f0f3; /* card hover (slightly off-white) */
-  --color-border:        #e5e5e7; /* soft grey — barely visible      */
+  /* Light-mode `surface-lifted` = pure white. Same token resolves
+     to the right "lifted card" color in both themes. */
+  --color-surface-lifted: #ffffff;
+  /* Skin pass 2026-05-06 — bumped border one step darker (e5e5e7 →
+     dedee5) per the UI skin direction mockup. Still barely visible on
+     white cards, but reads cleanly when sibling panels sit edge-to-
+     edge. `border-strong` introduced as a parallel token for the
+     decorative-but-visible hairlines (segmented controls, mini-rail,
+     panel dots) the mockup uses on the editorial surfaces. */
+  --color-border:        #dedee5; /* soft grey — barely visible      */
   --color-border-light:  #ededef; /* even softer for dividers        */
+  --color-border-strong: #c9c9d3; /* visible hairline — controls/dots */
+  /* Text tiers — primary stays pure black; secondary + meta were
+     previously pushed near-black (1c1c22 / 3f3f46) for maximum
+     contrast, which made them collide visually with the title. The
+     mockup uses zinc-600 / zinc-500 for those tiers so descriptions,
+     metadata, and captions read as clearly secondary instead of
+     "title-with-slightly-less-weight". Primary copy is unaffected. */
   --color-text:          #000000; /* PURE black for max contrast     */
-  --color-text-muted:    #1c1c22; /* near-black for body text        */
-  --color-text-light:    #3f3f46; /* dark grey for meta lines        */
+  --color-text-muted:    #52525b; /* zinc-600 — secondary copy       */
+  --color-text-light:    #7a7a85; /* faint — meta lines, timestamps  */
+  /* Light-mode `ink`: true near-black for the icon-tile / avatar
+     treatment shown in the mockup. Pairs with `text-gold` content
+     for the "black tile, yellow icon" rhythm. */
+  --color-ink:           #121217;
 
   /* Light-mode rev5 (2026-05-04) — bright punchy yellow for
      backgrounds (buttons, social media tiles, accent badges,
@@ -372,11 +423,22 @@ body {
 }
 
 :root[data-theme='light'] body {
-  /* Light-mode rev4 — body returns to flat grey; the wash now lives
-     on `.dashboard-shell` (see below) so it shows up INSIDE the
-     rounded page area where content actually lives. The body grey
-     just frames the shell with the small page-gap padding. */
-  background: var(--color-bg);
+  /* Skin pass 2026-05-06 — restore a faint warm/cool wash on the
+     body so the area AROUND the shell (the page-gap padding) carries
+     identity instead of reading as flat dead grey. Mockup pattern
+     (docs/mockups/checkmark-ui-skin-direction.html):
+       radial-gradient(ellipse 72% 62% at 0% 0%, rgba(255,214,10,.22), transparent 72%),
+       radial-gradient(ellipse 72% 66% at 100% 100%, rgba(139,124,255,.14), transparent 70%),
+       var(--bg)
+     The shell still has its own (denser) wash on top — the two layers
+     compose so the wash continues out beyond the shell edges. Alphas
+     intentionally low so existing white cards sitting on the shell
+     don't pick up unintended tint through the layers. */
+  background:
+    radial-gradient(ellipse 72% 62% at 0% 0%,     rgba(255, 214, 10, 0.18), transparent 72%),
+    radial-gradient(ellipse 72% 66% at 100% 100%, rgba(139, 124, 255, 0.12), transparent 70%),
+    var(--color-bg);
+  background-attachment: fixed;
   color-scheme: light;
 }
 
@@ -489,7 +551,11 @@ body {
       var(--color-bg);
     background-attachment: fixed;
     border-color: var(--color-border);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    /* Skin pass 2026-05-06 — deeper, richer ground shadow per mockup
+       (`box-shadow: 0 18px 70px rgba(20,20,28,.13)`). The shell now
+       reads as a lifted product surface against the wash body
+       instead of a flat grey card on a flat grey body. */
+    box-shadow: 0 18px 70px rgba(20, 20, 28, 0.13);
   }
   @media (max-width: 640px) {
     .dashboard-shell {
@@ -508,14 +574,147 @@ body {
     overflow: hidden;
   }
   :root[data-theme='light'] .widget-card {
-    background: var(--color-surface);
+    /* Skin pass 2026-05-06 (rev2) — widget body is now `surface-alt`
+       (subtle off-white), NOT pure white. This is what makes nested
+       `.list-panel` cards (which stay on pure `surface`) visibly pop
+       inside a widget frame. Without the dim, a list panel inside a
+       widget frame would be white-on-white = invisible boundary.
+       Mockup pattern: outer container is the slightly-creamy
+       `.system-preview`, inner panel is pure `var(--surface)`. */
+    background: var(--color-surface-alt);
     border-color: var(--color-border);
-    /* Light-mode rev3 — bumped to a softer falloff with bigger
-       spread so white cards float convincingly above the warm
-       wash background (matches the fintech reference's lifted
-       credit-card feel). Border stays barely visible — shadow is
-       what does the visual separation now. */
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 8px 26px rgba(20, 20, 28, 0.06);
+  }
+
+  /* -------- Icon tiles & row divider lists --------
+     Three shared building blocks pulled out of the UI skin direction
+     mockup (docs/mockups/checkmark-ui-skin-direction.html). Anywhere
+     a widget needs a soft-gold icon chip, a black-on-gold avatar, or
+     a stack of rows separated by hairline dividers, reach for these
+     instead of re-rolling Tailwind. The CALLER still picks the size
+     (w-7 h-7 / w-8 h-8 / w-10 h-10 etc.) so the chip can match the
+     surrounding row density. */
+
+  /* Soft-gold icon chip — the "♪" "✓" "↻" treatment in the mockup.
+     Background is a translucent gold tint with a slightly stronger
+     amber ring; the icon glyph inside should still carry `text-gold`
+     so the existing light-mode `.text-gold → #7a510f` override
+     resolves it to the deep-amber the mockup uses. Setting the
+     background via `color-mix` keeps the chip in sync with the gold
+     token so any future palette tweak cascades automatically. */
+  .icon-tile-gold {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: color-mix(in srgb, var(--color-gold) 18%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-gold) 32%, transparent);
+    border-radius: 0.625rem; /* 10px — matches mockup */
+  }
+
+  /* Black-tile, gold-icon — for brand marks, avatars, and the
+     "check on dark tile" rhythm. Uses `--color-ink` so dark mode and
+     light mode each pick the intended near-black against their own
+     surfaces. Caller picks size + child icon color (typically
+     `text-gold`). */
+  .icon-tile-ink {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--color-ink);
+    color: var(--color-gold);
+    border-radius: 0.625rem;
+  }
+
+  /* Row-list — the "thin divider line between rows" pattern in the
+     mockup's `.issue` blocks. Apply to the PARENT element that holds
+     the row siblings; each row past the first picks up a hairline
+     top border. `--color-border-light` keeps the divider visibly
+     present without going heavy. Pairs naturally with row children
+     like `<div class="flex items-center px-3 py-3 ...">` — no need
+     for the row itself to declare a border. */
+  .row-list > * + * {
+    border-top: 1px solid var(--color-border-light);
+  }
+
+  /* -------- List-panel pattern --------
+     The "nested inset list panel" shown in the UI skin direction
+     mockup: a single bordered panel containing list rows separated
+     by needle-thin dividers — NOT cards inside cards. Three pieces:
+
+       .list-panel       — outer card (border, radius, soft shadow)
+       .list-panel__head — title row, divided from rows below
+       .list-panel__rows — divider container (handles row stacking)
+       .list-row         — single row (icon · body · right-slot grid)
+
+     Use the React wrappers in `src/components/ui/ListPanel.tsx` so
+     callers don't have to remember the markup. The classes are
+     exposed here so a one-off page can hand-roll the structure if
+     it needs custom row content. Inside a DashboardWidgetFrame the
+     widget already provides the outer card, so a widget body should
+     use just `<ListRows>` + `<ListRow>` (skip the outer .list-panel
+     to avoid card-in-card). */
+  .list-panel {
+    /* Skin pass 2026-05-06 (rev3) — clear "lifted card on top of
+       another card" treatment that works in BOTH themes:
+         • `surface-lifted` → pure white in light, lighter charcoal
+           in dark. ALWAYS brighter than its parent widget-card.
+         • `border-strong` → visibly present hairline (light: #c9c9d3,
+           dark: #4d4d57). Subtle in isolation, defined when sibling
+           panels touch.
+         • `box-shadow` 0 6px 20px @ 10% alpha → genuine drop shadow
+           that reads in both themes. The `inset 0 1px 0` top
+           highlight gives a soft "rim of light" especially useful
+           in dark mode where drop shadows alone don't lift a card
+           above a dark parent.
+       Total effect: the inner panel POPS off the widget body
+       regardless of background contrast. */
+    background: var(--color-surface-lifted);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 1.25rem; /* 20px — matches widget-card scale */
+    box-shadow:
+      0 6px 20px rgba(0, 0, 0, 0.10),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+  }
+  .list-panel__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.875rem;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .list-panel__rows > * + * {
+    border-top: 1px solid var(--color-border-light);
+  }
+  .list-row {
+    /* Three-column grid: icon (auto) · body (1fr) · right (auto).
+       `align-items: center` keeps the icon and pill vertically
+       centered with a two-line title/meta block. */
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.8125rem 1rem; /* 13px 16px — matches mockup .issue */
+    text-align: left;
+    background: transparent;
+    border: 0;
+    width: 100%;
+    /* `min-width: 0` on the body via the React component lets the
+       title truncate inside the 1fr column without overflowing. */
+  }
+  .list-row--interactive {
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+  }
+  .list-row--interactive:hover {
+    background: var(--color-surface-hover);
+  }
+  .list-row--interactive:focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: -2px;
   }
 
   /* -------- Semantic typography scale --------

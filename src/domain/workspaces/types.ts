@@ -176,6 +176,18 @@ export interface WorkspaceWidgetRegistration<
   accessVisibility: AccessVisibility
   dataScope: DataScope
   allowedRoles: AppRole[]
+  /**
+   * If true, the DashboardWidgetFrame renders without its bold
+   * title bar — corner controls (drag handle, expand, visibility)
+   * stay visible but the title text is suppressed. Use for widgets
+   * whose body provides its own title via `<ListPanel>`, so the
+   * inner panel's header is the single source of hierarchy and we
+   * avoid the "title within a title" duplication. The
+   * registration's `title` field is still required (used for
+   * accessibility labels on the drag/expand buttons + for the
+   * layout editor / widget bank picker).
+   */
+  hideTitle?: boolean
 }
 
 // Member widget: id must be a MemberWidgetId AND placements must target

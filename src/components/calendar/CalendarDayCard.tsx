@@ -257,7 +257,15 @@ export default function CalendarDayCard({
 
   return (
     <div
-      className={`bg-surface rounded-2xl border border-border overflow-hidden flex flex-col ${className}`}
+      // Skin pass 2026-05-06 — was hand-rolled `bg-surface rounded-2xl
+      // border border-border`. Now uses the shared `.list-panel`
+      // class so it picks up the lifted surface token + the real drop
+      // shadow + the visible border-strong hairline. Result: when this
+      // card sits inside a `DashboardWidgetFrame` (admin_today_calendar
+      // on Hub or today_calendar on Overview), the dimmed widget body
+      // shows around the brighter inner card with a clear shadow lift —
+      // matching the mockup's "single bordered panel" nesting pattern.
+      className={`list-panel flex flex-col ${className}`}
     >
       {/* ── Header with day label + nav ───────────────────────────── */}
       <div className="px-4 py-3 border-b border-border shrink-0">

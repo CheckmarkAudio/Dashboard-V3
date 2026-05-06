@@ -326,7 +326,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
           </div>
         ) : channels.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center px-4 py-6">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gold/10 ring-1 ring-gold/20 mb-2">
+            <div className="icon-tile-gold w-10 h-10 mb-2">
               <MessageSquare size={18} className="text-gold" aria-hidden="true" />
             </div>
             <p className="text-[14px] font-medium text-text">No channels yet</p>
