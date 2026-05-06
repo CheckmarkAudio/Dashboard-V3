@@ -49,7 +49,7 @@ export default function Dashboard() {
   const { profile, appRole } = useAuth()
 
   return (
-    <div className="max-w-[1440px] mx-auto animate-fade-in space-y-6">
+    <div className="max-w-[1440px] mx-auto animate-fade-in space-y-3">
       <MemberOverviewProvider>
         <PageHeader
           icon={LayoutDashboard}

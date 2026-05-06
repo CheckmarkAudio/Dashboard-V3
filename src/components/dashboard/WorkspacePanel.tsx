@@ -422,19 +422,11 @@ export default function WorkspacePanel({
         </Card>
       )}
 
-      {!showControls && (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={resetLayout}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold text-text-muted hover:text-text hover:bg-surface-alt/60 transition-colors"
-            title="Reset widgets to default layout"
-          >
-            <RotateCcw size={11} />
-            Reset layout
-          </button>
-        </div>
-      )}
+      {/* 2026-05-06 — standalone "Reset layout" link removed from
+          the no-controls variant (Dashboard + Hub) per user direction.
+          Reset functionality stays in code (resetLayout) and remains
+          surfaced via the controls Card for any consumer that opts
+          in via showControls={true}. */}
 
       <DndContext
         sensors={sensors}
