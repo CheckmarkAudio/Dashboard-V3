@@ -778,6 +778,35 @@ body {
     color: var(--color-text);
   }
 
+  /* Inset panel — the booking-style nested bordered container that
+     a widget body wraps its row/list content in. Mirrors the chrome
+     used by the booking table inside Sessions.tsx so widgets across
+     the site nest their data the same way:
+
+       <div className="widget-card">           ← outer chrome
+         <div className="...header...">...</div>
+         <div className="p-4 sm:p-5">          ← outer padding
+           <div className="inset-panel">       ← THIS class
+             {row list / table / channels / etc.}
+           </div>
+         </div>
+       </div>
+
+     `border-border` matches the outer widget-card border for
+     visual consistency; the padding around it (caller's
+     responsibility) creates the spacing that makes the nesting
+     read. `overflow: hidden` clips any inner row dividers at the
+     panel edge so dividers stop cleanly at the border.
+
+     Theme-aware via the `--color-border` token (handles light + dark
+     correctly without override here). Use with `divide-y
+     divide-theme` on a child for needle-thin row separators. */
+  .inset-panel {
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem; /* 12px — matches the booking nested panel */
+    overflow: hidden;
+  }
+
   /* Widget header divider — separates the title bar from the body
      inside `.widget-card` (rendered by DashboardWidgetFrame).
 

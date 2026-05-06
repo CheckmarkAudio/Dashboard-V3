@@ -65,7 +65,7 @@ export default function PendingTaskRequestsWidget() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between gap-3 pb-2.5 mb-2 border-b border-white/5 shrink-0">
+      <div className="flex items-center justify-between gap-3 pb-2.5 mb-2 border-b theme-divider shrink-0">
         <div>
           <p className="text-[11px] font-semibold tracking-[0.06em] text-text-light">
             APPROVALS
@@ -77,7 +77,15 @@ export default function PendingTaskRequestsWidget() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
+      {/* Skin pass 2026-05-06 — wrap the scrollable request list in
+          the shared `.inset-panel` chrome (matches the booking-table
+          nested panel pattern from Sessions.tsx). The scrollable
+          container is INSIDE the panel so `overflow: hidden` on the
+          panel doesn't clip the scroll, and `overflow-y-auto` on
+          the inner div keeps row scrolling working as before. The
+          per-row `space-y-1.5` rhythm is preserved. */}
+      <div className="flex-1 min-h-0 inset-panel">
+        <div className="h-full overflow-y-auto p-2 space-y-1.5">
         {queue.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light py-6">
             <Loader2 size={16} className="animate-spin" />
@@ -99,6 +107,7 @@ export default function PendingTaskRequestsWidget() {
         ) : (
           requests.map((r) => <RequestRow key={r.id} request={r} />)
         )}
+        </div>
       </div>
     </div>
   )
