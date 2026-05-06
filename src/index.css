@@ -726,18 +726,25 @@ body {
      Caller writes:
        <table className="divide-y divide-theme">
 
-     Tailwind's `divide-y` adds the border-top-width to all-but-
-     first row pseudo-children; this class supplies the color.
+     ⚠️ Selector matches Tailwind v4's `divide-y > :not(:last-child)`
+     (which sets border-BOTTOM on every row except the last). The
+     prior selector `> :not([hidden]) ~ :not([hidden])` was the
+     v3-era pattern — those two selectors target DIFFERENT rows
+     in v4, so the first row's border-bottom rendered with
+     `currentColor` (= #000000 in light mode = pure black rogue
+     line) while the rest got my color. Both rules must use the
+     same selector pattern to compose correctly.
+
      Dark mode: original `rgba(255,255,255,0.05)`. Light mode:
      `var(--color-border-light)` (#ededef) — a step softer than
      `--color-border` (#dedee5) so table rows feel like needle-
      thin separators rather than full panel divisions. Use the
      `theme-divider` (border-border) for major section boundaries
      and `divide-theme` for the higher-density row lines. */
-  .divide-theme > :not([hidden]) ~ :not([hidden]) {
+  .divide-theme > :not(:last-child) {
     border-color: rgba(255, 255, 255, 0.05);
   }
-  :root[data-theme='light'] .divide-theme > :not([hidden]) ~ :not([hidden]) {
+  :root[data-theme='light'] .divide-theme > :not(:last-child) {
     border-color: var(--color-border-light);
   }
 
