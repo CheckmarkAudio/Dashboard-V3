@@ -615,6 +615,69 @@ body {
     border-top: 1px solid var(--color-border-light);
   }
 
+  /* -------- List-panel pattern --------
+     The "nested inset list panel" shown in the UI skin direction
+     mockup: a single bordered panel containing list rows separated
+     by needle-thin dividers — NOT cards inside cards. Three pieces:
+
+       .list-panel       — outer card (border, radius, soft shadow)
+       .list-panel__head — title row, divided from rows below
+       .list-panel__rows — divider container (handles row stacking)
+       .list-row         — single row (icon · body · right-slot grid)
+
+     Use the React wrappers in `src/components/ui/ListPanel.tsx` so
+     callers don't have to remember the markup. The classes are
+     exposed here so a one-off page can hand-roll the structure if
+     it needs custom row content. Inside a DashboardWidgetFrame the
+     widget already provides the outer card, so a widget body should
+     use just `<ListRows>` + `<ListRow>` (skip the outer .list-panel
+     to avoid card-in-card). */
+  .list-panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 1.25rem; /* 20px — matches widget-card scale */
+    box-shadow: 0 8px 26px rgba(20, 20, 28, 0.06);
+    overflow: hidden;
+  }
+  .list-panel__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.875rem;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .list-panel__rows > * + * {
+    border-top: 1px solid var(--color-border-light);
+  }
+  .list-row {
+    /* Three-column grid: icon (auto) · body (1fr) · right (auto).
+       `align-items: center` keeps the icon and pill vertically
+       centered with a two-line title/meta block. */
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.8125rem 1rem; /* 13px 16px — matches mockup .issue */
+    text-align: left;
+    background: transparent;
+    border: 0;
+    width: 100%;
+    /* `min-width: 0` on the body via the React component lets the
+       title truncate inside the 1fr column without overflowing. */
+  }
+  .list-row--interactive {
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+  }
+  .list-row--interactive:hover {
+    background: var(--color-surface-hover);
+  }
+  .list-row--interactive:focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: -2px;
+  }
+
   /* -------- Semantic typography scale --------
      These are thin wrappers that let pages declare intent (`.text-title`)
      instead of scattering size/weight/tracking classes. Sizes match the
