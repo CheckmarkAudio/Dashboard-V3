@@ -25,7 +25,10 @@ function QuickAssignButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="icon-shake-on-hover inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight ring-1 ring-gold-muted hover:bg-gold-muted hover:ring-gold-dim transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
+        // 2026-05-06 — width matched to BookButton (248px = 4×w-14
+        // social bubbles + 3×gap-2) so the two CTAs read as siblings
+        // across Overview + Hub.
+        className="icon-shake-on-hover inline-flex items-center justify-center gap-2 h-10 px-4 w-[248px] rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight ring-1 ring-gold-muted hover:bg-gold-muted hover:ring-gold-dim transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
       >
         <Zap
           size={14}
@@ -70,20 +73,20 @@ export default function AdminHub() {
   return (
     <AdminOverviewProvider>
       <div className="max-w-[1440px] mx-auto space-y-3 animate-fade-in">
-        {/* Skin pass 2026-05-06 — SocialStatsBar moved DOWN to the
-            member-row actions slot (mirrors the Overview swap).
-            QuickAssign bubble (2026-05-06) sits in the PageHeader's
-            top-right actions slot, mirroring the Overview's
-            "+Book a Session" affordance. */}
+        {/* Skin pass 2026-05-06 (rev2) — re-swapped per user direction:
+            SocialStatsBar moves BACK UP to the PageHeader actions slot;
+            Quick Assign moves DOWN beside the member panel. Quick Assign
+            is now w-[248px] (matched to BookButton + the social bubble
+            cluster) so the swap doesn't shrink the affordance. */}
         <PageHeader
           icon={UsersRound}
           title="Dashboard"
-          actions={<QuickAssignButton />}
+          actions={<SocialStatsBar />}
         />
         {/* Lean 7 (PR #78) — instagram-story-style member bubbles
             above the widget grid, mirroring the member Overview
             pattern from PR #61. Same component, same query cache. */}
-        <MemberHighlights actions={<SocialStatsBar />} />
+        <MemberHighlights actions={<QuickAssignButton />} />
         <WorkspacePanel
           role={appRole}
           userId={profile?.id ?? 'guest'}
