@@ -26,6 +26,15 @@
   --color-surface: #1e1e25;
   --color-surface-alt: #26262d;
   --color-surface-hover: #2e2e36;
+  /* `surface-lifted` is the "card on top of another card" surface —
+     deliberately BRIGHTER than `surface` in BOTH themes so the same
+     token always means "this sits visually above its parent." Dark
+     mode lifts to a noticeably lighter charcoal (#2e2e36 — same hue
+     as `surface-hover`); light mode lifts to pure white. The
+     light-mode override is set in the `[data-theme='light']` block.
+     Used by `.list-panel` so a nested list-panel always reads as a
+     lifted card regardless of theme. */
+  --color-surface-lifted: #2e2e36;
   --color-border: #34343d;
   --color-border-light: #4d4d57;
   /* `border-strong` is the more-visible divider — used for segmented
@@ -214,8 +223,19 @@
      enough to lift the white cards softly above the grey body. */
   --color-bg:            #e8e8ec; /* light warm grey body            */
   --color-surface:       #ffffff; /* WHITE cards (flipped from rev1) */
-  --color-surface-alt:   #f5f5f7; /* very subtle off-white nest      */
+  /* Skin pass 2026-05-06 (rev3) — bumped `surface-alt` from `#f5f5f7`
+     (only ~3% darker than white) to `#ebebef` (~8% darker). This is
+     what `.widget-card` uses in light mode; the previous value was
+     so close to pure white that a nested `<ListPanel>` (which sits
+     on `--color-surface = #ffffff`) was visually indistinguishable
+     from the widget body. The new value gives the inner panel a
+     clear lift while still reading as "calm off-white" rather than
+     "visible grey card." */
+  --color-surface-alt:   #ebebef; /* off-white nest — clearer contrast */
   --color-surface-hover: #f0f0f3; /* card hover (slightly off-white) */
+  /* Light-mode `surface-lifted` = pure white. Same token resolves
+     to the right "lifted card" color in both themes. */
+  --color-surface-lifted: #ffffff;
   /* Skin pass 2026-05-06 — bumped border one step darker (e5e5e7 →
      dedee5) per the UI skin direction mockup. Still barely visible on
      white cards, but reads cleanly when sibling panels sit edge-to-
@@ -636,10 +656,26 @@ body {
      use just `<ListRows>` + `<ListRow>` (skip the outer .list-panel
      to avoid card-in-card). */
   .list-panel {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    /* Skin pass 2026-05-06 (rev3) — clear "lifted card on top of
+       another card" treatment that works in BOTH themes:
+         • `surface-lifted` → pure white in light, lighter charcoal
+           in dark. ALWAYS brighter than its parent widget-card.
+         • `border-strong` → visibly present hairline (light: #c9c9d3,
+           dark: #4d4d57). Subtle in isolation, defined when sibling
+           panels touch.
+         • `box-shadow` 0 6px 20px @ 10% alpha → genuine drop shadow
+           that reads in both themes. The `inset 0 1px 0` top
+           highlight gives a soft "rim of light" especially useful
+           in dark mode where drop shadows alone don't lift a card
+           above a dark parent.
+       Total effect: the inner panel POPS off the widget body
+       regardless of background contrast. */
+    background: var(--color-surface-lifted);
+    border: 1px solid var(--color-border-strong);
     border-radius: 1.25rem; /* 20px — matches widget-card scale */
-    box-shadow: 0 8px 26px rgba(20, 20, 28, 0.06);
+    box-shadow:
+      0 6px 20px rgba(0, 0, 0, 0.10),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
     overflow: hidden;
   }
   .list-panel__head {
