@@ -208,16 +208,20 @@
   --color-text-muted:    #1c1c22; /* near-black for body text        */
   --color-text-light:    #3f3f46; /* dark grey for meta lines        */
 
-  /* Vibrant marigold for backgrounds, buttons, borders, glows.
-     rev10: restored rev8's HSL(36°, 87%, 54%) #f0a623 base after
-     rev9's global darken made buttons murky. The user wants buttons
-     punchy + text readable — accomplished by splitting gold into
-     two CSS layers: this token drives bg/border/glow at full
-     vibrancy; a `text-gold` override below renders text in a
-     darker amber for readability. Hover/dim variants follow. */
-  --color-gold:          #f0a623; /* HSL 36°, 87%, 54° — vibrant marigold */
-  --color-gold-muted:    #d08819; /* darker hover state                   */
-  --color-gold-dim:      #a8691a; /* darker still                         */
+  /* Light-mode rev5 (2026-05-04) — bright punchy yellow for
+     backgrounds (buttons, social media tiles, accent badges,
+     etc.) per the fintech-reference Continue/scan buttons. The
+     marigold #f0a623 was reading muddy/orange on white cards;
+     the new #FFD60A is a saturated pure yellow that pops as a
+     CTA fill while staying friendly with black icons + text on
+     top. The `text-gold` override below remains at deep amber
+     (#7a510f) for any usage as TEXT colour — bright yellow text
+     would fail contrast on white. Bg vs text is split exactly
+     as rev10 introduced: this token drives bg/border/glow,
+     `.text-gold` resolves separately. */
+  --color-gold:          #FFD60A; /* bright pure yellow — punchy CTA fill */
+  --color-gold-muted:    #E0BC00; /* darker hover state                   */
+  --color-gold-dim:      #B89800; /* darker still (dim/disabled)          */
 }
 
 /* Light-mode text-gold gets a darker amber so it stays readable on
@@ -368,31 +372,11 @@ body {
 }
 
 :root[data-theme='light'] body {
-  /* Light-mode revamp 2026-05-04 (rev3) — soft fintech-style wash.
-     User reference: clean Apple-tone fintech UI with a multi-tonal
-     background (warm cream/peach top-left → near-white center →
-     light cool grey bottom-right). White cards float on top of this
-     wash with a subtle shadow.
-
-     Implementation: layered radial gradients on top of a neutral
-     base so cards (`bg-surface = #ffffff`) stay pure white and
-     un-tinted. Tints kept VERY subtle (<14% alpha) so the wash
-     feels like ambient sunlight rather than a coloured background.
-
-     Base: `--color-bg` (#e8e8ec light grey) — what shows through
-     when the wash fades to transparent.
-
-     Stops:
-       • Top-left:     warm cream/peach `rgba(255, 224, 168, 0.45)`
-                       transparent by 36% — the "sunlight" patch
-       • Bottom-right: cool grey `rgba(208, 211, 219, 0.55)`
-                       transparent by 38% — the "shaded" patch
-     Both fade into the neutral base by mid-canvas, leaving a
-     near-white center that feels softly lit. */
-  background:
-    radial-gradient(circle at top left,     rgba(255, 224, 168, 0.45), transparent 36%),
-    radial-gradient(circle at bottom right, rgba(208, 211, 219, 0.55), transparent 38%),
-    var(--color-bg);
+  /* Light-mode rev4 — body returns to flat grey; the wash now lives
+     on `.dashboard-shell` (see below) so it shows up INSIDE the
+     rounded page area where content actually lives. The body grey
+     just frames the shell with the small page-gap padding. */
+  background: var(--color-bg);
   color-scheme: light;
 }
 
@@ -492,13 +476,23 @@ body {
     position: relative;
   }
   :root[data-theme='light'] .dashboard-shell {
-    /* Lean 2 rev3 (PR #79 follow-up) — shell uses the cream body bg
-       (NOT the grey card surface) so the whole page area reads as
-       one continuous warm cream sheet, with the grey widget cards
-       sitting on top in editorial relief. Mirrors the Replit
-       reference page where the body cream extends edge-to-edge and
-       only the cards drop into a warmer grey. */
-    background: var(--color-bg);
+    /* Light-mode rev4 — fintech-style wash applied to the shell so
+       it shows up INSIDE the rounded page area where content lives
+       (was on `body` previously, but the shell's flat background
+       was hiding it). Tints kept very subtle (<14% alpha) so cards
+       (`bg-surface = #ffffff`) stay pure white on top of the wash.
+
+       Stops:
+         • Top-left:     warm cream/peach `rgba(255, 224, 168, 0.45)`
+                         transparent by 36% — the "sunlight" patch
+         • Bottom-right: cool grey `rgba(208, 211, 219, 0.55)`
+                         transparent by 38% — the "shaded" patch
+       Both fade to the neutral grey base by mid-canvas, leaving a
+       near-white center that feels softly lit. */
+    background:
+      radial-gradient(circle at top left,     rgba(255, 224, 168, 0.45), transparent 36%),
+      radial-gradient(circle at bottom right, rgba(208, 211, 219, 0.55), transparent 38%),
+      var(--color-bg);
     border-color: var(--color-border);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   }
