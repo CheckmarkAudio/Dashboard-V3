@@ -25,6 +25,16 @@ interface DashboardWidgetFrameProps {
   // (see WorkspacePanel). The frame only emits the intent; the panel
   // owns the modal state and renders the overlay.
   onExpand?: () => void
+  /**
+   * Hide the frame's title bar (title text + description), leaving
+   * only the corner controls (drag handle, expand, visibility,
+   * reorder). Use for widgets whose body provides its own bold
+   * title via `<ListPanel>` — avoids the "title within a title"
+   * redundancy and lets the inner panel's header carry the
+   * hierarchy. The drag/expand affordances stay reachable in the
+   * top-right corner.
+   */
+  hideTitle?: boolean
   children: ReactNode
 }
 
@@ -39,6 +49,7 @@ export default function DashboardWidgetFrame({
   onToggleVisibility,
   dragHandleProps,
   onExpand,
+  hideTitle = false,
   children,
 }: DashboardWidgetFrameProps) {
   // Bind drag attributes/listeners to the grip element only — NOT the
@@ -52,8 +63,19 @@ export default function DashboardWidgetFrame({
       className="widget-card h-full flex flex-col overflow-hidden group/widget relative"
       style={{ containerType: 'inline-size' }}
     >
-      {/* ─── Header ─────────────────────────────────────────────── */}
-      <div className="px-4 py-3 border-b border-white/5 flex items-start justify-between gap-3">
+      {/* ─── Header ───────────────────────────────────────────────
+          When `hideTitle` is true the bar collapses: no bold title,
+          no bottom border, lower vertical padding. The drag handle
+          + corner controls stay visible (top-right) so the widget
+          can still be reordered, expanded, hidden. The body's own
+          `<ListPanel>` header carries the title hierarchy in that
+          case. */}
+      <div
+        className={[
+          'px-4 flex items-start justify-between gap-3',
+          hideTitle ? 'py-1.5' : 'py-3 border-b border-white/5',
+        ].join(' ')}
+      >
         <div className="min-w-0 flex-1 flex items-start gap-2">
           {dragHandleProps && (
             <button
@@ -67,8 +89,11 @@ export default function DashboardWidgetFrame({
           )}
           {/* Title is the click target that opens the floating detail
               modal. Clicking anywhere on the text (title or description)
-              expands. Hover state previews the affordance in gold. */}
-          {onExpand ? (
+              expands. Hover state previews the affordance in gold.
+              In `hideTitle` mode we render nothing here — the corner
+              expand button (right side) is the only expand
+              affordance. */}
+          {!hideTitle && (onExpand ? (
             <button
               type="button"
               onClick={onExpand}
@@ -89,7 +114,7 @@ export default function DashboardWidgetFrame({
                 <p className="mt-0.5 text-[12px] text-text-muted leading-snug">{description}</p>
               )}
             </div>
-          )}
+          ))}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {onExpand && (

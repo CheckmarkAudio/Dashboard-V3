@@ -385,6 +385,11 @@ export const ADMIN_BANK_REGISTRATIONS: AdminWidgetRegistration[] = [
     id: 'admin_schedule',
     title: 'Today Schedule',
     description: 'The studio schedule for today across the team.',
+    // Skin pass 2026-05-06 — body is a `<ListPanel>` with its own
+    // bold title/subtitle, so the frame title would duplicate it.
+    // Frame collapses to corner controls only; the inner panel
+    // carries the hierarchy.
+    hideTitle: true,
     defaultPlacements: [],
     accessVisibility: 'admin',
     dataScope: 'team',
@@ -394,6 +399,7 @@ export const ADMIN_BANK_REGISTRATIONS: AdminWidgetRegistration[] = [
     id: 'admin_shortcuts',
     title: 'Admin Shortcuts',
     description: 'Jump directly into the key admin workspaces.',
+    hideTitle: true,
     defaultPlacements: [],
     accessVisibility: 'admin',
     dataScope: 'global',

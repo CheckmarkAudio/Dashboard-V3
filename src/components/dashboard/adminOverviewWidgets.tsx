@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { APP_ROUTES } from '../../app/routes'
 import { useAdminOverviewContext } from '../../contexts/AdminOverviewContext'
-import { Badge, ListRows, ListRow } from '../ui'
+import { Badge, ListPanel, ListRow } from '../ui'
 
 function formatTimeLabel(value?: string | null): string {
   if (!value) return 'All day'
@@ -175,13 +175,18 @@ export function AdminScheduleWidget() {
     )
   }
 
-  // Skin pass 2026-05-06 — converted from `space-y-2` cards-inside-
-  // a-DashboardWidgetFrame to the shared `ListRows` + `ListRow`
-  // pattern. Same data, same affordances; lives flat inside the
-  // widget frame with needle-thin dividers between rows instead of
-  // each event sitting in its own bordered mini-card.
+  // Skin pass 2026-05-06 (rev2) — full nested-panel pattern: a pure-
+  // white `<ListPanel>` with its own bold title + subtitle, sitting
+  // inside the slightly-dimmed widget frame. The frame's own title
+  // is suppressed via `hideTitle: true` in the registry so we don't
+  // duplicate the heading. Each event is a `<ListRow>` with the
+  // calendar icon on the left and the time as a neutral pill on the
+  // right — needle-thin dividers between rows.
   return (
-    <ListRows>
+    <ListPanel
+      title="Today's sessions"
+      subtitle="Sessions and meetings on the books"
+    >
       {events.map((event) => (
         <ListRow
           key={event.id}
@@ -202,7 +207,7 @@ export function AdminScheduleWidget() {
           }
         />
       ))}
-    </ListRows>
+    </ListPanel>
   )
 }
 
@@ -214,13 +219,16 @@ export function AdminShortcutsWidget() {
     { to: APP_ROUTES.member.calendar, label: 'Calendar', icon: CalendarDays },
   ]
 
-  // Skin pass 2026-05-06 — converted from a `space-y-2` stack of
-  // bordered cards to the shared `ListRows` + `ListRow` pattern, so
-  // the four shortcuts read as flat list rows with needle-thin
-  // dividers inside the widget frame. Each row is a `to=` link, so
-  // ListRow renders a `<Link>` with the `--interactive` hover/focus.
+  // Skin pass 2026-05-06 (rev2) — nested-panel pattern: pure-white
+  // `<ListPanel>` with its own title + subtitle, inside the dimmed
+  // widget frame (frame title suppressed via `hideTitle: true`).
+  // Each shortcut is a `<ListRow to={…}>` so `ListRow` renders a
+  // real `<Link>` with hover + focus.
   return (
-    <ListRows>
+    <ListPanel
+      title="Quick links"
+      subtitle="Jump into the key admin workspaces"
+    >
       {links.map(({ to, label, icon: Icon }) => (
         <ListRow
           key={to}
@@ -234,6 +242,6 @@ export function AdminShortcutsWidget() {
           right={<ArrowRight size={14} className="text-text-light" aria-hidden="true" />}
         />
       ))}
-    </ListRows>
+    </ListPanel>
   )
 }

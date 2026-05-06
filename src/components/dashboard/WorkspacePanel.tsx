@@ -468,6 +468,7 @@ export default function WorkspacePanel({
                         <DashboardWidgetFrame
                           title={definition.title}
                           description={definition.description}
+                          hideTitle={definition.hideTitle}
                           visible={widget.visible}
                           dragHandleProps={dragHandleProps}
                           onExpand={() =>

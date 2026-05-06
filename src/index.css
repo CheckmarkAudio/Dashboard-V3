@@ -554,12 +554,15 @@ body {
     overflow: hidden;
   }
   :root[data-theme='light'] .widget-card {
-    background: var(--color-surface);
+    /* Skin pass 2026-05-06 (rev2) — widget body is now `surface-alt`
+       (subtle off-white), NOT pure white. This is what makes nested
+       `.list-panel` cards (which stay on pure `surface`) visibly pop
+       inside a widget frame. Without the dim, a list panel inside a
+       widget frame would be white-on-white = invisible boundary.
+       Mockup pattern: outer container is the slightly-creamy
+       `.system-preview`, inner panel is pure `var(--surface)`. */
+    background: var(--color-surface-alt);
     border-color: var(--color-border);
-    /* Skin pass 2026-05-06 — slightly bigger Y-offset + spread
-       (matches the mockup `box-shadow: 0 8px 26px rgba(20,20,28,.06)`).
-       Same alpha as before so the cards don't get heavier — they just
-       sit a hair more off the wash. Border stays barely visible. */
     box-shadow: 0 8px 26px rgba(20, 20, 28, 0.06);
   }
 
