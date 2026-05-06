@@ -342,8 +342,23 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             <p className="text-[12px] text-text-light mt-0.5">Create one in the Forum.</p>
           </div>
         ) : (
-          <div className="divide-y divide-theme">
-          {channels.map((c) => {
+          <>
+            {/* Skin pass 2026-05-06 — section header band for FORUMS,
+                mirrors the ASSIGNMENTS treatment below. No `border-t`
+                here because this is the FIRST section inside the
+                inset-panel; the panel's own top border + the band's
+                `bg-surface-alt/40` define the upper edge. The
+                trailing channel rows + ASSIGNMENTS block both
+                inherit the same section-band rhythm so the panel
+                reads as a clean two-section layout. */}
+            <div className="px-3 py-2 flex items-center gap-2 bg-surface-alt/40">
+              <MessageSquare size={11} className="text-gold/70" aria-hidden="true" />
+              <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
+                FORUMS
+              </p>
+            </div>
+            <div className="divide-y divide-theme">
+            {channels.map((c) => {
             const hasMessage = !!c.latest_id
             const unread = c.unread_count > 0
             const isExpanded = expandedChannelId === c.channel_id
@@ -560,6 +575,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             )
           })}
           </div>
+          </>
         )}
 
         {assignments.length > 0 && (
