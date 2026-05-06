@@ -80,7 +80,7 @@ export function CalendarWeek({
   return (
     <div className="bg-surface rounded-2xl border border-border overflow-hidden">
       {/* Nav strip */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border-strong">
         <div className="min-w-0">
           {title && (
             <p className="text-[11px] text-text-light uppercase tracking-wide mb-0.5">
@@ -106,7 +106,7 @@ export function CalendarWeek({
       </div>
 
       {/* Day headers + all-day row */}
-      <div className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-border">
+      <div className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-border-strong">
         <div aria-hidden="true" />
         {days.map((d) => {
           const key = localDateKey(d)
@@ -114,7 +114,7 @@ export function CalendarWeek({
           return (
             <div
               key={key}
-              className={`px-2 py-2 text-center border-l border-border ${
+              className={`px-2 py-2 text-center border-l border-border-strong ${
                 isToday ? 'bg-gold/5' : ''
               }`}
             >
@@ -135,7 +135,7 @@ export function CalendarWeek({
 
       {/* All-day event row (schedule_focus) */}
       {Array.from(allDayByDay.values()).some((list) => list.length > 0) && (
-        <div className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-border bg-surface-alt/30">
+        <div className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-border-strong bg-surface-alt/30">
           <div aria-hidden="true" className="flex items-start justify-end pr-1 pt-1">
             <span className="text-[9px] text-text-light uppercase tracking-wide">Focus</span>
           </div>
@@ -145,7 +145,7 @@ export function CalendarWeek({
             return (
               <div
                 key={key}
-                className="border-l border-border p-1 min-h-[32px] space-y-1"
+                className="border-l border-border-strong p-1 min-h-[32px] space-y-1"
               >
                 {list.map((ev) => (
                   <button
@@ -167,7 +167,7 @@ export function CalendarWeek({
       {/* Timed grid */}
       <div className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))]">
         {/* Shared time labels gutter */}
-        <div className="relative border-r border-border" style={{ height: 640 }}>
+        <div className="relative border-r border-border-strong" style={{ height: 640 }}>
           <TimeGrid
             heightPx={640}
             rangeStart={DAY_START_MIN}
@@ -184,7 +184,7 @@ export function CalendarWeek({
           return (
             <div
               key={key}
-              className={`relative border-l border-border ${isToday ? 'bg-gold/[0.03]' : ''}`}
+              className={`relative border-l border-border-strong ${isToday ? 'bg-gold/[0.03]' : ''}`}
               style={{ height: 640 }}
             >
               <TimeGrid

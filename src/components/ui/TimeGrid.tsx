@@ -58,7 +58,7 @@ export function TimeGrid({
         return (
           <div
             key={h}
-            className="absolute left-0 right-0 border-t border-border/30"
+            className="absolute left-0 right-0 border-t border-border-strong"
             style={{ top: `${clampedTop}%` }}
           >
             {showLabels && (

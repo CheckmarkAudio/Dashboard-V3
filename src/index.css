@@ -584,17 +584,17 @@ body {
     overflow: hidden;
   }
   :root[data-theme='light'] .widget-card {
-    /* Skin pass 2026-05-06 (rev4) — REVERTED back to pure
-       `--color-surface` (#ffffff) per user feedback "the grey on the
-       widgets is a big yikes — get it white and uniform with Assign,
-       Analytics, Members." Those admin pages use plain
-       `bg-surface rounded-xl border border-border`; widgets now
-       match. The nested `.list-panel` pattern still reads as nested
-       via its own drop-shadow + visible `border-strong` hairline —
-       see `.list-panel` below. */
+    /* Skin pass 2026-05-06 (rev7) — match the Forum chrome the user
+       called "golden standard". Forum uses
+       `bg-surface rounded-2xl border border-border overflow-hidden`
+       with NO drop shadow; the soft border defines a crisp edge.
+       Widgets had a `0 8px 26px @ 6%` drop shadow that softened
+       the perceived border, making widget edges feel hazy compared
+       to the crisp Forum panel. Shadow dropped; border alone now
+       defines the widget edge identically to Forum. */
     background: var(--color-surface);
     border-color: var(--color-border);
-    box-shadow: 0 8px 26px rgba(20, 20, 28, 0.06);
+    box-shadow: none;
   }
 
   /* -------- Icon tiles & row divider lists --------
