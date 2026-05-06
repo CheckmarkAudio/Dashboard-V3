@@ -218,15 +218,11 @@ export function BookingSnapshotWidget() {
  * component was deleted alongside this change.
  */
 export function ForumNotificationsWidget() {
-  const todayLabel = new Date()
-    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    .toUpperCase()
-  const eyebrow = (
-    <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
-      TODAY · {todayLabel}
-    </p>
-  )
-  return <NotificationsPanel eyebrow={eyebrow} />
+  // Skin pass 2026-05-06 — eyebrow ("TODAY · WED, MAY 6") removed.
+  // It was colliding with the panel's "Mark all read" button. Per-row
+  // dates now live on the right side of each notification row, so the
+  // top-of-panel date label is redundant.
+  return <NotificationsPanel />
 }
 
 // PR #65 — old inlined channel/assignment row + RPC helpers retired.

@@ -402,15 +402,11 @@ export function AdminNotificationsWidget() {
   // PR #68 final rev: standalone "Post" + "Channel" quick-actions retired.
   // Posting now happens via the inline reply on each forum row (click
   // anywhere on a channel notification → expands a textarea + send).
-  return (
-    <NotificationsPanel
-      eyebrow={
-        <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
-          TODAY · {todayEyebrow()}
-        </p>
-      }
-    />
-  )
+  //
+  // Skin pass 2026-05-06 — eyebrow ("TODAY · WED, MAY 6") removed
+  // (was colliding with the panel's "Mark all read" button). Per-row
+  // dates now live on the right side of each notification row.
+  return <NotificationsPanel />
 }
 
 // ─── Dead code from the pre-PR-#68 inline implementation ─────────────

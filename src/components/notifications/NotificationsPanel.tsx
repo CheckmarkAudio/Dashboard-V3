@@ -438,6 +438,17 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                     className="flex-1 min-w-0 text-left -my-1 py-1 rounded-md hover:bg-surface-hover transition-colors focus-ring"
                   >
                     <div className="flex items-center gap-2">
+                      {/* Skin pass 2026-05-06 — unread indicator is a
+                          small red dot (matches the assignment-row dot
+                          treatment). The unread COUNT badge moved to
+                          the right column with the date so the title
+                          row stays clean. */}
+                      {unread && (
+                        <span
+                          className="shrink-0 w-2 h-2 rounded-full bg-rose-500"
+                          aria-label="New messages"
+                        />
+                      )}
                       <p
                         className={`text-[13px] truncate ${
                           unread ? 'font-bold text-text' : 'font-semibold text-text-muted'
@@ -445,11 +456,6 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       >
                         #{c.channel_name}
                       </p>
-                      {unread && (
-                        <span className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums">
-                          {c.unread_count > 9 ? '9+' : c.unread_count}
-                        </span>
-                      )}
                     </div>
                     {hasMessage ? (
                       <p className={`text-[12px] truncate mt-0.5 ${unread ? 'text-text' : 'text-text-light'}`}>
@@ -459,10 +465,29 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                     ) : (
                       <p className="text-[12px] text-text-light italic mt-0.5">No messages yet</p>
                     )}
-                    {c.latest_created_at && (
-                      <p className="text-[10px] text-text-light mt-0.5">{relativeTime(c.latest_created_at)}</p>
-                    )}
                   </button>
+
+                  {/* Skin pass 2026-05-06 — right column: most-recent
+                      message date + (when unread) the unread count
+                      badge stacked below it. Date moved off the body
+                      so it doesn't compete with title for vertical
+                      space; matches the assignment-row right-column
+                      treatment. */}
+                  <div className="shrink-0 flex flex-col items-end gap-1 mt-0.5">
+                    {c.latest_created_at && (
+                      <span
+                        className="text-[10px] text-text-light tabular-nums whitespace-nowrap"
+                        title={new Date(c.latest_created_at).toLocaleString()}
+                      >
+                        {relativeTime(c.latest_created_at)}
+                      </span>
+                    )}
+                    {unread && (
+                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums">
+                        {c.unread_count > 9 ? '9+' : c.unread_count}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Inline quick-reply. Single-line textarea (rows=1, padding
@@ -567,6 +592,14 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                   <CategoryBadge category={cat} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
+                      {/* Skin pass 2026-05-06 — NEW pill replaced with a
+                          small red dot. Same unread cue, less chrome. */}
+                      {unread && (
+                        <span
+                          className="shrink-0 w-2 h-2 rounded-full bg-rose-500"
+                          aria-label="New"
+                        />
+                      )}
                       <p
                         className={`text-[13px] truncate ${
                           unread ? 'font-bold text-text' : 'font-semibold text-text-muted'
@@ -574,19 +607,24 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       >
                         {n.title}
                       </p>
-                      {unread && (
-                        <span className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums">
-                          NEW
-                        </span>
-                      )}
                     </div>
                     {n.body && (
                       <p className={`text-[12px] truncate mt-0.5 ${unread ? 'text-text' : 'text-text-light'}`}>
                         {n.body}
                       </p>
                     )}
-                    <p className="text-[10px] text-text-light mt-0.5">{relativeTime(n.created_at)}</p>
                   </div>
+                  {/* Skin pass 2026-05-06 — assigned date moved from
+                      below the body to the row's right edge so it
+                      doesn't compete with the title for vertical space.
+                      Uses `n.created_at` which is when the notification
+                      (= assignment) was created. */}
+                  <span
+                    className="shrink-0 text-[10px] text-text-light tabular-nums whitespace-nowrap mt-0.5"
+                    title={new Date(n.created_at).toLocaleString()}
+                  >
+                    {relativeTime(n.created_at)}
+                  </span>
                 </button>
               )
             })}
