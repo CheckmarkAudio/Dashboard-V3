@@ -268,7 +268,7 @@ export default function CalendarDayCard({
       className={`list-panel flex flex-col ${className}`}
     >
       {/* ── Header with day label + nav ───────────────────────────── */}
-      <div className="px-4 py-3 border-b border-border shrink-0">
+      <div className="px-4 py-3 border-b border-border-strong shrink-0">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-[16px] font-bold text-text tracking-tight">
             {isToday ? 'Today' : dayLabel}
@@ -325,7 +325,7 @@ export default function CalendarDayCard({
               const bNotes = bookingNotes[b.id] ?? []
               const isOpen = expandedNotes.has(b.id)
               return (
-                <div key={b.id} className="py-3 border-b border-border/20 last:border-0">
+                <div key={b.id} className="py-3 border-b border-border-strong last:border-0">
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-[13px] font-semibold text-text">{b.client}</p>
                     <span className="text-[9px] font-semibold text-gold bg-gold/10 px-1.5 py-0.5 rounded">
@@ -365,7 +365,7 @@ export default function CalendarDayCard({
                   </div>
 
                   {isOpen && (
-                    <div className="mt-2 pt-2 border-t border-border/15">
+                    <div className="mt-2 pt-2 border-t border-border-strong">
                       {bNotes.length > 0 && (
                         <div className="space-y-1.5 mb-2">
                           {bNotes.map((n) => (
