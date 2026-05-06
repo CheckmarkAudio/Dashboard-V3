@@ -63,6 +63,12 @@ Avoid scattering arbitrary text sizes such as `text-[13px]`, `text-[17px]`, or `
 
 Important text should stay readable. Do not solve layout pressure by shrinking important labels until they become hard to read.
 
+## Subtext And Descriptions
+
+Default website presentation should be title-first and compact. Do not add visible description/subtext under cards, task rows, template tiles, page headers, or widget headings unless the user explicitly asks for it or the text is required for accessibility, error recovery, or destructive-action safety.
+
+Descriptions can still exist as editable data when useful for notes, admin cleanup, modals, or backend records. They should not automatically render as passive subtext in list rows or cover tiles. If a description is necessary, prefer showing it in an expanded detail/edit view rather than on the main surface.
+
 ## Widget Chrome
 
 The standard widget surface is `.widget-card`, usually provided by `DashboardWidgetFrame`.

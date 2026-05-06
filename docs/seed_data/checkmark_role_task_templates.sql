@@ -13,6 +13,8 @@
 --   exists, metadata is updated and its items are replaced with the
 --   list below. If it does not exist, it is created. Rerunning after
 --   manual edits will overwrite item lists for these template names.
+--   Descriptions are intentionally cleared before commit so templates
+--   stay title-first in the app and do not render passive subtext.
 --
 -- How to run:
 --   1. Open Supabase SQL Editor for the Checkmark Intern Manager project.
@@ -410,6 +412,34 @@ BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+UPDATE public.task_templates t
+SET description = NULL,
+    updated_at = now()
+WHERE (t.name, t.role_tag) IN (
+  ('Engineer Shift Readiness', 'engineer'),
+  ('Marketing Content + Outreach', 'marketing'),
+  ('Media Capture + Asset Prep', 'media'),
+  ('Intern Studio Support', 'intern'),
+  ('Dev Dashboard Maintenance', 'dev'),
+  ('Admin Daily Operations', 'admin'),
+  ('Ops Studio Readiness', 'ops')
+);
+
+UPDATE public.task_template_items i
+SET description = NULL,
+    updated_at = now()
+FROM public.task_templates t
+WHERE i.template_id = t.id
+  AND (t.name, t.role_tag) IN (
+    ('Engineer Shift Readiness', 'engineer'),
+    ('Marketing Content + Outreach', 'marketing'),
+    ('Media Capture + Asset Prep', 'media'),
+    ('Intern Studio Support', 'intern'),
+    ('Dev Dashboard Maintenance', 'dev'),
+    ('Admin Daily Operations', 'admin'),
+    ('Ops Studio Readiness', 'ops')
+  );
 
 COMMIT;
 

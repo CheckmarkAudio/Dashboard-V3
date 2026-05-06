@@ -107,7 +107,7 @@ export default function TemplateEditorModal({
       if (!templateId) throw new Error('No template id to update')
       return updateTaskTemplate(templateId, {
         name: name.trim(),
-        description: description.trim() || null,
+        description: description.trim(),
         role_tag: roleTag.trim() || null,
         is_onboarding: isOnboarding,
       })
@@ -295,16 +295,27 @@ function ItemRow({
   const { toast } = useToast()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(item.title)
+  const [description, setDescription] = useState(item.description ?? '')
   const [category, setCategory] = useState(item.category ?? '')
   const [isRequired, setIsRequired] = useState(item.is_required)
   const [defaultDueOffset, setDefaultDueOffset] = useState(
     item.default_due_offset_days?.toString() ?? '',
   )
 
+  useEffect(() => {
+    if (editing) return
+    setTitle(item.title)
+    setDescription(item.description ?? '')
+    setCategory(item.category ?? '')
+    setIsRequired(item.is_required)
+    setDefaultDueOffset(item.default_due_offset_days?.toString() ?? '')
+  }, [editing, item])
+
   const updateMutation = useMutation({
     mutationFn: async () => {
       const patch: UpdateTemplateItemInput = {
         title: title.trim(),
+        description: description.trim(),
         category: category.trim() || null,
         is_required: isRequired,
         default_due_offset_days: defaultDueOffset ? Number(defaultDueOffset) : null,
@@ -390,6 +401,16 @@ function ItemRow({
         placeholder="Item title"
         className="w-full px-2 py-1.5 rounded bg-surface border border-border text-sm focus-ring"
       />
+      <label className="block">
+        <span className="sr-only">Item description</span>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={2}
+          placeholder="Description or subtext. Leave blank for none."
+          className="w-full px-2 py-1.5 rounded bg-surface border border-border text-[12px] focus-ring resize-y"
+        />
+      </label>
       <div className="grid grid-cols-2 gap-2">
         <input
           type="text"
