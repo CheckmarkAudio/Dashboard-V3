@@ -61,11 +61,15 @@ export function TeamFocusWidget() {
         </div>
       </div>
 
-      <div className="space-y-2">
+      {/* Skin pass 2026-05-06 — member list flattened to booking-style:
+          inset-panel + divide-theme hairlines, per-row card chrome
+          dropped. Each member is a flat row inside the bordered panel. */}
+      <div className="inset-panel">
+        <div className="divide-y divide-theme">
         {snapshot.members.slice(0, 5).map((member) => {
           const pct = member.dailyTotal > 0 ? Math.round((member.dailyDone / member.dailyTotal) * 100) : 0
           return (
-            <div key={member.id} className="rounded-xl border border-border/70 bg-surface-alt/40 px-3 py-2.5">
+            <div key={member.id} className="px-3 py-2.5 hover:bg-surface-hover transition-colors">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-text truncate">{member.displayName}</p>
@@ -81,7 +85,7 @@ export function TeamFocusWidget() {
                 </div>
               </div>
               {member.dailyTotal > 0 && (
-                <div className="mt-2 h-1.5 rounded-full bg-surface border border-border/40 overflow-hidden">
+                <div className="mt-2 h-1.5 rounded-full bg-surface-alt border border-border overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#10b981' : '#C9A84C' }}
@@ -91,6 +95,7 @@ export function TeamFocusWidget() {
             </div>
           )
         })}
+        </div>
       </div>
     </div>
   )
