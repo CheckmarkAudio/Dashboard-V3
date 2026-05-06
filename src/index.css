@@ -435,6 +435,47 @@
 /* Sky — fill the gap (-500). */
 :root[data-theme='light'] .text-sky-500 { color: #0369a1; } /* sky-700 */
 
+/* ─── Calendar event/booking block opacity (light mode only) ──────
+   User: "thicken the opacity of the time block portion." Calendar
+   event blocks (CalendarWeek `eventBgClass`) use --color-stage-*-bg
+   tokens which default to 6% alpha — readable on the dark surface
+   but barely perceptible on a white widget. Bumped to ~22% in light
+   only via this override block, leaving dark mode intact per the
+   DARK MODE LOCKED policy above.
+
+   Side effect: Badge variants stage-* (used in KPI / Pipeline /
+   etc.) also pick up the stronger fill in light mode — net positive
+   for badge legibility on white cards. */
+:root[data-theme='light'] {
+  --color-stage-deliver-bg: rgba(96, 165, 250, 0.22);
+  --color-stage-capture-bg: rgba(167, 139, 250, 0.22);
+  --color-stage-share-bg:   rgba(34, 211, 238, 0.22);
+  --color-stage-attract-bg: rgba(244, 114, 182, 0.22);
+  --color-stage-book-bg:    rgba(251, 146, 60, 0.22);
+}
+
+/* Calendar booking block (Calendar.tsx week view) — gold-tinted
+   block with 35% bg + 70% border. Light mode bumps to 55% bg +
+   85% border so the block reads clearly on a white grid; dark
+   mode keeps 35/70 (locked).
+   Caller adds `.calendar-booking-block` to the block element
+   instead of the inline `bg-gold/35 border border-gold/70` chain. */
+.calendar-booking-block {
+  background: rgba(255, 214, 10, 0.35);
+  border: 1px solid rgba(255, 214, 10, 0.70);
+  transition: background-color 0.15s ease;
+}
+.calendar-booking-block:hover {
+  background: rgba(255, 214, 10, 0.50);
+}
+:root[data-theme='light'] .calendar-booking-block {
+  background: rgba(255, 214, 10, 0.55);
+  border-color: rgba(255, 214, 10, 0.85);
+}
+:root[data-theme='light'] .calendar-booking-block:hover {
+  background: rgba(255, 214, 10, 0.70);
+}
+
 body {
   /* Lean 2 (PR #79) — body-level gradient with three tints, all VERY
      subtle (<10% alpha). Gold wash top-left = brand identity; pinch
