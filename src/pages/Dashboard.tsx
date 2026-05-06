@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import WorkspacePanel from '../components/dashboard/WorkspacePanel'
 import { MEMBER_WIDGET_DEFINITIONS } from '../components/dashboard/widgetRegistry'
 import { PageHeader } from '../components/ui'
-import MemberHighlights from '../components/members/MemberHighlights'
+import MemberHighlights, { SocialStatsBar } from '../components/members/MemberHighlights'
 import CreateBookingModal from '../components/CreateBookingModal'
 
 const MEMBER_SCOPE = 'member_overview' as const
@@ -54,7 +54,12 @@ export default function Dashboard() {
         <PageHeader
           icon={LayoutDashboard}
           title="Overview"
-          actions={<BookButton />}
+          actions={
+            <>
+              <SocialStatsBar />
+              <BookButton />
+            </>
+          }
         />
         <MemberHighlights />
         <WorkspacePanel

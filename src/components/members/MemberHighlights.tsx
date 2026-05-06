@@ -194,6 +194,32 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
 }
 
 // ─── Strip ──────────────────────────────────────────────────────────
+//
+// 2026-05-06 — split: <MemberHighlights /> renders ONLY member pills
+// now (its own row beneath the page title). <SocialStatsBar /> is a
+// named export that renders the social tiles standalone — the
+// Dashboard / Hub page wires it into PageHeader's `actions` slot so
+// social sits right-justified on the title row.
+
+/**
+ * SocialStatsBar — the four social media bubbles + counts as a
+ * standalone bar. Used inside PageHeader's `actions` slot on
+ * Dashboard + Hub so they read on the same row as the page title.
+ * Self-contained: no props, queries nothing — just maps
+ * SOCIAL_CHANNELS to <SocialStat /> rows.
+ */
+export function SocialStatsBar() {
+  return (
+    <div
+      className="flex items-center gap-4 shrink-0"
+      aria-label="Checkmark Audio social media snapshot"
+    >
+      {SOCIAL_CHANNELS.map((channel) => (
+        <SocialStat key={channel.platform} channel={channel} />
+      ))}
+    </div>
+  )
+}
 
 export default function MemberHighlights() {
   const { data: members = [] } = useQuery({
@@ -203,33 +229,14 @@ export default function MemberHighlights() {
   })
 
   const active = members.filter((m) => (m.status ?? 'active') === 'active')
-
-  // Render even with zero active members — the social snapshot is
-  // useful on its own. Only short-circuit if the strip would be
-  // entirely empty (would never happen as long as SOCIAL_CHANNELS
-  // is non-empty).
-  if (active.length === 0 && SOCIAL_CHANNELS.length === 0) return null
+  if (active.length === 0) return null
 
   return (
-    <div className="flex items-center justify-between gap-4">
-      {/* Members — left side, scrolls horizontally if the team grows */}
+    <div className="flex items-center gap-4">
+      {/* Members — scrolls horizontally if the team grows. */}
       <div className="flex gap-2 overflow-x-auto min-w-0 flex-1 pb-1 -mx-1 px-1 [scrollbar-width:thin]">
         {active.map((member) => (
           <MemberPill key={member.id} member={member} />
-        ))}
-      </div>
-
-      {/* Social snapshot — solid-body stat tiles, right-aligned.
-          gap-4 between tiles + pr-1 buffer so even with hover
-          transitions and font measurement quirks the rightmost
-          tile content stays comfortably inside the rightmost
-          widget's right edge — no bleed at any viewport. */}
-      <div
-        className="flex items-center gap-4 shrink-0 pl-2 pr-1"
-        aria-label="Checkmark Audio social media snapshot"
-      >
-        {SOCIAL_CHANNELS.map((channel) => (
-          <SocialStat key={channel.platform} channel={channel} />
         ))}
       </div>
     </div>
