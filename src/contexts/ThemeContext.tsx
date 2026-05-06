@@ -38,7 +38,13 @@ function readStoredPreference(): ThemePreference {
   } catch {
     // localStorage may be unavailable (private mode, SSR); fall through.
   }
-  return 'dark' // dashboard ships dark-first; 'system' is opt-in
+  // Skin pass 2026-05-06 — default flipped from 'dark' to 'light' per
+  // user direction "make light mode the standard page on log in." The
+  // dark-mode design is preserved (lock policy still in effect on
+  // shared tokens), but new users + users without a saved preference
+  // now land on light first. The theme toggle in the top-bar lets
+  // them switch any time; their choice persists to localStorage.
+  return 'light'
 }
 
 function systemPrefersLight(): boolean {
