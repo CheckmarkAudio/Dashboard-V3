@@ -657,26 +657,18 @@ body {
      use just `<ListRows>` + `<ListRow>` (skip the outer .list-panel
      to avoid card-in-card). */
   .list-panel {
-    /* Skin pass 2026-05-06 (rev3) — clear "lifted card on top of
-       another card" treatment that works in BOTH themes:
-         • `surface-lifted` → pure white in light, lighter charcoal
-           in dark. ALWAYS brighter than its parent widget-card.
-         • `border-strong` → visibly present hairline (light: #c9c9d3,
-           dark: #4d4d57). Subtle in isolation, defined when sibling
-           panels touch.
-         • `box-shadow` 0 6px 20px @ 10% alpha → genuine drop shadow
-           that reads in both themes. The `inset 0 1px 0` top
-           highlight gives a soft "rim of light" especially useful
-           in dark mode where drop shadows alone don't lift a card
-           above a dark parent.
-       Total effect: the inner panel POPS off the widget body
-       regardless of background contrast. */
+    /* Skin pass 2026-05-06 (rev5) — FLAT treatment. User feedback on
+       the calendar widget: "remove the shadowing on the nested box,
+       we need that to be a subtle line, not a shadow." Drop shadow
+       and inset top highlight removed sitewide; nesting now reads
+       via the hairline border alone. Pairs with the white widget
+       body from rev4 — the inner panel sits flush, defined by the
+       `border-strong` line (light: #c9c9d3, dark: #4d4d57), no
+       lift effect. Matches the Linear-flat aesthetic the user
+       prefers over the credit-card shadow look. */
     background: var(--color-surface-lifted);
     border: 1px solid var(--color-border-strong);
     border-radius: 1.25rem; /* 20px — matches widget-card scale */
-    box-shadow:
-      0 6px 20px rgba(0, 0, 0, 0.10),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
     overflow: hidden;
   }
   .list-panel__head {
