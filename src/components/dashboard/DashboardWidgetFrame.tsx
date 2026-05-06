@@ -73,11 +73,17 @@ export default function DashboardWidgetFrame({
           + corner controls stay visible (top-right) so the widget
           can still be reordered, expanded, hidden. The body's own
           `<ListPanel>` header carries the title hierarchy in that
-          case. */}
+          case.
+
+          Skin pass 2026-05-06 — the in-grid header divider moved
+          from the inline `border-b border-white/5` (dark-tuned,
+          invisible in light mode) to the shared
+          `.widget-frame-head` class which carries dark-preserved +
+          light-visible variants. See src/index.css. */}
       <div
         className={[
           'px-4 flex items-start justify-between gap-3',
-          hideTitle ? 'py-1.5' : 'py-3 border-b border-white/5',
+          hideTitle ? 'py-1.5' : 'py-3 widget-frame-head',
         ].join(' ')}
       >
         <div className="min-w-0 flex-1 flex items-start gap-2">
