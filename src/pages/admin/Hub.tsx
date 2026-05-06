@@ -36,7 +36,7 @@ export default function AdminHub() {
 
   return (
     <AdminOverviewProvider>
-      <div className="max-w-[1440px] mx-auto space-y-6 animate-fade-in">
+      <div className="max-w-[1440px] mx-auto space-y-3 animate-fade-in">
         <PageHeader
           icon={UsersRound}
           title="Dashboard"
