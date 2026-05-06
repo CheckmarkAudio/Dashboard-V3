@@ -206,8 +206,10 @@
   --color-border:        #e5e5e7; /* SOFT grey — not black ink       */
   --color-border-light:  #ededef; /* even softer for dividers        */
   --color-text:          #1c1c22; /* black for max headline contrast */
-  --color-text-muted:    #4a4a52; /* slightly lighter than rev17     */
-  --color-text-light:    #76767d; /* lighter mid-grey for meta lines */
+  --color-text-muted:    #3f3f46; /* dark grey (matches rev17)       */
+  --color-text-light:    #5e5e66; /* darker mid-grey — bumped from   */
+                                  /*   #76767d so meta lines pass    */
+                                  /*   AA contrast on lighter cards. */
 
   /* Vibrant marigold for backgrounds, buttons, borders, glows.
      rev10: restored rev8's HSL(36°, 87%, 54%) #f0a623 base after
@@ -271,6 +273,72 @@
 :root[data-theme='light'] .text-cyan-400   { color: #0e7490; }
 :root[data-theme='light'] .text-fuchsia-300 { color: #a21caf; } /* fuchsia-700 */
 :root[data-theme='light'] .text-fuchsia-400 { color: #a21caf; }
+
+/* Light-mode revamp 2026-05-04 — close the contrast gaps that the
+   rev17 overrides missed: opacity-modified accent classes, missing
+   shade tiers (-100/-500/-600), and the new orange family.
+   User report: "anything that is golden yellow or not very contrasty
+   needs to be changed to black or some other darker color."
+   Each rule below resolves to the high-contrast 700/800-tier in
+   light mode regardless of opacity modifier — Tailwind's `/N`
+   modifier compiles a separate class that doesn't inherit the
+   parent override (`.text-gold` ≠ `.text-gold/70`), so each variant
+   in actual use needs an explicit selector. */
+
+/* Gold — opacity variants. Drop the opacity entirely + use deep
+   amber so even the most subtle text-gold/40 still passes contrast. */
+:root[data-theme='light'] .text-gold\/40,
+:root[data-theme='light'] .text-gold\/50,
+:root[data-theme='light'] .text-gold\/60,
+:root[data-theme='light'] .text-gold\/70,
+:root[data-theme='light'] .text-gold\/80,
+:root[data-theme='light'] .text-gold\/90 { color: #7a510f; }
+
+/* Amber — fill the gaps (-100, -500) + opacity variants. */
+:root[data-theme='light'] .text-amber-100,
+:root[data-theme='light'] .text-amber-100\/90 { color: #92400e; } /* amber-800 */
+:root[data-theme='light'] .text-amber-200\/80 { color: #92400e; }
+:root[data-theme='light'] .text-amber-300\/70,
+:root[data-theme='light'] .text-amber-300\/80,
+:root[data-theme='light'] .text-amber-300\/90,
+:root[data-theme='light'] .text-amber-500 { color: #b45309; } /* amber-700 */
+
+/* Orange — entirely new family (rev17 didn't cover it). Treat the
+   200/300/400/500 tiers + opacity variants the same way. */
+:root[data-theme='light'] .text-orange-200,
+:root[data-theme='light'] .text-orange-300,
+:root[data-theme='light'] .text-orange-300\/90,
+:root[data-theme='light'] .text-orange-400,
+:root[data-theme='light'] .text-orange-400\/70,
+:root[data-theme='light'] .text-orange-500,
+:root[data-theme='light'] .text-orange-500\/70 { color: #c2410c; } /* orange-700 */
+
+/* Cyan — fill the gaps (-200, -500) + opacity variants. */
+:root[data-theme='light'] .text-cyan-200,
+:root[data-theme='light'] .text-cyan-400\/70,
+:root[data-theme='light'] .text-cyan-500\/70 { color: #0e7490; } /* cyan-700 */
+
+/* Emerald — fill the gap (-500) + opacity variants. */
+:root[data-theme='light'] .text-emerald-400\/70,
+:root[data-theme='light'] .text-emerald-400\/80,
+:root[data-theme='light'] .text-emerald-500 { color: #047857; } /* emerald-700 */
+
+/* Red — fill the gap (-600). */
+:root[data-theme='light'] .text-red-600 { color: #b91c1c; } /* red-700 */
+
+/* Rose — opacity variants. */
+:root[data-theme='light'] .text-rose-300\/70,
+:root[data-theme='light'] .text-rose-300\/80,
+:root[data-theme='light'] .text-rose-400\/40,
+:root[data-theme='light'] .text-rose-400\/80,
+:root[data-theme='light'] .text-rose-400\/90 { color: #be123c; } /* rose-700 */
+
+/* Violet — opacity variants. */
+:root[data-theme='light'] .text-violet-300\/70,
+:root[data-theme='light'] .text-violet-400\/70 { color: #6d28d9; } /* violet-700 */
+
+/* Sky — fill the gap (-500). */
+:root[data-theme='light'] .text-sky-500 { color: #0369a1; } /* sky-700 */
 
 body {
   /* Lean 2 (PR #79) — body-level gradient with three tints, all VERY
