@@ -157,12 +157,14 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
       {/* Solid icon body — inverse-color so it pops in both themes.
           Uses explicit CSS-var arbitrary values because the
           `bg-text` / `text-bg` Tailwind shortcuts collide with
-          built-in text-* utility prefixes and never generated.
-          bg = current theme's text color (black in light /
-          near-white in dark); glyph = current theme's body color
-          (cream in light / charcoal in dark). Hover flips body to
-          marigold gold; glyph auto-stays inverse for legibility. */}
-      <span className="flex w-10 h-10 items-center justify-center rounded-xl bg-[var(--color-text)] text-[var(--color-bg)] group-hover:bg-gold transition-colors shrink-0">
+          2026-05-04 — flipped per user direction: tiles are GOLD by
+          default with dark glyphs (matches the fintech reference
+          where social/CTA accents are the bright yellow). Hover
+          deepens to gold-muted for a tactile cue. Previous default
+          was inverse (black tile, light glyph) which fought with
+          the light-mode wash + pulled visual weight away from the
+          actual page content. */}
+      <span className="flex w-10 h-10 items-center justify-center rounded-xl bg-gold text-black group-hover:bg-gold-muted transition-colors shrink-0">
         <PlatformIcon platform={channel.platform} size={22} />
       </span>
       <span className="text-[22px] font-bold text-text group-hover:text-gold transition-colors tabular-nums whitespace-nowrap leading-none">
