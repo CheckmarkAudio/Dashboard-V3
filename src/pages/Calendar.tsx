@@ -202,14 +202,14 @@ export default function Calendar() {
 
         {/* ── Right column: This Week grid ── */}
         <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-          <div className="px-4 py-3 border-b border-border-strong">
+          <div className="px-4 py-3 border-b border-border">
             <h2 className="text-[16px] font-bold text-text tracking-tight">This Week</h2>
           </div>
 
           <div>
             <div>
               {/* Day headers — clickable */}
-              <div className="grid grid-cols-[36px_repeat(7,1fr)] border-b border-border-strong">
+              <div className="grid grid-cols-[36px_repeat(7,1fr)] border-b border-border">
                 <div />
                 {WEEK.map((wd) => {
                   const isActualToday = wd.key === TODAY_KEY
@@ -218,7 +218,7 @@ export default function Calendar() {
                     <button
                       key={wd.key}
                       onClick={() => setSelectedDate(wd.key)}
-                      className={`text-center py-2 border-l border-border-strong transition-all ${isSelected ? 'bg-gold/[0.08]' : isActualToday ? 'bg-gold/[0.03]' : 'hover:bg-white/[0.02]'}`}
+                      className={`text-center py-2 border-l border-border transition-all ${isSelected ? 'bg-gold/[0.08]' : isActualToday ? 'bg-gold/[0.03]' : 'hover:bg-white/[0.02]'}`}
                     >
                       <p className={`text-[10px] font-semibold uppercase ${isSelected ? 'text-gold' : isActualToday ? 'text-gold/60' : 'text-text-muted'}`}>{wd.day}</p>
                       <p className={`text-[9px] ${isSelected ? 'text-gold' : isActualToday ? 'text-gold/50' : 'text-text-light'}`}>{wd.date}</p>
@@ -232,14 +232,14 @@ export default function Calendar() {
               <div className="relative" style={{ height: HOURS.length * 48 }}>
                 {/* Grid lines */}
                 {HOURS.map(hour => (
-                  <div key={hour} className="absolute left-0 right-0 grid grid-cols-[36px_repeat(7,1fr)] h-[48px] border-b border-border-strong" style={{ top: (hour - 7) * 48 }}>
+                  <div key={hour} className="absolute left-0 right-0 grid grid-cols-[36px_repeat(7,1fr)] h-[48px] border-b border-border" style={{ top: (hour - 7) * 48 }}>
                     <div className="text-[9px] text-text-light font-medium pr-2 text-right pt-0.5">
                       {hour > 12 ? hour - 12 : hour} {hour >= 12 ? 'PM' : 'AM'}
                     </div>
                     {WEEK.map((wd, di) => {
                       const isSel = wd.key === selectedDate
                       return (
-                        <div key={di} className={`border-l border-border-strong group/cell relative ${isSel ? 'bg-gold/[0.03]' : ''}`}>
+                        <div key={di} className={`border-l border-border group/cell relative ${isSel ? 'bg-gold/[0.03]' : ''}`}>
                           <button onClick={() => { setBookingPrefillDate(wd.key); setBookingPrefillTime(`${hour.toString().padStart(2,'0')}:00`); setShowBooking(true) }} className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity z-20">
                             <span className="flex items-center gap-0.5 text-[9px] text-gold bg-surface/90 border border-gold/20 rounded px-1.5 py-0.5">
                               <Plus size={8} />Book
@@ -267,7 +267,7 @@ export default function Calendar() {
                     return (
                       <div
                         key={b.id}
-                        className="absolute bg-gold/35 border border-gold/70 px-1.5 py-0.5 overflow-hidden cursor-default hover:bg-gold/50 transition-colors z-10"
+                        className="absolute calendar-booking-block px-1.5 py-0.5 overflow-hidden cursor-default z-10"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 18),
