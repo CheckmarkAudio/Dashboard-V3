@@ -314,7 +314,16 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto -mx-1">
+      {/* Skin pass 2026-05-06 — wrap the scrollable channels +
+          assignments area in `.inset-panel` chrome (matches booking
+          + Task Requests). Channels and assignments are flattened
+          to flat rows separated by `divide-y divide-theme`; the
+          per-row `rounded-xl border` chrome was dropped. State
+          (unread / expanded / hover) is now communicated by bg
+          tint alone. The scroller is inside the panel so
+          `overflow:hidden` doesn't fight `overflow-auto`. */}
+      <div className="flex-1 min-h-0 inset-panel">
+        <div className="h-full overflow-auto">
         {notifQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light py-6">
             <Loader2 size={18} className="animate-spin" />
@@ -333,7 +342,8 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             <p className="text-[12px] text-text-light mt-0.5">Create one in the Forum.</p>
           </div>
         ) : (
-          channels.map((c) => {
+          <div className="divide-y divide-theme">
+          {channels.map((c) => {
             const hasMessage = !!c.latest_id
             const unread = c.unread_count > 0
             const isExpanded = expandedChannelId === c.channel_id
@@ -382,19 +392,21 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
 
             const channelHref = `${APP_ROUTES.member.content}${c.channel_slug ? `?channel=${c.channel_slug}` : ''}`
 
-            // Forum violet (matches CategoryBadge for forum) — used for
-            // expanded-state border + the speech-bubble button hover/active
-            // states so the row reads as a violet-themed entity end to end.
-            const expandedRingClass = isExpanded
-              ? 'bg-violet-500/10 border-violet-500/40'
-              : 'border-transparent ' + (unread
-                  ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
-                  : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10')
+            // Skin pass 2026-05-06 — flattened from rounded-xl card to
+            // flat row inside the inset-panel + divide-theme stack.
+            // State (unread / expanded / hover) communicated by bg
+            // tint alone now that the divide-theme line provides the
+            // separation. Forum violet still tints the expanded row.
+            const stateBg = isExpanded
+              ? 'bg-violet-500/10'
+              : unread
+                ? 'bg-gold/8 hover:bg-gold/12'
+                : 'hover:bg-surface-hover'
 
             return (
               <div
                 key={c.channel_id}
-                className={`relative rounded-xl border transition-[background-color,border-color] duration-150 ease-out ${expandedRingClass}`}
+                className={`relative transition-[background-color] duration-150 ease-out ${stateBg}`}
               >
                 <div className={`flex items-start gap-2.5 ${rowPad}`}>
                   {/* Speech-bubble = the inline-reply trigger. Buttoned
@@ -423,7 +435,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                     type="button"
                     onClick={toggleExpand}
                     aria-expanded={isExpanded}
-                    className="flex-1 min-w-0 text-left -my-1 py-1 rounded-md hover:bg-white/[0.02] transition-colors focus-ring"
+                    className="flex-1 min-w-0 text-left -my-1 py-1 rounded-md hover:bg-surface-hover transition-colors focus-ring"
                   >
                     <div className="flex items-center gap-2">
                       <p
@@ -521,18 +533,23 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 )}
               </div>
             )
-          })
+          })}
+          </div>
         )}
 
         {assignments.length > 0 && (
           <>
-            <div className="mx-2 mt-4 mb-2 flex items-center gap-2">
+            {/* Skin pass — section header for ASSIGNMENTS gets its own
+                divider via border-t theme-divider + a soft surface-alt
+                bg band, matching the table-head treatment used on the
+                booking nested panel. */}
+            <div className="border-t theme-divider px-3 py-2 flex items-center gap-2 bg-surface-alt/40">
               <Bell size={11} className="text-gold/70" aria-hidden="true" />
               <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
                 ASSIGNMENTS
               </p>
-              <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
             </div>
+            <div className="divide-y divide-theme">
             {assignments.map((n) => {
               const unread = !n.is_read
               const cat = categoryFor(n)
@@ -541,10 +558,10 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                   key={n.id}
                   type="button"
                   onClick={() => handleAssignmentClick(n)}
-                  className={`w-full group relative flex items-start gap-2.5 ${rowPad} rounded-xl border border-transparent transition-[background-color,border-color,transform] duration-150 ease-out active:scale-[0.995] text-left ${
+                  className={`w-full group relative flex items-start gap-2.5 ${rowPad} transition-[background-color,transform] duration-150 ease-out active:scale-[0.995] text-left ${
                     unread
-                      ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
-                      : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
+                      ? 'bg-gold/8 hover:bg-gold/12'
+                      : 'hover:bg-surface-hover'
                   }`}
                 >
                   <CategoryBadge category={cat} />
@@ -573,6 +590,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 </button>
               )
             })}
+            </div>
           </>
         )}
 
@@ -582,6 +600,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             <p className="text-[12px]">All caught up.</p>
           </div>
         )}
+        </div>
       </div>
 
       {reassignModalOpen && (
