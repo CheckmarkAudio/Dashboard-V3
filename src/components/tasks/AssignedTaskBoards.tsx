@@ -140,6 +140,9 @@ function AssignmentBoardBody({
       else next.add(taskId)
       return next
     })
+    // Tapping any non-swap row also folds an open swap drawer — keeps
+    // the list visually quiet (only one row open at a time, period).
+    closeExpand()
   }
 
   const submitMutation = useMutation({
@@ -159,24 +162,22 @@ function AssignmentBoardBody({
   // `requestTaskReassignment` directly and we tracked "did I request
   // this?" in a local Set. The new flow is a NotificationsPanel-style
   // click-to-expand inline drawer:
-  //   1) click row → "Request to take this task?" + Yes
-  //   2) click Yes → "Tap again to confirm" + Confirm
-  //   3) confirm → fires RPC; row keeps a visible pending marker
-  //   4) click pending row → "Cancel task swap?" + Yes / Confirm
-  //   5) confirm cancel → fires cancel RPC; pending marker drops
-  // Pending state now comes from `get_my_outgoing_pending_reassign_requests`
+  //   1) click row → "Request to take this task?" + Submit
+  //   2) Submit → fires RPC; row keeps a visible pending marker
+  //   3) click pending row → "Cancel task swap?" + Submit
+  //   4) Submit → fires cancel RPC; pending marker drops
+  // Single-tap submit on each step (no two-step confirm) — cancel is
+  // a one-tap revert anyway, so a "type to commit" gate is overkill.
+  // Pending state comes from get_my_outgoing_pending_reassign_requests
   // so it survives reload + matches the source of truth (and gives us
-  // the request id we need to cancel).
+  // the request id we need to cancel). Only one drawer is open at a
+  // time across the whole list (clicking another row folds the prev).
   const outgoingPendingQuery = useQuery({
     queryKey: taskReassignKeys.outgoing(),
     queryFn: fetchMyOutgoingPendingReassignRequests,
     enabled: Boolean(profile?.id),
     staleTime: 30_000,
   })
-  // Map taskId → requestId so each row knows whether it has a pending
-  // request the caller initiated, and which row to cancel. Filtered
-  // to direction='take' since this widget only ever sends "take"
-  // requests (transfers are owner-initiated from MyTasks).
   const pendingByTaskId = useMemo(() => {
     const m = new Map<string, string>()
     for (const r of outgoingPendingQuery.data ?? []) {
@@ -186,17 +187,19 @@ function AssignmentBoardBody({
   }, [outgoingPendingQuery.data])
 
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
-  // Two-step confirmation: first Yes click sets this so the second
-  // tap actually fires the mutation. Reset on row close / success.
-  const [confirmingTaskId, setConfirmingTaskId] = useState<string | null>(null)
   // Optional "why are you taking this?" note. Lives at the parent so
-  // it survives the Yes → Confirm flip without losing what the user
-  // typed. Reset whenever the drawer closes or jumps to a new row.
+  // it survives a re-render. Reset whenever the drawer closes or
+  // jumps to a new row.
   const [noteText, setNoteText] = useState('')
 
   const closeExpand = () => {
     setExpandedTaskId(null)
-    setConfirmingTaskId(null)
+    setNoteText('')
+  }
+  // Toggle helper: clicking the open row closes; clicking another row
+  // folds the prev + opens the new one (note resets either way).
+  const openRow = (taskId: string) => {
+    setExpandedTaskId((prev) => (prev === taskId ? null : taskId))
     setNoteText('')
   }
 
@@ -322,16 +325,10 @@ function AssignmentBoardBody({
                 pendingIds={pendingIds}
                 pendingByTaskId={pendingByTaskId}
                 expandedTaskId={expandedTaskId}
-                confirmingTaskId={confirmingTaskId}
                 noteText={noteText}
                 onNoteChange={setNoteText}
                 togglePending={togglePending}
-                onToggleExpand={(id) => {
-                  setExpandedTaskId((prev) => (prev === id ? null : id))
-                  setConfirmingTaskId(null)
-                  setNoteText('')
-                }}
-                onAdvanceConfirm={(id) => setConfirmingTaskId(id)}
+                onToggleExpand={openRow}
                 onSubmitTake={(id) =>
                   reassignMutation.mutate({ taskId: id, note: noteText.trim() ? noteText.trim() : null })
                 }
@@ -353,16 +350,10 @@ function AssignmentBoardBody({
                   pendingIds={pendingIds}
                   pendingByTaskId={pendingByTaskId}
                   expandedTaskId={expandedTaskId}
-                  confirmingTaskId={confirmingTaskId}
                   noteText={noteText}
                   onNoteChange={setNoteText}
                   togglePending={togglePending}
-                  onToggleExpand={(id) => {
-                    setExpandedTaskId((prev) => (prev === id ? null : id))
-                    setConfirmingTaskId(null)
-                    setNoteText('')
-                  }}
-                  onAdvanceConfirm={(id) => setConfirmingTaskId(id)}
+                  onToggleExpand={openRow}
                   onSubmitTake={(id) =>
                     reassignMutation.mutate({ taskId: id, note: noteText.trim() ? noteText.trim() : null })
                   }
@@ -392,7 +383,6 @@ function AssignmentBoardBody({
               task.assigned_to !== profile?.id
             const pendingRequestId = pendingByTaskId.get(task.id) ?? null
             const isExpanded = expandedTaskId === task.id
-            const isConfirming = confirmingTaskId === task.id
 
             return (
               <TeamTaskRow
@@ -404,18 +394,12 @@ function AssignmentBoardBody({
                 canRequestTransfer={canRequestTransfer}
                 pendingRequestId={pendingRequestId}
                 isExpanded={isExpanded}
-                isConfirming={isConfirming}
                 noteText={noteText}
                 onNoteChange={setNoteText}
                 isMutating={reassignMutation.isPending || cancelMutation.isPending}
                 disableCheckbox={!task.can_complete || submitMutation.isPending}
                 onTogglePending={() => togglePending(task.id)}
-                onToggleExpand={() => {
-                  setExpandedTaskId((prev) => (prev === task.id ? null : task.id))
-                  setConfirmingTaskId(null)
-                  setNoteText('')
-                }}
-                onAdvanceConfirm={() => setConfirmingTaskId(task.id)}
+                onToggleExpand={() => openRow(task.id)}
                 onSubmitTake={() =>
                   reassignMutation.mutate({
                     taskId: task.id,
@@ -444,12 +428,11 @@ function AssignmentBoardBody({
 //     toggle the pending set, sibling rows join the Submit batch.
 //   - Peer's member task (canRequestTransfer=true): click-to-expand
 //     drawer. Closed: tappable row + (if pending) gold "Pending swap"
-//     marker. Open: inline two-step confirm drawer offering either
-//     "Request to take this task?" → "Tap again to confirm" → fire
-//     RPC, OR (when already pending) "Cancel task swap?" →
-//     "Tap again to confirm" → fire cancel RPC. Mirrors the
-//     NotificationsPanel quick-reply pattern (forum violet → gold
-//     for swap actions).
+//     marker. Open: inline single-tap drawer offering either
+//     "Request to take this task?" → Submit → fire RPC, OR (when
+//     already pending) "Cancel task swap?" → Submit → fire cancel.
+//     Mirrors the NotificationsPanel quick-reply pattern (forum
+//     violet → gold for swap actions).
 // Both variants share the grid-layout + stage pill + due-label look.
 function TeamTaskRow({
   task,
@@ -459,14 +442,12 @@ function TeamTaskRow({
   canRequestTransfer,
   pendingRequestId,
   isExpanded,
-  isConfirming,
   noteText,
   onNoteChange,
   isMutating,
   disableCheckbox,
   onTogglePending,
   onToggleExpand,
-  onAdvanceConfirm,
   onSubmitTake,
   onSubmitCancel,
   memberMap,
@@ -478,14 +459,12 @@ function TeamTaskRow({
   canRequestTransfer: boolean
   pendingRequestId: string | null
   isExpanded: boolean
-  isConfirming: boolean
   noteText: string
   onNoteChange: (value: string) => void
   isMutating: boolean
   disableCheckbox: boolean
   onTogglePending: () => void
   onToggleExpand: () => void
-  onAdvanceConfirm: () => void
   onSubmitTake: () => void
   onSubmitCancel: () => void
   memberMap: Map<string, TeamMember>
@@ -547,7 +526,7 @@ function TeamTaskRow({
 
   if (canRequestTransfer) {
     // Non-own member task. Two states: closed (tappable trigger) and
-    // open (inline drawer with two-step confirm). Flat row chrome
+    // open (inline single-tap submit drawer). Flat row chrome
     // (divider stack does separation) but tinted bg when expanded or
     // pending so the swap state is visible at a glance.
     const tint = isExpanded
@@ -572,13 +551,7 @@ function TeamTaskRow({
             style={{ animation: 'fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1)' }}
           >
             <p className="text-[12px] font-semibold text-text">
-              {hasPendingSwap
-                ? isConfirming
-                  ? 'Tap Confirm to withdraw this swap request.'
-                  : 'Cancel task swap?'
-                : isConfirming
-                  ? 'Tap Confirm to send your request to the current owner.'
-                  : 'Request to take this task?'}
+              {hasPendingSwap ? 'Cancel task swap?' : 'Request to take this task?'}
             </p>
             {/* Optional note — only shown for the take flow (cancel is
                 a one-line withdrawal, no message needed). Mirrors the
@@ -593,8 +566,7 @@ function TeamTaskRow({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                     e.preventDefault()
-                    if (isConfirming) onSubmitTake()
-                    else onAdvanceConfirm()
+                    onSubmitTake()
                   }
                   if (e.key === 'Escape') {
                     e.preventDefault()
@@ -607,9 +579,7 @@ function TeamTaskRow({
             )}
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] text-text-light/70">
-                {hasPendingSwap
-                  ? 'Esc to dismiss'
-                  : '⌘/Ctrl + Enter · Esc to dismiss'}
+                {hasPendingSwap ? 'Esc to dismiss' : '⌘/Ctrl + Enter · Esc to dismiss'}
               </span>
               <div className="flex items-center gap-1.5">
                 <button
@@ -619,34 +589,19 @@ function TeamTaskRow({
                 >
                   Not now
                 </button>
-                {!isConfirming ? (
-                  <button
-                    type="button"
-                    onClick={onAdvanceConfirm}
-                    disabled={isMutating}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-all focus-ring ${
-                      hasPendingSwap
-                        ? 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/40 hover:bg-rose-500/25'
-                        : 'bg-gold text-black hover:bg-gold-muted'
-                    } disabled:opacity-60`}
-                  >
-                    Yes
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={hasPendingSwap ? onSubmitCancel : onSubmitTake}
-                    disabled={isMutating}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-all focus-ring ${
-                      hasPendingSwap
-                        ? 'bg-rose-500 text-white hover:bg-rose-600 shadow-[0_4px_12px_rgba(0,0,0,0.08)]'
-                        : 'bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(0,0,0,0.08)]'
-                    } disabled:opacity-60`}
-                  >
-                    {isMutating ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} strokeWidth={3} />}
-                    Confirm
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={hasPendingSwap ? onSubmitCancel : onSubmitTake}
+                  disabled={isMutating}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-all focus-ring ${
+                    hasPendingSwap
+                      ? 'bg-rose-500 text-white hover:bg-rose-600 shadow-[0_4px_12px_rgba(0,0,0,0.08)]'
+                      : 'bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(0,0,0,0.08)]'
+                  } disabled:opacity-60`}
+                >
+                  {isMutating ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} strokeWidth={3} />}
+                  Submit
+                </button>
               </div>
             </div>
           </div>
@@ -689,12 +644,10 @@ function SectionedRows({
   pendingIds,
   pendingByTaskId,
   expandedTaskId,
-  confirmingTaskId,
   noteText,
   onNoteChange,
   togglePending,
   onToggleExpand,
-  onAdvanceConfirm,
   onSubmitTake,
   onSubmitCancel,
   isMutating,
@@ -708,12 +661,10 @@ function SectionedRows({
   pendingIds: Set<string>
   pendingByTaskId: Map<string, string>
   expandedTaskId: string | null
-  confirmingTaskId: string | null
   noteText: string
   onNoteChange: (value: string) => void
   togglePending: (taskId: string) => void
   onToggleExpand: (taskId: string) => void
-  onAdvanceConfirm: (taskId: string) => void
   onSubmitTake: (taskId: string) => void
   onSubmitCancel: (requestId: string) => void
   isMutating: boolean
@@ -754,7 +705,6 @@ function SectionedRows({
             task.assigned_to !== profileId
           const pendingRequestId = pendingByTaskId.get(task.id) ?? null
           const isExpanded = expandedTaskId === task.id
-          const isConfirming = confirmingTaskId === task.id
           return (
             <TeamTaskRow
               key={task.id}
@@ -765,14 +715,12 @@ function SectionedRows({
               canRequestTransfer={canRequestTransfer}
               pendingRequestId={pendingRequestId}
               isExpanded={isExpanded}
-              isConfirming={isConfirming}
               noteText={noteText}
               onNoteChange={onNoteChange}
               isMutating={isMutating}
               disableCheckbox={!task.can_complete || submitMutationPending}
               onTogglePending={() => togglePending(task.id)}
               onToggleExpand={() => onToggleExpand(task.id)}
-              onAdvanceConfirm={() => onAdvanceConfirm(task.id)}
               onSubmitTake={() => onSubmitTake(task.id)}
               onSubmitCancel={() => {
                 if (pendingRequestId) onSubmitCancel(pendingRequestId)
