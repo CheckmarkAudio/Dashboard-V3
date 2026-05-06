@@ -70,6 +70,24 @@ export async function requestTaskReassignment(
   }
 }
 
+/**
+ * 2026-05-06 — requester-side cancel. Caller must be the row's
+ * `requester_id` and the row must still be `pending`. Wraps RPC
+ * `cancel_my_task_reassignment` (migration
+ * 20260506120000_task_reassign_cancel_rpc.sql) which also DELETES
+ * the original "X wants to take Y" notification on the assignee
+ * side so their notifications panel reflects reality.
+ */
+export async function cancelTaskReassignment(requestId: string): Promise<void> {
+  const { error } = await supabase.rpc('cancel_my_task_reassignment', {
+    p_request_id: requestId,
+  })
+  if (error) {
+    console.error('[queries/taskReassign] cancel failed:', error)
+    throw requireMessage(error, 'Could not cancel the request.')
+  }
+}
+
 export async function approveTaskReassignment(requestId: string): Promise<void> {
   const { error } = await supabase.rpc('approve_task_reassignment', {
     p_request_id: requestId,

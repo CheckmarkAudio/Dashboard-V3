@@ -128,32 +128,13 @@ export default function Sessions() {
     : sessions.filter((row) => row.category === activeCategory)
 
   // PR #65 — same gold-CTA shape as the Overview Book a Session button.
-  // h-10 / px-4 / rounded-2xl + lighter shadow `0_6px_14px_18%` (was
-  // `0_14px_28px_22%` — way too feathery per user feedback).
+  // 2026-05-06 — for the bookings view, the Manage + Book buttons
+  // moved DOWN onto the category-pill row (right-justified) per user
+  // direction, so the actions slot is empty there. Clients view still
+  // surfaces "Add Client" in the actions slot since it has no filter
+  // row to host inline buttons.
   const headerAction =
-    view === 'bookings' ? (
-      <div className="flex items-center gap-2 flex-wrap justify-end">
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => setShowAdminEdit(true)}
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl border border-gold/25 bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/18 transition-all focus-ring"
-            title="Edit or cancel existing bookings"
-          >
-            <Pencil size={14} strokeWidth={2.2} />
-            Manage Bookings
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setShowBooking(true)}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
-        >
-          <Plus size={14} strokeWidth={2.4} />
-          Book a Session
-        </button>
-      </div>
-    ) : (
+    view === 'clients' ? (
       <button
         type="button"
         onClick={() => openAddClientRef.current?.()}
@@ -162,7 +143,7 @@ export default function Sessions() {
         <Plus size={14} strokeWidth={2.4} />
         Add Client
       </button>
-    )
+    ) : null
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
@@ -204,26 +185,60 @@ export default function Sessions() {
           />
         </div>
 
-        {/* Bookings-only sub-row: category pills. */}
+        {/* Bookings-only sub-row: category pills on the LEFT, Manage +
+            Book CTAs justified to the RIGHT. Wraps cleanly when the
+            row gets tight (CTAs stay together; pills wrap first). */}
         {view === 'bookings' && (
-          <div className="flex gap-1.5 flex-wrap">
-            {CATEGORIES.map((cat) => {
-              const active = activeCategory === cat
-              return (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex gap-1.5 flex-wrap">
+              {CATEGORIES.map((cat) => {
+                const active = activeCategory === cat
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setActiveCategory(cat)}
+                    className={`inline-flex items-center h-9 px-3.5 rounded-[22px] text-[13px] font-semibold transition-all focus-ring whitespace-nowrap ${
+                      active
+                        ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                        : 'text-text-muted hover:text-text hover:bg-surface-hover'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap justify-end ml-auto">
+              {isAdmin && (
                 <button
-                  key={cat}
                   type="button"
-                  onClick={() => setActiveCategory(cat)}
-                  className={`inline-flex items-center h-9 px-3.5 rounded-[22px] text-[13px] font-semibold transition-all focus-ring whitespace-nowrap ${
-                    active
-                      ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-                      : 'text-text-muted hover:text-text hover:bg-surface-hover'
-                  }`}
+                  onClick={() => setShowAdminEdit(true)}
+                  // 2026-05-06 — border bumped from gold/25 (faint) to
+                  // border-gold-muted (full-opacity darker gold) so the
+                  // outline reads as a real "lined" button in light
+                  // mode instead of blending into the gold/12 wash.
+                  // Width matched to BookButton + QuickAssign + Book a
+                  // Session (248px = 4×w-14 + 3×gap-2) so the three
+                  // gold pills stack as a coherent button family.
+                  className="inline-flex items-center justify-center gap-2 h-10 px-4 w-[248px] rounded-2xl border-2 border-gold-muted bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/20 hover:border-gold transition-all focus-ring"
+                  title="Edit or cancel existing bookings"
                 >
-                  {cat}
+                  <Pencil size={14} strokeWidth={2.2} />
+                  Manage Bookings
                 </button>
-              )
-            })}
+              )}
+              <button
+                type="button"
+                onClick={() => setShowBooking(true)}
+                // 2026-05-06 — width matches Overview Book a Session
+                // (= 4×w-14 social bubbles + 3×gap-2). Sitewide.
+                className="inline-flex items-center justify-center gap-2 h-10 px-4 w-[248px] rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight border border-gold-muted hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
+              >
+                <Plus size={14} strokeWidth={2.4} />
+                Book a Session
+              </button>
+            </div>
           </div>
         )}
       </PageHeader>
