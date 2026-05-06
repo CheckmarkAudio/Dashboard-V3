@@ -15,8 +15,11 @@ These guardrails support the project cornerstones:
 
 Before editing files:
 
+- For a fresh session, run `.claude/commands/start-session.md` before coding.
 - Read `docs/SESSION_CONTEXT.md`.
 - Read `docs/PROJECT_STATE.md`.
+- For UI, layout, theme, widget chrome, spacing, borders, typography, or visual polish, use the repo-local Claude skill at `.claude/skills/ui-consistency/SKILL.md`.
+- For visual standards, read `docs/ui-standards.md`.
 - For Assign, Tasks, task requests, approvals, or related RPCs, read `docs/assign-engine-spec-2026-05-03.md`.
 - For merge readiness, use `docs/pr-acceptance-checklist.md`.
 - Check open PRs and avoid overlapping active Claude/Codex work.
@@ -56,6 +59,17 @@ For frontend work:
 - Use the actual route and role the user cares about.
 
 Avoid declaring a visual issue fixed from DOM numbers alone. DOM geometry is useful, but the final check is whether the full screen reads correctly.
+
+## UI Consistency
+
+Use `docs/ui-standards.md` as the styling source of truth.
+
+- Colors should come from `src/index.css` tokens.
+- Widget chrome should come from `.widget-card` and `DashboardWidgetFrame`.
+- Widget-grid layout should come from `WorkspacePanel`.
+- Shared visual changes should be made in shared classes/components, not repeated local Tailwind strings.
+- Arbitrary values such as `text-[13px]`, `rounded-[17px]`, `border-[#...]`, and `shadow-[...]` need a reason.
+- If a border, radius, font size, or color should match across pages, update the shared token/class/component so it changes site-wide.
 
 ## Accessibility Rules
 

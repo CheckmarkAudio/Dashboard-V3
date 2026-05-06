@@ -38,6 +38,15 @@ Supabase, or Vercel-preview work. It captures scope discipline,
 preview verification, accessibility, backend safety, and background
 task cleanup expectations.
 
+For UI consistency specifically, use `.claude/skills/ui-consistency/SKILL.md`
+and `docs/ui-standards.md`. Visual changes should route through shared
+tokens, shared CSS classes, or reusable components whenever they should
+match site-wide.
+
+For fresh Claude sessions, run `.claude/commands/start-session.md`
+before coding. It loads context, checks open PRs, checks drift, activates
+the relevant guardrails, and summarizes the safe next move.
+
 ### Change provenance tags
 
 When writing handoff notes, use these tags so future Claude/Codex sessions
