@@ -15,6 +15,7 @@ These guardrails support the project cornerstones:
 
 Before editing files:
 
+- For a fresh session, run `.claude/commands/start-session.md` before coding.
 - Read `docs/SESSION_CONTEXT.md`.
 - Read `docs/PROJECT_STATE.md`.
 - For UI, layout, theme, widget chrome, spacing, borders, typography, or visual polish, use the repo-local Claude skill at `.claude/skills/ui-consistency/SKILL.md`.
