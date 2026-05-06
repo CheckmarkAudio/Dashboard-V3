@@ -210,7 +210,17 @@ function AssignmentBoardBody({
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
+      {/* Skin pass 2026-05-06 — booking-style nesting for parity with
+          MyTasksCard. Wrap scrollable list in `.inset-panel` so row
+          dividers clip cleanly at the panel border; inner scroller
+          uses `divide-y divide-theme` for needle-thin row hairlines.
+          Per-row card chrome (rounded-[14px] border bg-white/[…])
+          dropped in TeamTaskRow below — flat rows + bg-tinted state
+          via theme-aware tokens. Section headers in the studio
+          variant render between divider groups so each room reads
+          as its own grouping. */}
+      <div className="flex-1 min-h-0 inset-panel">
+        <div className="h-full overflow-y-auto divide-y divide-theme">
         {tasksQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light py-6">
             <Loader2 size={18} className="animate-spin" />
@@ -222,7 +232,7 @@ function AssignmentBoardBody({
           </div>
         ) : visibleTasks.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center py-6">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/[0.03] ring-1 ring-white/10 mb-2">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-surface-alt ring-1 ring-border mb-2">
               <Inbox size={18} className="text-text-light" aria-hidden="true" />
             </div>
             <p className="text-[14px] font-medium text-text">{emptyTitle}</p>
@@ -301,13 +311,14 @@ function AssignmentBoardBody({
             )
           })
         )}
+        </div>
       </div>
 
       {/* PR #37 — sticky footer: Submit Completed bar (greyed until
           user queues at least one pending toggle) + show-completed
           eye. No +Task button here since these boards don't support
           self-requesting. */}
-      <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t border-white/5">
+      <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t theme-divider">
         <SubmitBar
           count={pendingIds.size}
           isSubmitting={submitMutation.isPending}
@@ -365,7 +376,14 @@ function TeamTaskRow({
   const assignee = task.assigned_to ? memberMap.get(task.assigned_to) : undefined
   const roleLabel = rolePositionFor(assignee?.position)
   const shortName = formatShortName(task.assigned_to_name)
-  const rowBase = 'relative w-full text-left grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2.5 py-2 rounded-[14px] border transition-all'
+  // Skin pass 2026-05-06 — flattened from rounded-[14px] border card
+  // to flat row inside AssignedTaskBoards' inset-panel + divide-theme
+  // stack. Matches the MyTasksCard treatment exactly:
+  // - rounded + border dropped (divide-theme provides separation)
+  // - bg state uses theme-aware tokens (dark-tuned bg-white/[…] → bg-surface-*)
+  // - checkbox empty-state border swapped border-white/20 → border-border
+  //   so the checkbox is actually visible in light mode (was invisible)
+  const rowBase = 'relative w-full text-left grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-3 py-2 transition-all'
 
   const rowContent = (
     <>
@@ -375,7 +393,7 @@ function TeamTaskRow({
             ? 'bg-gold/30 border-gold'
             : task.is_completed
               ? 'bg-gold/30 border-gold/40'
-              : 'border-white/20'
+              : 'border-border'
         }`}
       >
         {checkVisual && <Check size={11} className="text-gold" strokeWidth={3} />}
@@ -410,15 +428,15 @@ function TeamTaskRow({
     // to the overlay, not a toggle. Overlay fades in on hover/focus.
     return (
       <div
-        className={`group ${rowBase} bg-white/[0.018] border-transparent cursor-default overflow-hidden`}
+        className={`group ${rowBase} bg-surface-alt/30 cursor-default overflow-hidden`}
         tabIndex={0}
       >
         {rowContent}
         <div
-          className={`absolute inset-0 rounded-[14px] flex items-center justify-center transition-opacity ${
+          className={`absolute inset-0 flex items-center justify-center transition-opacity ${
             alreadyRequested
-              ? 'bg-emerald-500/15 ring-1 ring-emerald-500/30 opacity-100'
-              : 'bg-gold/10 ring-1 ring-gold/40 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+              ? 'bg-emerald-500/15 ring-1 ring-emerald-500/30 ring-inset opacity-100'
+              : 'bg-gold/10 ring-1 ring-gold/40 ring-inset opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
           }`}
         >
           {alreadyRequested ? (
@@ -450,8 +468,8 @@ function TeamTaskRow({
       onClick={onTogglePending}
       className={`${rowBase} ${
         isPending
-          ? 'bg-gold/8 border-gold/30'
-          : 'bg-white/[0.018] border-transparent hover:bg-white/[0.03] hover:border-white/[0.08]'
+          ? 'bg-gold/8 hover:bg-gold/12'
+          : 'hover:bg-surface-hover'
       } ${task.is_completed && !isPending ? 'opacity-40' : ''} ${
         !task.can_complete ? 'cursor-default opacity-60' : ''
       }`}
@@ -492,21 +510,27 @@ function SectionedRows({
   memberMap: Map<string, TeamMember>
   profileId: string | null
 }) {
+  // Skin pass 2026-05-06 — section header restyled as a section band
+  // (matches the ASSIGNMENTS / FORUMS treatment used in
+  // NotificationsPanel + the booking page table head). Rows inside
+  // each section use divide-y divide-theme so hairlines appear
+  // between rows within the same room. The OUTER scroller's
+  // divide-theme handles separation BETWEEN sections.
   return (
     <section>
-      <div className="flex items-center gap-2 px-1 pb-1">
+      <div className="flex items-center gap-2 px-3 py-2 bg-surface-alt/40">
         <h3
-          className={`text-[10px] font-bold uppercase tracking-[0.08em] ${
-            labelDim ? 'text-text-light/70' : 'text-gold'
+          className={`text-[11px] font-bold uppercase tracking-[0.08em] ${
+            labelDim ? 'text-text-light/70' : 'text-gold/70'
           }`}
         >
           {label}
         </h3>
-        <span className="tabular-nums text-[10px] font-bold text-text-light/70 px-1.5 py-0.5 rounded-full bg-surface-alt ring-1 ring-border">
+        <span className="tabular-nums text-[10px] font-bold text-text-light/70 px-1.5 py-0.5 rounded-full bg-surface ring-1 ring-border">
           {tasks.length}
         </span>
       </div>
-      <div className="space-y-1.5">
+      <div className="divide-y divide-theme">
         {tasks.map((task) => {
           const dueLabel = formatDueShort(task.due_date)
           const isPending = pendingIds.has(task.id)
