@@ -401,7 +401,7 @@ export function SourceFilterRow({
     <div className="flex flex-wrap gap-1.5">
       <SourcePill label="All" count={counts.all} active={active === 'all'} onClick={() => onChange('all')} />
       <SourcePill label="Assigned" count={counts.assigned} active={active === 'assigned'} onClick={() => onChange('assigned')} />
-      <SourcePill label="Self" count={counts.self} active={active === 'self'} onClick={() => onChange('self')} />
+      <SourcePill label="Self Assigned" count={counts.self} active={active === 'self'} onClick={() => onChange('self')} />
     </div>
   )
 }

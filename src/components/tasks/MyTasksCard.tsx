@@ -362,12 +362,15 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   // Sticky bottom footer — two rows:
   //   - SubmitBar (greyed when pendingIds empty, gold when queued)
   //   - + Task · Show-completed eye
-  // The "N pending" expandable strip + chip have been retired —
-  // pending requests now render in a dedicated divider section
-  // above (always visible when non-empty), so the chip-toggle
-  // affordance is no longer needed.
-  const footerBar = (
-    <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t theme-divider">
+  // Skin pass 2026-05-06 — toolbar moved from BOTTOM to TOP per user
+  // direction "put the +task that is at the very bottom of the my
+  // tasks page, at the top of the widget instead." Was a footer with
+  // `border-t theme-divider mt-1`; now a header with `mb-2` (no
+  // border — the inset-panel below provides natural visual
+  // separation). +Task is the leading affordance now, so a brand-
+  // new member sees the request CTA before scrolling through tasks.
+  const toolbar = (
+    <div className="shrink-0 space-y-1.5 mb-2">
       <SubmitBar
         count={pendingIds.size}
         isSubmitting={submitMutation.isPending}
@@ -390,6 +393,11 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
 
   const body = (
     <>
+      {/* Toolbar (formerly footer). Submit Completed bar + Task
+          create + show-completed eye live at the TOP of the widget
+          now so the +Task affordance is visible without scrolling. */}
+      {toolbar}
+
       {/* PR #69 — source filter (Assigned vs Self) replaces the stage
           pill row. Stages return as real KPIs in the upcoming flywheel
           event ledger PR; until then they're decorative noise here. */}
@@ -520,9 +528,8 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         </div>
       </div>
 
-      {/* PR #37 — sticky footer with + Task + show-completed eye.
-          Stays below the scroll area so the eye is always reachable. */}
-      {footerBar}
+      {/* Toolbar moved to TOP of widget body (skin pass 2026-05-06) —
+          see {toolbar} render above the source filter. */}
     </>
   )
 
