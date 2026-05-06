@@ -4,7 +4,12 @@ import { Building2, Calendar, CalendarCheck, Send, Users, Zap } from 'lucide-rea
 import FloatingDetailModal from '../FloatingDetailModal'
 import { useToast } from '../Toast'
 import MemberMultiSelect from '../members/MemberMultiSelect'
-import { assignCustomTaskToMembers } from '../../lib/queries/assignments'
+import { assignCustomTasksToMembers } from '../../lib/queries/assignments'
+import {
+  RecurrencePicker,
+  recurrenceToServerSpec,
+  type RecurrenceFrequency,
+} from '../tasks/requests/formAtoms'
 import type { AssignedTaskScope } from '../../types/assignments'
 
 /**
@@ -41,6 +46,11 @@ export default function QuickAssignModal({
   const [dueDate, setDueDate] = useState('')
   const [scope, setScope] = useState<AssignedTaskScope>(initialScope)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // 2026-05-06 — recurrence parity with AdminTaskCreateModal +
+  // MultiTaskCreateModal. The plural `assign_custom_tasks_to_members`
+  // RPC accepts recurrence_spec on each task draft (studio + member
+  // scope both wired in migration 20260503040000).
+  const [recurrence, setRecurrence] = useState<RecurrenceFrequency>('off')
 
   const todayISO = useMemo(() => {
     const d = new Date()
@@ -50,17 +60,20 @@ export default function QuickAssignModal({
 
   const assignMutation = useMutation({
     mutationFn: () =>
-      assignCustomTaskToMembers(
+      assignCustomTasksToMembers(
         scope === 'studio' ? [] : Array.from(selectedIds),
-        {
-          title: title.trim(),
-          description: null,
-          category: null,
-          due_date: dueDate || null,
-          is_required: false,
-          show_on_overview: true,
-          scope,
-        },
+        [
+          {
+            title: title.trim(),
+            description: null,
+            category: null,
+            due_date: dueDate || null,
+            is_required: false,
+            show_on_overview: true,
+            recurrence_spec: recurrenceToServerSpec(recurrence),
+          },
+        ],
+        { scope },
       ),
     onSuccess: (summary) => {
       if (scope === 'studio') {
@@ -83,6 +96,17 @@ export default function QuickAssignModal({
       toast(err instanceof Error ? err.message : 'Quick assign failed', 'error')
     },
   })
+
+  function handleRecurrenceChange(next: RecurrenceFrequency) {
+    const prev = recurrence
+    setRecurrence(next)
+    // Single coming-soon nudge per off→on transition. Same UX as
+    // AdminTaskCreateModal + TaskRequestModal so users learn the
+    // pattern in any task-create surface.
+    if (next !== 'off' && prev === 'off') {
+      toast('Recurring tasks — engine coming soon. Your choice is saved.', 'success')
+    }
+  }
 
   const canSubmit = useMemo(() => {
     if (assignMutation.isPending) return false
@@ -227,6 +251,8 @@ export default function QuickAssignModal({
             />
           </div>
         </div>
+
+        <RecurrencePicker value={recurrence} onChange={handleRecurrenceChange} />
 
         {scope === 'member' ? (
           <MemberMultiSelect

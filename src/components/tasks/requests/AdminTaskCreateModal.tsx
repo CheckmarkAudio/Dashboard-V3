@@ -4,13 +4,13 @@ import { Building2, Flag, Send, Users } from 'lucide-react'
 import FloatingDetailModal from '../../FloatingDetailModal'
 import { useToast } from '../../Toast'
 import MemberMultiSelect from '../../members/MemberMultiSelect'
-import { assignCustomTaskToMembers } from '../../../lib/queries/assignments'
+import { assignCustomTasksToMembers } from '../../../lib/queries/assignments'
 import type { AssignedTaskScope } from '../../../types/assignments'
 import {
   Field,
   FlywheelStagePicker,
   RecurrencePicker,
-  recurrenceToSpec,
+  recurrenceToServerSpec,
   type FlywheelStage,
   type RecurrenceFrequency,
 } from './formAtoms'
@@ -67,18 +67,25 @@ export default function AdminTaskCreateModal({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const assignMutation = useMutation({
+    // 2026-05-06 — switched from singular `assign_custom_task_to_members`
+    // RPC (which doesn't accept recurrence_spec) to the plural variant
+    // so the recurrence the admin picks actually persists. Studio + member
+    // scope both wired in migration 20260503040000.
     mutationFn: () =>
-      assignCustomTaskToMembers(
+      assignCustomTasksToMembers(
         scope === 'studio' ? [] : Array.from(selectedIds),
-        {
-          title: title.trim(),
-          description: description.trim() || null,
-          category: stage,
-          due_date: dueDate || null,
-          is_required: priority,
-          show_on_overview: true,
-          scope,
-        },
+        [
+          {
+            title: title.trim(),
+            description: description.trim() || null,
+            category: stage,
+            due_date: dueDate || null,
+            is_required: priority,
+            show_on_overview: true,
+            recurrence_spec: recurrenceToServerSpec(recurrence),
+          },
+        ],
+        { scope },
       ),
     onSuccess: (summary) => {
       if (scope === 'studio') {
@@ -127,16 +134,13 @@ export default function AdminTaskCreateModal({
   function handleRecurrenceChange(next: RecurrenceFrequency) {
     const prev = recurrence
     setRecurrence(next)
-    // Persist the choice; fire the coming-soon nudge once per Off-to-on
-    // transition. Engine lands in a later PR.
+    // Coming-soon nudge once per Off-to-on transition. The cron engine
+    // that auto-recreates rows on the cadence is still future work, but
+    // 2026-05-06: the spec NOW persists on the row (via the plural RPC)
+    // so when the engine lands existing rows auto-activate.
     if (next !== 'off' && prev === 'off') {
       toast('Recurring tasks — engine coming soon. Your choice is saved.', 'success')
     }
-    // recurrenceToSpec is called at submit time; the admin RPC doesn't
-    // currently accept a recurrence spec (that path is member-only for
-    // now), so we hold the value locally and the stub remains toast-only
-    // until the cron pipeline + admin RPC update ship together.
-    void recurrenceToSpec
   }
 
   return (
