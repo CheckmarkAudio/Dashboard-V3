@@ -718,6 +718,20 @@ body {
     border-color: var(--color-border);
   }
 
+  /* Theme-aware logo — the bundled checkmark-audio-logo.png is a
+     white-on-transparent monochrome glyph designed for the dark
+     surface. In light mode the white pixels become invisible, so we
+     invert the image to render the logo as black on white instead.
+     `filter: invert(1)` flips luminance only; pure white → pure black,
+     transparency stays transparent. Works because the asset has no
+     color accents to invert wrongly. */
+  .logo-themed {
+    /* Dark mode default — image renders natively (white on dark). */
+  }
+  :root[data-theme='light'] .logo-themed {
+    filter: invert(1);
+  }
+
   /* Theme-aware `divide-y` color — pair with Tailwind's `divide-y`
      to get hairline dividers between table rows / list items that
      read in BOTH themes. Replaces `divide-white/5` (dark-tuned;

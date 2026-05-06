@@ -10,7 +10,6 @@ import { useQuickKeyListener } from '../hooks/useQuickKeyListener'
 import { APP_ROUTES } from '../app/routes'
 import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
-import SocialLinks from './SocialLinks'
 import NotificationsBell from './notifications/NotificationsBell'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
@@ -526,7 +525,7 @@ export default function Layout() {
             <img
               src={checkmarkLogo}
               alt="Checkmark Audio logo"
-              className="w-10 h-10 object-contain shrink-0"
+              className="logo-themed w-10 h-10 object-contain shrink-0"
             />
             <div className="leading-tight hidden md:block">
               <h1 className="font-bold text-[15px] tracking-[-0.02em] text-text whitespace-nowrap">Checkmark Audio</h1>
@@ -534,12 +533,14 @@ export default function Layout() {
             </div>
           </div>
 
-          {/* Right section: Social + Theme toggle + Clock + Profile */}
+          {/* Right section: Theme toggle + Clock + Profile + Bell */}
           <div className="ml-auto flex items-center gap-3 lg:gap-4 min-w-0">
-            {/* PR #65 — Instagram / TikTok / YouTube link strip. Frontend-
-                only stubs (hrefs unset until the backend wire-up). Hidden
-                below md so the brand row stays clean on phones. */}
-            <SocialLinks />
+            {/* Skin pass 2026-05-06 — SocialLinks (the small Instagram /
+                TikTok / YouTube icons that were here as frontend-only
+                stubs) removed per user direction "remove the small
+                social media icons in the very top of the website." The
+                live follower-count SocialStatsBar on Overview/Hub stays —
+                that's a separate component with real counts. */}
 
             {/* Theme toggle — light/dark. System preference stays accessible
                 via ThemeContext for anyone who wants a future Settings UI. */}
