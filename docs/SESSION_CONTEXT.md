@@ -32,6 +32,12 @@ For Assign, Tasks, task requests, approvals, and related RPC work, use
 `docs/assign-engine-spec-2026-05-03.md` as the behavior contract.
 Layout experiments should not redefine task semantics.
 
+For Claude Code web-development sessions, use
+`docs/claude-web-dev-guardrails.md` before starting UI, frontend,
+Supabase, or Vercel-preview work. It captures scope discipline,
+preview verification, accessibility, backend safety, and background
+task cleanup expectations.
+
 ### Change provenance tags
 
 When writing handoff notes, use these tags so future Claude/Codex sessions
