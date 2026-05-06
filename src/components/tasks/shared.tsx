@@ -223,10 +223,15 @@ export function SubmitBar({
       onClick={onClick}
       disabled={disabled}
       aria-label={count > 0 ? `Submit ${count} completed task${count === 1 ? '' : 's'}` : 'Submit completed (none pending)'}
+      // 2026-05-06 — disabled state was bg-white/[0.04] + ring-white/5
+      // which was invisible on light mode (white on white). Switched to
+      // theme-aware surface gradient + visible border-strong so the
+      // button reads as "waiting" in BOTH modes. Active gold state
+      // unchanged — already works in both.
       className={`w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-bold tracking-tight transition-all ${
         disabled
-          ? 'bg-white/[0.04] text-text-light/50 ring-1 ring-white/5 cursor-not-allowed'
-          : 'bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(0,0,0,0.08)]'
+          ? 'bg-gradient-to-br from-surface-alt to-surface-hover text-text-light/60 border border-border-strong cursor-not-allowed'
+          : 'bg-gold text-black hover:bg-gold-muted shadow-[0_4px_12px_rgba(0,0,0,0.08)] border border-gold-muted'
       }`}
     >
       <Check size={12} strokeWidth={3} />
