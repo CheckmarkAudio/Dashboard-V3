@@ -476,23 +476,18 @@ body {
     position: relative;
   }
   :root[data-theme='light'] .dashboard-shell {
-    /* Light-mode rev4 — fintech-style wash applied to the shell so
-       it shows up INSIDE the rounded page area where content lives
-       (was on `body` previously, but the shell's flat background
-       was hiding it). Tints kept very subtle (<14% alpha) so cards
-       (`bg-surface = #ffffff`) stay pure white on top of the wash.
-
-       Stops:
-         • Top-left:     warm cream/peach `rgba(255, 224, 168, 0.45)`
-                         transparent by 36% — the "sunlight" patch
-         • Bottom-right: cool grey `rgba(208, 211, 219, 0.55)`
-                         transparent by 38% — the "shaded" patch
-       Both fade to the neutral grey base by mid-canvas, leaving a
-       near-white center that feels softly lit. */
+    /* Light-mode rev6 — wash now spans the WHOLE page area, not just
+       tiny corner patches. Earlier attempt (rev4) faded gradients at
+       36-38% which made them invisible past the corners and the page
+       just read as flat grey. Spread bumped to 75-90% so the warm
+       cream/peach genuinely covers the top-left half and the cool
+       grey covers the bottom-right half — visible at 1440px wide.
+       White cards (--color-surface = #ffffff) stay un-tinted on top. */
     background:
-      radial-gradient(circle at top left,     rgba(255, 224, 168, 0.45), transparent 36%),
-      radial-gradient(circle at bottom right, rgba(208, 211, 219, 0.55), transparent 38%),
+      radial-gradient(ellipse 90% 80% at 0% 0%,        rgba(255, 220, 160, 0.55), transparent 75%),
+      radial-gradient(ellipse 90% 80% at 100% 100%,    rgba(195, 200, 215, 0.50), transparent 75%),
       var(--color-bg);
+    background-attachment: fixed;
     border-color: var(--color-border);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   }
