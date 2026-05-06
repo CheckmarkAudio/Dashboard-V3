@@ -40,7 +40,11 @@ interface DashboardWidgetFrameProps {
 
 export default function DashboardWidgetFrame({
   title,
-  description,
+  // `description` intentionally omitted from destructure — sitewide
+  // subtitle suppression (skin pass 2026-05-06). The prop stays on
+  // the type and is still consumed when the widget is expanded into
+  // the FloatingDetailModal (rendered there as the modal eyebrow,
+  // not as a subtitle under the title).
   canMoveUp = false,
   canMoveDown = false,
   visible = true,
@@ -93,6 +97,13 @@ export default function DashboardWidgetFrame({
               In `hideTitle` mode we render nothing here — the corner
               expand button (right side) is the only expand
               affordance. */}
+          {/* Skin pass 2026-05-06 — `description` no longer renders
+              under the widget title. Sitewide policy: titles only,
+              no decorative subtitle/description text. The
+              `description` prop is kept (used for accessibility
+              labels on drag/expand buttons + as the modal eyebrow
+              when the widget is expanded), but it does not appear
+              as a `<p>` under the title in the in-grid header. */}
           {!hideTitle && (onExpand ? (
             <button
               type="button"
@@ -103,16 +114,10 @@ export default function DashboardWidgetFrame({
               <h2 className="text-[15px] font-bold tracking-tight text-text group-hover/title:text-gold transition-colors leading-tight">
                 {title}
               </h2>
-              {description && (
-                <p className="mt-0.5 text-[12px] text-text-muted leading-snug">{description}</p>
-              )}
             </button>
           ) : (
             <div className="min-w-0">
               <h2 className="text-[15px] font-bold tracking-tight text-text leading-tight">{title}</h2>
-              {description && (
-                <p className="mt-0.5 text-[12px] text-text-muted leading-snug">{description}</p>
-              )}
             </div>
           ))}
         </div>

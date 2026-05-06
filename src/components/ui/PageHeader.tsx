@@ -29,7 +29,9 @@ interface PageHeaderProps {
  */
 export function PageHeader({
   title,
-  subtitle,
+  // `subtitle` intentionally omitted from destructure — sitewide
+  // subtitle suppression (skin pass 2026-05-06). The prop stays on
+  // the type so existing callsites still type-check.
   icon: Icon,
   actions,
   children,
@@ -54,7 +56,12 @@ export function PageHeader({
           )}
           <div className="min-w-0">
             <h1 className="text-title truncate">{title}</h1>
-            {subtitle && <p className="mt-1 text-sm text-text-muted">{subtitle}</p>}
+            {/* Skin pass 2026-05-06 — subtitle suppressed sitewide.
+                Pages no longer render decorative explanatory copy
+                under the page title. The `subtitle` prop is kept on
+                the type so a one-off page can opt back in later
+                without re-plumbing — just restore the render here
+                behind a `forceSubtitle` flag (not added until needed). */}
           </div>
         </div>
         {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}

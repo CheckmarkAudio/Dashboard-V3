@@ -183,10 +183,7 @@ export function AdminScheduleWidget() {
   // calendar icon on the left and the time as a neutral pill on the
   // right — needle-thin dividers between rows.
   return (
-    <ListPanel
-      title="Today's sessions"
-      subtitle="Sessions and meetings on the books"
-    >
+    <ListPanel title="Today's sessions">
       {events.map((event) => (
         <ListRow
           key={event.id}
@@ -225,10 +222,7 @@ export function AdminShortcutsWidget() {
   // Each shortcut is a `<ListRow to={…}>` so `ListRow` renders a
   // real `<Link>` with hover + focus.
   return (
-    <ListPanel
-      title="Quick links"
-      subtitle="Jump into the key admin workspaces"
-    >
+    <ListPanel title="Quick links">
       {links.map(({ to, label, icon: Icon }) => (
         <ListRow
           key={to}

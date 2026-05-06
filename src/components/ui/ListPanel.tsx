@@ -45,7 +45,10 @@ interface ListPanelProps {
 
 export function ListPanel({
   title,
-  subtitle,
+  // `subtitle` intentionally omitted from destructure — sitewide
+  // subtitle suppression (skin pass 2026-05-06). Prop stays on the
+  // type so existing callsites (and the converted retrofits) keep
+  // type-checking even though the rendered output skips it.
   rightHeader,
   children,
   className,
@@ -57,11 +60,11 @@ export function ListPanel({
           <h3 className="text-[15px] font-bold tracking-tight text-text leading-tight">
             {title}
           </h3>
-          {subtitle && (
-            <p className="mt-0.5 text-[12px] text-text-muted leading-snug">
-              {subtitle}
-            </p>
-          )}
+          {/* Skin pass 2026-05-06 — subtitle suppressed sitewide.
+              List panels carry a single bold title and no decorative
+              explanatory copy underneath. Prop kept on the type so a
+              specific panel can opt back in later (will need a
+              `forceSubtitle` flag here when that happens). */}
         </div>
         {rightHeader && <div className="shrink-0">{rightHeader}</div>}
       </header>

@@ -53,7 +53,10 @@ export function Modal({
   open,
   onClose,
   title,
-  description,
+  // `description` intentionally omitted from destructure — sitewide
+  // subtitle suppression (skin pass 2026-05-06). Prop stays on the
+  // type so existing callsites still type-check; helper copy now
+  // belongs in the modal body.
   children,
   footer,
   size = 'md',
@@ -106,9 +109,11 @@ export function Modal({
           <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-3">
             <div className="min-w-0 flex-1">
               <h2 className="text-base font-semibold text-text">{title}</h2>
-              {description && (
-                <p className="mt-1 text-sm text-text-muted">{description}</p>
-              )}
+              {/* Skin pass 2026-05-06 — modal description suppressed
+                  sitewide. Modals carry a single bold title; helper
+                  copy belongs in the body, not the header. Prop kept
+                  on the type so a specific dialog can opt back in
+                  later (will need a `forceDescription` flag here). */}
             </div>
             {!hideCloseButton && (
               <button
