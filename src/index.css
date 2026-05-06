@@ -671,6 +671,30 @@ body {
     box-shadow: none;
   }
 
+  /* Widget header divider — separates the title bar from the body
+     inside `.widget-card` (rendered by DashboardWidgetFrame).
+
+     Theme-aware (per docs/light-dark-theme-handoff.md):
+       • Dark mode: `rgba(255,255,255,0.05)` — preserves the soft
+         white-on-charcoal hairline that was tuned for dark mode and
+         must NOT change per the dark-mode-locked policy.
+       • Light mode: `var(--color-border)` (#dedee5) — the same
+         visible hairline used by the Forum + Analytics pages for
+         their section headers (`bg-surface rounded-2xl border
+         border-border` outer + `border-b border-border` head).
+
+     Why this exists: the prior inline `border-b border-white/5` on
+     the widget header was dark-tuned and rendered as 5% white over
+     #ffffff in light mode = literally invisible. Widgets lost their
+     title/body separation in light mode. This class restores the
+     Analytics/Forum aesthetic in light without touching dark. */
+  .widget-frame-head {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  :root[data-theme='light'] .widget-frame-head {
+    border-bottom-color: var(--color-border);
+  }
+
   /* -------- Icon tiles & row divider lists --------
      Three shared building blocks pulled out of the UI skin direction
      mockup (docs/mockups/checkmark-ui-skin-direction.html). Anywhere
