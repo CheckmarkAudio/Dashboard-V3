@@ -114,6 +114,19 @@ function PlatformIcon({ platform, size = 32 }: { platform: SocialChannel['platfo
   return <TikTokGlyph size={size} />
 }
 
+// Brand-color tints per platform — used as the icon color inside the
+// gold bubble so the four icons read as distinct brand identities
+// instead of all-the-same monochrome (per user feedback). These
+// Tailwind palette values aren't theme-tokenized; they render
+// identically in light + dark which is what we want for brand
+// recognizability.
+const PLATFORM_COLOR: Record<SocialChannel['platform'], string> = {
+  instagram: 'text-pink-500',
+  tiktok: 'text-cyan-500',
+  youtube: 'text-red-500',
+  facebook: 'text-blue-500',
+}
+
 // ─── Member pill ────────────────────────────────────────────────────
 
 function initialsFor(name: string | undefined): string {
@@ -128,13 +141,19 @@ function MemberPill({ member }: { member: TeamMember }) {
   const initials = initialsFor(member.display_name)
   const firstName = member.display_name?.split(' ')[0] ?? '—'
 
+  // Skin pass 2026-05-06 — per-pill border dropped; the parent
+  // MemberHighlights wraps the whole row in a single bordered
+  // panel so members live inside one container instead of as
+  // separate floating chips. Avatar gets a thicker bevel
+  // (ring-2 + offset + shadow) so it reads as a raised disc on
+  // the panel surface.
   return (
     <Link
       to={`/profile/${member.id}`}
-      className="group flex items-center gap-2.5 shrink-0 pl-1.5 pr-4 py-1.5 rounded-2xl border border-border bg-surface hover:bg-surface-hover transition-colors focus-ring"
+      className="group flex items-center gap-2.5 shrink-0 pl-1.5 pr-4 py-1.5 rounded-xl hover:bg-surface-hover transition-colors focus-ring"
       aria-label={`View ${member.display_name}'s profile`}
     >
-      <span className="block w-9 h-9 rounded-full overflow-hidden shrink-0 ring-1 ring-border">
+      <span className="block w-10 h-10 rounded-full overflow-hidden shrink-0 ring-2 ring-surface ring-offset-2 ring-offset-border-light shadow-[0_2px_4px_rgba(0,0,0,0.08)]">
         {member.avatar_url ? (
           <img src={member.avatar_url} alt="" className="w-full h-full object-cover" />
         ) : (
@@ -151,15 +170,18 @@ function MemberPill({ member }: { member: TeamMember }) {
 // ─── Social pill ────────────────────────────────────────────────────
 
 /**
- * SocialStat — solid-body social snapshot. Each entry is a 40×40
- * filled rounded-square holding the brand glyph (inverse-color
- * inside), with a bold count to the right. Platform label is
- * intentionally omitted — the glyph IS the label. Hover swaps the
- * filled body to marigold for a tactile cue.
+ * SocialStat — circular bubble holding a brand-colored glyph above
+ * the follower count, both INSIDE the same bubble. Per user direction
+ * 2026-05-06:
+ *   • circular (rounded-full)
+ *   • icon stacked above count, both in the bubble
+ *   • brand colors (not all black)
+ *   • reduced kerning between bubbles (gap dropped from 16px → 8px
+ *     in the parent SocialStatsBar)
  *
- * Distinct from member pills: members are bordered chips with
- * inverse anatomy (avatar visible, name beside); social stats are
- * filled tiles + count, no border, no platform name.
+ * Bubble bg stays the soft `bg-gold/15` + `ring-gold/30` — gives a
+ * consistent Checkmark-gold container that reads in both light + dark
+ * while the brand-colored glyph inside provides per-platform identity.
  */
 function SocialStat({ channel }: { channel: SocialChannel }) {
   return (
@@ -167,27 +189,17 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
       href={channel.href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex items-center gap-2.5 shrink-0 rounded-xl focus-ring"
+      className="group inline-flex shrink-0 rounded-full focus-ring"
       aria-label={`${channel.label} — ${formatCount(channel.count)} followers`}
       title={`${channel.label} — ${formatCount(channel.count)} followers`}
     >
-      {/* 2026-05-06 — translucent gold-tinted BUBBLE per user direction:
-          icons need to be encased in a bubble that's visible in both
-          light AND dark mode. Previous attempts:
-            • solid yellow tile → too loud, hard edges cut into text
-            • fully transparent → invisible against the page wash
-          This: bg-gold/15 + ring-gold/30 — soft yellow tint that
-          reads as a clickable bubble in BOTH themes (gold token is
-          bright yellow in light mode, marigold in dark mode; both
-          are visible at /15 + /30 against their respective bg).
-          Glyph stays `text-text` so it inherits the theme's body
-          color (black on light bubble, light on dark bubble). Hover
-          deepens the bubble + brightens the glyph for tactile cue. */}
-      <span className="flex w-10 h-10 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/30 text-text group-hover:bg-gold/25 group-hover:text-gold transition-colors shrink-0">
-        <PlatformIcon platform={channel.platform} size={22} />
-      </span>
-      <span className="text-[22px] font-bold text-text group-hover:text-gold transition-colors tabular-nums whitespace-nowrap leading-none">
-        {formatCount(channel.count)}
+      <span className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-gold/15 ring-1 ring-gold/30 group-hover:bg-gold/25 group-hover:ring-gold/50 transition-colors shrink-0 leading-none">
+        <span className={PLATFORM_COLOR[channel.platform]}>
+          <PlatformIcon platform={channel.platform} size={18} />
+        </span>
+        <span className="text-[10px] font-bold text-text tabular-nums whitespace-nowrap mt-0.5">
+          {formatCount(channel.count)}
+        </span>
       </span>
     </a>
   )
@@ -211,7 +223,7 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
 export function SocialStatsBar() {
   return (
     <div
-      className="flex items-center gap-4 shrink-0"
+      className="flex items-center gap-2 shrink-0"
       aria-label="Checkmark Audio social media snapshot"
     >
       {SOCIAL_CHANNELS.map((channel) => (
@@ -231,10 +243,14 @@ export default function MemberHighlights() {
   const active = members.filter((m) => (m.status ?? 'active') === 'active')
   if (active.length === 0) return null
 
+  // Skin pass 2026-05-06 — wrap the row in a single bordered
+  // container per user feedback "nest all the members in a singular
+  // border box." Per-pill borders dropped (see MemberPill); this
+  // outer panel carries the chrome, members live inside as flat
+  // tiles with hover-only feedback.
   return (
-    <div className="flex items-center gap-4">
-      {/* Members — scrolls horizontally if the team grows. */}
-      <div className="flex gap-2 overflow-x-auto min-w-0 flex-1 pb-1 -mx-1 px-1 [scrollbar-width:thin]">
+    <div className="rounded-xl border border-border bg-surface px-2 py-1.5">
+      <div className="flex gap-1 overflow-x-auto min-w-0 [scrollbar-width:thin]">
         {active.map((member) => (
           <MemberPill key={member.id} member={member} />
         ))}

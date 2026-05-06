@@ -12,6 +12,7 @@ import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
 import SocialLinks from './SocialLinks'
 import NotificationsBell from './notifications/NotificationsBell'
+import CreateBookingModal from './CreateBookingModal'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
 import {
@@ -25,7 +26,7 @@ import {
   LayoutDashboard, Users, Calendar, Settings, Gauge,
   Menu, X, ChevronDown, ClipboardList, CheckSquare,
   BarChart3, Briefcase, MessageSquare, Clock, Sun, Moon,
-  Loader2, MoreHorizontal,
+  Loader2, MoreHorizontal, Plus,
 } from 'lucide-react'
 
 /**
@@ -395,6 +396,12 @@ export default function Layout() {
   const queryClient = useQueryClient()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showSelfReport, setShowSelfReport] = useState(false)
+  // Skin pass 2026-05-06 — Book a Session lifted into the global
+  // top-bar so the action is visible on every page (was previously
+  // tucked inside Dashboard's PageHeader actions only). Modal state
+  // lives at the Layout level so any page can rely on the button
+  // being present in the header without re-implementing it.
+  const [showBooking, setShowBooking] = useState(false)
   const [adminExpanded, setAdminExpanded] = useState(true)
 
   // PR #50 — Clock In/Out is now DB-backed. The header button reads
@@ -552,6 +559,24 @@ export default function Layout() {
             >
               {resolvedTheme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
             </button>
+
+            {/* Book a Session — global gold CTA. Sits next to Clock In
+                so the two primary work-actions cluster visually. Modal
+                state owned by Layout so the button is present on
+                every page without per-page wiring. */}
+            <button
+              type="button"
+              onClick={() => setShowBooking(true)}
+              className="flex items-center gap-2 h-10 px-4 rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
+            >
+              <Plus size={14} strokeWidth={2.4} aria-hidden="true" />
+              Book a Session
+            </button>
+            {showBooking && (
+              <CreateBookingModal
+                onClose={() => setShowBooking(false)}
+              />
+            )}
 
             {/* Clock In / Clock Out — DB-backed (PR #50). Click "Clock
                 In" → fires the clock_in RPC. Click "Clock Out" →

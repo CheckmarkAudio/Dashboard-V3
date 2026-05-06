@@ -1,48 +1,18 @@
-import { useState } from 'react'
-import { LayoutDashboard, Plus } from 'lucide-react'
-import { MemberOverviewProvider, useMemberOverviewContext } from '../contexts/MemberOverviewContext'
+import { LayoutDashboard } from 'lucide-react'
+import { MemberOverviewProvider } from '../contexts/MemberOverviewContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import WorkspacePanel from '../components/dashboard/WorkspacePanel'
 import { MEMBER_WIDGET_DEFINITIONS } from '../components/dashboard/widgetRegistry'
 import { PageHeader } from '../components/ui'
 import MemberHighlights, { SocialStatsBar } from '../components/members/MemberHighlights'
-import CreateBookingModal from '../components/CreateBookingModal'
 
 const MEMBER_SCOPE = 'member_overview' as const
 
-/**
- * Book-a-Session CTA — gold gradient pill matching the Sessions page
- * "Book a Session" button (PR #65 unifies them) so the action looks
- * the same wherever it appears. Shadow is the standardized
- * `shadow-[0_6px_14px_rgba(214,170,55,0.18)]` — ~60% lighter than the
- * earlier `0_14px_28px` feathering. h-10 / px-4 / rounded-2xl /
- * font-extrabold matches the top-nav active-pill rhythm.
- */
-function BookButton() {
-  const { refetch } = useMemberOverviewContext()
-  const [showBooking, setShowBooking] = useState(false)
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setShowBooking(true)}
-        className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
-      >
-        <Plus size={14} strokeWidth={2.4} aria-hidden="true" />
-        Book a Session
-      </button>
-      {showBooking && (
-        <CreateBookingModal
-          onClose={() => {
-            setShowBooking(false)
-            void refetch()
-          }}
-        />
-      )}
-    </>
-  )
-}
+// Skin pass 2026-05-06 — local BookButton + CreateBookingModal wiring
+// removed. Book a Session now lives in the global Layout header so
+// it's visible on every page. Page action slot kept for the social
+// stats bar.
 
 export default function Dashboard() {
   useDocumentTitle('Overview - Checkmark Workspace')
@@ -54,12 +24,7 @@ export default function Dashboard() {
         <PageHeader
           icon={LayoutDashboard}
           title="Overview"
-          actions={
-            <>
-              <SocialStatsBar />
-              <BookButton />
-            </>
-          }
+          actions={<SocialStatsBar />}
         />
         <MemberHighlights />
         <WorkspacePanel
