@@ -270,7 +270,7 @@ export default function MultiTaskCreateModal({
             <button
               type="button"
               onClick={() => setTemplatePickerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-bold text-text-light hover:text-text hover:bg-white/[0.04] transition-colors ring-1 ring-border"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-bold text-text-light hover:text-text hover:bg-surface-hover transition-colors ring-1 ring-border"
             >
               <FileText size={13} />
               Add from template
@@ -299,7 +299,7 @@ export default function MultiTaskCreateModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 inline-flex items-center justify-center py-2 rounded-lg text-[13px] font-semibold bg-white/[0.04] text-text-light hover:text-text hover:bg-white/[0.08]"
+              className="flex-1 inline-flex items-center justify-center py-2 rounded-lg text-[13px] font-semibold btn-subtle"
             >
               Cancel
             </button>

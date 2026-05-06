@@ -214,7 +214,7 @@ function EditableRow({
       <button
         type="button"
         onClick={onOpenEdit}
-        className={`w-full text-left grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 px-3 py-2 rounded-xl border border-transparent hover:bg-white/[0.03] hover:border-white/[0.08] transition-all ${
+        className={`w-full text-left grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 px-3 py-2 rounded-xl border border-transparent hover:bg-surface-hover hover:border-border transition-all ${
           task.is_completed ? 'opacity-50' : ''
         }`}
       >
@@ -248,7 +248,7 @@ function EditableRow({
         <button
           type="button"
           onClick={onCancelEdit}
-          className="inline-flex items-center justify-center p-1 rounded-md text-text-muted hover:text-text hover:bg-white/[0.04]"
+          className="inline-flex items-center justify-center p-1 rounded-md text-text-muted hover:text-text hover:bg-surface-hover"
           aria-label="Cancel"
         >
           <X size={13} />
@@ -307,7 +307,7 @@ function EditableRow({
         <button
           type="button"
           onClick={onCancelEdit}
-          className="flex-1 inline-flex items-center justify-center py-2 rounded-lg text-[12px] font-semibold bg-white/[0.04] text-text-light hover:text-text hover:bg-white/[0.08]"
+          className="flex-1 inline-flex items-center justify-center py-2 rounded-lg text-[12px] font-semibold btn-subtle"
         >
           Cancel
         </button>

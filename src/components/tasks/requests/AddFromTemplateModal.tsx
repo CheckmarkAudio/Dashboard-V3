@@ -176,12 +176,12 @@ export default function AddFromTemplateModal({
                       className={`w-full text-left flex items-start gap-2.5 px-2.5 py-2 rounded-xl border transition-colors ${
                         checked
                           ? 'bg-gold/8 border-gold/30'
-                          : 'bg-white/[0.018] border-transparent hover:bg-white/[0.03] hover:border-white/[0.08]'
+                          : 'bg-surface-alt/40 border-transparent hover:bg-surface-hover hover:border-border'
                       }`}
                     >
                       <span
                         className={`shrink-0 w-[18px] h-[18px] mt-[1px] rounded-[5px] border-[1.5px] flex items-center justify-center ${
-                          checked ? 'bg-gold/30 border-gold' : 'border-white/20'
+                          checked ? 'bg-gold/30 border-gold' : 'border-border'
                         }`}
                       >
                         {checked && <span className="w-[8px] h-[8px] rounded-[1px] bg-gold" aria-hidden="true" />}
@@ -203,7 +203,7 @@ export default function AddFromTemplateModal({
                 <button
                   type="button"
                   onClick={onCancel}
-                  className="flex-1 inline-flex items-center justify-center py-2 rounded-lg text-[12px] font-semibold bg-white/[0.04] text-text-light hover:text-text hover:bg-white/[0.08]"
+                  className="flex-1 inline-flex items-center justify-center py-2 rounded-lg text-[12px] font-semibold btn-subtle"
                 >
                   Cancel
                 </button>

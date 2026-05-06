@@ -136,7 +136,7 @@ function RequestRow({
             type="button"
             onClick={() => setDeclineOpen(true)}
             disabled={isBusy}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[12px] font-semibold bg-white/[0.04] text-text-light hover:text-text hover:bg-white/[0.08] disabled:opacity-50"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[12px] font-semibold btn-subtle disabled:opacity-50"
           >
             <X size={13} strokeWidth={3} />
             Decline
@@ -167,7 +167,7 @@ function RequestRow({
                 setDeclineOpen(false)
                 setNote('')
               }}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[12px] font-semibold bg-white/[0.04] text-text-light hover:text-text"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[12px] font-semibold btn-subtle"
             >
               Cancel
             </button>

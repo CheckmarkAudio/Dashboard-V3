@@ -238,7 +238,7 @@ export default function TemplateEditorModal({
 
       {/* Items section — only shown once template exists ─────────── */}
       {isEdit && (
-        <div className="mt-6 pt-6 border-t border-white/5">
+        <div className="mt-6 pt-6 border-t theme-divider">
           <div className="flex items-baseline justify-between mb-3">
             <h3 className="text-[14px] font-bold text-text">
               Items <span className="text-text-light font-normal">· {items.length}</span>

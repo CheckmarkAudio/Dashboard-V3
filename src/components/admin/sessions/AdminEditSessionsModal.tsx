@@ -282,7 +282,7 @@ function EditableSessionRow({
       <button
         type="button"
         onClick={onOpenEdit}
-        className="w-full text-left grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-3 py-2 rounded-xl border border-transparent hover:bg-white/[0.03] hover:border-white/[0.08] transition-all"
+        className="w-full text-left grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-3 py-2 rounded-xl border border-transparent hover:bg-surface-hover hover:border-border transition-all"
       >
         <CalendarIcon size={14} className="text-gold/70 mt-0.5" />
         <div className="min-w-0">
@@ -316,7 +316,7 @@ function EditableSessionRow({
         <button
           type="button"
           onClick={onCancelEdit}
-          className="inline-flex items-center justify-center p-1 rounded-md text-text-muted hover:text-text hover:bg-white/[0.04]"
+          className="inline-flex items-center justify-center p-1 rounded-md text-text-muted hover:text-text hover:bg-surface-hover"
           aria-label="Cancel"
         >
           <X size={13} />
@@ -428,7 +428,7 @@ function EditableSessionRow({
         <button
           type="button"
           onClick={onCancelEdit}
-          className="inline-flex items-center justify-center px-3 py-2 rounded-lg text-[12px] font-semibold bg-white/[0.04] text-text-light hover:text-text hover:bg-white/[0.08]"
+          className="inline-flex items-center justify-center px-3 py-2 rounded-lg text-[12px] font-semibold btn-subtle"
         >
           Cancel
         </button>

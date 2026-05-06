@@ -671,6 +671,83 @@ body {
     box-shadow: none;
   }
 
+  /* Modal panel chrome — used by `FloatingDetailModal` and any
+     other large floating dialog that previously hand-rolled a dark
+     gradient panel.
+
+     Theme-aware (per docs/light-dark-theme-handoff.md):
+       • Dark mode: charcoal vertical gradient + soft white-ish
+         border + heavy black drop-shadow. Preserves the EXACT prior
+         appearance — pulled out of FloatingDetailModal.tsx line
+         165 so it could become a shared token. Per the dark-mode
+         locked policy, do not adjust the dark values without
+         explicit go-ahead.
+       • Light mode: pure-white surface + soft border-border
+         hairline + subtler dark-tinted shadow. Matches the
+         token-backed `bg-surface rounded-2xl border border-border
+         shadow-2xl` pattern that the smaller `Modal`,
+         `ConfirmModal`, and `SelfReportModal` already render
+         correctly in light. */
+  .modal-panel {
+    background: linear-gradient(180deg, rgba(22, 24, 31, 0.98), rgba(15, 17, 22, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.55);
+  }
+  :root[data-theme='light'] .modal-panel {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    box-shadow: 0 22px 70px rgba(20, 20, 28, 0.18);
+  }
+
+  /* Theme-aware divider color — set just the `border-color` so the
+     caller picks the side via Tailwind (`border-b`, `border-t`,
+     `border-r`, etc.). Use this anywhere a hairline divider needs
+     to read in BOTH themes; replaces the dark-tuned `border-white/5`
+     pattern that was scattered through modal headers, footers, table
+     rows, and panel sub-sections.
+
+     Dark mode value preserves the exact `rgba(255,255,255,0.05)`
+     that was tuned for dark surfaces (per dark-mode-locked policy).
+     Light mode override resolves to `var(--color-border)` (#dedee5),
+     the same hairline Forum + Analytics use across their section
+     headers. */
+  .theme-divider {
+    border-color: rgba(255, 255, 255, 0.05);
+  }
+  :root[data-theme='light'] .theme-divider {
+    border-color: var(--color-border);
+  }
+
+  /* Subtle ghost button — replaces the scattered
+     `bg-white/[0.04] text-text-light hover:text-text hover:bg-white/[0.08]`
+     pattern that's repeated across modal footers (Cancel buttons,
+     "skip" actions, secondary toggles). Dark-mode values preserve
+     the exact alphas that were tuned for dark surfaces; light mode
+     override uses `--color-surface-alt` / `--color-surface-hover`
+     so the button reads as a soft greyish chip on white panels.
+
+     Usage: <button className="btn-subtle px-3 py-2 rounded-lg
+                                text-[12px] font-semibold">Cancel</button>
+     The class sets bg + text color + hover only — caller still
+     picks padding, radius, font size. Composes with Tailwind. */
+  .btn-subtle {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-text-light);
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .btn-subtle:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-text);
+  }
+  :root[data-theme='light'] .btn-subtle {
+    background: var(--color-surface-alt);
+    color: var(--color-text-muted);
+  }
+  :root[data-theme='light'] .btn-subtle:hover:not(:disabled) {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
+
   /* Widget header divider — separates the title bar from the body
      inside `.widget-card` (rendered by DashboardWidgetFrame).
 
