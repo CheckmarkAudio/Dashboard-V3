@@ -2,6 +2,7 @@ This folder stores visual-only mockups and preview screenshots for design review
 
 Current file:
 - `blueprint-gallery.html` — scrollable gallery that embeds the current blueprint/mockup HTML files for side-by-side review in one place
+- `checkmark-ui-skin-direction.html` — visual-only direction board combining Linear-style operational density with service-card rhythm from California Vending, translated into Checkmark colors/wash gradients
 - `clients-panel-blueprint.html` — wireframe-only layout showing which client actions should be direct row actions versus secondary menu actions
 - `header-mockup-preview.png` — header polish draft for approval
 - `header-draft-separated-controls.html` — cleaner header concept with distinct time controls and profile panel
