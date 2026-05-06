@@ -482,12 +482,12 @@ function TeamTaskRow({
   const rowContent = (
     <>
       <span
-        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-[5px] border-[1.5px] flex items-center justify-center ${
+        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-[5px] border-[1.5px] flex items-center justify-center transition-colors ${
           isPending
             ? 'bg-gold/30 border-gold'
             : task.is_completed
               ? 'bg-gold/30 border-gold/40'
-              : 'border-border'
+              : 'checkbox-empty'
         }`}
       >
         {checkVisual && <Check size={11} className="text-gold" strokeWidth={3} />}

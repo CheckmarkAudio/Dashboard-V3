@@ -75,7 +75,7 @@ export function TaskRow({
               ? 'bg-gold/30 border-gold/40'
               : isPending
                 ? 'bg-gold/20 border-gold'
-                : 'border-white/20 group-hover:border-gold/60'
+                : 'checkbox-empty'
           }`}
         >
           {isChecked && <Check size={11} className="text-gold" strokeWidth={3} />}
