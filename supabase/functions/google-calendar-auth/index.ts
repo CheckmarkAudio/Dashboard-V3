@@ -6,10 +6,22 @@ import {
   fetchGoogleUserEmail,
 } from "../_shared/googleCalendar.ts"
 
+// NOTE:
+// This function intentionally handles two different trust models:
+// 1. GET callback requests from Google, which do not carry the app user's
+//    Supabase Authorization header. Those requests are validated by the
+//    one-time `state` row we stored during the POST `start` action.
+// 2. POST admin actions from the app (`start`, `status`, `disconnect`), which
+//    must include a logged-in Supabase JWT and are re-checked against the
+//    caller's team_members role before doing anything sensitive.
+//
+// For the callback path to work in production, this function must be deployed
+// with JWT verification disabled at the platform edge. We enforce that in
+// `supabase/config.toml` and still verify POST caller auth manually below.
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -42,7 +54,7 @@ function appendRedirectParam(url: string, key: string, value: string): string {
   return next.toString()
 }
 
-async function getCallerContext(req: Request) {
+async function getPostCallerContext(req: Request) {
   const supabaseUrl = requireEnv("SUPABASE_URL")
   const anonKey = requireEnv("SUPABASE_ANON_KEY")
   const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY")
@@ -84,6 +96,107 @@ async function getCallerContext(req: Request) {
   }
 }
 
+type CallbackEnv = {
+  supabaseUrl: string
+  googleClientId: string
+  googleClientSecret: string
+  encryptionSecret: string
+}
+
+async function handleGoogleOauthCallback(req: Request, env: CallbackEnv): Promise<Response> {
+  const url = new URL(req.url)
+  const state = url.searchParams.get("state") ?? ""
+  const code = url.searchParams.get("code") ?? ""
+  const oauthError = url.searchParams.get("error") ?? ""
+
+  const admin = createClient(env.supabaseUrl, requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  const { data: stateRow } = await admin
+    .from("google_oauth_states")
+    .select("state, team_id, created_by, redirect_to, expires_at")
+    .eq("state", state)
+    .maybeSingle()
+
+  if (!stateRow?.redirect_to) {
+    return jsonResponse({ ok: false, error: "OAuth state expired or invalid" }, 400)
+  }
+  if (new Date(stateRow.expires_at).getTime() < Date.now()) {
+    await admin.from("google_oauth_states").delete().eq("state", state)
+    return redirectResponse(
+      appendRedirectParam(stateRow.redirect_to, "google_calendar_error", "expired_state"),
+    )
+  }
+
+  if (oauthError) {
+    await admin.from("google_oauth_states").delete().eq("state", state)
+    return redirectResponse(
+      appendRedirectParam(stateRow.redirect_to, "google_calendar_error", oauthError),
+    )
+  }
+
+  if (!code) {
+    await admin.from("google_oauth_states").delete().eq("state", state)
+    return redirectResponse(
+      appendRedirectParam(stateRow.redirect_to, "google_calendar_error", "missing_code"),
+    )
+  }
+
+  const tokenData = await exchangeCodeForTokens({
+    code,
+    clientId: env.googleClientId,
+    clientSecret: env.googleClientSecret,
+    redirectUri: callbackUrl(env.supabaseUrl),
+  })
+
+  const refreshToken = tokenData.refresh_token
+  if (!refreshToken) {
+    await admin.from("google_oauth_states").delete().eq("state", state)
+    return redirectResponse(
+      appendRedirectParam(
+        stateRow.redirect_to,
+        "google_calendar_error",
+        "missing_refresh_token",
+      ),
+    )
+  }
+
+  const encrypted = await encryptRefreshToken(refreshToken, env.encryptionSecret)
+  const googleEmail = await fetchGoogleUserEmail(tokenData.access_token).catch(() => null)
+
+  const { error: upsertErr } = await admin
+    .from("google_calendar_connections")
+    .upsert({
+      team_id: stateRow.team_id,
+      google_email: googleEmail ?? "checkmarkaudio@gmail.com",
+      calendar_id: "primary",
+      encrypted_refresh_token: encrypted.ciphertext,
+      refresh_token_iv: encrypted.iv,
+      token_scope: (tokenData.scope ?? "").split(" ").filter(Boolean),
+      token_type: tokenData.token_type ?? "Bearer",
+      connected_by: stateRow.created_by,
+      updated_at: new Date().toISOString(),
+      last_sync_error: null,
+    }, { onConflict: "team_id" })
+
+  await admin.from("google_oauth_states").delete().eq("state", state)
+
+  if (upsertErr) {
+    return redirectResponse(
+      appendRedirectParam(
+        stateRow.redirect_to,
+        "google_calendar_error",
+        "connection_save_failed",
+      ),
+    )
+  }
+
+  return redirectResponse(
+    appendRedirectParam(stateRow.redirect_to, "google_calendar", "connected"),
+  )
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS })
@@ -96,104 +209,19 @@ Deno.serve(async (req: Request) => {
     const encryptionSecret = requireEnv("GOOGLE_TOKEN_ENCRYPTION_KEY")
 
     if (req.method === "GET") {
-      const url = new URL(req.url)
-      const state = url.searchParams.get("state") ?? ""
-      const code = url.searchParams.get("code") ?? ""
-      const oauthError = url.searchParams.get("error") ?? ""
-
-      const admin = createClient(supabaseUrl, requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {
-        auth: { persistSession: false, autoRefreshToken: false },
+      return handleGoogleOauthCallback(req, {
+        supabaseUrl,
+        googleClientId,
+        googleClientSecret,
+        encryptionSecret,
       })
-
-      const { data: stateRow } = await admin
-        .from("google_oauth_states")
-        .select("state, team_id, created_by, redirect_to, expires_at")
-        .eq("state", state)
-        .maybeSingle()
-
-      if (!stateRow?.redirect_to) {
-        return jsonResponse({ ok: false, error: "OAuth state expired or invalid" }, 400)
-      }
-      if (new Date(stateRow.expires_at).getTime() < Date.now()) {
-        await admin.from("google_oauth_states").delete().eq("state", state)
-        return redirectResponse(
-          appendRedirectParam(stateRow.redirect_to, "google_calendar_error", "expired_state"),
-        )
-      }
-
-      if (oauthError) {
-        await admin.from("google_oauth_states").delete().eq("state", state)
-        return redirectResponse(
-          appendRedirectParam(stateRow.redirect_to, "google_calendar_error", oauthError),
-        )
-      }
-
-      if (!code) {
-        await admin.from("google_oauth_states").delete().eq("state", state)
-        return redirectResponse(
-          appendRedirectParam(stateRow.redirect_to, "google_calendar_error", "missing_code"),
-        )
-      }
-
-      const tokenData = await exchangeCodeForTokens({
-        code,
-        clientId: googleClientId,
-        clientSecret: googleClientSecret,
-        redirectUri: callbackUrl(supabaseUrl),
-      })
-
-      const refreshToken = tokenData.refresh_token
-      if (!refreshToken) {
-        await admin.from("google_oauth_states").delete().eq("state", state)
-        return redirectResponse(
-          appendRedirectParam(
-            stateRow.redirect_to,
-            "google_calendar_error",
-            "missing_refresh_token",
-          ),
-        )
-      }
-
-      const encrypted = await encryptRefreshToken(refreshToken, encryptionSecret)
-      const googleEmail = await fetchGoogleUserEmail(tokenData.access_token).catch(() => null)
-
-      const { error: upsertErr } = await admin
-        .from("google_calendar_connections")
-        .upsert({
-          team_id: stateRow.team_id,
-          google_email: googleEmail ?? "checkmarkaudio@gmail.com",
-          calendar_id: "primary",
-          encrypted_refresh_token: encrypted.ciphertext,
-          refresh_token_iv: encrypted.iv,
-          token_scope: (tokenData.scope ?? "").split(" ").filter(Boolean),
-          token_type: tokenData.token_type ?? "Bearer",
-          connected_by: stateRow.created_by,
-          updated_at: new Date().toISOString(),
-          last_sync_error: null,
-        }, { onConflict: "team_id" })
-
-      await admin.from("google_oauth_states").delete().eq("state", state)
-
-      if (upsertErr) {
-        return redirectResponse(
-          appendRedirectParam(
-            stateRow.redirect_to,
-            "google_calendar_error",
-            "connection_save_failed",
-          ),
-        )
-      }
-
-      return redirectResponse(
-        appendRedirectParam(stateRow.redirect_to, "google_calendar", "connected"),
-      )
     }
 
     if (req.method !== "POST") {
       return jsonResponse({ ok: false, error: "Method not allowed" }, 405)
     }
 
-    const ctx = await getCallerContext(req)
+    const ctx = await getPostCallerContext(req)
     if ("error" in ctx) return ctx.error
 
     let body: { action?: string; redirect_to?: string } = {}

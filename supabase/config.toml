@@ -1,0 +1,6 @@
+[functions.google-calendar-auth]
+# Google redirects back to this callback URL from outside the app, so there is
+# no Supabase Authorization header on the inbound request. We validate the
+# callback with the one-time `state` row instead, then require logged-in auth
+# again for POST actions like `start`, `status`, and `disconnect`.
+verify_jwt = false
