@@ -144,17 +144,27 @@ export default function AdminEditSessionsModal({ onClose }: { onClose: () => voi
                 isEditing={editingId === session.id}
                 onOpenEdit={() => setEditingId(session.id)}
                 onCancelEdit={() => setEditingId(null)}
-                onSaved={() => {
+                onSaved={(syncWarning) => {
                   setEditingId(null)
-                  toast('Session updated.', 'success')
+                  toast(
+                    syncWarning
+                      ? `Session updated, but Google Calendar sync failed: ${syncWarning}`
+                      : 'Session updated.',
+                    syncWarning ? 'error' : 'success',
+                  )
                   void queryClient.invalidateQueries({ queryKey: adminSessionKeys.all })
                   // Touch viewer-side caches so /sessions + widgets refresh.
                   void queryClient.invalidateQueries({ queryKey: ['sessions'] })
                   void queryClient.invalidateQueries({ queryKey: ['member-overview-snapshot'] })
                 }}
-                onDeleted={() => {
+                onDeleted={(syncWarning) => {
                   setEditingId(null)
-                  toast('Session cancelled.', 'success')
+                  toast(
+                    syncWarning
+                      ? `Session cancelled, but Google Calendar cleanup failed: ${syncWarning}`
+                      : 'Session cancelled.',
+                    syncWarning ? 'error' : 'success',
+                  )
                   void queryClient.invalidateQueries({ queryKey: adminSessionKeys.all })
                   void queryClient.invalidateQueries({ queryKey: ['sessions'] })
                   void queryClient.invalidateQueries({ queryKey: ['member-overview-snapshot'] })
@@ -213,8 +223,8 @@ function EditableSessionRow({
   isEditing: boolean
   onOpenEdit: () => void
   onCancelEdit: () => void
-  onSaved: () => void
-  onDeleted: () => void
+  onSaved: (syncWarning: string | null) => void
+  onDeleted: (syncWarning: string | null) => void
   onError: (err: Error) => void
 }) {
   const [clientName, setClientName] = useState(session.client_name ?? '')
@@ -247,13 +257,13 @@ function EditableSessionRow({
       if (status !== session.status) payload.status = status
       return adminUpdateSession(session.id, payload)
     },
-    onSuccess: onSaved,
+    onSuccess: ({ syncWarning }) => onSaved(syncWarning),
     onError: (err: Error) => onError(err),
   })
 
   const deleteMutation = useMutation({
     mutationFn: () => adminDeleteSession(session.id),
-    onSuccess: onDeleted,
+    onSuccess: ({ syncWarning }) => onDeleted(syncWarning),
     onError: (err: Error) => onError(err),
   })
 

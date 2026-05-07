@@ -1,10 +1,17 @@
-import { useState, type ChangeEvent } from 'react'
+import { useEffect, useState, type ChangeEvent } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useQuickKeys } from '../../hooks/useQuickKeys'
+import { useToast } from '../../components/Toast'
 import AccountAccessPanel from '../../components/admin/AccountAccessPanel'
 import WidgetBank from '../../components/admin/WidgetBank'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
+import {
+  disconnectGoogleCalendar,
+  fetchGoogleCalendarStatus,
+  startGoogleCalendarConnect,
+  type GoogleCalendarConnectionStatus,
+} from '../../lib/googleCalendar'
 import {
   Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid,
 } from 'lucide-react'
@@ -68,6 +75,7 @@ function KeyCapInput({
 export default function AdminSettings() {
   useDocumentTitle('Settings - Checkmark Workspace')
   const { profile } = useAuth()
+  const { toast } = useToast()
   const [activeSection, setActiveSection] = useState<SectionKey>('account-access')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -89,9 +97,73 @@ export default function AdminSettings() {
   const [headerImage, setHeaderImage] = useState<string | null>(null)
   const [headerOpacity, setHeaderOpacity] = useState(100)
   const [headerFit, setHeaderFit] = useState<'original' | 'cover' | 'contain'>('original')
+  const [googleCalendarLoading, setGoogleCalendarLoading] = useState(true)
+  const [googleCalendarConnecting, setGoogleCalendarConnecting] = useState(false)
+  const [googleCalendarDisconnecting, setGoogleCalendarDisconnecting] = useState(false)
+  const [googleCalendarStatus, setGoogleCalendarStatus] = useState<GoogleCalendarConnectionStatus | null>(null)
 
   // Quick keys
   const { actions, bindings, setBinding, resetDefaults } = useQuickKeys()
+
+  const loadGoogleCalendar = async () => {
+    setGoogleCalendarLoading(true)
+    try {
+      const status = await fetchGoogleCalendarStatus()
+      setGoogleCalendarStatus(status.connection)
+    } catch (err) {
+      toast((err as Error).message, 'error')
+    } finally {
+      setGoogleCalendarLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadGoogleCalendar()
+  }, [])
+
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const connected = url.searchParams.get('google_calendar')
+    const error = url.searchParams.get('google_calendar_error')
+    if (!connected && !error) return
+
+    if (connected === 'connected') {
+      toast('Google Calendar connected.', 'success')
+      void loadGoogleCalendar()
+    }
+    if (error) {
+      toast(`Google Calendar connect failed: ${error}`, 'error')
+    }
+
+    url.searchParams.delete('google_calendar')
+    url.searchParams.delete('google_calendar_error')
+    window.history.replaceState({}, '', url.toString())
+  }, [])
+
+  const handleConnectGoogleCalendar = async () => {
+    setGoogleCalendarConnecting(true)
+    try {
+      const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}admin/settings`
+      const authUrl = await startGoogleCalendarConnect(redirectTo)
+      window.location.assign(authUrl)
+    } catch (err) {
+      toast((err as Error).message, 'error')
+      setGoogleCalendarConnecting(false)
+    }
+  }
+
+  const handleDisconnectGoogleCalendar = async () => {
+    setGoogleCalendarDisconnecting(true)
+    try {
+      await disconnectGoogleCalendar()
+      setGoogleCalendarStatus(null)
+      toast('Google Calendar disconnected.', 'success')
+    } catch (err) {
+      toast((err as Error).message, 'error')
+    } finally {
+      setGoogleCalendarDisconnecting(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -409,6 +481,74 @@ export default function AdminSettings() {
                   <span className="text-text-muted">Admin User</span>
                   <span className="font-medium">{profile?.email}</span>
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-border p-4 space-y-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-text">Google Calendar Sync</h3>
+                    <p className="text-xs text-text-muted mt-1">
+                      Phase 1 sync pushes Checkmark bookings to the connected Google account, which Apple Calendar then mirrors.
+                    </p>
+                  </div>
+                  {googleCalendarLoading && <Loader2 size={16} className="animate-spin text-text-muted shrink-0" />}
+                </div>
+
+                {googleCalendarStatus ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-alt">
+                      <span className="text-text-muted">Connected account</span>
+                      <span className="font-medium">{googleCalendarStatus.google_email}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-alt">
+                      <span className="text-text-muted">Calendar target</span>
+                      <code className="text-xs bg-surface px-2 py-1 rounded border border-border">
+                        {googleCalendarStatus.calendar_id}
+                      </code>
+                    </div>
+                    {googleCalendarStatus.last_sync_error && (
+                      <div className="p-3 rounded-lg border border-amber-400/30 bg-amber-500/10 text-xs text-amber-200">
+                        Last sync error: {googleCalendarStatus.last_sync_error}
+                      </div>
+                    )}
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleDisconnectGoogleCalendar}
+                        disabled={googleCalendarDisconnecting}
+                        className="px-4 py-2 rounded-lg border border-border text-sm font-semibold hover:bg-surface-hover disabled:opacity-50"
+                      >
+                        {googleCalendarDisconnecting ? 'Disconnecting…' : 'Disconnect'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-text-muted">
+                      No Google Calendar connection yet. Connect `checkmarkaudio@gmail.com` to let Checkmark drive Google and Apple Calendar from one place.
+                    </p>
+                    <div className="p-3 rounded-lg border border-border bg-surface-alt text-xs text-text-muted">
+                      During Phase 1, Checkmark should stay the source of truth. Bookings created directly in Apple Calendar will not flow back into Checkmark until Phase 2 is added.
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleConnectGoogleCalendar}
+                        disabled={googleCalendarConnecting}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold hover:bg-gold-muted text-black text-sm font-semibold disabled:opacity-50"
+                      >
+                        {googleCalendarConnecting ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                            Connecting…
+                          </>
+                        ) : (
+                          'Connect Google Calendar'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

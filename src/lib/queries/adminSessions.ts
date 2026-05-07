@@ -2,6 +2,7 @@
 // Mirrors `adminTasks.ts` in shape.
 
 import { supabase } from '../supabase'
+import { deleteSessionEventFromGoogleCalendar, syncSessionToGoogleCalendar } from '../googleCalendar'
 
 export interface AdminSession {
   id: string
@@ -17,6 +18,7 @@ export interface AdminSession {
   assigned_to_name: string | null
   created_by: string | null
   created_at: string | null
+  google_event_id?: string | null
 }
 
 export const adminSessionKeys = {
@@ -58,7 +60,7 @@ export interface AdminUpdateSessionPayload {
 export async function adminUpdateSession(
   sessionId: string,
   payload: AdminUpdateSessionPayload,
-): Promise<AdminSession> {
+): Promise<{ session: AdminSession; syncWarning: string | null }> {
   const { data, error } = await supabase.rpc('admin_update_session', {
     p_session_id: sessionId,
     p_client_name: payload.client_name ?? null,
@@ -79,19 +81,37 @@ export async function adminUpdateSession(
     console.error('[queries/adminSessions] adminUpdateSession failed:', error)
     throw new Error(error.message)
   }
-  return data as AdminSession
+  const updated = data as AdminSession
+  try {
+    await syncSessionToGoogleCalendar(updated.id)
+    return { session: updated, syncWarning: null }
+  } catch (error) {
+    return {
+      session: updated,
+      syncWarning: error instanceof Error ? error.message : 'Unknown Google Calendar sync failure',
+    }
+  }
 }
 
 export async function adminDeleteSession(
   sessionId: string,
   opts: { cancelNote?: string } = {},
-): Promise<void> {
-  const { error } = await supabase.rpc('admin_delete_session', {
+): Promise<{ syncWarning: string | null }> {
+  const { data, error } = await supabase.rpc('admin_delete_session', {
     p_session_id: sessionId,
     p_cancel_note: opts.cancelNote ?? null,
   })
   if (error) {
     console.error('[queries/adminSessions] adminDeleteSession failed:', error)
     throw new Error(error.message)
+  }
+  const googleEventId = (data as { deleted_google_event_id?: string | null } | null)?.deleted_google_event_id
+  try {
+    await deleteSessionEventFromGoogleCalendar(googleEventId ?? null)
+    return { syncWarning: null }
+  } catch (syncError) {
+    return {
+      syncWarning: syncError instanceof Error ? syncError.message : 'Unknown Google Calendar delete failure',
+    }
   }
 }
