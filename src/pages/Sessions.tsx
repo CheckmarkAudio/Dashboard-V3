@@ -7,7 +7,7 @@ import BookingStatusPopover from '../components/calendar/BookingStatusPopover'
 import { loadSessionsWindow, type SessionCategory, type SessionListItem } from '../domain/sessions/queries'
 import { PageHeader } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
-import { AlertCircle, Briefcase, Loader2, Pencil, Plus, UserSquare } from 'lucide-react'
+import { AlertCircle, Briefcase, ChevronDown, Loader2, Pencil, Plus, UserSquare } from 'lucide-react'
 
 // PR #15 — matches the highlight-task pattern in MyTasksCard. When a
 // session-assign notification is clicked elsewhere in the app, the
@@ -24,18 +24,32 @@ type CategoryTab = typeof CATEGORIES[number]
 
 type ViewTab = 'bookings' | 'clients'
 
-/* ── Status dot (emerald/amber/red used as status semantics — those
-   three hues are reserved for the future priority system, so status
-   readings align with that palette naturally). ── */
+/* ── Status pill — tonal, button-shaped so it's obvious you can click it.
+   Wrapped in BookingStatusPopover at the call site (PR #158); this is
+   purely the visual trigger. Emerald/amber/rose hues are status
+   semantics (those three are reserved away from the future priority
+   palette so they don't clash). The chevron-down caret + ring + hover
+   deepen telegraph "menu opens here." Completed shows the same chrome
+   minus the chevron since the popover doesn't surface for terminal
+   states. ── */
 function StatusLabel({ status }: { status: string }) {
   const lower = status.toLowerCase()
+  const tone =
+    lower === 'confirmed' || lower === 'completed'
+      ? { bg: 'bg-emerald-500/10', text: 'text-emerald-300', ring: 'ring-emerald-500/30', dot: 'bg-emerald-400', hover: 'hover:bg-emerald-500/20' }
+      : lower === 'pending'
+        ? { bg: 'bg-amber-500/10', text: 'text-amber-300', ring: 'ring-amber-500/30', dot: 'bg-amber-400', hover: 'hover:bg-amber-500/20' }
+        : lower === 'cancelled'
+          ? { bg: 'bg-rose-500/10', text: 'text-rose-300', ring: 'ring-rose-500/30', dot: 'bg-rose-400', hover: 'hover:bg-rose-500/20' }
+          : { bg: 'bg-text-light/10', text: 'text-text-muted', ring: 'ring-border', dot: 'bg-text-light', hover: 'hover:bg-text-light/20' }
+  const isTerminal = lower === 'completed'
   return (
-    <span className="flex items-center gap-1.5 text-[13px] text-text-muted">
-      {lower === 'confirmed' && <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />}
-      {lower === 'completed' && <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />}
-      {lower === 'pending'   && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
-      {lower === 'cancelled' && <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />}
-      {status}
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 text-[11px] font-bold uppercase tracking-wider transition-colors ${tone.bg} ${tone.text} ${tone.ring} ${isTerminal ? '' : tone.hover}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} aria-hidden="true" />
+      <span>{status}</span>
+      {!isTerminal && <ChevronDown size={11} strokeWidth={2.5} aria-hidden="true" className="opacity-70" />}
     </span>
   )
 }
