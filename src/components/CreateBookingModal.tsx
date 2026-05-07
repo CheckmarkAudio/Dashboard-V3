@@ -79,14 +79,30 @@ function to12(t: string): string {
 
 const todayYMD = () => new Date().toISOString().split('T')[0] ?? ''
 
+// Reverse map for prefilling the booking-type pill from a stored
+// session_type (engineering/training/education default to recording
+// since the original UI category isn't preserved per row).
+const SESSION_TYPE_TO_BOOKING: Record<string, BookingType> = {
+  recording: 'engineering',
+  mixing: 'engineering',
+  lesson: 'music_lesson',
+  meeting: 'consultation',
+}
+
 export default function CreateBookingModal({
   onClose,
   prefillDate,
   prefillTime,
+  editSessionId,
 }: {
   onClose: () => void
   prefillDate?: string
   prefillTime?: string
+  // 2026-05-07 (PR E) — when set, the modal opens in EDIT mode:
+  // fetches the session row, pre-fills every field, and submits as
+  // an UPDATE instead of an INSERT. Header + submit-button copy
+  // change to match.
+  editSessionId?: string
 }) {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
@@ -168,6 +184,50 @@ export default function CreateBookingModal({
   // 2026-05-07 — bookings recurrence. Off | weekly | monthly. Stored
   // as recurrence_spec on the row; daily cron spawns next instance.
   const [recurring, setRecurring] = useState<'off' | 'weekly' | 'monthly'>('off')
+
+  // PR E — edit-mode prefill. When `editSessionId` is set, fetch the
+  // session row once on mount and seed every form field. Status is
+  // surfaced read-only via a small chip below the header (Lean 5 will
+  // wire Cancel/Confirm/Reschedule actions there).
+  const isEditMode = Boolean(editSessionId)
+  useEffect(() => {
+    if (!editSessionId) return
+    let cancelled = false
+    void (async () => {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('id, client_id, client_name, session_date, start_time, end_time, session_type, room, notes, assigned_to, recurrence_spec')
+        .eq('id', editSessionId)
+        .single()
+      if (cancelled || error || !data) return
+      // Resolve the linked client (if any) so the typeahead's
+      // selectedClient reflects the existing link.
+      let resolvedClient: Client | null = null
+      if (data.client_id) {
+        try {
+          const matches = await searchClients(data.client_name ?? '')
+          resolvedClient = matches.find((c) => c.id === data.client_id) ?? null
+        } catch {
+          resolvedClient = null
+        }
+      }
+      setSelectedClient(resolvedClient)
+      setClientQuery(data.client_name ?? '')
+      setDescription(data.notes ?? '')
+      setDate(data.session_date ?? '')
+      // Server stores HH:mm:ss; UI inputs use HH:mm.
+      setStartTime((data.start_time ?? '').slice(0, 5))
+      setEndTime((data.end_time ?? '').slice(0, 5))
+      setBookingType(SESSION_TYPE_TO_BOOKING[data.session_type] ?? 'engineering')
+      setStudio((data.room as StudioSpace) ?? 'Studio A')
+      setAssignedTo(data.assigned_to ?? '')
+      const spec = data.recurrence_spec as { frequency?: string } | null
+      const freq = spec?.frequency
+      if (freq === 'weekly' || freq === 'monthly') setRecurring(freq)
+      else setRecurring('off')
+    })()
+    return () => { cancelled = true }
+  }, [editSessionId])
 
   // Re-check conflict whenever date/time/studio changes.
   useEffect(() => {
@@ -274,10 +334,8 @@ export default function CreateBookingModal({
       start_time: startTime.length === 5 ? `${startTime}:00` : startTime,
       end_time: endTime.length === 5 ? `${endTime}:00` : endTime,
       session_type: BOOKING_TYPE_TO_SESSION_TYPE[bookingType],
-      status: 'pending' as Session['status'],
       room: studio,
       notes: description.trim() || null,
-      created_by: profile?.id ?? null,
       assigned_to: assignedTo || null,
       // 2026-05-07 — bookings recurrence. Server CHECK enforces
       // frequency ∈ {'weekly','monthly'}; null for one-shot bookings.
@@ -285,7 +343,17 @@ export default function CreateBookingModal({
         recurring === 'off' ? null : { frequency: recurring, interval: 1 },
     }
 
-    const { error } = await supabase.from('sessions').insert(payload)
+    // PR E — branch on edit-mode. UPDATE preserves status + created_by;
+    // INSERT seeds them with sensible defaults.
+    const { error } = isEditMode && editSessionId
+      ? await supabase.from('sessions').update(payload).eq('id', editSessionId)
+      : await supabase
+          .from('sessions')
+          .insert({
+            ...payload,
+            status: 'pending' as Session['status'],
+            created_by: profile?.id ?? null,
+          })
     setSubmitting(false)
     if (error) {
       setSubmitError(error.message || 'Failed to save booking.')
@@ -301,9 +369,17 @@ export default function CreateBookingModal({
       <div className="relative bg-surface rounded-2xl border border-border w-full max-w-lg mx-4 p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-lg font-bold text-text">Book a Session</h2>
+            <h2 className="text-lg font-bold text-text">
+              {isEditMode ? 'Edit Booking' : 'Book a Session'}
+            </h2>
             <p className="text-[11px] text-text-muted mt-0.5">
-              Auto-assigned to <span className="text-gold font-semibold">Book</span> KPI stage
+              {isEditMode
+                ? 'Update any field below — saves directly to the session.'
+                : (
+                  <>
+                    Auto-assigned to <span className="text-gold font-semibold">Book</span> KPI stage
+                  </>
+                )}
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted">
@@ -673,9 +749,9 @@ export default function CreateBookingModal({
           {submitting && <Loader2 size={14} className="animate-spin" />}
           {submitting
             ? 'Saving…'
-            : conflictWarning && confirmedOverride
-              ? 'Create Booking (Override)'
-              : 'Create Booking'}
+            : isEditMode
+              ? (conflictWarning && confirmedOverride ? 'Save Changes (Override)' : 'Save Changes')
+              : (conflictWarning && confirmedOverride ? 'Create Booking (Override)' : 'Create Booking')}
         </button>
       </div>
     </div>

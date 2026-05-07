@@ -85,6 +85,63 @@ function formatTime12(t: string): string {
   return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`
 }
 
+/**
+ * PR E — overlap-aware lane assignment for a single day's bookings.
+ * Two bookings overlap when one's [start, end) intersects the other's.
+ * Bookings are partitioned into "groups" (transitively-overlapping
+ * sets); within each group, every booking gets a lane index, and the
+ * group as a whole knows how many lanes it needs (`groupSize`).
+ *
+ * Render math: each booking renders at width = colWidth / groupSize,
+ * left offset = lane * (colWidth / groupSize). A standalone booking
+ * (no overlap) ends up in a 1-lane group → full width as before.
+ */
+interface BookingLane<T> {
+  booking: T
+  lane: number
+  groupSize: number
+}
+function assignBookingLanes<T extends { startTime: string; endTime: string }>(
+  dayBookings: T[],
+): BookingLane<T>[] {
+  const sorted = [...dayBookings].sort(
+    (a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime),
+  )
+  const result: BookingLane<T>[] = []
+  let groupBuffer: { booking: T; lane: number }[] = []
+  let lanesEndMin: number[] = []
+  let groupEndMin = -Infinity
+
+  function flushGroup() {
+    if (groupBuffer.length === 0) return
+    const groupSize = lanesEndMin.length
+    for (const item of groupBuffer) result.push({ ...item, groupSize })
+    groupBuffer = []
+    lanesEndMin = []
+    groupEndMin = -Infinity
+  }
+
+  for (const b of sorted) {
+    const startMin = timeToMinutes(b.startTime)
+    const endMin = timeToMinutes(b.endTime)
+    // If this booking starts after every lane in the current group is
+    // free, the group is closed — finalize before continuing.
+    if (startMin >= groupEndMin) flushGroup()
+    // First lane whose previous booking ended at/before this start time.
+    let laneIdx = lanesEndMin.findIndex((end) => end <= startMin)
+    if (laneIdx === -1) {
+      laneIdx = lanesEndMin.length
+      lanesEndMin.push(endMin)
+    } else {
+      lanesEndMin[laneIdx] = endMin
+    }
+    groupBuffer.push({ booking: b, lane: laneIdx })
+    groupEndMin = Math.max(groupEndMin, endMin)
+  }
+  flushGroup()
+  return result
+}
+
 export default function Calendar() {
   useDocumentTitle('Calendar - Checkmark Workspace')
   const TODAY_KEY = getTodayKey()
@@ -154,6 +211,10 @@ export default function Calendar() {
   // shared BookingDetailModal. State is page-local since the side
   // CalendarDayCard manages its own modal independently.
   const [detailBooking, setDetailBooking] = useState<BookingDetail | null>(null)
+  // PR E — when admin clicks "Edit" inside the detail modal, hand off
+  // to CreateBookingModal in edit mode (`editSessionId`). null when
+  // not editing.
+  const [editSessionId, setEditSessionId] = useState<string | null>(null)
 
   // Day-detail concerns (selected-day booking list, inline notes,
   // add-note flow) now live inside CalendarDayCard. This page owns
@@ -173,10 +234,21 @@ export default function Calendar() {
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
       {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime(''); void refetch() }} prefillDate={bookingPrefillDate} prefillTime={bookingPrefillTime} />}
+      {editSessionId && (
+        <CreateBookingModal
+          editSessionId={editSessionId}
+          onClose={() => { setEditSessionId(null); void refetch() }}
+        />
+      )}
       {detailBooking && (
         <BookingDetailModal
           booking={detailBooking}
           onClose={() => setDetailBooking(null)}
+          onEdit={() => {
+            const id = detailBooking.id
+            setDetailBooking(null)
+            setEditSessionId(id)
+          }}
         />
       )}
       {/* Header */}
@@ -251,7 +323,12 @@ export default function Calendar() {
                       const isSel = wd.key === selectedDate
                       return (
                         <div key={di} className={`border-l border-border group/cell relative ${isSel ? 'bg-gold/[0.03]' : ''}`}>
-                          <button onClick={() => { setBookingPrefillDate(wd.key); setBookingPrefillTime(`${hour.toString().padStart(2,'0')}:00`); setShowBooking(true) }} className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity z-20">
+                          {/* +Book hover affordance — sits at z-10 so it's
+                              below booking blocks (z-30). When a cell is
+                              already booked, the booking block intercepts
+                              the hover + click; this button only surfaces
+                              on truly-empty cells. */}
+                          <button onClick={() => { setBookingPrefillDate(wd.key); setBookingPrefillTime(`${hour.toString().padStart(2,'0')}:00`); setShowBooking(true) }} className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity z-10">
                             <span className="flex items-center gap-0.5 text-[9px] text-gold bg-surface/90 border border-gold/20 rounded px-1.5 py-0.5">
                               <Plus size={8} />Book
                             </span>
@@ -262,18 +339,29 @@ export default function Calendar() {
                   </div>
                 ))}
 
-                {/* Booking blocks — positioned within each day column using grid math */}
+                {/* Booking blocks — positioned within each day column
+                    via overlap-aware lane math (PR E). Bookings that
+                    share a time slot fan out side-by-side instead of
+                    stacking. Z-index is z-30 — above the +Book hover
+                    button (z-10) so a click on a booking always lands
+                    on the booking, never on the empty-cell affordance
+                    underneath. */}
                 {WEEK.map((wd, dayIndex) => {
                   const dayBookings = bookingsByDate[wd.key] ?? []
-                  return dayBookings.map(b => {
+                  const laned = assignBookingLanes(dayBookings)
+                  return laned.map(({ booking: b, lane, groupSize }) => {
                     const startMin = timeToMinutes(b.startTime)
                     const endMin = timeToMinutes(b.endTime)
                     const gridStart = 7 * 60
                     const topPx = ((startMin - gridStart) / 60) * 48
                     const heightPx = ((endMin - startMin) / 60) * 48
-                    // Use CSS calc that matches the grid: skip 50px time col, then position within 7 equal columns
+                    // Day column width within the 7-column grid.
                     const colWidth = `((100% - 36px) / 7)`
                     const colLeft = `(36px + ${colWidth} * ${dayIndex})`
+                    // Lane width within this day's column. groupSize=1
+                    // collapses to the full column.
+                    const laneWidth = `(${colWidth} / ${groupSize})`
+                    const laneLeft = `(${colLeft} + ${laneWidth} * ${lane})`
 
                     return (
                       <button
@@ -281,12 +369,12 @@ export default function Calendar() {
                         type="button"
                         onClick={() => setDetailBooking(b)}
                         title={`${b.client} · ${formatTime12(b.startTime)}–${formatTime12(b.endTime)}`}
-                        className="absolute calendar-booking-block px-1.5 py-0.5 overflow-hidden text-left cursor-pointer z-10 hover:ring-2 hover:ring-gold/50 hover:z-20 transition-all focus-ring"
+                        className="absolute calendar-booking-block px-1.5 py-0.5 overflow-hidden text-left cursor-pointer z-30 hover:ring-2 hover:ring-gold/50 hover:z-40 transition-all focus-ring"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 18),
-                          left: `calc(${colLeft} + 1px)`,
-                          width: `calc(${colWidth} - 2px)`,
+                          left: `calc(${laneLeft} + 1px)`,
+                          width: `calc(${laneWidth} - 2px)`,
                         }}
                       >
                         <div className="flex items-center gap-1">
@@ -294,7 +382,9 @@ export default function Calendar() {
                           <p className="text-[10px] font-medium text-gold truncate leading-tight">{b.client}</p>
                         </div>
                         {heightPx > 28 && <p className="text-[8px] text-text-muted truncate leading-tight">{b.assignee}</p>}
-                        {heightPx > 42 && <p className="text-[8px] text-text-light truncate leading-tight">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>}
+                        {heightPx > 42 && groupSize === 1 && (
+                          <p className="text-[8px] text-text-light truncate leading-tight">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>
+                        )}
                       </button>
                     )
                   })
