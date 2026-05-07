@@ -3,6 +3,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import CreateBookingModal from '../components/CreateBookingModal'
 import AdminEditSessionsModal from '../components/admin/sessions/AdminEditSessionsModal'
 import ClientsPanel from '../components/clients/ClientsPanel'
+import BookingStatusPopover from '../components/calendar/BookingStatusPopover'
 import { loadSessionsWindow, type SessionCategory, type SessionListItem } from '../domain/sessions/queries'
 import { PageHeader } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
@@ -60,6 +61,9 @@ export default function Sessions() {
 
   const [activeCategory, setActiveCategory] = useState<CategoryTab>('All')
   const [showBooking, setShowBooking] = useState(false)
+  // PR #158 — Reschedule from the BookingStatusPopover opens
+  // CreateBookingModal in edit mode (mirror of Calendar.tsx).
+  const [editSessionId, setEditSessionId] = useState<string | null>(null)
   const [showAdminEdit, setShowAdminEdit] = useState(false)
   const [sessions, setSessions] = useState<SessionListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -148,6 +152,12 @@ export default function Sessions() {
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
       {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); void refetch() }} />}
+      {editSessionId && (
+        <CreateBookingModal
+          editSessionId={editSessionId}
+          onClose={() => { setEditSessionId(null); void refetch() }}
+        />
+      )}
       {showAdminEdit && (
         <AdminEditSessionsModal
           onClose={() => {
@@ -309,7 +319,18 @@ export default function Sessions() {
                         <p className="text-[11px] text-text-light">{booking.studio}</p>
                       </td>
                       <td className="px-5 py-4">
-                        <StatusLabel status={booking.status} />
+                        {/* PR #158 (Active #3) — hover/click the status
+                            pill → action popover (Confirm · Reschedule
+                            · Cancel · Restore depending on current
+                            state). Reschedule opens the editor. */}
+                        <BookingStatusPopover
+                          sessionId={booking.id}
+                          status={booking.status}
+                          onChanged={() => void refetch()}
+                          onReschedule={() => setEditSessionId(booking.id)}
+                        >
+                          <StatusLabel status={booking.status} />
+                        </BookingStatusPopover>
                       </td>
                     </tr>
                   ))}

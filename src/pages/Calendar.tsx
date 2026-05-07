@@ -249,6 +249,7 @@ export default function Calendar() {
             setDetailBooking(null)
             setEditSessionId(id)
           }}
+          onStatusChanged={() => { setDetailBooking(null); void refetch() }}
         />
       )}
       {/* Header */}
