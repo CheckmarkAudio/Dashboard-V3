@@ -271,11 +271,20 @@ export default function CreateBookingModal({
   }, [editSessionId])
 
   // Re-check conflict whenever date/time/studio changes.
+  // 2026-05-07 — pass `excludeId: editSessionId` so editing a booking
+  // doesn't flag itself as a conflict ("Megan is booked … from 12-1"
+  // when Megan IS the row being edited).
   useEffect(() => {
     if (!date || !startTime || !endTime || !studio) return
     let cancelled = false
     setCheckingConflict(true)
-    findSessionConflict({ sessionDate: date, startTime, endTime, room: studio })
+    findSessionConflict({
+      sessionDate: date,
+      startTime,
+      endTime,
+      room: studio,
+      excludeId: editSessionId ?? null,
+    })
       .then((conflict) => {
         if (cancelled) return
         if (conflict) {
@@ -296,7 +305,7 @@ export default function CreateBookingModal({
       })
       .finally(() => { if (!cancelled) setCheckingConflict(false) })
     return () => { cancelled = true }
-  }, [date, startTime, endTime, studio])
+  }, [date, startTime, endTime, studio, editSessionId])
 
   // PR #51 — must have either a selected existing client OR a
   // non-empty typed name (which we'll auto-create on submit).
@@ -318,12 +327,15 @@ export default function CreateBookingModal({
 
     // Final conflict check right before insert — guards against the
     // race where someone else booked the slot after the effect ran.
+    // Edit mode excludes the current row so we never flag the booking
+    // being edited as conflicting with itself.
     try {
       const conflict = await findSessionConflict({
         sessionDate: date,
         startTime,
         endTime,
         room: studio,
+        excludeId: editSessionId ?? null,
       })
       if (conflict && !confirmedOverride) {
         setConflictWarning(
@@ -395,12 +407,27 @@ export default function CreateBookingModal({
             status: 'pending' as Session['status'],
             created_by: profile?.id ?? null,
           })
-    setSubmitting(false)
     if (error) {
+      setSubmitting(false)
       setSubmitError(error.message || 'Failed to save booking.')
       return
     }
 
+    // 2026-05-07 — immediately fill the recurrence horizon so admins
+    // see the next 4–5 weekly instances on the calendar right away
+    // (instead of waiting for tomorrow's 11 UTC cron tick to spawn
+    // the first child). The spawn function is idempotent + safe to
+    // call from any authenticated context. Failures here are silent —
+    // the cron will catch up tomorrow either way.
+    if (payload.recurrence_spec) {
+      try {
+        await supabase.rpc('spawn_recurring_session_instances')
+      } catch (e) {
+        console.warn('[booking] spawn_recurring_session_instances:', e)
+      }
+    }
+
+    setSubmitting(false)
     onClose()
   }
 
