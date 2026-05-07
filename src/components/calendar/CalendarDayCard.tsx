@@ -5,9 +5,13 @@ import {
   ChevronRight,
   Loader2,
   StickyNote,
+  X,
 } from 'lucide-react'
 import { loadWeekEvents } from '../../lib/calendar'
 import { addDays, startOfWeek } from '../../lib/time'
+import { useAuth } from '../../contexts/AuthContext'
+import BookingDetailModal, { type BookingDetail } from './BookingDetailModal'
+import CreateBookingModal from '../CreateBookingModal'
 
 /**
  * CalendarDayCard — self-contained day-view widget extracted from
@@ -48,6 +52,24 @@ interface BookingNote {
   id: string
   text: string
   time: string
+  // 2026-05-07 (PR #152) — author attribution. Older notes saved
+  // before this PR don't have these fields; we fall back to "Anon"
+  // initials in render rather than mutating the historical entries.
+  author_name?: string | null
+  author_initials?: string | null
+}
+
+/** Two-letter initials from a display name (single names get a single
+ *  letter). Returns "?" when the name is missing or empty. */
+function deriveInitials(name: string | null | undefined): string {
+  const trimmed = (name ?? '').trim()
+  if (!trimmed) return '?'
+  const parts = trimmed.split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return (parts[0]?.[0] ?? '?').toUpperCase()
+  const first = parts[0]?.[0] ?? ''
+  const last = parts[parts.length - 1]?.[0] ?? ''
+  return `${first}${last}`.toUpperCase() || '?'
 }
 
 const SESSION_TYPE_TO_UI: Record<string, string> = {
@@ -108,6 +130,14 @@ function shiftDate(dateKey: string, days: number): string {
 }
 
 const NOTES_STORAGE_KEY = 'checkmark-booking-notes'
+// 2026-05-07 (Lean B) — persist which notes drawers are expanded so
+// they stay open across navigation / page refresh. Per user direction:
+// "the notes close if you leave the page — make the notes stay opened
+// unless you log out or close them yourself manually." `localStorage`
+// (vs sessionStorage) so opening notes on Calendar carries over to the
+// Overview side card too. Cleared on sign-out by the global storage
+// purge in AuthContext.
+const EXPANDED_NOTES_STORAGE_KEY = 'checkmark-booking-notes-expanded'
 
 interface CalendarDayCardProps {
   /** Optional controlled date. If provided, caller owns the state. */
@@ -122,6 +152,9 @@ export default function CalendarDayCard({
   onSelectDate,
   className = '',
 }: CalendarDayCardProps = {}) {
+  // PR #152 — author attribution on notes. Pull current user so each
+  // saved note carries the display name + computed initials inline.
+  const { profile } = useAuth()
   // Local state only used when uncontrolled — memoize to keep hooks stable.
   const [uncontrolledDate, setUncontrolledDate] = useState<string>(() => todayKey())
   const selectedDate = controlledDate ?? uncontrolledDate
@@ -190,6 +223,15 @@ export default function CalendarDayCard({
 
   // Notes — shared localStorage key with the Calendar page so both
   // surfaces see the same notes.
+  // 2026-05-07 (Lean A) — clicking the booking title opens a read-
+  // only detail modal. Modal shape mirrors the local CalendarBooking
+  // interface so we just store the row directly (avoids a round-trip).
+  const [detailBooking, setDetailBooking] = useState<BookingDetail | null>(null)
+  // PR E — admin clicks "Edit" inside the detail modal → swap into
+  // CreateBookingModal (edit mode). Auto-refetches the week on close
+  // so the updated booking lights up immediately.
+  const [editSessionId, setEditSessionId] = useState<string | null>(null)
+
   const [bookingNotes, setBookingNotes] = useState<Record<string, BookingNote[]>>(() => {
     try {
       const saved = localStorage.getItem(NOTES_STORAGE_KEY)
@@ -199,11 +241,21 @@ export default function CalendarDayCard({
     }
   })
   const [noteInputs, setNoteInputs] = useState<Record<string, string>>({})
-  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(EXPANDED_NOTES_STORAGE_KEY)
+      if (!saved) return new Set()
+      const ids = JSON.parse(saved) as unknown
+      return Array.isArray(ids) ? new Set(ids.filter((x): x is string => typeof x === 'string')) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
 
   function addBookingNote(bookingId: string) {
     const text = noteInputs[bookingId]?.trim()
     if (!text) return
+    const authorName = profile?.display_name ?? 'Anon'
     const note: BookingNote = {
       id: `note-${Date.now()}`,
       text,
@@ -212,6 +264,8 @@ export default function CalendarDayCard({
         minute: '2-digit',
         hour12: true,
       }),
+      author_name: authorName,
+      author_initials: deriveInitials(authorName),
     }
     setBookingNotes((prev) => {
       const next = {
@@ -229,11 +283,41 @@ export default function CalendarDayCard({
     setNoteInputs((prev) => ({ ...prev, [bookingId]: '' }))
   }
 
+  // PR #152 — delete a single note from a booking. localStorage is
+  // the source of truth (we don't have a server-side notes table yet),
+  // so the delete just rewrites the per-booking array minus the row.
+  function deleteBookingNote(bookingId: string, noteId: string) {
+    setBookingNotes((prev) => {
+      const remaining = (prev[bookingId] ?? []).filter((n) => n.id !== noteId)
+      const next: Record<string, BookingNote[]> = { ...prev }
+      if (remaining.length === 0) {
+        // Drop the empty array so the localStorage payload stays clean
+        // and the "Notes (N)" badge math doesn't show "(0)".
+        delete next[bookingId]
+      } else {
+        next[bookingId] = remaining
+      }
+      try {
+        localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        // Same silent-drop posture as addBookingNote.
+      }
+      return next
+    })
+  }
+
   function toggleNotes(bookingId: string) {
     setExpandedNotes((prev) => {
       const next = new Set(prev)
       if (next.has(bookingId)) next.delete(bookingId)
       else next.add(bookingId)
+      // Persist so the drawer state survives navigation + refresh.
+      try {
+        localStorage.setItem(EXPANDED_NOTES_STORAGE_KEY, JSON.stringify([...next]))
+      } catch {
+        // localStorage can throw in privacy mode; expanded-state is
+        // a nice-to-have, silent drop is fine.
+      }
       return next
     })
   }
@@ -304,6 +388,31 @@ export default function CalendarDayCard({
         <p className="text-[10px] text-text-muted mt-0.5">{fullDateLabel}</p>
       </div>
 
+      {detailBooking && (
+        <BookingDetailModal
+          booking={detailBooking}
+          onClose={() => setDetailBooking(null)}
+          onEdit={() => {
+            const id = detailBooking.id
+            setDetailBooking(null)
+            setEditSessionId(id)
+          }}
+          onStatusChanged={() => {
+            setDetailBooking(null)
+            setFetchedWeekKey(null) // force refetch so the new status shows
+          }}
+        />
+      )}
+      {editSessionId && (
+        <CreateBookingModal
+          editSessionId={editSessionId}
+          onClose={() => {
+            setEditSessionId(null)
+            setFetchedWeekKey(null) // force refetch so edits show up
+          }}
+        />
+      )}
+
       {/* ── Body ──────────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2">
         {loading ? (
@@ -327,8 +436,15 @@ export default function CalendarDayCard({
               return (
                 <div key={b.id} className="py-3 border-b border-border-strong last:border-0">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-[13px] font-semibold text-text">{b.client}</p>
-                    <span className="text-[9px] font-semibold text-gold bg-gold/10 px-1.5 py-0.5 rounded">
+                    {/* Clickable title — opens BookingDetailModal (Lean A). */}
+                    <button
+                      type="button"
+                      onClick={() => setDetailBooking(b)}
+                      className="text-[13px] font-semibold text-text hover:text-gold transition-colors text-left truncate focus-ring rounded"
+                    >
+                      {b.client}
+                    </button>
+                    <span className="text-[9px] font-semibold text-gold bg-gold/10 px-1.5 py-0.5 rounded shrink-0 ml-2">
                       {durationLabel(b.startTime, b.endTime)}
                     </span>
                   </div>
@@ -368,21 +484,47 @@ export default function CalendarDayCard({
                     <div className="mt-2 pt-2 border-t border-border-strong">
                       {bNotes.length > 0 && (
                         <div className="space-y-1.5 mb-2">
-                          {bNotes.map((n) => (
-                            <div
-                              key={n.id}
-                              className="flex items-start gap-2 border-l-2 border-gold/30 pl-2.5 py-1"
-                            >
-                              <StickyNote
-                                size={9}
-                                className="text-gold/40 mt-0.5 shrink-0"
-                              />
-                              <div>
-                                <p className="text-[11px] text-text-muted italic">{n.text}</p>
-                                <p className="text-[8px] text-text-light mt-0.5">{n.time}</p>
+                          {bNotes.map((n) => {
+                            // PR #152 — author attribution. Older notes
+                            // saved before this PR don't have author
+                            // metadata; fall back gracefully.
+                            const initials = n.author_initials ?? deriveInitials(n.author_name)
+                            const authorTitle = n.author_name ?? 'Unknown author'
+                            return (
+                              <div
+                                key={n.id}
+                                className="group/note flex items-start gap-2 border-l-2 border-gold/30 pl-2.5 py-1"
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className="text-[12px] leading-none text-gold mt-0.5 shrink-0"
+                                >
+                                  ♪
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[12px] text-text leading-snug">{n.text}</p>
+                                  <p className="text-[8px] text-text-light mt-0.5 flex items-center gap-1.5">
+                                    <span
+                                      title={authorTitle}
+                                      className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-gold/15 ring-1 ring-gold/40 text-gold text-[7px] font-bold uppercase tabular-nums"
+                                    >
+                                      {initials}
+                                    </span>
+                                    <span>{n.time}</span>
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteBookingNote(b.id, n.id)}
+                                  aria-label={`Delete note: ${n.text}`}
+                                  title="Delete note"
+                                  className="shrink-0 p-1 rounded-md text-text-light hover:text-rose-400 hover:bg-rose-500/10 opacity-0 group-hover/note:opacity-100 focus:opacity-100 focus-ring transition-opacity"
+                                >
+                                  <X size={11} aria-hidden="true" />
+                                </button>
                               </div>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       )}
                       <div className="flex gap-1.5">

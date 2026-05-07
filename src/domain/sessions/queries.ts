@@ -349,3 +349,25 @@ export async function findSessionConflict(input: {
   const row = data?.[0]
   return row ? (row as SessionConflict) : null
 }
+
+/**
+ * Booking status — server CHECK enforces `pending | confirmed | cancelled`.
+ * Used by the BookingStatusPopover for one-click status flips (Confirm,
+ * Cancel, Restore). Reschedule isn't a status change — it opens the
+ * existing CreateBookingModal in edit mode (handled separately).
+ */
+export type BookingStatus = 'pending' | 'confirmed' | 'cancelled'
+
+export async function setBookingStatus(
+  sessionId: string,
+  next: BookingStatus,
+): Promise<void> {
+  const { error } = await supabase
+    .from('sessions')
+    .update({ status: next })
+    .eq('id', sessionId)
+  if (error) {
+    console.error('[domain/sessions] setBookingStatus failed:', error)
+    throw new Error(error.message)
+  }
+}
