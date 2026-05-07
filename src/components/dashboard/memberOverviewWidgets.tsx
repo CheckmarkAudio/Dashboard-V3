@@ -6,7 +6,6 @@ import {
   AlertCircle,
   Check,
   ChevronRight,
-  FileText,
   Flame,
   Loader2,
   Plus,
@@ -62,7 +61,7 @@ function WidgetStatus({ error, loading }: { error: string | null; loading: boole
 }
 
 export function TeamSnapshotWidget() {
-  const { daily, streak, todayNote, mustDoSubmission, loading, error } = useMemberOverviewContext()
+  const { daily, streak, mustDoSubmission, loading, error } = useMemberOverviewContext()
   const status = <WidgetStatus error={error} loading={loading} />
   if (loading || error) return status
 
@@ -107,23 +106,10 @@ export function TeamSnapshotWidget() {
             Open tasks
           </Link>
         </div>
-        <div className="rounded-xl border border-border/70 bg-surface-alt/40 px-3 py-2.5 flex items-center justify-between gap-3">
-          <div className="min-w-0 flex items-center gap-2">
-            <FileText size={14} className="text-emerald-400 shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-text">Daily note</p>
-              <p className="text-[11px] text-text-light">
-                {todayNote ? 'Submitted for today' : 'Not submitted yet'}
-              </p>
-            </div>
-          </div>
-          {/* 2026-05-07 link audit — `/notes` was retired and the
-              route now redirects to `/`. Show muted "Coming soon" copy
-              instead of a dead link until daily-note has a live home. */}
-          <span className="text-sm font-medium text-text-light shrink-0">
-            Coming soon
-          </span>
-        </div>
+        {/* 2026-05-07 link audit — Daily note row dropped entirely.
+            The /notes route was retired and the daily-note feature
+            has no live home; the row was only showing "Coming soon".
+            Re-add when daily-note has a real surface to link to. */}
       </div>
     </div>
   )
