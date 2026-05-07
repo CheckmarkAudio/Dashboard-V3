@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { loadWeekEvents } from '../../lib/calendar'
 import { addDays, startOfWeek } from '../../lib/time'
+import BookingDetailModal, { type BookingDetail } from './BookingDetailModal'
 
 /**
  * CalendarDayCard — self-contained day-view widget extracted from
@@ -190,6 +191,11 @@ export default function CalendarDayCard({
 
   // Notes — shared localStorage key with the Calendar page so both
   // surfaces see the same notes.
+  // 2026-05-07 (Lean A) — clicking the booking title opens a read-
+  // only detail modal. Modal shape mirrors the local CalendarBooking
+  // interface so we just store the row directly (avoids a round-trip).
+  const [detailBooking, setDetailBooking] = useState<BookingDetail | null>(null)
+
   const [bookingNotes, setBookingNotes] = useState<Record<string, BookingNote[]>>(() => {
     try {
       const saved = localStorage.getItem(NOTES_STORAGE_KEY)
@@ -304,6 +310,13 @@ export default function CalendarDayCard({
         <p className="text-[10px] text-text-muted mt-0.5">{fullDateLabel}</p>
       </div>
 
+      {detailBooking && (
+        <BookingDetailModal
+          booking={detailBooking}
+          onClose={() => setDetailBooking(null)}
+        />
+      )}
+
       {/* ── Body ──────────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2">
         {loading ? (
@@ -327,8 +340,15 @@ export default function CalendarDayCard({
               return (
                 <div key={b.id} className="py-3 border-b border-border-strong last:border-0">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-[13px] font-semibold text-text">{b.client}</p>
-                    <span className="text-[9px] font-semibold text-gold bg-gold/10 px-1.5 py-0.5 rounded">
+                    {/* Clickable title — opens BookingDetailModal (Lean A). */}
+                    <button
+                      type="button"
+                      onClick={() => setDetailBooking(b)}
+                      className="text-[13px] font-semibold text-text hover:text-gold transition-colors text-left truncate focus-ring rounded"
+                    >
+                      {b.client}
+                    </button>
+                    <span className="text-[9px] font-semibold text-gold bg-gold/10 px-1.5 py-0.5 rounded shrink-0 ml-2">
                       {durationLabel(b.startTime, b.endTime)}
                     </span>
                   </div>

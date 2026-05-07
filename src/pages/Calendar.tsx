@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import CreateBookingModal from '../components/CreateBookingModal'
 import CalendarDayCard from '../components/calendar/CalendarDayCard'
+import BookingDetailModal, { type BookingDetail } from '../components/calendar/BookingDetailModal'
 import { loadWeekEvents } from '../lib/calendar'
 import { addDays, startOfWeek } from '../lib/time'
 import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2 } from 'lucide-react'
@@ -149,6 +150,10 @@ export default function Calendar() {
   const [showBooking, setShowBooking] = useState(false)
   const [bookingPrefillDate, setBookingPrefillDate] = useState('')
   const [bookingPrefillTime, setBookingPrefillTime] = useState('')
+  // 2026-05-07 (Lean A) — clicking a week-grid booking block opens the
+  // shared BookingDetailModal. State is page-local since the side
+  // CalendarDayCard manages its own modal independently.
+  const [detailBooking, setDetailBooking] = useState<BookingDetail | null>(null)
 
   // Day-detail concerns (selected-day booking list, inline notes,
   // add-note flow) now live inside CalendarDayCard. This page owns
@@ -168,6 +173,12 @@ export default function Calendar() {
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
       {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime(''); void refetch() }} prefillDate={bookingPrefillDate} prefillTime={bookingPrefillTime} />}
+      {detailBooking && (
+        <BookingDetailModal
+          booking={detailBooking}
+          onClose={() => setDetailBooking(null)}
+        />
+      )}
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -265,9 +276,12 @@ export default function Calendar() {
                     const colLeft = `(36px + ${colWidth} * ${dayIndex})`
 
                     return (
-                      <div
+                      <button
                         key={b.id}
-                        className="absolute calendar-booking-block px-1.5 py-0.5 overflow-hidden cursor-default z-10"
+                        type="button"
+                        onClick={() => setDetailBooking(b)}
+                        title={`${b.client} · ${formatTime12(b.startTime)}–${formatTime12(b.endTime)}`}
+                        className="absolute calendar-booking-block px-1.5 py-0.5 overflow-hidden text-left cursor-pointer z-10 hover:ring-2 hover:ring-gold/50 hover:z-20 transition-all focus-ring"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 18),
@@ -281,7 +295,7 @@ export default function Calendar() {
                         </div>
                         {heightPx > 28 && <p className="text-[8px] text-text-muted truncate leading-tight">{b.assignee}</p>}
                         {heightPx > 42 && <p className="text-[8px] text-text-light truncate leading-tight">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>}
-                      </div>
+                      </button>
                     )
                   })
                 })}
