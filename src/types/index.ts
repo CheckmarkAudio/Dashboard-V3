@@ -178,6 +178,10 @@ export interface Session {
   created_by: string | null
   /** Team member actually working the session. Nullable until admin sets one. */
   assigned_to: string | null
+  google_event_id?: string | null
+  google_sync_status?: 'pending' | 'synced' | 'error'
+  google_last_synced_at?: string | null
+  google_sync_error?: string | null
   created_at: string
 }
 

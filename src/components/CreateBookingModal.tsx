@@ -8,8 +8,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from './Toast'
 import { type BookingType, type StudioSpace } from '../contexts/TaskContext'
 import { supabase } from '../lib/supabase'
+import { syncSessionToGoogleCalendar } from '../lib/googleCalendar'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import {
   clientKeys,
@@ -133,6 +135,7 @@ export default function CreateBookingModal({
   editSessionId?: string
 }) {
   const { profile } = useAuth()
+  const { toast } = useToast()
   const queryClient = useQueryClient()
 
   // Team members populate the Assigned To dropdown. Shared react-query
@@ -398,8 +401,13 @@ export default function CreateBookingModal({
 
     // PR E — branch on edit-mode. UPDATE preserves status + created_by;
     // INSERT seeds them with sensible defaults.
-    const { error } = isEditMode && editSessionId
-      ? await supabase.from('sessions').update(payload).eq('id', editSessionId)
+    const { data, error } = isEditMode && editSessionId
+      ? await supabase
+          .from('sessions')
+          .update(payload)
+          .eq('id', editSessionId)
+          .select('id')
+          .single()
       : await supabase
           .from('sessions')
           .insert({
@@ -407,6 +415,8 @@ export default function CreateBookingModal({
             status: 'pending' as Session['status'],
             created_by: profile?.id ?? null,
           })
+          .select('id')
+          .single()
     if (error) {
       setSubmitting(false)
       setSubmitError(error.message || 'Failed to save booking.')
@@ -425,6 +435,15 @@ export default function CreateBookingModal({
       } catch (e) {
         console.warn('[booking] spawn_recurring_session_instances:', e)
       }
+    }
+
+    try {
+      const savedId = data?.id ?? editSessionId
+      if (savedId) {
+        await syncSessionToGoogleCalendar(savedId)
+      }
+    } catch (err) {
+      toast(`Booking saved, but Google Calendar sync failed: ${(err as Error).message}`, 'error')
     }
 
     setSubmitting(false)

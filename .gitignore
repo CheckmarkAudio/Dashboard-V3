@@ -15,3 +15,5 @@ dist-ssr/
 
 # Local DB snapshots from Supabase MCP exports — contain real user data, never commit
 backups/
+.vercel
+.env*.local

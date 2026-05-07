@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { syncSessionToGoogleCalendar } from '../../lib/googleCalendar'
 import { localDateKey } from '../../lib/dates'
 
 /**
@@ -264,7 +265,9 @@ export async function assignSession(
     console.error('[queries/sessions] assignSession failed:', error)
     throw new Error(error.message)
   }
-  return data as AssignSessionResult
+  const result = data as AssignSessionResult
+  await syncSessionToGoogleCalendar(result.session_id)
+  return result
 }
 
 // ─── Engineer conflict check (PR #15) ────────────────────────────────
