@@ -46,11 +46,39 @@ const BOOKING_TYPE_TO_SESSION_TYPE: Record<BookingType, Session['session_type']>
 
 const STUDIOS: StudioSpace[] = ['Studio A', 'Studio B', 'Home Visit', 'Venue']
 
-// Common time slots for easy selection
-const TIME_PRESETS = [
-  '7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
-  '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM',
-]
+// 2026-05-07 — half-hour granularity for the quick-tap pills.
+// Real bookings frequently land on :30 (lessons, consults). The
+// native HH:MM input below the pills covers anything else.
+function buildTimePresets(): string[] {
+  const out: string[] = []
+  // 7 AM through 8 PM, every 30 minutes.
+  for (let h = 7; h <= 20; h++) {
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    const hr = h % 12 || 12
+    out.push(`${hr}:00 ${ampm}`)
+    if (h < 20) out.push(`${hr}:30 ${ampm}`)
+  }
+  return out
+}
+const TIME_PRESETS = buildTimePresets()
+
+// Add `delta` minutes to an "HH:mm" string and clamp to the day.
+function shiftClock(value: string, deltaMin: number): string {
+  const [h = 0, m = 0] = value.split(':').map((n) => Number(n) || 0)
+  let total = h * 60 + m + deltaMin
+  if (total < 0) total = 0
+  if (total > 23 * 60 + 45) total = 23 * 60 + 45
+  const nh = Math.floor(total / 60)
+  const nm = total % 60
+  return `${nh.toString().padStart(2, '0')}:${nm.toString().padStart(2, '0')}`
+}
+
+// Difference in minutes between two "HH:mm" strings.
+function clockDiff(start: string, end: string): number {
+  const [sh = 0, sm = 0] = start.split(':').map((n) => Number(n) || 0)
+  const [eh = 0, em = 0] = end.split(':').map((n) => Number(n) || 0)
+  return eh * 60 + em - (sh * 60 + sm)
+}
 
 function splitClockParts(value: string): [string, string] {
   const [left = '', right = ''] = value.split(':')
@@ -163,6 +191,19 @@ export default function CreateBookingModal({
     }
     return '12:00'
   })
+
+  // 2026-05-07 — when the user picks a new start time, slide the end
+  // time forward by the same delta so the duration stays the same
+  // (and the end never lands BEFORE the start). If duration was zero
+  // / negative, default to a 1h block. Falls back gracefully when the
+  // shift would push past the 23:45 cap.
+  function setStartTimeAndShiftEnd(nextStart: string) {
+    const prevDuration = clockDiff(startTime, endTime)
+    setStartTime(nextStart)
+    const newDuration = prevDuration > 0 ? prevDuration : 60
+    const nextEnd = shiftClock(nextStart, newDuration)
+    if (nextEnd !== endTime) setEndTime(nextEnd)
+  }
   // Default the assignee to the signed-in user so single-person studios
   // don't have to touch the field. Empty string until team loads.
   const [assignedTo, setAssignedTo] = useState<string>('')
@@ -580,17 +621,52 @@ export default function CreateBookingModal({
             />
           </div>
 
-          {/* Time selection — easy tap presets */}
+          {/* Time selection — flexible picker (PR #156).
+              Three layers:
+                1. Native HH:MM input (15-min snap via step) for any
+                   arbitrary time + ± 15-min nudge buttons.
+                2. Quick-tap pills at 30-min granularity for common
+                   slots (covers ~95% of bookings in one click).
+                3. Live "From – To" summary + duration label.
+              When the From time changes, the To time slides forward
+              by the same delta so the duration stays the same and
+              the end never lands before the start. */}
           <div>
             <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5">From</label>
+            <div className="flex items-center gap-1.5 mb-2">
+              <button
+                type="button"
+                onClick={() => setStartTimeAndShiftEnd(shiftClock(startTime, -15))}
+                aria-label="Nudge start time back 15 minutes"
+                className="px-2 py-1.5 rounded-lg border border-border bg-surface-alt text-text-muted hover:text-text hover:border-border-light text-[11px] font-bold focus-ring"
+              >
+                –15m
+              </button>
+              <input
+                type="time"
+                step={900}
+                value={startTime}
+                onChange={(e) => setStartTimeAndShiftEnd(e.target.value)}
+                className="bg-surface-alt border border-border rounded-xl px-3 py-2 text-sm text-text focus:border-gold focus:outline-none tabular-nums"
+              />
+              <button
+                type="button"
+                onClick={() => setStartTimeAndShiftEnd(shiftClock(startTime, 15))}
+                aria-label="Nudge start time forward 15 minutes"
+                className="px-2 py-1.5 rounded-lg border border-border bg-surface-alt text-text-muted hover:text-text hover:border-border-light text-[11px] font-bold focus-ring"
+              >
+                +15m
+              </button>
+            </div>
             <div className="flex flex-wrap gap-1">
               {TIME_PRESETS.map((t) => {
                 const val = to24(t)
                 return (
                   <button
                     key={t}
-                    onClick={() => setStartTime(val)}
-                    className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all ${startTime === val ? 'bg-gold/12 text-gold border-gold/25' : 'text-text-light border-border hover:text-text-muted hover:border-border-light'}`}
+                    type="button"
+                    onClick={() => setStartTimeAndShiftEnd(val)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all tabular-nums ${startTime === val ? 'bg-gold/12 text-gold border-gold/25' : 'text-text-light border-border hover:text-text-muted hover:border-border-light'}`}
                   >
                     {t}
                   </button>
@@ -600,14 +676,40 @@ export default function CreateBookingModal({
           </div>
           <div>
             <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5">To</label>
+            <div className="flex items-center gap-1.5 mb-2">
+              <button
+                type="button"
+                onClick={() => setEndTime(shiftClock(endTime, -15))}
+                aria-label="Nudge end time back 15 minutes"
+                className="px-2 py-1.5 rounded-lg border border-border bg-surface-alt text-text-muted hover:text-text hover:border-border-light text-[11px] font-bold focus-ring"
+              >
+                –15m
+              </button>
+              <input
+                type="time"
+                step={900}
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="bg-surface-alt border border-border rounded-xl px-3 py-2 text-sm text-text focus:border-gold focus:outline-none tabular-nums"
+              />
+              <button
+                type="button"
+                onClick={() => setEndTime(shiftClock(endTime, 15))}
+                aria-label="Nudge end time forward 15 minutes"
+                className="px-2 py-1.5 rounded-lg border border-border bg-surface-alt text-text-muted hover:text-text hover:border-border-light text-[11px] font-bold focus-ring"
+              >
+                +15m
+              </button>
+            </div>
             <div className="flex flex-wrap gap-1">
               {TIME_PRESETS.map((t) => {
                 const val = to24(t)
                 return (
                   <button
                     key={t}
+                    type="button"
                     onClick={() => setEndTime(val)}
-                    className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all ${endTime === val ? 'bg-gold/12 text-gold border-gold/25' : 'text-text-light border-border hover:text-text-muted hover:border-border-light'}`}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all tabular-nums ${endTime === val ? 'bg-gold/12 text-gold border-gold/25' : 'text-text-light border-border hover:text-text-muted hover:border-border-light'}`}
                   >
                     {t}
                   </button>
@@ -616,6 +718,13 @@ export default function CreateBookingModal({
             </div>
             <p className="text-[10px] text-text-light mt-1.5">
               {to12(startTime)} – {to12(endTime)}
+              {(() => {
+                const mins = clockDiff(startTime, endTime)
+                if (mins <= 0) return <span className="ml-2 text-rose-400">· end is before start</span>
+                const h = Math.floor(mins / 60), m = mins % 60
+                const dur = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`
+                return <span className="ml-2 text-text-muted">· {dur}</span>
+              })()}
               {checkingConflict && <span className="ml-2 text-text-light/70">· checking availability…</span>}
             </p>
           </div>
