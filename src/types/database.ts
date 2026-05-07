@@ -805,6 +805,10 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           end_time: string
+          google_event_id: string | null
+          google_last_synced_at: string | null
+          google_sync_error: string | null
+          google_sync_status: string
           id: string
           notes: string | null
           project_id: string | null
@@ -821,6 +825,10 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           end_time: string
+          google_event_id?: string | null
+          google_last_synced_at?: string | null
+          google_sync_error?: string | null
+          google_sync_status?: string
           id?: string
           notes?: string | null
           project_id?: string | null
@@ -837,6 +845,10 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           end_time?: string
+          google_event_id?: string | null
+          google_last_synced_at?: string | null
+          google_sync_error?: string | null
+          google_sync_status?: string
           id?: string
           notes?: string | null
           project_id?: string | null
@@ -2811,4 +2823,3 @@ export const Constants = {
     },
   },
 } as const
-

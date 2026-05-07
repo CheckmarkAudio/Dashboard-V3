@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { syncSessionToGoogleCalendar } from '../../lib/googleCalendar'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../Toast'
 import { Button, Input, Textarea, Select, Modal } from '../ui'
@@ -120,23 +121,42 @@ export default function SessionFormModal({
     }
 
     if (editing) {
-      const { error } = await supabase.from('sessions').update(payload).eq('id', editing.id)
+      const { data, error } = await supabase
+        .from('sessions')
+        .update(payload)
+        .eq('id', editing.id)
+        .select('id')
+        .single()
       if (error) {
         console.error(error)
         toast(error.message || 'Failed to update session', 'error')
         setSubmitting(false)
         return
       }
-      toast('Session updated')
+      try {
+        await syncSessionToGoogleCalendar(data.id)
+        toast('Session updated')
+      } catch (err) {
+        toast(`Session updated, but Google Calendar sync failed: ${(err as Error).message}`, 'error')
+      }
     } else {
-      const { error } = await supabase.from('sessions').insert(payload)
+      const { data, error } = await supabase
+        .from('sessions')
+        .insert(payload)
+        .select('id')
+        .single()
       if (error) {
         console.error(error)
         toast(error.message || 'Failed to create session', 'error')
         setSubmitting(false)
         return
       }
-      toast('Session booked')
+      try {
+        await syncSessionToGoogleCalendar(data.id)
+        toast('Session booked')
+      } catch (err) {
+        toast(`Session booked, but Google Calendar sync failed: ${(err as Error).message}`, 'error')
+      }
     }
 
     setSubmitting(false)

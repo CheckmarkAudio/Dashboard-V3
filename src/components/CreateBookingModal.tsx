@@ -8,8 +8,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from './Toast'
 import { type BookingType, type StudioSpace } from '../contexts/TaskContext'
 import { supabase } from '../lib/supabase'
+import { syncSessionToGoogleCalendar } from '../lib/googleCalendar'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import {
   clientKeys,
@@ -89,6 +91,7 @@ export default function CreateBookingModal({
   prefillTime?: string
 }) {
   const { profile } = useAuth()
+  const { toast } = useToast()
   const queryClient = useQueryClient()
 
   // Team members populate the Assigned To dropdown. Shared react-query
@@ -285,11 +288,21 @@ export default function CreateBookingModal({
         recurring === 'off' ? null : { frequency: recurring, interval: 1 },
     }
 
-    const { error } = await supabase.from('sessions').insert(payload)
+    const { data, error } = await supabase
+      .from('sessions')
+      .insert(payload)
+      .select('id')
+      .single()
     setSubmitting(false)
     if (error) {
       setSubmitError(error.message || 'Failed to save booking.')
       return
+    }
+
+    try {
+      await syncSessionToGoogleCalendar(data.id)
+    } catch (err) {
+      toast(`Booking saved, but Google Calendar sync failed: ${(err as Error).message}`, 'error')
     }
 
     onClose()
