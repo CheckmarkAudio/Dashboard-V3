@@ -397,6 +397,10 @@ export default function CalendarDayCard({
             setDetailBooking(null)
             setEditSessionId(id)
           }}
+          onStatusChanged={() => {
+            setDetailBooking(null)
+            setFetchedWeekKey(null) // force refetch so the new status shows
+          }}
         />
       )}
       {editSessionId && (

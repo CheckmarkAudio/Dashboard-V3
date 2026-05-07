@@ -1,5 +1,6 @@
 import { Building2, CalendarDays, Clock, Edit2, User as UserIcon } from 'lucide-react'
 import FloatingDetailModal from '../FloatingDetailModal'
+import BookingStatusPopover from './BookingStatusPopover'
 
 /**
  * BookingDetailModal — read-only summary of a single booking, opened
@@ -91,6 +92,7 @@ export default function BookingDetailModal({
   booking,
   onClose,
   onEdit,
+  onStatusChanged,
 }: {
   booking: BookingDetail
   onClose: () => void
@@ -98,6 +100,9 @@ export default function BookingDetailModal({
   // Parent is responsible for what edit means (typically: close this
   // modal + open CreateBookingModal in edit mode with `editSessionId`).
   onEdit?: () => void
+  // PR #158 — bubbled when the user flips status via the hover
+  // popover (Confirm / Cancel / Restore). Parent should refetch.
+  onStatusChanged?: () => void
 }) {
   const typeLabel = TYPE_LABELS[booking.type] ?? booking.type
 
@@ -114,12 +119,22 @@ export default function BookingDetailModal({
             <h2 className="text-[22px] font-bold tracking-[-0.02em] text-text leading-tight truncate">
               {booking.client}
             </h2>
-            <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 text-[11px] font-bold uppercase tracking-wider ${STATUS_TONE[booking.status]}`}
+            {/* Status pill is the popover trigger (PR #158). Reschedule
+                forwards to onEdit so admin doesn't need a separate
+                Edit button click for the time-change case. */}
+            <BookingStatusPopover
+              sessionId={booking.id}
+              status={booking.status}
+              onChanged={() => onStatusChanged?.()}
+              onReschedule={onEdit}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[booking.status]}`} />
-              {booking.status}
-            </span>
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 text-[11px] font-bold uppercase tracking-wider ${STATUS_TONE[booking.status]}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[booking.status]}`} />
+                {booking.status}
+              </span>
+            </BookingStatusPopover>
           </div>
           {booking.description && booking.description !== booking.client && (
             <p className="mt-1.5 text-[12px] text-text-muted">{booking.description}</p>
