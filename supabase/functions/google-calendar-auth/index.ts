@@ -209,7 +209,7 @@ Deno.serve(async (req: Request) => {
     const encryptionSecret = requireEnv("GOOGLE_TOKEN_ENCRYPTION_KEY")
 
     if (req.method === "GET") {
-      return handleGoogleOauthCallback(req, {
+      return await handleGoogleOauthCallback(req, {
         supabaseUrl,
         googleClientId,
         googleClientSecret,
