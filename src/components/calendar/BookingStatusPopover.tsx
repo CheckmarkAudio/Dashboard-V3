@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation } from '@tanstack/react-query'
 import { Calendar as CalendarIcon, Check, Loader2, RotateCcw, X } from 'lucide-react'
 import { setBookingStatus, type BookingStatus } from '../../domain/sessions/queries'
@@ -58,8 +59,16 @@ export default function BookingStatusPopover({
   const [open, setOpen] = useState(false)
   const [confirmingCancel, setConfirmingCancel] = useState(false)
   const wrapperRef = useRef<HTMLSpanElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
   const enterTimer = useRef<number | null>(null)
   const leaveTimer = useRef<number | null>(null)
+  // 2026-05-07 — popover position (viewport coords) for the portal-
+  // rendered dropdown. Recomputed on open + on scroll/resize so the
+  // menu stays anchored to the trigger when the page moves under it.
+  // Portal is required because the Sessions table wraps its rows in
+  // an `overflow-hidden` container; an in-place absolute popover gets
+  // clipped and reads as "not responsive."
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
 
   const normalized = normalize(status)
   // Completed is a terminal read-only state; show the pill but no actions.
@@ -102,12 +111,39 @@ export default function BookingStatusPopover({
     }, 300)
   }
 
-  // Click outside + Esc close. Only mounted when open.
+  // Position the portal-rendered popover under the trigger. Re-measures
+  // on open + on scroll/resize so it stays glued to the trigger when
+  // the page moves. Uses viewport coords because the portal renders to
+  // document.body (`position: fixed`).
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null)
+      return
+    }
+    const measure = () => {
+      const rect = wrapperRef.current?.getBoundingClientRect()
+      if (!rect) return
+      setPos({ top: rect.bottom + 6, left: rect.left })
+    }
+    measure()
+    window.addEventListener('scroll', measure, true) // capture phase → catches inner scroll containers too
+    window.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('scroll', measure, true)
+      window.removeEventListener('resize', measure)
+    }
+  }, [open])
+
+  // Click outside + Esc close. Click-outside check covers BOTH the
+  // trigger wrapper AND the portaled popover (since the popover lives
+  // outside the wrapper's DOM subtree).
   useEffect(() => {
     if (!open) return
     const handleDown = (e: MouseEvent) => {
-      if (!wrapperRef.current) return
-      if (!wrapperRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const inTrigger = wrapperRef.current?.contains(target) ?? false
+      const inPopover = popoverRef.current?.contains(target) ?? false
+      if (!inTrigger && !inPopover) {
         setOpen(false)
         setConfirmingCancel(false)
       }
@@ -135,6 +171,73 @@ export default function BookingStatusPopover({
 
   const cancelButtonLabel = confirmingCancel ? 'Confirm cancel' : 'Cancel'
 
+  const popoverContent = open && pos ? (
+    <div
+      ref={popoverRef}
+      role="menu"
+      aria-label={`Booking status actions for ${status}`}
+      className="fixed z-[60] min-w-[180px] rounded-xl border border-border bg-surface shadow-2xl overflow-hidden"
+      style={{
+        top: pos.top,
+        left: pos.left,
+        animation: 'fadeIn 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+      }}
+      onMouseEnter={() => clearTimers()}
+      onMouseLeave={scheduleClose}
+    >
+      {/* Pending → Confirm */}
+      {normalized === 'pending' && (
+        <PopoverAction
+          icon={<Check size={13} strokeWidth={2.5} aria-hidden="true" />}
+          label="Confirm"
+          tone="emerald"
+          disabled={mutation.isPending}
+          onClick={() => mutation.mutate('confirmed')}
+        />
+      )}
+      {/* Cancelled → Restore (back to pending) */}
+      {normalized === 'cancelled' && (
+        <PopoverAction
+          icon={<RotateCcw size={13} strokeWidth={2.5} aria-hidden="true" />}
+          label="Restore to pending"
+          tone="gold"
+          disabled={mutation.isPending}
+          onClick={() => mutation.mutate('pending')}
+        />
+      )}
+      {/* Reschedule — always available except when noActions. */}
+      {onReschedule && (
+        <PopoverAction
+          icon={<CalendarIcon size={13} strokeWidth={2.5} aria-hidden="true" />}
+          label="Reschedule"
+          tone="default"
+          onClick={() => {
+            setOpen(false)
+            onReschedule()
+          }}
+        />
+      )}
+      {/* Cancel — destructive; inline two-step confirm. Hidden when
+          the row is already cancelled. */}
+      {(normalized === 'pending' || normalized === 'confirmed') && (
+        <PopoverAction
+          icon={<X size={13} strokeWidth={2.5} aria-hidden="true" />}
+          label={cancelButtonLabel}
+          tone="rose"
+          busy={mutation.isPending && confirmingCancel}
+          disabled={mutation.isPending}
+          onClick={() => {
+            if (!confirmingCancel) {
+              setConfirmingCancel(true)
+              return
+            }
+            mutation.mutate('cancelled')
+          }}
+        />
+      )}
+    </div>
+  ) : null
+
   return (
     <span
       ref={wrapperRef}
@@ -154,70 +257,13 @@ export default function BookingStatusPopover({
       >
         {children}
       </button>
-
-      {open && (
-        <div
-          role="menu"
-          aria-label={`Booking status actions for ${status}`}
-          className="absolute top-full left-0 mt-1.5 z-50 min-w-[180px] rounded-xl border border-border bg-surface shadow-2xl overflow-hidden"
-          style={{
-            animation: 'fadeIn 150ms cubic-bezier(0.16, 1, 0.3, 1)',
-          }}
-          onMouseEnter={() => clearTimers()}
-          onMouseLeave={scheduleClose}
-        >
-          {/* Pending → Confirm */}
-          {normalized === 'pending' && (
-            <PopoverAction
-              icon={<Check size={13} strokeWidth={2.5} aria-hidden="true" />}
-              label="Confirm"
-              tone="emerald"
-              disabled={mutation.isPending}
-              onClick={() => mutation.mutate('confirmed')}
-            />
-          )}
-          {/* Cancelled → Restore (back to pending) */}
-          {normalized === 'cancelled' && (
-            <PopoverAction
-              icon={<RotateCcw size={13} strokeWidth={2.5} aria-hidden="true" />}
-              label="Restore to pending"
-              tone="gold"
-              disabled={mutation.isPending}
-              onClick={() => mutation.mutate('pending')}
-            />
-          )}
-          {/* Reschedule — always available except when noActions. */}
-          {onReschedule && (
-            <PopoverAction
-              icon={<CalendarIcon size={13} strokeWidth={2.5} aria-hidden="true" />}
-              label="Reschedule"
-              tone="default"
-              onClick={() => {
-                setOpen(false)
-                onReschedule()
-              }}
-            />
-          )}
-          {/* Cancel — destructive; inline two-step confirm. Hidden when
-              the row is already cancelled. */}
-          {(normalized === 'pending' || normalized === 'confirmed') && (
-            <PopoverAction
-              icon={<X size={13} strokeWidth={2.5} aria-hidden="true" />}
-              label={cancelButtonLabel}
-              tone="rose"
-              busy={mutation.isPending && confirmingCancel}
-              disabled={mutation.isPending}
-              onClick={() => {
-                if (!confirmingCancel) {
-                  setConfirmingCancel(true)
-                  return
-                }
-                mutation.mutate('cancelled')
-              }}
-            />
-          )}
-        </div>
-      )}
+      {/* Portal escapes table/widget overflow-hidden clipping contexts.
+          Without this the popover renders correctly but is invisible
+          (clipped by the Sessions table's outer rounded-lg wrapper),
+          which reads as "the dropdown isn't responsive." */}
+      {typeof document !== 'undefined' && popoverContent
+        ? createPortal(popoverContent, document.body)
+        : null}
     </span>
   )
 }
