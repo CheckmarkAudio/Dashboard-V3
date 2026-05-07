@@ -426,10 +426,16 @@ export default function Layout() {
     },
   })
   const clockOutMutation = useMutation({
-    mutationFn: () => clockOut(),
+    // 2026-05-07 — accept the SelfReportModal reflection text so the
+    // "Went well / To improve" entries actually persist to
+    // time_clock_entries.notes (Members > Clock Data reads from there).
+    mutationFn: (notes?: string | null) => clockOut(notes ?? undefined),
     onSuccess: () => {
       queryClient.setQueryData(timeClockKeys.myOpen(), null)
       void queryClient.invalidateQueries({ queryKey: timeClockKeys.currentlyClockedIn() })
+      // Refresh the admin Clock Data table so the just-closed shift +
+      // its notes show up on the Members page without a manual reload.
+      void queryClient.invalidateQueries({ queryKey: timeClockKeys.all })
     },
   })
   const navigate = useNavigate()
@@ -584,17 +590,20 @@ export default function Layout() {
                 {showSelfReport && (
                   <SelfReportModal
                     clockInTime={clockInTime}
-                    onClose={() => {
+                    // 2026-05-07 — both paths pass the reflection
+                    // notes (or null when both fields are empty) so
+                    // they land on time_clock_entries.notes.
+                    onClose={(notes) => {
                       setShowSelfReport(false)
-                      clockOutMutation.mutate()
+                      clockOutMutation.mutate(notes)
                     }}
                     // Log Out path — close the shift AND end the
                     // Supabase session. Mutation runs in parallel with
                     // signOut so we don't block the redirect on the
                     // clock_out RPC.
-                    onLogout={async () => {
+                    onLogout={async (notes) => {
                       setShowSelfReport(false)
-                      clockOutMutation.mutate()
+                      clockOutMutation.mutate(notes)
                       await handleSignOut()
                     }}
                   />

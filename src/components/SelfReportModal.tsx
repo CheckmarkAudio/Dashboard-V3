@@ -8,7 +8,36 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   music_lesson: 'Music Lesson', consultation: 'Consultation',
 }
 
-export default function SelfReportModal({ clockInTime, onClose, onLogout }: { clockInTime: string; onClose: () => void; onLogout: () => void }) {
+/**
+ * Combine the two reflection prompts into a single notes string for
+ * `time_clock_entries.notes`. Returns null when both fields are empty
+ * so the column stores NULL (clean) instead of an empty header. Format
+ * is deliberately plain text — Markdown renderers aren't in play in
+ * the Clock Data table; admins read this verbatim.
+ */
+function buildClockOutNotes(wentWell: string, toImprove: string): string | null {
+  const went = wentWell.trim()
+  const improve = toImprove.trim()
+  if (!went && !improve) return null
+  if (went && improve) return `Went well: ${went}\n\nTo improve: ${improve}`
+  if (went) return `Went well: ${went}`
+  return `To improve: ${improve}`
+}
+
+export default function SelfReportModal({
+  clockInTime,
+  onClose,
+  onLogout,
+}: {
+  clockInTime: string
+  // 2026-05-07 — both close paths now hand the reflection text up so
+  // the parent (Layout) can pass it as the `p_notes` arg to
+  // `clock_out`. Previously the modal collected wentWell / toImprove
+  // in local state and dropped them on submit; this fixes the gap so
+  // Members > Clock Data shows the actual reflections.
+  onClose: (notes: string | null) => void
+  onLogout: (notes: string | null) => void
+}) {
   const { tasks, bookings } = useTasks()
   const [wentWell, setWentWell] = useState('')
   const [toImprove, setToImprove] = useState('')
@@ -37,6 +66,7 @@ export default function SelfReportModal({ clockInTime, onClose, onLogout }: { cl
   }, [])
   const clockOutTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
 
+  const currentNotes = () => buildClockOutNotes(wentWell, toImprove)
   const handleSubmit = () => {
     setSubmitted(true)
   }
@@ -50,14 +80,14 @@ export default function SelfReportModal({ clockInTime, onClose, onLogout }: { cl
   // NotificationsBell dropdown uses.
   const modalContent = (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => onClose(currentNotes())} />
       <div className="relative bg-surface rounded-2xl border border-border w-full max-w-lg mx-4 p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-lg font-bold text-text">Self Report</h2>
             <p className="text-[11px] text-text-muted">Clocked in: {clockInTime} · Clocking out: {clockOutTime}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted"><X size={18} /></button>
+          <button onClick={() => onClose(currentNotes())} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted"><X size={18} /></button>
         </div>
 
         {submitted ? (
@@ -68,7 +98,7 @@ export default function SelfReportModal({ clockInTime, onClose, onLogout }: { cl
             <p className="text-[15px] font-semibold text-text">Report submitted!</p>
             <p className="text-[12px] text-text-muted mt-1">Great work today. Clocked out at {clockOutTime}</p>
             <button
-              onClick={onLogout}
+              onClick={() => onLogout(currentNotes())}
               className="mt-5 px-6 py-2.5 rounded-xl bg-gold text-black text-[13px] font-bold hover:bg-gold-muted transition-all"
             >
               Log Out
