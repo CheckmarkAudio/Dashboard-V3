@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle, Bell, Calendar, CheckCheck, ClipboardList, ExternalLink,
@@ -135,6 +135,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   const queryClient = useQueryClient()
   const { profile } = useAuth()
   const { toast } = useToast()
+  const navigate = useNavigate()
   const [reassignModalOpen, setReassignModalOpen] = useState(false)
   // PR #68 (rev) — inline channel reply. Clicking a channel row expands
   // it to reveal a textarea + Send. Stays open until the user clears it
@@ -260,10 +261,16 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     })
 
     if (n.session_id) {
+      // 2026-05-07 link audit — was `window.location.href = '/sessions'`
+      // (full page reload). Switched to React Router navigate() so the
+      // SPA stays warm + the highlight-session event listener on the
+      // Sessions page (registered in Sessions.tsx via the
+      // HIGHLIGHT_EVENT useEffect) catches the dispatched event without
+      // a remount race.
       window.dispatchEvent(
         new CustomEvent('highlight-session', { detail: { sessionId: n.session_id } }),
       )
-      window.location.href = '/sessions'
+      navigate('/sessions')
       return
     }
 

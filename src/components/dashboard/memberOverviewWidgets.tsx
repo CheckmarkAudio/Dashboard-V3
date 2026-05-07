@@ -117,9 +117,12 @@ export function TeamSnapshotWidget() {
               </p>
             </div>
           </div>
-          <Link to="/notes" className="text-sm font-medium text-gold hover:underline shrink-0">
-            {todayNote ? 'View' : 'Submit'}
-          </Link>
+          {/* 2026-05-07 link audit — `/notes` was retired and the
+              route now redirects to `/`. Show muted "Coming soon" copy
+              instead of a dead link until daily-note has a live home. */}
+          <span className="text-sm font-medium text-text-light shrink-0">
+            Coming soon
+          </span>
         </div>
       </div>
     </div>

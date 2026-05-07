@@ -186,14 +186,19 @@ export default function YourDayTab() {
           {todayNote ? (
             <p className="text-sm font-semibold text-emerald-400">Submitted</p>
           ) : (
-            <Link to="/notes" className="text-sm font-semibold text-gold hover:underline">
-              Submit now
-            </Link>
+            // 2026-05-07 link audit — `/notes` was retired and the
+            // route now redirects to `/`. Show the data with a muted
+            // "Coming soon" affordance instead of a dead link until
+            // the daily-note feature surfaces somewhere live again.
+            <p className="text-sm font-semibold text-text-light">Coming soon</p>
           )}
         </div>
 
         {primaryKpi && (
-          <Link to="/kpis" className="bg-surface rounded-2xl border border-border p-4 hover:border-gold/20 transition-colors">
+          // 2026-05-07 link audit — `/kpis` was retired and the route
+          // redirects to `/`. Card stays as a static stat tile (drops
+          // the broken Link wrapper); KPI page can reattach later.
+          <div className="bg-surface rounded-2xl border border-border p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-text-muted uppercase tracking-wide truncate">{primaryKpi.name}</span>
               <Target size={14} className="text-gold shrink-0" aria-hidden="true" />
@@ -241,7 +246,7 @@ export default function YourDayTab() {
                 </div>
               </>
             )}
-          </Link>
+          </div>
         )}
       </div>
 
