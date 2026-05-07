@@ -26,6 +26,7 @@ import {
   type ProposedTaskEdit,
 } from '../../lib/queries/taskRequests'
 import { submitTaskTransferRequest, taskReassignKeys } from '../../lib/queries/taskReassign'
+import { adminTaskKeys, adminUpdateAssignedTask } from '../../lib/queries/adminTasks'
 import type { AssignedTask } from '../../types/assignments'
 import { FLYWHEEL_STAGES, type FlywheelStage } from './requests/formAtoms'
 
@@ -66,7 +67,7 @@ export default function TaskDetailModal({
 }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
 
   // ─── Mark complete (existing) ───────────────────────────────────
   const toggleMutation = useMutation({
@@ -214,6 +215,52 @@ export default function TaskDetailModal({
     },
   })
 
+  // 2026-05-06 — admin direct-edit. Same form fields as the member
+  // request flow, but submission goes through admin_update_assigned_task
+  // (no approval needed). Reason field is omitted from the payload —
+  // admins are the approvers, so a "reason for the admin" line would
+  // be meta-noise. The mutation maps `editProposed` keys onto the
+  // partial-update RPC's optional fields + clear* flags.
+  const adminEditMutation = useMutation({
+    mutationFn: () => {
+      // Translate ProposedTaskEdit (unset = omit, null = clear) into
+      // the RPC's partial-update payload (value = set, clear* = clear).
+      const payload: Parameters<typeof adminUpdateAssignedTask>[1] = {}
+      if ('title' in editProposed && editProposed.title !== undefined) {
+        payload.title = editProposed.title as string
+      }
+      if ('description' in editProposed) {
+        if (editProposed.description === null) payload.clearDescription = true
+        else payload.description = editProposed.description as string
+      }
+      if ('due_date' in editProposed) {
+        if (editProposed.due_date === null) payload.clearDue = true
+        else payload.due_date = editProposed.due_date as string
+      }
+      if ('category' in editProposed) {
+        if (editProposed.category === null) payload.clearCategory = true
+        else payload.category = editProposed.category as string
+      }
+      return adminUpdateAssignedTask(task.id, payload)
+    },
+    onSuccess: () => {
+      toast('Task updated.', 'success')
+      void queryClient.invalidateQueries({ queryKey: ['assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['team-assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['studio-assigned-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: adminTaskKeys.all })
+      closeCompose()
+      onClose()
+    },
+    onError: (err) => {
+      handleStaleTaskError(err, 'Could not save edits.')
+    },
+  })
+
+  // Single submit dispatcher — admins fire the direct-write RPC, members
+  // fire the request-for-approval RPC.
+  const editMutation = isAdmin ? adminEditMutation : requestEditMutation
+
   // Shared error handler — when the server reports the task is gone
   // (admin direct-delete from /admin/templates raced our request),
   // refresh local caches + close the modal with a friendly message
@@ -249,14 +296,14 @@ export default function TaskDetailModal({
           transferMutation.mutate()
         } else if (compose === 'delete' && !requestDeleteMutation.isPending) {
           requestDeleteMutation.mutate()
-        } else if (compose === 'edit' && editHasChanges && !requestEditMutation.isPending) {
-          requestEditMutation.mutate()
+        } else if (compose === 'edit' && editHasChanges && !editMutation.isPending) {
+          editMutation.mutate()
         }
       }
     }
     window.addEventListener('keydown', handler, true)
     return () => window.removeEventListener('keydown', handler, true)
-  }, [compose, transferReady, editHasChanges, transferMutation, requestDeleteMutation, requestEditMutation])
+  }, [compose, transferReady, editHasChanges, transferMutation, requestDeleteMutation, editMutation])
 
   // Member-only entry points: own active member-scope tasks. Server
   // RPCs enforce the same rules.
@@ -265,6 +312,12 @@ export default function TaskDetailModal({
     task.scope === 'member' &&
     Boolean(profile?.id) &&
     task.assigned_to === profile?.id
+
+  // Admin direct-edit: any active task, regardless of assignee or scope.
+  // Edits go through admin_update_assigned_task (no approval). Delete +
+  // Transfer stay member-only since admins have their own broader tools
+  // (`AdminEditTasksModal`, AssignAdmin) for those flows.
+  const canAdminEdit = isAdmin && !done
 
   const originLabel = (() => {
     if (task.source_type === 'daily_checklist') return 'Daily checklist'
@@ -342,16 +395,19 @@ export default function TaskDetailModal({
           <ComposerShell
             tone="orange"
             icon={<Edit2 size={11} aria-hidden="true" />}
-            label="Propose edits to this task"
+            // Admins write directly via admin_update_assigned_task;
+            // members fire submit_task_edit_request (admin-approval).
+            // Header copy + send-button label reflect which path runs.
+            label={isAdmin ? 'Edit this task' : 'Propose edits to this task'}
             shortcutHint
             onCancel={closeCompose}
-            onSend={() => requestEditMutation.mutate()}
-            sendDisabled={!editHasChanges || requestEditMutation.isPending}
+            onSend={() => editMutation.mutate()}
+            sendDisabled={!editHasChanges || editMutation.isPending}
             sendLabel={
-              requestEditMutation.isPending
-                ? 'Sending…'
+              editMutation.isPending
+                ? isAdmin ? 'Saving…' : 'Sending…'
                 : editHasChanges
-                  ? 'Send'
+                  ? isAdmin ? 'Save' : 'Send'
                   : 'No changes'
             }
           >
@@ -396,15 +452,19 @@ export default function TaskDetailModal({
                 ))}
               </select>
             </div>
-            <input
-              type="text"
-              value={editReason}
-              onChange={(e) => setEditReason(e.target.value)}
-              placeholder="Reason (optional, helps the admin decide)"
-              maxLength={500}
-              aria-label="Reason"
-              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-orange-400/60 focus:outline-none"
-            />
+            {/* Reason field is admin-facing — when the admin IS the
+                editor, it's just self-narration noise, so hide it. */}
+            {!isAdmin && (
+              <input
+                type="text"
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                placeholder="Reason (optional, helps the admin decide)"
+                maxLength={500}
+                aria-label="Reason"
+                className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-orange-400/60 focus:outline-none"
+              />
+            )}
           </ComposerShell>
         ) : (
           <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border bg-surface-alt/40 rounded-b-[18px]">
@@ -413,7 +473,9 @@ export default function TaskDetailModal({
                 ? done
                   ? 'You can mark this incomplete.'
                   : 'Ready to check off.'
-                : 'Read-only — only the assignee or an admin can change this.'}
+                : canAdminEdit
+                  ? 'Edit any field as admin.'
+                  : 'Read-only — only the assignee or an admin can change this.'}
             </p>
             <div className="flex items-center gap-1.5">
               <button
@@ -423,42 +485,45 @@ export default function TaskDetailModal({
               >
                 Close
               </button>
-              {/* Member request actions — small pill buttons (icon +
-                  label) so the action reads at a glance instead of
-                  forcing the user to read tooltips. Trash = ask admin
-                  to delete; Edit = propose changes; ArrowRightLeft =
-                  hand off to a teammate. Click opens the matching
-                  inline composer. */}
+              {/* Per-actor entry pills.
+                  • Member on own active member-scope task: Delete /
+                    Edit / Transfer (each routes through admin-approval).
+                  • Admin on ANY active task: Edit (direct write via
+                    admin_update_assigned_task). Delete + Transfer are
+                    NOT shown — admins have broader tools for those
+                    flows on the Assign page. */}
               {canRequest && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setCompose('delete')}
-                    aria-label="Request admin to delete this task"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-rose-300 bg-rose-500/10 ring-1 ring-rose-500/25 hover:bg-rose-500/20 hover:text-rose-200 transition-colors focus-ring"
-                  >
-                    <Trash2 size={12} aria-hidden="true" />
-                    Delete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openEdit}
-                    aria-label="Propose edits to this task"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-orange-300 bg-orange-500/10 ring-1 ring-orange-500/30 hover:bg-orange-500/20 transition-colors focus-ring"
-                  >
-                    <Edit2 size={12} aria-hidden="true" />
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCompose('transfer')}
-                    aria-label="Hand off this task to a teammate"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-gold bg-gold/10 ring-1 ring-gold/25 hover:bg-gold/20 transition-colors focus-ring"
-                  >
-                    <ArrowRightLeft size={12} aria-hidden="true" />
-                    Transfer
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={() => setCompose('delete')}
+                  aria-label="Request admin to delete this task"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-rose-300 bg-rose-500/10 ring-1 ring-rose-500/25 hover:bg-rose-500/20 hover:text-rose-200 transition-colors focus-ring"
+                >
+                  <Trash2 size={12} aria-hidden="true" />
+                  Delete
+                </button>
+              )}
+              {(canRequest || canAdminEdit) && (
+                <button
+                  type="button"
+                  onClick={openEdit}
+                  aria-label={isAdmin ? 'Edit this task' : 'Propose edits to this task'}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-orange-300 bg-orange-500/10 ring-1 ring-orange-500/30 hover:bg-orange-500/20 transition-colors focus-ring"
+                >
+                  <Edit2 size={12} aria-hidden="true" />
+                  Edit
+                </button>
+              )}
+              {canRequest && (
+                <button
+                  type="button"
+                  onClick={() => setCompose('transfer')}
+                  aria-label="Hand off this task to a teammate"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-semibold text-gold bg-gold/10 ring-1 ring-gold/25 hover:bg-gold/20 transition-colors focus-ring"
+                >
+                  <ArrowRightLeft size={12} aria-hidden="true" />
+                  Transfer
+                </button>
               )}
               {task.can_complete && (
                 <button

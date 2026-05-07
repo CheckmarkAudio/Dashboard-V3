@@ -101,6 +101,25 @@ export function recurrenceToSpec(freq: RecurrenceFrequency): RecurrenceSpec | nu
   return { frequency: freq, interval: 1 }
 }
 
+/**
+ * Server-side spec — narrowed to the cadences the database CHECK
+ * constraint accepts (`daily | weekly | monthly`). 'custom' is a UI
+ * placeholder for the future RFC-5545 picker; for now it serializes
+ * to `null` so the row persists without a recurrence and the picker
+ * still surfaces "Custom…" as a known coming-soon affordance.
+ */
+export type ServerRecurrenceSpec = {
+  frequency: 'daily' | 'weekly' | 'monthly'
+  interval: number
+}
+
+export function recurrenceToServerSpec(
+  freq: RecurrenceFrequency,
+): ServerRecurrenceSpec | null {
+  if (freq === 'off' || freq === 'custom') return null
+  return { frequency: freq, interval: 1 }
+}
+
 export function RecurrencePicker({
   value,
   onChange,
