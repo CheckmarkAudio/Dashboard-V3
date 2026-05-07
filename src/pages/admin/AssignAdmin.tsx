@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle, Archive, Building2, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronRight,
-  ClipboardList, Edit2, Layers, Loader2, Plus, Save,
-  Sparkles, Tag, Trash2, Users, X,
+  ClipboardList, Edit2, Flag, Layers, Loader2, Plus, Save,
+  Sparkles, Tag, Trash2, Users, UserPlus, X,
 } from 'lucide-react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
@@ -14,7 +14,19 @@ import {
   completeAssignedTask,
   fetchMemberAssignedTasks,
 } from '../../lib/queries/assignments'
-import { adminDeleteAssignedTasks, adminUpdateAssignedTask } from '../../lib/queries/adminTasks'
+import {
+  adminCloneTaskToMembers,
+  adminDeleteAssignedTasks,
+  adminUpdateAssignedTask,
+  STUDIO_SPACES,
+  type StudioSpace,
+} from '../../lib/queries/adminTasks'
+import MemberMultiSelect from '../../components/members/MemberMultiSelect'
+import {
+  RecurrencePicker,
+  recurrenceToServerSpec,
+  type RecurrenceFrequency,
+} from '../../components/tasks/requests/formAtoms'
 import {
   addTaskTemplateItem,
   assignTemplateItemsToMembers,
@@ -1001,9 +1013,23 @@ function formatDueShort(iso: string): string {
 // ─── Single-task edit modal ─────────────────────────────────────────
 //
 // Smaller than AdminEditTasksModal — opens scoped to ONE task. Hits
-// `admin_update_assigned_task` directly. Title / description /
-// category / due date are the editable fields, matching the admin
-// RPC's payload shape.
+// `admin_update_assigned_task` directly. 2026-05-07 — surfaced the
+// remaining editable fields so admin can change every Create-modal
+// field in one round-trip: recurrence, required, reassign (member
+// scope), studio space (studio scope), plus an "add additional
+// people" multi-select that fans the task out to extra members via
+// the new `admin_clone_task_to_members` RPC.
+
+// Map an existing recurrence_spec.frequency back to the picker's
+// RecurrenceFrequency union (the picker has 'off' for null + 'custom'
+// as a UI placeholder; existing rows only ever store daily/weekly/monthly).
+function specToFreq(
+  spec: { frequency?: string } | null | undefined,
+): RecurrenceFrequency {
+  const f = spec?.frequency
+  if (f === 'daily' || f === 'weekly' || f === 'monthly') return f
+  return 'off'
+}
 
 function SingleTaskEditModal({
   task,
@@ -1019,9 +1045,34 @@ function SingleTaskEditModal({
   const [description, setDescription] = useState(task.description ?? '')
   const [category, setCategory] = useState<string>(task.category ?? '')
   const [dueDate, setDueDate] = useState(task.due_date ?? '')
+  const [recurrence, setRecurrence] = useState<RecurrenceFrequency>(
+    () => specToFreq(task.recurrence_spec),
+  )
+  const [isRequired, setIsRequired] = useState<boolean>(task.is_required ?? false)
+  const [assignedTo, setAssignedTo] = useState<string>(task.assigned_to ?? '')
+  const [studioSpace, setStudioSpace] = useState<StudioSpace | ''>(
+    (task.studio_space as StudioSpace | null | undefined) ?? '',
+  )
+  // "Add additional people" — multi-select. Submits via the parallel
+  // clone RPC after the main update lands so a single Save click can
+  // change fields AND fan the task out to extra members atomically
+  // from the user's POV. Pre-excludes the current assignee.
+  const [addAssignees, setAddAssignees] = useState<Set<string>>(() => new Set())
+
+  // Team members for the reassign + add-people pickers. Cheap query —
+  // already cached by the rest of the app.
+  const teamQuery = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+    staleTime: 60_000,
+  })
+  const teamMembers: TeamMember[] = teamQuery.data ?? []
+
+  const isMemberScope = task.scope === 'member'
+  const isStudioScope = task.scope === 'studio'
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const payload: Parameters<typeof adminUpdateAssignedTask>[1] = {}
       if (title.trim() !== task.title) {
         payload.title = title.trim()
@@ -1042,10 +1093,47 @@ function SingleTaskEditModal({
         if (dueDate) payload.due_date = dueDate
         else payload.clearDue = true
       }
-      return adminUpdateAssignedTask(task.id, payload)
+      // Recurrence — diff against current. Off → clear; otherwise set.
+      const currentFreq = specToFreq(task.recurrence_spec)
+      if (recurrence !== currentFreq) {
+        const nextSpec = recurrenceToServerSpec(recurrence)
+        if (nextSpec === null) payload.clearRecurrenceSpec = true
+        else payload.recurrence_spec = nextSpec
+      }
+      // Required — only diff if changed.
+      if (isRequired !== (task.is_required ?? false)) {
+        payload.is_required = isRequired
+      }
+      // Reassign (member-scope only). Empty string = clear.
+      if (isMemberScope && assignedTo !== (task.assigned_to ?? '')) {
+        if (assignedTo === '') payload.clearAssignedTo = true
+        else payload.assigned_to = assignedTo
+      }
+      // Studio space (studio-scope only).
+      if (isStudioScope) {
+        const currentSpace = (task.studio_space as string | null | undefined) ?? ''
+        if (studioSpace !== currentSpace) {
+          if (studioSpace === '') payload.clearStudioSpace = true
+          else payload.studio_space = studioSpace
+        }
+      }
+      const updated = await adminUpdateAssignedTask(task.id, payload)
+
+      // Fan-out: if admin added extra people, clone the task to them.
+      // Member scope only; clone RPC enforces this server-side too.
+      if (isMemberScope && addAssignees.size > 0) {
+        await adminCloneTaskToMembers(task.id, Array.from(addAssignees))
+      }
+
+      return updated
     },
     onSuccess: (updated) => {
-      toast('Task updated')
+      const cloneCount = addAssignees.size
+      if (cloneCount > 0) {
+        toast(`Task updated · added to ${cloneCount} more ${cloneCount === 1 ? 'member' : 'members'}`)
+      } else {
+        toast('Task updated')
+      }
       onSaved(updated)
     },
     onError: (err: Error) => toast(err.message, 'error'),
@@ -1124,6 +1212,120 @@ function SingleTaskEditModal({
               onChange={(e) => setDueDate(e.target.value)}
             />
           </div>
+
+          {/* Recurrence — diffs against current spec at submit. */}
+          <RecurrencePicker value={recurrence} onChange={setRecurrence} />
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* Required toggle — same chrome as the Create modal. */}
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5">
+                Priority
+              </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isRequired}
+                onClick={() => setIsRequired((v) => !v)}
+                className={`w-full inline-flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl ring-1 text-[13px] font-semibold transition-colors ${
+                  isRequired
+                    ? 'bg-rose-500/10 text-rose-300 ring-rose-500/40'
+                    : 'bg-surface-alt text-text-muted ring-border hover:text-text'
+                }`}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Flag size={13} aria-hidden="true" />
+                  {isRequired ? 'Required' : 'Normal'}
+                </span>
+                <span
+                  className={`inline-block w-8 h-4 rounded-full relative transition-colors ${
+                    isRequired ? 'bg-rose-500/60' : 'bg-white/10'
+                  }`}
+                  aria-hidden="true"
+                >
+                  <span
+                    className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${
+                      isRequired ? 'left-4' : 'left-0.5'
+                    }`}
+                  />
+                </span>
+              </button>
+            </div>
+
+            {/* Reassign (member scope) OR Studio space (studio scope) */}
+            {isMemberScope ? (
+              <div>
+                <label
+                  htmlFor="edit-task-assignee"
+                  className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5"
+                >
+                  Assigned to
+                </label>
+                <select
+                  id="edit-task-assignee"
+                  value={assignedTo}
+                  onChange={(e) => setAssignedTo(e.target.value)}
+                  className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2.5 text-sm focus:border-gold focus:outline-none"
+                >
+                  <option value="">— Unassigned —</option>
+                  {teamMembers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.display_name}
+                      {m.position ? ` · ${m.position.replace(/_/g, ' ')}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : isStudioScope ? (
+              <div>
+                <label
+                  htmlFor="edit-task-studio-space"
+                  className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5"
+                >
+                  Studio space
+                </label>
+                <select
+                  id="edit-task-studio-space"
+                  value={studioSpace}
+                  onChange={(e) => setStudioSpace(e.target.value as StudioSpace | '')}
+                  className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2.5 text-sm focus:border-gold focus:outline-none"
+                >
+                  <option value="">— No space —</option>
+                  {STUDIO_SPACES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Add additional assignees (member scope only). The current
+              assignee is excluded from the picker; ticking members
+              clones the task to each on Save via admin_clone_task_to_members. */}
+          {isMemberScope && (
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide flex items-center gap-1.5 mb-1.5">
+                <UserPlus size={12} />
+                Add people to this task
+              </label>
+              <p className="text-[11px] text-text-light leading-snug mb-2">
+                Each person ticked gets their own copy of this task. The original assignee stays where they are; reassign above if you want to move it instead.
+              </p>
+              <MemberMultiSelect
+                selectedIds={addAssignees}
+                onToggle={(id) =>
+                  setAddAssignees((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(id)) next.delete(id)
+                    else next.add(id)
+                    return next
+                  })
+                }
+                label=""
+                maxHeightClass="max-h-40"
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-5 mt-5 border-t border-border">

@@ -33,6 +33,10 @@ export async function fetchAllAssignedTasks(
  * explicitly null a column (distinguishes "don't change" from "clear
  * this field"). Server fires a `task_edited` notification to the
  * current assignee when relevant.
+ *
+ * 2026-05-07 — extended with recurrence_spec / is_required /
+ * assigned_to so the admin Edit modal can change every editable
+ * field on a task in one round-trip (matches the Create surface).
  */
 export interface AdminUpdateTaskPayload {
   title?: string
@@ -41,10 +45,18 @@ export interface AdminUpdateTaskPayload {
   due_date?: string | null  // YYYY-MM-DD
   /** Only valid for `scope='studio'` tasks; server raises if set on a member task. */
   studio_space?: StudioSpace | null
+  /** Cadence on the row. Server CHECK enforces frequency ∈ daily|weekly|monthly. */
+  recurrence_spec?: { frequency: 'daily' | 'weekly' | 'monthly'; interval: number } | null
+  /** Priority / required toggle. `undefined` = "don't change". */
+  is_required?: boolean
+  /** Reassign — only valid for `scope='member'` tasks. */
+  assigned_to?: string | null
   clearDescription?: boolean
   clearCategory?: boolean
   clearDue?: boolean
   clearStudioSpace?: boolean
+  clearRecurrenceSpec?: boolean
+  clearAssignedTo?: boolean
 }
 
 /** Physical room for a studio-scope task. Distinct from the booking
@@ -73,12 +85,40 @@ export async function adminUpdateAssignedTask(
     p_clear_category: payload.clearCategory ?? false,
     p_studio_space: payload.studio_space ?? null,
     p_clear_studio_space: payload.clearStudioSpace ?? false,
+    p_recurrence_spec: payload.recurrence_spec ?? null,
+    p_clear_recurrence_spec: payload.clearRecurrenceSpec ?? false,
+    p_is_required: payload.is_required ?? null,
+    p_assigned_to: payload.assigned_to ?? null,
+    p_clear_assigned_to: payload.clearAssignedTo ?? false,
   })
   if (error) {
     console.error('[queries/adminTasks] adminUpdateAssignedTask failed:', error)
     throw new Error(error.message)
   }
   return data as AssignedTask
+}
+
+/**
+ * 2026-05-07 — "add people to assign" path. Copies a member-scope
+ * task to additional members (each gets its own row in the same
+ * batch). Skips members who already have the task. Returns the
+ * count of new rows created.
+ */
+export async function adminCloneTaskToMembers(
+  taskId: string,
+  memberIds: string[],
+): Promise<{ added: number }> {
+  if (memberIds.length === 0) return { added: 0 }
+  const { data, error } = await supabase.rpc('admin_clone_task_to_members', {
+    p_task_id: taskId,
+    p_member_ids: memberIds,
+  })
+  if (error) {
+    console.error('[queries/adminTasks] adminCloneTaskToMembers failed:', error)
+    throw new Error(error.message)
+  }
+  const result = data as { added?: number }
+  return { added: result.added ?? 0 }
 }
 
 /**
