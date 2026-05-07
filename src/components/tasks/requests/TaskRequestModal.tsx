@@ -73,12 +73,8 @@ export default function TaskRequestModal({ onClose }: { onClose: () => void }) {
   }
 
   function handleRecurrenceChange(next: RecurrenceFrequency) {
-    const prev = recurrence
     setRecurrence(next)
-    // Fire the coming-soon nudge once per selection transition off of Off.
-    if (next !== 'off' && prev === 'off') {
-      toast('Recurring tasks — engine coming soon. Your choice is saved.', 'success')
-    }
+    // 2026-05-07 — engine shipped. No off→on nudge needed.
   }
 
   return (

@@ -1,8 +1,9 @@
 // Phase A of the booking migration — writes directly to the Supabase
-// `sessions` table instead of the old in-memory TaskContext path. The
-// recurring Weekly/Monthly options are intentionally disabled here
-// pending the Phase B "Weekly Approval" workflow (separate task). See
-// notes on the Recurring section below.
+// `sessions` table. 2026-05-07: Recurring (weekly / monthly) is now
+// fully active — picking a cadence stores `recurrence_spec` on the
+// session row, and the daily 11:00 UTC cron
+// (`spawn_recurring_session_instances`) inserts a fresh instance per
+// cadence whenever the next instance is within 30 days.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -164,6 +165,9 @@ export default function CreateBookingModal({
 
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  // 2026-05-07 — bookings recurrence. Off | weekly | monthly. Stored
+  // as recurrence_spec on the row; daily cron spawns next instance.
+  const [recurring, setRecurring] = useState<'off' | 'weekly' | 'monthly'>('off')
 
   // Re-check conflict whenever date/time/studio changes.
   useEffect(() => {
@@ -275,6 +279,10 @@ export default function CreateBookingModal({
       notes: description.trim() || null,
       created_by: profile?.id ?? null,
       assigned_to: assignedTo || null,
+      // 2026-05-07 — bookings recurrence. Server CHECK enforces
+      // frequency ∈ {'weekly','monthly'}; null for one-shot bookings.
+      recurrence_spec:
+        recurring === 'off' ? null : { frequency: recurring, interval: 1 },
     }
 
     const { error } = await supabase.from('sessions').insert(payload)
@@ -588,43 +596,40 @@ export default function CreateBookingModal({
             )}
           </div>
 
-          {/* Recurring — Phase A placeholder.
-              Off works (single booking). Weekly and Monthly are shown
-              as visibly disabled so the admin sees what's coming without
-              thinking they're broken. Phase B (Weekly Approval workflow,
-              separate task) builds these out with a recurring_schedules
-              table and a generation + approval queue. */}
+          {/* Recurring — 2026-05-07: live. Picking weekly/monthly stores
+              recurrence_spec on the row; the daily 11:00 UTC cron
+              spawns the next instance whenever it falls within 30
+              days. The original row stays the editable template (each
+              spawn copies its current content forward). */}
           <div>
             <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5">
               Recurring
             </label>
             <div className="flex gap-1.5">
-              <button
-                type="button"
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-gold/10 text-gold border-gold/30"
-              >
-                Off
-              </button>
-              <button
-                type="button"
-                disabled
-                title="Recurring bookings are coming with the Weekly Approval workflow."
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold border bg-surface-alt text-text-light/60 border-border cursor-not-allowed"
-              >
-                Weekly
-              </button>
-              <button
-                type="button"
-                disabled
-                title="Recurring bookings are coming with the Weekly Approval workflow."
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold border bg-surface-alt text-text-light/60 border-border cursor-not-allowed"
-              >
-                Monthly
-              </button>
+              {(['off', 'weekly', 'monthly'] as const).map((opt) => {
+                const active = recurring === opt
+                const label = opt === 'off' ? 'Off' : opt === 'weekly' ? 'Weekly' : 'Monthly'
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setRecurring(opt)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      active
+                        ? 'bg-gold/15 text-gold border-gold/40'
+                        : 'bg-surface-alt text-text-muted border-border hover:text-text hover:border-border-light'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
             </div>
-            <p className="text-[10px] text-text-light mt-1.5">
-              Weekly &amp; Monthly recurring is coming soon — part of the upcoming Weekly Approval workflow.
-            </p>
+            {recurring !== 'off' && (
+              <p className="text-[10px] text-text-light mt-1.5">
+                A new {recurring} instance auto-generates each cycle (status: pending) — admin can confirm or reschedule.
+              </p>
+            )}
           </div>
 
           {/* Conflict warning — auto-clears when resolved */}

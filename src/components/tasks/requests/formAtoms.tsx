@@ -5,7 +5,6 @@
 // approval modal can reuse the flywheel picker at approve-time.
 
 import type { ReactNode } from 'react'
-import { AlertCircle } from 'lucide-react'
 
 // ─── Flywheel stage picker ──────────────────────────────────────────
 //
@@ -123,16 +122,23 @@ export function recurrenceToServerSpec(
 export function RecurrencePicker({
   value,
   onChange,
-  comingSoonHint = true,
+  hideDaily = false,
 }: {
   value: RecurrenceFrequency
   onChange: (next: RecurrenceFrequency) => void
-  /** Show the "coming soon" hint under the picker. Parent fires the actual toast. */
-  comingSoonHint?: boolean
+  /** Bookings only support Weekly / Monthly cadences. Pass true to
+   *  drop the Daily pill from the picker. */
+  hideDaily?: boolean
 }) {
+  // 2026-05-07 — engine shipped (migration 20260507120000) so the
+  // "coming soon" hint under the picker was retired. Selecting Weekly
+  // / Monthly now actually spawns instances on cadence; tasks via the
+  // assigned_tasks recurrence_engine cron, bookings via the parallel
+  // sessions cron. 'custom' stays as a UI placeholder for the future
+  // RFC-5545 picker — it serializes to null server-side.
   const options: { key: RecurrenceFrequency; label: string }[] = [
     { key: 'off',     label: 'Off' },
-    { key: 'daily',   label: 'Daily' },
+    ...(hideDaily ? [] : [{ key: 'daily' as const, label: 'Daily' }]),
     { key: 'weekly',  label: 'Weekly' },
     { key: 'monthly', label: 'Monthly' },
     { key: 'custom',  label: 'Custom…' },
@@ -161,20 +167,6 @@ export function RecurrencePicker({
           )
         })}
       </div>
-      {comingSoonHint && value !== 'off' && (
-        <ComingSoonHint>
-          Recurring engine coming soon. Your choice saves now and will activate once the pipeline ships.
-        </ComingSoonHint>
-      )}
-    </div>
-  )
-}
-
-function ComingSoonHint({ children }: { children: ReactNode }) {
-  return (
-    <div className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 ring-1 ring-amber-500/30 px-2.5 py-2">
-      <AlertCircle size={13} className="text-amber-300 shrink-0 mt-0.5" aria-hidden="true" />
-      <p className="text-[11px] text-amber-100/90 leading-snug">{children}</p>
     </div>
   )
 }
