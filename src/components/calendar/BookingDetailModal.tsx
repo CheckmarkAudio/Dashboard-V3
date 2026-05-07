@@ -1,4 +1,4 @@
-import { Building2, CalendarDays, Clock, User as UserIcon } from 'lucide-react'
+import { Building2, CalendarDays, Clock, Edit2, User as UserIcon } from 'lucide-react'
 import FloatingDetailModal from '../FloatingDetailModal'
 
 /**
@@ -90,9 +90,14 @@ const STATUS_DOT: Record<BookingDetail['status'], string> = {
 export default function BookingDetailModal({
   booking,
   onClose,
+  onEdit,
 }: {
   booking: BookingDetail
   onClose: () => void
+  // 2026-05-07 (PR E) — when set, the footer surfaces an "Edit" pill.
+  // Parent is responsible for what edit means (typically: close this
+  // modal + open CreateBookingModal in edit mode with `editSessionId`).
+  onEdit?: () => void
 }) {
   const typeLabel = TYPE_LABELS[booking.type] ?? booking.type
 
@@ -132,6 +137,16 @@ export default function BookingDetailModal({
           >
             Close
           </button>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-bold bg-gold text-black hover:bg-gold-muted focus-ring shadow-[0_4px_12px_rgba(0,0,0,0.08)]"
+            >
+              <Edit2 size={13} aria-hidden="true" />
+              Edit
+            </button>
+          )}
         </div>
       }
     >

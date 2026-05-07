@@ -11,6 +11,7 @@ import { loadWeekEvents } from '../../lib/calendar'
 import { addDays, startOfWeek } from '../../lib/time'
 import { useAuth } from '../../contexts/AuthContext'
 import BookingDetailModal, { type BookingDetail } from './BookingDetailModal'
+import CreateBookingModal from '../CreateBookingModal'
 
 /**
  * CalendarDayCard — self-contained day-view widget extracted from
@@ -226,6 +227,10 @@ export default function CalendarDayCard({
   // only detail modal. Modal shape mirrors the local CalendarBooking
   // interface so we just store the row directly (avoids a round-trip).
   const [detailBooking, setDetailBooking] = useState<BookingDetail | null>(null)
+  // PR E — admin clicks "Edit" inside the detail modal → swap into
+  // CreateBookingModal (edit mode). Auto-refetches the week on close
+  // so the updated booking lights up immediately.
+  const [editSessionId, setEditSessionId] = useState<string | null>(null)
 
   const [bookingNotes, setBookingNotes] = useState<Record<string, BookingNote[]>>(() => {
     try {
@@ -387,6 +392,20 @@ export default function CalendarDayCard({
         <BookingDetailModal
           booking={detailBooking}
           onClose={() => setDetailBooking(null)}
+          onEdit={() => {
+            const id = detailBooking.id
+            setDetailBooking(null)
+            setEditSessionId(id)
+          }}
+        />
+      )}
+      {editSessionId && (
+        <CreateBookingModal
+          editSessionId={editSessionId}
+          onClose={() => {
+            setEditSessionId(null)
+            setFetchedWeekKey(null) // force refetch so edits show up
+          }}
         />
       )}
 
