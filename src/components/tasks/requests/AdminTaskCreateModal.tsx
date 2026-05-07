@@ -132,15 +132,9 @@ export default function AdminTaskCreateModal({
   }
 
   function handleRecurrenceChange(next: RecurrenceFrequency) {
-    const prev = recurrence
     setRecurrence(next)
-    // Coming-soon nudge once per Off-to-on transition. The cron engine
-    // that auto-recreates rows on the cadence is still future work, but
-    // 2026-05-06: the spec NOW persists on the row (via the plural RPC)
-    // so when the engine lands existing rows auto-activate.
-    if (next !== 'off' && prev === 'off') {
-      toast('Recurring tasks — engine coming soon. Your choice is saved.', 'success')
-    }
+    // 2026-05-07 — engine shipped. Daily 11:00 UTC cron spawns fresh
+    // instances on cadence; no off→on toast needed anymore.
   }
 
   return (

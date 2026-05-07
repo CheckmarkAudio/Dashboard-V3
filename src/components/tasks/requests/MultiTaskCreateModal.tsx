@@ -168,10 +168,11 @@ export default function MultiTaskCreateModal({
           is_required: d.isRequired,
           show_on_overview: true,
           studio_space: scope === 'studio' ? d.studioSpace : null,
-          recurrence_spec:
-            scope === 'studio' && d.recurrence
-              ? { frequency: d.recurrence, interval: 1 }
-              : null,
+          // Recurrence threads through for BOTH scopes; engine handles
+          // member + studio rows uniformly.
+          recurrence_spec: d.recurrence
+            ? { frequency: d.recurrence, interval: 1 }
+            : null,
         }))
       return assignCustomTasksToMembers(
         scope === 'studio' ? [] : Array.from(selectedMemberIds),
@@ -423,14 +424,17 @@ function DraftRowCard({
         />
       )}
 
-      {/* Recurrence picker — studio scope only (column accepts member
-          rows too; UI extension is a future change). */}
-      {isStudio && (
-        <RecurrencePicker
-          value={draft.recurrence}
-          onChange={(next) => onChange({ recurrence: next })}
-        />
-      )}
+      {/* Recurrence picker — surfaced for BOTH member + studio scope
+          (2026-05-07). Member-scope tasks didn't have UI for this
+          historically; the column always accepted it, and now that
+          the engine ships (migration 20260507120000) members can pick
+          a cadence too. Selecting Daily / Weekly / Monthly causes
+          spawn_recurring_task_instances() to insert fresh rows on
+          cadence; cron fires daily at 11:00 UTC. */}
+      <RecurrencePicker
+        value={draft.recurrence}
+        onChange={(next) => onChange({ recurrence: next })}
+      />
 
       <div className="grid grid-cols-2 gap-2">
         <div>

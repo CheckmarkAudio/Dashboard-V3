@@ -98,14 +98,8 @@ export default function QuickAssignModal({
   })
 
   function handleRecurrenceChange(next: RecurrenceFrequency) {
-    const prev = recurrence
     setRecurrence(next)
-    // Single coming-soon nudge per off→on transition. Same UX as
-    // AdminTaskCreateModal + TaskRequestModal so users learn the
-    // pattern in any task-create surface.
-    if (next !== 'off' && prev === 'off') {
-      toast('Recurring tasks — engine coming soon. Your choice is saved.', 'success')
-    }
+    // 2026-05-07 — engine shipped. No off→on nudge needed.
   }
 
   const canSubmit = useMemo(() => {
