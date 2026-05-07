@@ -108,6 +108,14 @@ function shiftDate(dateKey: string, days: number): string {
 }
 
 const NOTES_STORAGE_KEY = 'checkmark-booking-notes'
+// 2026-05-07 (Lean B) — persist which notes drawers are expanded so
+// they stay open across navigation / page refresh. Per user direction:
+// "the notes close if you leave the page — make the notes stay opened
+// unless you log out or close them yourself manually." `localStorage`
+// (vs sessionStorage) so opening notes on Calendar carries over to the
+// Overview side card too. Cleared on sign-out by the global storage
+// purge in AuthContext.
+const EXPANDED_NOTES_STORAGE_KEY = 'checkmark-booking-notes-expanded'
 
 interface CalendarDayCardProps {
   /** Optional controlled date. If provided, caller owns the state. */
@@ -199,7 +207,16 @@ export default function CalendarDayCard({
     }
   })
   const [noteInputs, setNoteInputs] = useState<Record<string, string>>({})
-  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(EXPANDED_NOTES_STORAGE_KEY)
+      if (!saved) return new Set()
+      const ids = JSON.parse(saved) as unknown
+      return Array.isArray(ids) ? new Set(ids.filter((x): x is string => typeof x === 'string')) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
 
   function addBookingNote(bookingId: string) {
     const text = noteInputs[bookingId]?.trim()
@@ -234,6 +251,13 @@ export default function CalendarDayCard({
       const next = new Set(prev)
       if (next.has(bookingId)) next.delete(bookingId)
       else next.add(bookingId)
+      // Persist so the drawer state survives navigation + refresh.
+      try {
+        localStorage.setItem(EXPANDED_NOTES_STORAGE_KEY, JSON.stringify([...next]))
+      } catch {
+        // localStorage can throw in privacy mode; expanded-state is
+        // a nice-to-have, silent drop is fine.
+      }
       return next
     })
   }
@@ -373,12 +397,21 @@ export default function CalendarDayCard({
                               key={n.id}
                               className="flex items-start gap-2 border-l-2 border-gold/30 pl-2.5 py-1"
                             >
-                              <StickyNote
-                                size={9}
-                                className="text-gold/40 mt-0.5 shrink-0"
-                              />
+                              {/* 2026-05-07 (Lean C) — replaced the small
+                                  StickyNote glyph with the ♪ music note
+                                  per user direction; bumped the bullet
+                                  to gold so it actually pops. */}
+                              <span
+                                aria-hidden="true"
+                                className="text-[12px] leading-none text-gold mt-0.5 shrink-0"
+                              >
+                                ♪
+                              </span>
                               <div>
-                                <p className="text-[11px] text-text-muted italic">{n.text}</p>
+                                {/* Brighter note text — was text-muted italic
+                                    which read as a faded comment; now full text
+                                    color so notes stand out at a glance. */}
+                                <p className="text-[12px] text-text leading-snug">{n.text}</p>
                                 <p className="text-[8px] text-text-light mt-0.5">{n.time}</p>
                               </div>
                             </div>
