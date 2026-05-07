@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -136,6 +136,15 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   const { profile } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
+  // PR #161 — `NotificationsPanel` mounts in TWO places at once: the
+  // top-bar bell dropdown AND the historical Overview widget on `/`.
+  // Supabase Realtime returns the SAME channel instance for the same
+  // name, so the second mount's `.on('postgres_changes', …)` runs
+  // against an already-subscribed channel and throws
+  // `cannot add postgres_changes callbacks for realtime:overview-notifications after subscribe()`.
+  // Using a per-instance `useId()` suffix gives each mount its own
+  // dedicated channel, killing the collision and the crash.
+  const instanceId = useId()
   const [reassignModalOpen, setReassignModalOpen] = useState(false)
   // PR #68 (rev) — inline channel reply. Clicking a channel row expands
   // it to reveal a textarea + Send. Stays open until the user clears it
@@ -158,9 +167,12 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   })
 
   // Realtime — chat_messages anywhere triggers a refetch of channel unread.
+  // Channel name suffixed with `instanceId` so the bell-dropdown mount
+  // and the Overview-widget mount don't collide on the same Realtime
+  // channel (see comment on `instanceId` above).
   useEffect(() => {
     const chatSub = supabase
-      .channel('overview-notifications')
+      .channel(`overview-notifications:${instanceId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => {
         void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
       })
@@ -168,13 +180,15 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     return () => {
       void supabase.removeChannel(chatSub)
     }
-  }, [queryClient])
+  }, [queryClient, instanceId])
 
   // Realtime — assignment_notifications for the current user.
+  // Same per-instance suffix as above so simultaneous mounts each get
+  // their own dedicated channel.
   useEffect(() => {
     if (!profile?.id) return
     const sub = supabase
-      .channel(`overview-assignment-notifications:${profile.id}`)
+      .channel(`overview-assignment-notifications:${profile.id}:${instanceId}`)
       .on(
         'postgres_changes',
         {
@@ -191,7 +205,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     return () => {
       void supabase.removeChannel(sub)
     }
-  }, [queryClient, profile?.id])
+  }, [queryClient, profile?.id, instanceId])
 
   const channels = notifQuery.data ?? []
   const channelUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
