@@ -23,6 +23,7 @@ import type { TeamMember } from '../../types'
 import MyTasksCard from '../tasks/MyTasksCard'
 import CreateBookingModal from '../CreateBookingModal'
 import NotificationsPanel from '../notifications/NotificationsPanel'
+import MemberAvatar from '../members/MemberAvatar'
 
 // Stage tokens shared between the activity feed + status pills.
 // Sourced from the v1.0 design system (Deliver/Capture/Share/Attract/Book).
@@ -332,7 +333,6 @@ export function TeamDirectoryWidget() {
         <div className="flex gap-4 py-2">
           {ordered.map((m) => {
             const inactive = m.status?.toLowerCase() === 'inactive'
-            const initial = m.display_name?.charAt(0)?.toUpperCase() ?? '?'
             return (
               <Link
                 key={m.id}
@@ -342,9 +342,12 @@ export function TeamDirectoryWidget() {
                 }`}
                 title={m.position ? `${m.display_name} — ${m.position}` : m.display_name}
               >
-                <div className="w-12 h-12 rounded-full bg-surface-alt border-2 border-border-light text-gold flex items-center justify-center text-[15px] font-bold shrink-0 group-hover:border-gold/50 transition-colors">
-                  {initial}
-                </div>
+                {/* Lean 7 — canonical MemberAvatar so uploaded
+                    profile photos show up here. The hover-border
+                    treatment is reapplied via a wrapping ring. */}
+                <span className="ring-2 ring-border-light group-hover:ring-gold/50 rounded-full transition-all inline-flex">
+                  <MemberAvatar member={m} size="lg" />
+                </span>
                 <span className="text-[11px] font-medium text-text-muted tracking-tight truncate max-w-full group-hover:text-text transition-colors">
                   {m.display_name.split(' ')[0]}
                 </span>

@@ -12,6 +12,7 @@ import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
 import NotificationsBell from './notifications/NotificationsBell'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
+import MemberAvatar from './members/MemberAvatar'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
 import {
   clockIn,
@@ -625,13 +626,17 @@ export default function Layout() {
               disabled={!profile?.id}
               className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer focus-ring rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {/* Avatar — bigger (44px) + thicker ring per mockup. */}
-              <div
-                className="w-11 h-11 rounded-full bg-surface-alt border-[3px] border-white/12 text-gold flex items-center justify-center text-[15px] font-bold shrink-0"
+              {/* Avatar — Lean 7 super-PR uses the canonical
+                  `<MemberAvatar />` so an uploaded profile photo
+                  shows up in the top bar instead of just the
+                  initial. Wrapped with the existing thicker ring
+                  per the mockup. */}
+              <span
+                className="ring-[3px] ring-white/12 rounded-full shrink-0 inline-flex"
                 title={profile?.email ?? 'Signed in'}
               >
-                {profile?.display_name?.charAt(0)?.toUpperCase() ?? '?'}
-              </div>
+                <MemberAvatar member={profile} size="lg" />
+              </span>
               <div className="text-right hidden sm:block">
                 <p className="text-[13px] font-semibold text-text tracking-tight truncate max-w-[140px]">
                   {profile?.display_name ?? 'User'}

@@ -24,6 +24,7 @@ import { useToast } from '../Toast'
 import CreateBookingModal from '../CreateBookingModal'
 import MultiTaskCreateModal from '../tasks/requests/MultiTaskCreateModal'
 import NotificationsPanel from '../notifications/NotificationsPanel'
+import MemberAvatar from '../members/MemberAvatar'
 import type { TeamMember } from '../../types'
 import type { EnrichedApprovalRequest } from '../../domain/dashboard/adminOverview'
 
@@ -459,7 +460,6 @@ export function AdminTeamWidget() {
         ) : (
           <div className="flex flex-wrap gap-3 py-2">
             {members.map((m: TeamMember) => {
-              const initial = m.display_name.charAt(0).toUpperCase()
               const firstName = m.display_name.split(' ')[0] ?? m.display_name
               const isAdmin = m.role === 'admin'
               return (
@@ -470,9 +470,13 @@ export function AdminTeamWidget() {
                   className="group flex flex-col items-center gap-1 w-[60px] focus-ring rounded-lg"
                 >
                   <div className="relative">
-                    <div className="w-11 h-11 rounded-full bg-surface-alt border-2 border-border-light text-gold flex items-center justify-center text-[14px] font-bold group-hover:border-gold/60 transition-colors">
-                      {initial}
-                    </div>
+                    {/* Lean 7 — canonical MemberAvatar so an
+                        uploaded profile photo renders in the
+                        admin Hub Team widget. The hover-border
+                        treatment is reapplied via a wrapping ring. */}
+                    <span className="ring-2 ring-border-light group-hover:ring-gold/60 rounded-full transition-colors inline-flex">
+                      <MemberAvatar member={m} size="lg" />
+                    </span>
                     <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-surface" aria-hidden="true" />
                   </div>
                   <span className="text-[11px] font-semibold text-text truncate max-w-full">{firstName}</span>
