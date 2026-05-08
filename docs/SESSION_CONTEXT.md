@@ -503,6 +503,41 @@ Everything depends on this layer. Start here.
 
 ## Active plans
 
+### Current reality — 2026-05-07
+
+- **Google Calendar Phase 1 is live on production.**
+- Production Settings now shows `Google Calendar Sync`.
+- Connected account: `checkmarkaudio@gmail.com`
+- Calendar target: `primary`
+- Sync mode currently live:
+  `Checkmark -> Google Calendar -> Apple Calendar`
+- Current operating rule remains:
+  **Checkmark is the source of truth; Apple Calendar is mirror-only until
+  Phase 2 inbound sync ships.**
+
+### Immediate next track — Phase 2
+
+Phase 2 is now the primary planned calendar initiative.
+
+Safe rollout order is:
+
+1. inbound sync for **already-linked** events only
+2. restricted inbound field set first (time, date, title, notes, location)
+3. external cancellation handling next
+4. unmatched external-event import only later, if explicitly approved
+
+This is intentionally additive. Do **not** destabilize the current outbound
+Phase 1 path while building inbound sync.
+
+Current implementation status:
+
+- Phase 1 outbound sync is live on production and connected to
+  `checkmarkaudio@gmail.com` / `primary`
+- Phase 2 first slice is being built as a **manual admin-triggered inbound
+  sync beta for already-linked events only**
+- That beta is branch-only until preview-tested and explicitly approved
+- Production behavior remains one-way until that rollout happens
+
 ### Completed emergency track — 2026-05-01 security stabilization
 
 - **`CODEX:`** authored two repo migrations:
@@ -682,6 +717,45 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 ---
 
 ## Recent + next
+
+### 2026-05-07 calendar-sync production handoff
+
+- **`CODEX:`** built the Google Calendar Phase 1 code path, patched the
+  Google OAuth callback so `GET` callback requests validate via one-time
+  `state` instead of requiring a Supabase JWT, added `verify_jwt = false`
+  for `google-calendar-auth`, and fixed the callback handler to await the
+  async redirect flow properly.
+- **`MANUAL-GOOGLE-CLOUD:`** user created the OAuth client in project
+  `Checkmark Calendar Agent`, then later rotated the exposed client
+  secret and copied the new live secret into Supabase.
+- **`MANUAL-SUPABASE:`** user applied the calendar SQL by hand in SQL
+  Editor because local/remote migration history had drifted, then updated
+  secrets and redeployed `google-calendar-auth`.
+- **`PREVIEW-VERIFIED:`** preview Settings showed `Connect Google Calendar`
+  and successfully completed Google approval after the callback + secret
+  fixes.
+- **`LIVE-VERIFIED:`** production Settings now shows:
+  - `Google Calendar Sync`
+  - connected account `checkmarkaudio@gmail.com`
+  - calendar target `primary`
+  - Disconnect button
+- **`CODEX:`** started Phase 2 on a branch as a safe first slice:
+  manual admin-only inbound sync for already-linked Google events,
+  limited-field updates, external-cancel handling, sync-token storage,
+  and audit metadata for last-changed source/time. This branch is not
+  live yet and exists specifically to protect the working Phase 1 path.
+
+### What must stay true while Phase 2 is under construction
+
+- Phase 1 outbound sync is still the live contract:
+  `Checkmark -> Google -> Apple`
+- Direct Apple/Google edits do **not** flow back yet.
+- Team rule stays in force:
+  **If it is not in Checkmark, it is not booked.**
+- Any booking-flow deployment should be tested against:
+  create → appears in Google/Apple,
+  edit → updates,
+  cancel → disappears.
 
 ### 2026-05-01 security stabilization handoff
 

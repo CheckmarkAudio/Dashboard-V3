@@ -10,6 +10,13 @@ Phase 1 is:
 
 It is **not** true two-way sync yet.
 
+Current live production connection:
+
+- Supabase project: `ncljfjdcyswoeitsooty`
+- Connected Google account: `checkmarkaudio@gmail.com`
+- Calendar target: `primary`
+- Live site: `https://dashboard-v3-dusky.vercel.app`
+
 ---
 
 ## Source Of Truth
@@ -143,6 +150,8 @@ Current Phase 1 limitations:
 - No inbound Google-to-Checkmark sync
 - Potential short delay before Apple reflects Google updates
 - Manual discipline is required to avoid dual-entry mistakes
+- While Phase 2 is being built, staff should assume Apple-side edits are
+  **view-only convenience**, not authoritative booking edits
 
 ---
 
