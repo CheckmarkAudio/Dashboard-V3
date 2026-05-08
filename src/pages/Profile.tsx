@@ -9,28 +9,38 @@ import {
   Loader2,
   Mail,
   Pencil,
+  Shield,
   Twitter,
   Youtube,
 } from 'lucide-react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
+import { getPositionLabel, getPositionVariant } from '../domain/positions'
 import ChangePasswordPanel from '../components/auth/ChangePasswordPanel'
 import MemberAvatar from '../components/members/MemberAvatar'
 import ProfileEditor from '../components/members/ProfileEditor'
-import { Button } from '../components/ui'
+import LiveStatus from '../components/members/LiveStatus'
+import StatsSidebar from '../components/members/StatsSidebar'
+import { Badge, Button } from '../components/ui'
 import type { MemberSocials, TeamMember } from '../types'
 
 /**
  * Member profile page.
  *
- * Read view shows: banner (if set), avatar + name + position +
- * pronouns, contact, bio, socials, the security panel (own
- * profile only), and the team list.
+ * Tier 1 (post-super-PR) layout:
+ *   - max-w-5xl container so the page actually has room to breathe
+ *   - Banner spans the full card width (3:1 hero)
+ *   - Hero row: avatar (overlapping the banner) + identity column
+ *     with name, pronouns, role pills, live status, and (own-only)
+ *     Edit profile action
+ *   - Below the hero: 2-column grid (main left + stats sidebar right)
+ *     · Left main: About, Socials, Security (own only), Team list
+ *     · Right sidebar: stats card + achievements placeholder
  *
- * Own-profile viewers get an "Edit profile" button that swaps the
- * page into the inline `<ProfileEditor />`. Admins editing OTHER
- * members still go through `/admin/my-team` (TeamManager).
+ * Editing swaps the whole card body into `<ProfileEditor />`. Admins
+ * editing OTHER members still go through `/admin/my-team`
+ * (TeamManager) — this page only edits your own profile.
  */
 export default function Profile() {
   const { memberId } = useParams<{ memberId: string }>()
@@ -44,18 +54,13 @@ export default function Profile() {
   const members: TeamMember[] = teamQuery.data ?? []
   const member = members.find((m) => m.id === memberId)
 
-  // Lean 3 — show the self-serve security panel only when the
-  // signed-in user is looking at their OWN profile. Admins viewing
-  // another member's profile don't get the change-password UI here
-  // (the canonical admin path for resetting another member's
-  // password lives at /admin/settings → Account Access).
   const isOwnProfile = Boolean(viewerProfile && member && viewerProfile.id === member.id)
 
   useDocumentTitle(member ? `${member.display_name} - Checkmark Workspace` : 'Profile - Checkmark Workspace')
 
   if (teamQuery.isLoading) {
     return (
-      <div className="max-w-2xl mx-auto py-16 flex items-center justify-center text-text-light">
+      <div className="max-w-5xl mx-auto py-16 flex items-center justify-center text-text-light">
         <Loader2 size={18} className="animate-spin mr-2" />
         Loading profile…
       </div>
@@ -64,7 +69,7 @@ export default function Profile() {
 
   if (teamQuery.error) {
     return (
-      <div className="max-w-2xl mx-auto py-16 flex items-start gap-2 text-amber-300">
+      <div className="max-w-5xl mx-auto py-16 flex items-start gap-2 text-amber-300">
         <AlertCircle size={16} className="mt-0.5 shrink-0" />
         <div>
           <p className="text-sm font-medium">Could not load profile</p>
@@ -76,7 +81,7 @@ export default function Profile() {
 
   if (!member) {
     return (
-      <div className="max-w-2xl mx-auto py-16 text-center animate-fade-in">
+      <div className="max-w-5xl mx-auto py-16 text-center animate-fade-in">
         <p className="text-[16px] text-text-muted">Profile not found.</p>
         <Link to="/" className="text-[13px] text-gold hover:underline mt-3 inline-block">
           Back to Overview
@@ -86,51 +91,59 @@ export default function Profile() {
   }
 
   const otherMembers = members.filter((m) => m.id !== member.id)
+  const isAdmin = member.role === 'admin'
+  const positionLabel = getPositionLabel(member.position)
+  const positionVariant = getPositionVariant(member.position)
 
   return (
-    <div className="max-w-2xl mx-auto animate-fade-in">
+    <div className="max-w-5xl mx-auto animate-fade-in">
       {/* Back link */}
       <Link to="/" className="flex items-center gap-1 text-[12px] text-text-light hover:text-gold transition-colors mb-6">
         <ChevronLeft size={14} /> Back to Dashboard
       </Link>
 
-      {/* Profile card */}
+      {/* Profile card — banner + hero live INSIDE this card. */}
       <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-        {/* Banner — wide hero image when set, otherwise the existing
-            tinted strip. Renders BEFORE the hero so it sits at the top.
-            Hidden in edit mode to keep the editor focused. */}
-        {member.banner_url && !editing && (
-          <div className="aspect-[3/1] w-full overflow-hidden">
-            <img
-              src={member.banner_url}
-              alt=""
-              className="w-full h-full object-cover"
-              key={member.banner_url}
-            />
-          </div>
+        {/* Banner — full card width when set, otherwise a thin
+            tinted strip so the avatar still has something to
+            overlap. Hidden in edit mode to keep the editor focused. */}
+        {!editing && (
+          member.banner_url ? (
+            <div className="aspect-[4/1] w-full overflow-hidden bg-surface-alt">
+              <img
+                src={member.banner_url}
+                alt=""
+                className="w-full h-full object-cover"
+                key={member.banner_url}
+              />
+            </div>
+          ) : (
+            <div className="h-20 w-full bg-gradient-to-br from-gold/15 via-surface-alt to-surface-alt" />
+          )
         )}
 
-        {/* Hero / Editor */}
         {editing ? (
           <div className="px-8 py-7">
             <ProfileEditor member={member} onClose={() => setEditing(false)} />
           </div>
         ) : (
           <>
-            <div className={member.banner_url ? 'px-8 pt-5 pb-6' : 'bg-surface-alt px-8 pt-8 pb-6'}>
+            {/* Hero row */}
+            <div className="px-8 pt-5 pb-6">
               <div className="flex items-start gap-5">
-                {/* When there's a banner, lift the avatar up so it
-                    overlaps the banner edge — matches the standard
-                    profile-card pattern (Notion / Linear / etc.). */}
-                <div className={member.banner_url ? '-mt-12' : ''}>
+                {/* Avatar — lifted up to overlap the banner edge.
+                    Ring around it provides separation from any
+                    busy banner image underneath. */}
+                <div className="-mt-14 shrink-0">
                   <div className="ring-4 ring-surface rounded-full">
                     <MemberAvatar member={member} size="xl" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h1 className="text-[24px] font-extrabold text-text tracking-tight">
+                    <div className="min-w-0 space-y-2">
+                      {/* Name + pronouns */}
+                      <h1 className="text-[24px] font-extrabold text-text tracking-tight leading-tight">
                         {member.display_name}
                         {member.pronouns && (
                           <span className="ml-2 text-[13px] font-medium text-text-light">
@@ -138,12 +151,27 @@ export default function Profile() {
                           </span>
                         )}
                       </h1>
-                      {member.position && (
-                        <p className="text-[14px] text-text-muted mt-0.5">{member.position}</p>
-                      )}
-                      {member.department && (
-                        <p className="text-[12px] text-text-light mt-0.5">{member.department}</p>
-                      )}
+                      {/* Role pills — position color + admin shield */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant={positionVariant} size="sm">{positionLabel}</Badge>
+                        {isAdmin && (
+                          <Badge variant="gold" size="sm">
+                            <span className="inline-flex items-center gap-1">
+                              <Shield size={10} aria-hidden="true" />
+                              Admin
+                            </span>
+                          </Badge>
+                        )}
+                        {member.department && (
+                          <span className="text-[12px] text-text-light">
+                            · {member.department}
+                          </span>
+                        )}
+                      </div>
+                      {/* Live status row */}
+                      <div className="pt-0.5">
+                        <LiveStatus memberId={member.id} />
+                      </div>
                     </div>
                     {isOwnProfile && (
                       <Button
@@ -160,62 +188,67 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* Body */}
-            <div className="px-8 py-6 space-y-6">
-              {/* Bio */}
-              {member.bio && (
+            {/* Body — 2-column grid below the hero */}
+            <div className="px-8 pb-8 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+              {/* Left: main content */}
+              <div className="space-y-6 min-w-0">
+                {/* Bio */}
+                {member.bio && (
+                  <div>
+                    <h2 className="text-[11px] font-semibold text-gold uppercase tracking-wider mb-2">About</h2>
+                    <p className="text-[14px] text-text-muted whitespace-pre-wrap leading-relaxed">
+                      {member.bio}
+                    </p>
+                  </div>
+                )}
+
+                {/* Contact */}
                 <div>
-                  <h2 className="text-[11px] font-semibold text-gold uppercase tracking-wider mb-2">About</h2>
-                  <p className="text-[14px] text-text-muted whitespace-pre-wrap leading-relaxed">
-                    {member.bio}
-                  </p>
-                </div>
-              )}
-
-              {/* Contact */}
-              <div>
-                <h2 className="text-[11px] font-semibold text-gold uppercase tracking-wider mb-3">Contact</h2>
-                <div className="space-y-2">
-                  <a
-                    href={`mailto:${member.email}`}
-                    className="flex items-center gap-3 text-[14px] text-text-muted hover:text-gold transition-colors"
-                  >
-                    <Mail size={15} className="text-text-light" />
-                    {member.email}
-                  </a>
-                </div>
-              </div>
-
-              {/* Socials */}
-              <SocialsBlock socials={member.socials} />
-
-              {/* Lean 3 — self-serve change-password panel. Renders only
-                  when the viewer is on their own profile. Admins
-                  resetting another member's password go through
-                  /admin/settings → Account Access. */}
-              {isOwnProfile && <ChangePasswordPanel />}
-
-              {/* Team — other members, clickable to their profiles */}
-              {otherMembers.length > 0 && (
-                <div>
-                  <h2 className="text-[11px] font-semibold text-gold uppercase tracking-wider mb-3">Team</h2>
-                  <div className="space-y-0">
-                    {otherMembers.map((m) => (
-                      <Link
-                        key={m.id}
-                        to={`/profile/${m.id}`}
-                        className="flex items-center gap-2.5 py-2 border-b border-border/20 last:border-0 hover:opacity-80 transition-opacity"
-                      >
-                        <MemberAvatar member={m} size="sm" />
-                        <span className="text-[13px] text-text-muted tracking-tight">{m.display_name}</span>
-                        {m.position && (
-                          <span className="text-[11px] text-text-light ml-auto">{m.position}</span>
-                        )}
-                      </Link>
-                    ))}
+                  <h2 className="text-[11px] font-semibold text-gold uppercase tracking-wider mb-3">Contact</h2>
+                  <div className="space-y-2">
+                    <a
+                      href={`mailto:${member.email}`}
+                      className="flex items-center gap-3 text-[14px] text-text-muted hover:text-gold transition-colors"
+                    >
+                      <Mail size={15} className="text-text-light" />
+                      {member.email}
+                    </a>
                   </div>
                 </div>
-              )}
+
+                {/* Socials */}
+                <SocialsBlock socials={member.socials} />
+
+                {/* Self-serve change-password (Lean 3) — own profile only */}
+                {isOwnProfile && <ChangePasswordPanel />}
+
+                {/* Team list */}
+                {otherMembers.length > 0 && (
+                  <div>
+                    <h2 className="text-[11px] font-semibold text-gold uppercase tracking-wider mb-3">Team</h2>
+                    <div className="space-y-0">
+                      {otherMembers.map((m) => (
+                        <Link
+                          key={m.id}
+                          to={`/profile/${m.id}`}
+                          className="flex items-center gap-2.5 py-2 border-b border-border/20 last:border-0 hover:opacity-80 transition-opacity"
+                        >
+                          <MemberAvatar member={m} size="sm" />
+                          <span className="text-[13px] text-text-muted tracking-tight">{m.display_name}</span>
+                          {m.position && (
+                            <span className="text-[11px] text-text-light ml-auto">
+                              {getPositionLabel(m.position)}
+                            </span>
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right: stats sidebar */}
+              <StatsSidebar member={member} />
             </div>
           </>
         )}
@@ -257,8 +290,6 @@ function SocialsBlock({ socials }: { socials?: MemberSocials | null }) {
       <h2 className="text-[11px] font-semibold text-gold uppercase tracking-wider mb-3">Socials</h2>
       <div className="flex flex-wrap gap-2">
         {entries.map(([key, value]) => {
-          // Fall back to a known-defined meta so noUncheckedIndexedAccess
-          // can prove `meta` is never undefined.
           const meta: SocialMeta = SOCIAL_ICON_MAP[key] ?? WEBSITE_META
           const { Icon, label } = meta
           return (
