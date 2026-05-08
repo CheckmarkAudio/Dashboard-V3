@@ -2,7 +2,9 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, ChevronLeft, Loader2, Mail } from 'lucide-react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
+import { useAuth } from '../contexts/AuthContext'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
+import ChangePasswordPanel from '../components/auth/ChangePasswordPanel'
 import type { TeamMember } from '../types'
 
 /**
@@ -17,6 +19,7 @@ import type { TeamMember } from '../types'
  */
 export default function Profile() {
   const { memberId } = useParams<{ memberId: string }>()
+  const { profile: viewerProfile } = useAuth()
 
   const teamQuery = useQuery({
     queryKey: teamMemberKeys.list(),
@@ -24,6 +27,13 @@ export default function Profile() {
   })
   const members: TeamMember[] = teamQuery.data ?? []
   const member = members.find((m) => m.id === memberId)
+
+  // Lean 3 — show the self-serve security panel only when the
+  // signed-in user is looking at their OWN profile. Admins viewing
+  // another member's profile don't get the change-password UI here
+  // (the canonical admin path for resetting another member's
+  // password lives at /admin/settings → Account Access).
+  const isOwnProfile = Boolean(viewerProfile && member && viewerProfile.id === member.id)
 
   useDocumentTitle(member ? `${member.display_name} - Checkmark Workspace` : 'Profile - Checkmark Workspace')
 
@@ -105,6 +115,12 @@ export default function Profile() {
               </a>
             </div>
           </div>
+
+          {/* Lean 3 — self-serve change-password panel. Renders only
+              when the viewer is on their own profile. Admins
+              resetting another member's password go through
+              /admin/settings → Account Access. */}
+          {isOwnProfile && <ChangePasswordPanel />}
 
           {/* Team — other members, clickable to their profiles */}
           {otherMembers.length > 0 && (

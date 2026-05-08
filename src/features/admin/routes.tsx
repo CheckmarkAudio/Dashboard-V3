@@ -17,10 +17,9 @@ const TeamManager    = lazy(() => import('../../pages/admin/TeamManager'))
 const AssignAdmin    = lazy(() => import('../../pages/admin/AssignAdmin'))
 const TemplatesClassic = lazy(() => import('../../pages/admin/Templates'))
 // PR #49 — MyTeam.tsx retired. The read-only roster table got merged
-// into TeamManager (now table-styled) so we have ONE canonical
-// Members admin surface. Both `/admin/team` and `/admin/my-team`
-// resolve to TeamManager so any saved bookmark / nav link still
-// works.
+// into TeamManager so we have ONE canonical Members admin surface
+// (`/admin/my-team`). PR #160 link-audit dropped the alternate
+// `/admin/team` alias since nothing actively links to it.
 // PR #64 — ClientsAdmin retired. Client management lives on the
 // Booking page (`/sessions`) as a Bookings ↔ Clients toggle.
 // PR #56 — full-page Templates manager. Reachable from the new
@@ -37,13 +36,14 @@ export interface FeatureRouteDef {
 
 export const ADMIN_ROUTES: FeatureRouteDef[] = [
   { path: APP_ROUTES.admin.hub,       element: <AdminHub /> },
-  { path: APP_ROUTES.admin.team,      element: <TeamManager /> },
   // PR #52 — canonical Assign route now renders the new member-
   // centric editor. The legacy widget-grid page is preserved at
   // /admin/assign-classic.
+  // PR #160 link-audit — `/admin/team` and `/admin/assign-mockup`
+  // alias routes dropped. Old bookmarks 404 → fallback → member
+  // overview.
   { path: APP_ROUTES.admin.templates,     element: <AssignAdmin /> },
   { path: APP_ROUTES.admin.assignClassic, element: <TemplatesClassic /> },
-  { path: APP_ROUTES.admin.assignMockup,  element: <AssignAdmin /> },
   { path: APP_ROUTES.admin.members,   element: <TeamManager /> },
   { path: APP_ROUTES.admin.templateLibrary, element: <TemplateLibrary /> },
   // Analytics now owns every chart + flywheel drill-down (was two

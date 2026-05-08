@@ -12,18 +12,21 @@ export const APP_ROUTES = {
   },
   admin: {
     hub: '/admin',
-    team: '/admin/team',
     // PR #52 — `/admin/templates` (the canonical Assign route the
-    // top-nav points at) now renders the member-centric Assign
-    // editor. The legacy widget-grid Assign page (Task Requests /
-    // Approval Log / Edit Tasks / Assign / Assign Log / Templates)
-    // moved to `/admin/assign-classic` so the data + components
-    // stay reachable for the planned "tabs" integration.
+    // top-nav points at) renders the member-centric Assign editor.
+    // The legacy widget-grid Assign page (Task Requests / Approval
+    // Log / Edit Tasks / Assign / Assign Log / Templates) lives at
+    // `/admin/assign-classic` so the data + components stay
+    // reachable for the planned "tabs" integration.
+    //
+    // 2026-05-07 link audit (PR #160) — dropped two legacy aliases
+    // that nothing actively links to:
+    //   • `team: '/admin/team'` (alias of `members: '/admin/my-team'`)
+    //   • `assignMockup: '/admin/assign-mockup'` (preview-phase URL)
+    // Either bookmark from before May 2026 now hits the app-level
+    // fallback route → member overview, which is acceptable.
     templates: '/admin/templates',
     assignClassic: '/admin/assign-classic',
-    // Legacy preview-phase URL — kept so any saved bookmark still
-    // works. Renders the same component as `templates`.
-    assignMockup: '/admin/assign-mockup',
     // PR #56 — full-page Templates manager. Reachable from the new
     // Assign page sidebar's "Templates" link. The legacy widget is
     // still rendered inside `/admin/assign-classic` for reference.
