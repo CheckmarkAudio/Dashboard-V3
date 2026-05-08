@@ -5,14 +5,42 @@ export interface TeamMember {
   role: string
   position?: string
   department?: string
-  avatar_url?: string
+  avatar_url?: string | null
+  banner_url?: string | null
+  bio?: string | null
+  pronouns?: string | null
+  /** JSON map of social handles, e.g. { instagram: "checkmark", soundcloud: "..." }. */
+  socials?: MemberSocials | null
+  /** IANA timezone, e.g. "America/Los_Angeles". */
+  timezone?: string | null
+  /** JSON blob owned by the member for notification preferences. */
+  notification_prefs?: Record<string, unknown> | null
   phone?: string
   start_date?: string
   end_date?: string
   status?: string
   created_at?: string
+  /** Auto-touched on every UPDATE via team_members_updated_at trigger. */
+  updated_at?: string
   team_id?: string
   managed_by?: string
+}
+
+/**
+ * Known social platforms shown on the profile editor. Other keys
+ * are tolerated by the schema (`socials` is freeform jsonb) but we
+ * type the canonical ones here so the editor can render them in a
+ * stable order.
+ */
+export interface MemberSocials {
+  instagram?: string
+  twitter?: string
+  tiktok?: string
+  youtube?: string
+  soundcloud?: string
+  spotify?: string
+  website?: string
+  [key: string]: string | undefined
 }
 
 export interface DailyNote {
