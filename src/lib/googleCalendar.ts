@@ -6,6 +6,15 @@ export interface GoogleCalendarConnectionStatus {
   created_at: string
   updated_at: string
   last_sync_error: string | null
+  inbound_last_synced_at?: string | null
+  inbound_last_sync_error?: string | null
+  inbound_last_sync_summary?: {
+    processed_count?: number
+    updated_count?: number
+    cancelled_count?: number
+    unchanged_count?: number
+    skipped_count?: number
+  } | null
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -63,6 +72,36 @@ export async function disconnectGoogleCalendar(): Promise<void> {
   if (error || !data?.ok) {
     throw new Error(data?.error || error?.message || 'Failed to disconnect Google Calendar')
   }
+}
+
+export async function pullInboundGoogleCalendarChanges(): Promise<{
+  summary: {
+    processed_count: number
+    updated_count: number
+    cancelled_count: number
+    unchanged_count: number
+    skipped_count: number
+  }
+}> {
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean
+    summary?: {
+      processed_count: number
+      updated_count: number
+      cancelled_count: number
+      unchanged_count: number
+      skipped_count: number
+    }
+    error?: string
+  }>('google-calendar-sync', {
+    body: { action: 'pull_inbound_changes' },
+  })
+
+  if (error || !data?.ok || !data.summary) {
+    throw new Error(data?.error || errorMessage(error, 'Failed to pull inbound Google Calendar changes'))
+  }
+
+  return { summary: data.summary }
 }
 
 export async function syncSessionToGoogleCalendar(sessionId: string): Promise<void> {
