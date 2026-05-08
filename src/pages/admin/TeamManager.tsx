@@ -2,10 +2,12 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { normalizeEmail } from '../../lib/email'
+import { generateTempPassword } from '../../lib/auth/tempPassword'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
 import ConfirmModal from '../../components/ConfirmModal'
+import TempPasswordReveal from '../../components/auth/TempPasswordReveal'
 import { Button, Input, Select, Badge, EmptyState } from '../../components/ui'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
 import ClockDataSection from '../../components/admin/ClockDataSection'
@@ -19,7 +21,7 @@ import type { TeamMember, ReportTemplate } from '../../types'
 import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
   Mail, Phone, Save, ChevronRight, ChevronLeft,
-  MoreVertical, UserPlus, Filter, Check, ClipboardList,
+  MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
 } from 'lucide-react'
 
 import type { BadgeVariant } from '../../components/ui'
@@ -48,21 +50,25 @@ type MemberForm = {
   display_name: string; email: string; role: 'admin' | 'intern'
   position: string; phone: string; start_date: string; status: 'active' | 'inactive'
   managed_by: string
-  default_password: string
-  // PR #49 — when true (default), the admin enters NO password; the
-  // edge function generates a strong random one server-side and we
-  // fire `auth.resetPasswordForEmail()` after creation so the new
-  // member receives a setup link and picks their own password.
-  // When false, the admin enters a temp password to share manually
-  // (offline / walk-in adds).
-  send_setup_email: boolean
+  // 2026-05-08 (Lean 1) — replaces the old `send_setup_email`
+  // boolean. The "email a setup link" path silently failed (free-tier
+  // Supabase SMTP only sends to the project owner address), so we
+  // defaulted onboarding to a temp-password handoff instead:
+  //   - 'auto'   = generate a strong password client-side; the modal
+  //                reveals it after creation so the admin can copy +
+  //                hand it off (DM, in-person)
+  //   - 'manual' = admin types the password they want (e.g. for
+  //                memorable verbal handoff: "audio2026!")
+  // When SMTP comes online (separate Lean), we add an 'email' option.
+  password_mode: 'auto' | 'manual'
+  manual_password: string
 }
 
 const EMPTY_MEMBER: MemberForm = {
   display_name: '', email: '', role: 'intern', position: 'intern',
   phone: '', start_date: '', status: 'active', managed_by: '',
-  default_password: '',
-  send_setup_email: true,
+  password_mode: 'auto',
+  manual_password: '',
 }
 
 export default function TeamManager() {
@@ -93,6 +99,16 @@ export default function TeamManager() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // 2026-05-08 (Lean 1) — when an Add Member create succeeds, the
+  // form swaps to a "Step 4" success view that reveals the temp
+  // password the admin needs to hand off. Holding profile + password
+  // here keeps the data flow simple: success → render reveal →
+  // admin hits "Done" → form closes + members list refreshes.
+  const [createdMember, setCreatedMember] = useState<{
+    profile: TeamMember
+    tempPassword: string
+  } | null>(null)
 
   // PR #58 — left-rail active section (Roster default; Clock Data is a
   // placeholder until PR #59 lands the shifts table).
@@ -129,12 +145,10 @@ export default function TeamManager() {
     if (!editingMember) {
       const email = normalizeEmail(formData.email)
       if (!email) return 'Email is required'
-      // PR #49 — when send_setup_email is on (default), the edge
-      // function generates a strong random password server-side and
-      // we email a reset link, so admin doesn't need to enter one.
-      // Only require a password when the admin opted into manual
-      // share mode (offline / walk-in adds).
-      if (!formData.send_setup_email && formData.default_password.length < 8) {
+      // 2026-05-08 (Lean 1) — auto mode generates the password
+      // client-side at submit time, so no input to validate. Manual
+      // mode still requires a min-length check.
+      if (formData.password_mode === 'manual' && formData.manual_password.length < 8) {
         return 'Temporary password must be at least 8 characters'
       }
     }
@@ -202,11 +216,16 @@ export default function TeamManager() {
     const position = formData.position === 'custom' ? customPosition : formData.position
     const email = normalizeEmail(formData.email)
 
+    // 2026-05-08 (Lean 1) — always send a password to the edge
+    // function. Auto mode generates a strong one client-side; manual
+    // mode uses what the admin typed. The old "let the server
+    // generate one + email a link" path is gone — Supabase free-tier
+    // SMTP only sends to the project owner, so the email silently
+    // failed and members were left stranded.
+    const tempPassword =
+      formData.password_mode === 'auto' ? generateTempPassword() : formData.manual_password
+
     // 1) Create the auth user + team_members row atomically via the Edge Function.
-    //    PR #49 — when send_setup_email is on, we omit `default_password`
-    //    entirely; the edge function generates one server-side. The plaintext
-    //    is never returned to the client. We then trigger the recovery email
-    //    below so the member can pick their own password.
     const { data: result, error } = await supabase.functions.invoke<
       {
         ok: boolean
@@ -219,12 +238,7 @@ export default function TeamManager() {
       body: {
         email,
         display_name: formData.display_name.trim(),
-        // Only send a password when the admin opted into manual share
-        // mode. Omitting the field cleanly triggers the server-side
-        // random-generation path.
-        ...(formData.send_setup_email
-          ? {}
-          : { default_password: formData.default_password }),
+        default_password: tempPassword,
         role: formData.role,
         position,
         phone: formData.phone.trim() || null,
@@ -290,45 +304,12 @@ export default function TeamManager() {
       // is fine.
     }
 
-    // 4) PR #49 — when the admin chose "Email a setup link", trigger
-    //    Supabase's standard recovery email so the new member receives
-    //    a single-use link to set their own password. The link lands
-    //    on the app with `type=recovery`, RecoveryGate intercepts and
-    //    shows the password-set form. Non-fatal — the member account
-    //    still exists if this fails; admin can re-send via
-    //    AccountAccessPanel afterwards.
-    let setupEmailSent = false
-    if (formData.send_setup_email) {
-      try {
-        const redirectTo =
-          typeof window !== 'undefined'
-            ? window.location.origin + import.meta.env.BASE_URL
-            : undefined
-        const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
-          email,
-          redirectTo ? { redirectTo } : undefined,
-        )
-        if (resetErr) {
-          console.error('[TeamManager] resetPasswordForEmail failed:', resetErr)
-        } else {
-          setupEmailSent = true
-        }
-      } catch (resetErr) {
-        console.error('[TeamManager] resetPasswordForEmail threw:', resetErr)
-      }
-    }
-
-    if (formData.send_setup_email) {
-      toast(
-        setupEmailSent
-          ? `Member added — setup email sent to ${email}`
-          : `Member added — couldn't send setup email. Resend from Account Access.`,
-        setupEmailSent ? 'success' : 'error',
-      )
-    } else {
-      toast(`Member added — share the temporary password with them`)
-    }
-    closeForm()
+    // 4) Lean 1 success state — flip the form into a "Step 4" reveal
+    //    so the admin sees + copies the temp password before closing.
+    //    Members list refreshes in the background so the new row is
+    //    already there when they hit Done.
+    setCreatedMember({ profile: newMember, tempPassword })
+    toast(`${newMember.display_name} added — share the temporary password`, 'success')
     setSubmitting(false)
     loadMembers()
   }
@@ -384,6 +365,7 @@ export default function TeamManager() {
     setStep(1)
     setSelectedDailyTemplateIds(new Set())
     setSelectedWeeklyTemplateIds(new Set())
+    setCreatedMember(null)
   }
 
   const handleEdit = (member: TeamMember) => {
@@ -398,10 +380,10 @@ export default function TeamManager() {
       start_date: member.start_date ?? '',
       status: (member.status ?? 'active') as 'active' | 'inactive',
       managed_by: member.managed_by ?? '',
-      // default_password + send_setup_email are only meaningful for
-      // new-member creation; not editable here.
-      default_password: '',
-      send_setup_email: true,
+      // password fields are only meaningful for new-member creation;
+      // editing reuses the form schema with safe defaults.
+      password_mode: 'auto',
+      manual_password: '',
     })
     if (!knownPosition) setCustomPosition(member.position ?? '')
     setShowForm(true)
@@ -444,41 +426,14 @@ export default function TeamManager() {
     loadMembers()
   }
 
-  /**
-   * PR #49 — re-send the password-setup email to an existing member.
-   * Same `auth.resetPasswordForEmail()` call AccountAccessPanel uses;
-   * Supabase delivers a single-use recovery link, the member clicks
-   * it, lands on `RecoveryGate`, picks their own password.
-   *
-   * Useful when:
-   *   - Admin originally created the member with a manual temp pw and
-   *     wants to switch them to the email-setup path instead.
-   *   - The original setup email expired (1-hour TTL).
-   *   - Member forgot their password and the admin is helping.
-   */
-  const handleSendSetupEmail = async (member: TeamMember) => {
-    setOpenMenuId(null)
-    if (!member.email) {
-      toast('Member has no email on file', 'error')
-      return
-    }
-    setActionLoadingId(member.id)
-    const redirectTo =
-      typeof window !== 'undefined'
-        ? window.location.origin + import.meta.env.BASE_URL
-        : undefined
-    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
-      member.email,
-      redirectTo ? { redirectTo } : undefined,
-    )
-    setActionLoadingId(null)
-    if (resetErr) {
-      console.error('[TeamManager] handleSendSetupEmail failed:', resetErr)
-      toast(`Couldn't send setup email: ${resetErr.message}`, 'error')
-      return
-    }
-    toast(`Setup email sent to ${member.email}`)
-  }
+  // 2026-05-08 (Lean 1) — `handleSendSetupEmail` removed. Free-tier
+  // Supabase SMTP only delivers to the project owner address, so the
+  // recovery email silently failed for every other member. The
+  // canonical "reset a member's password" path now lives in
+  // `/admin/settings → Account Access`, which uses the
+  // `admin-reset-password` edge function to mint a temp password the
+  // owner hands off directly. When SMTP is configured (separate
+  // Lean), restore the email path here.
 
   const getPositionVariant = (pos: string): BadgeVariant =>
     POSITIONS.find(p => p.value === pos)?.badge ?? 'neutral'
@@ -798,13 +753,12 @@ export default function TeamManager() {
                               >
                                 <Edit2 size={12} aria-hidden="true" /> Edit member
                               </button>
-                              <button
-                                role="menuitem"
-                                onClick={() => handleSendSetupEmail(member)}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors"
-                              >
-                                <Mail size={12} aria-hidden="true" /> Send setup email
-                              </button>
+                              {/* 2026-05-08 (Lean 1) — "Send setup email"
+                                  retired. Reset path lives at
+                                  /admin/settings → Account Access (the
+                                  Key icon there generates a temp
+                                  password the owner hands off
+                                  directly). */}
                               <button
                                 role="menuitem"
                                 onClick={() => toggleRole(member)}
@@ -862,7 +816,9 @@ export default function TeamManager() {
               <h2 id="team-manager-panel-title" className="font-semibold text-lg">
                 {editingMember
                   ? 'Edit Team Member'
-                  : `Add Team Member · Step ${step} of 3`}
+                  : createdMember
+                    ? `${createdMember.profile.display_name} added`
+                    : `Add Team Member · Step ${step} of 3`}
               </h2>
               <Button
                 variant="ghost"
@@ -875,8 +831,9 @@ export default function TeamManager() {
               </Button>
             </div>
 
-            {/* Step indicator (add mode only) */}
-            {!editingMember && (
+            {/* Step indicator (add mode only — hidden once the
+                success state takes over). */}
+            {!editingMember && !createdMember && (
               <div className="px-6 py-3 border-b border-border bg-surface-alt/40">
                 <div className="flex items-center gap-2">
                   {[
@@ -912,8 +869,36 @@ export default function TeamManager() {
 
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto flex flex-col">
               <div className="p-6 space-y-5 flex-1">
+                {/* ─── Step 4 — Success ─── (Lean 1)
+                    Triggered after `admin-create-member` succeeds.
+                    Replaces the "close + toast" flow so the admin
+                    can see + copy the temp password before leaving
+                    the form. `<TempPasswordReveal />` owns the
+                    Copy button + select-all interaction. */}
+                {createdMember && (
+                  <div className="space-y-4">
+                    <TempPasswordReveal
+                      email={createdMember.profile.email ?? ''}
+                      displayName={createdMember.profile.display_name}
+                      tempPassword={createdMember.tempPassword}
+                      headline={`${createdMember.profile.display_name} is ready to log in`}
+                      subhead="Hand off the temporary password below. They'll be required to choose their own on first sign-in."
+                    />
+                    <p className="text-[11px] text-text-light">
+                      You can also reset their password later from{' '}
+                      <Link
+                        to="/admin/settings"
+                        className="text-gold hover:underline"
+                      >
+                        Settings → Account Access
+                      </Link>
+                      .
+                    </p>
+                  </div>
+                )}
+
                 {/* ─── Step 1 — Profile ─── */}
-                {(editingMember || step === 1) && (
+                {!createdMember && (editingMember || step === 1) && (
                 <>
                 <Input
                   id="team-member-display-name"
@@ -941,61 +926,82 @@ export default function TeamManager() {
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
                 />
 
-                {/* PR #49 — Send-setup-email toggle replaces the
-                    always-visible password input. When on (default),
-                    no password is collected: the edge function
-                    generates a random one server-side and we email a
-                    setup link via Supabase's native recovery flow.
-                    When off, the password input returns for offline
-                    adds. */}
+                {/* 2026-05-08 (Lean 1) — temp-password handoff is
+                    the canonical onboarding flow until SMTP is
+                    configured. Two modes:
+                      - Auto: client-side `generateTempPassword()` at
+                        submit; revealed in the success step so the
+                        admin can copy + hand it off.
+                      - Manual: admin types a memorable password (e.g.
+                        for verbal handoff in person).
+                    The old "Email a setup link" path is gone — Supabase
+                    free-tier SMTP only delivers to the project owner
+                    address, so it silently failed for everyone else. */}
                 {!editingMember && (
                   <div className="space-y-3">
-                    <label
-                      className="flex items-start gap-3 px-3 py-3 rounded-xl border border-border bg-surface-alt/50 hover:bg-surface-alt cursor-pointer transition-colors"
-                      htmlFor="team-member-send-setup-email"
-                    >
-                      <input
-                        id="team-member-send-setup-email"
-                        type="checkbox"
-                        checked={formData.send_setup_email}
-                        onChange={e =>
-                          setFormData({ ...formData, send_setup_email: e.target.checked })
-                        }
-                        className="mt-1 w-4 h-4 rounded border-border accent-gold shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-text flex items-center gap-1.5">
-                          <Mail size={13} className="text-gold shrink-0" aria-hidden="true" />
-                          Email a setup link to the new member
-                        </p>
-                        <p className="text-[12px] text-text-muted mt-0.5">
-                          {formData.send_setup_email ? (
-                            <>
-                              They'll get a secure link at{' '}
-                              <span className="font-medium text-text">
-                                {normalizeEmail(formData.email) || 'their email'}
-                              </span>{' '}
-                              to choose their own password. Recommended.
-                            </>
-                          ) : (
-                            "You'll set a temporary password below to share with them manually."
-                          )}
-                        </p>
-                      </div>
-                    </label>
+                    <fieldset className="rounded-xl border border-border bg-surface-alt/50 p-3 space-y-2">
+                      <legend className="px-1 text-[11px] font-semibold tracking-wider uppercase text-text-light">
+                        Temporary password
+                      </legend>
+                      <label
+                        className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-surface-alt transition-colors"
+                        htmlFor="team-member-pw-mode-auto"
+                      >
+                        <input
+                          id="team-member-pw-mode-auto"
+                          type="radio"
+                          name="team-member-pw-mode"
+                          checked={formData.password_mode === 'auto'}
+                          onChange={() =>
+                            setFormData({ ...formData, password_mode: 'auto' })
+                          }
+                          className="mt-1 w-4 h-4 border-border accent-gold shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-text flex items-center gap-1.5">
+                            <KeyRound size={13} className="text-gold shrink-0" aria-hidden="true" />
+                            Auto-generate (recommended)
+                          </p>
+                          <p className="text-[12px] text-text-muted mt-0.5">
+                            Strong 14-character password. Revealed after creation so you can copy it and hand it off.
+                          </p>
+                        </div>
+                      </label>
+                      <label
+                        className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-surface-alt transition-colors"
+                        htmlFor="team-member-pw-mode-manual"
+                      >
+                        <input
+                          id="team-member-pw-mode-manual"
+                          type="radio"
+                          name="team-member-pw-mode"
+                          checked={formData.password_mode === 'manual'}
+                          onChange={() =>
+                            setFormData({ ...formData, password_mode: 'manual' })
+                          }
+                          className="mt-1 w-4 h-4 border-border accent-gold shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-text">Set my own</p>
+                          <p className="text-[12px] text-text-muted mt-0.5">
+                            For memorable verbal handoff. They'll be forced to change it on first sign-in.
+                          </p>
+                        </div>
+                      </label>
+                    </fieldset>
 
-                    {!formData.send_setup_email && (
+                    {formData.password_mode === 'manual' && (
                       <Input
-                        id="team-member-default-password"
+                        id="team-member-manual-password"
                         label="Temporary password"
                         type="text"
                         required
                         minLength={8}
                         placeholder="Min 8 characters"
                         hint="Share this with the member. They'll be prompted to change it on first sign-in."
-                        value={formData.default_password}
+                        value={formData.manual_password}
                         onChange={e =>
-                          setFormData({ ...formData, default_password: e.target.value })
+                          setFormData({ ...formData, manual_password: e.target.value })
                         }
                       />
                     )}
@@ -1079,7 +1085,7 @@ export default function TeamManager() {
                 )}
 
                 {/* ─── Step 2 — Templates ─── */}
-                {!editingMember && step === 2 && (
+                {!createdMember && !editingMember && step === 2 && (
                   <div className="space-y-6">
                     <div>
                       <h3 className="text-sm font-semibold flex items-center gap-2 text-text">
@@ -1135,7 +1141,7 @@ export default function TeamManager() {
                 )}
 
                 {/* ─── Step 3 — Review ─── */}
-                {!editingMember && step === 3 && (
+                {!createdMember && !editingMember && step === 3 && (
                   <div className="space-y-4">
                     <div>
                       <h3 className="text-sm font-semibold flex items-center gap-2 text-text">
@@ -1143,18 +1149,10 @@ export default function TeamManager() {
                         Review &amp; create
                       </h3>
                       <p className="text-xs text-text-muted mt-1">
-                        {formData.send_setup_email ? (
-                          <>
-                            Confirm everything below. After creation, a setup-link email will be sent to{' '}
-                            <span className="font-semibold text-text">{normalizeEmail(formData.email)}</span>{' '}
-                            so the new member can pick their own password.
-                          </>
-                        ) : (
-                          <>
-                            Confirm everything below. The temporary password will need to be shared with
-                            the new member directly — they'll be required to change it on first sign-in.
-                          </>
-                        )}
+                        Confirm everything below. After creation you'll see the temporary password —
+                        copy it and hand it off to{' '}
+                        <span className="font-semibold text-text">{formData.display_name || 'the new member'}</span>.
+                        They'll be required to change it on first sign-in.
                       </p>
                     </div>
 
@@ -1169,9 +1167,9 @@ export default function TeamManager() {
                         ['Phone', formData.phone || '—'],
                         ['Start date', formData.start_date || '—'],
                         ['Status', formData.status],
-                        formData.send_setup_email
-                          ? ['Setup', 'Email link to member']
-                          : ['Temp password', formData.default_password],
+                        formData.password_mode === 'auto'
+                          ? ['Temp password', 'Auto-generated (revealed after create)']
+                          : ['Temp password', formData.manual_password],
                       ]}
                     />
 
@@ -1201,45 +1199,59 @@ export default function TeamManager() {
               </div>
 
               <div className="sticky bottom-0 flex items-center justify-between gap-2 px-6 py-4 border-t border-border bg-surface">
-                {/* Left: Back / Cancel */}
-                <div>
-                  {!editingMember && step > 1 ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={handleBack}
-                      iconLeft={<ChevronLeft size={14} aria-hidden="true" />}
-                    >
-                      Back
+                {createdMember ? (
+                  // Lean 1 — success state: only show Done. Closing
+                  // also tears down the createdMember state so the
+                  // next "Add Member" click starts fresh on Step 1.
+                  <>
+                    <span />
+                    <Button type="button" variant="primary" onClick={closeForm}>
+                      Done
                     </Button>
-                  ) : (
-                    <Button type="button" variant="ghost" onClick={closeForm}>
-                      Cancel
-                    </Button>
-                  )}
-                </div>
-                {/* Right: Next / Create / Update */}
-                <div className="flex items-center gap-2">
-                  {!editingMember && step < 3 ? (
-                    <Button
-                      type="button"
-                      variant="primary"
-                      onClick={handleNext}
-                      iconLeft={<ChevronRight size={14} aria-hidden="true" />}
-                    >
-                      Next
-                    </Button>
-                  ) : (
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      loading={submitting}
-                      iconLeft={!submitting ? <Save size={16} aria-hidden="true" /> : undefined}
-                    >
-                      {editingMember ? 'Update Member' : 'Create Account'}
-                    </Button>
-                  )}
-                </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Left: Back / Cancel */}
+                    <div>
+                      {!editingMember && step > 1 ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={handleBack}
+                          iconLeft={<ChevronLeft size={14} aria-hidden="true" />}
+                        >
+                          Back
+                        </Button>
+                      ) : (
+                        <Button type="button" variant="ghost" onClick={closeForm}>
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                    {/* Right: Next / Create / Update */}
+                    <div className="flex items-center gap-2">
+                      {!editingMember && step < 3 ? (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          onClick={handleNext}
+                          iconLeft={<ChevronRight size={14} aria-hidden="true" />}
+                        >
+                          Next
+                        </Button>
+                      ) : (
+                        <Button
+                          type="submit"
+                          variant="primary"
+                          loading={submitting}
+                          iconLeft={!submitting ? <Save size={16} aria-hidden="true" /> : undefined}
+                        >
+                          {editingMember ? 'Update Member' : 'Create Account'}
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </form>
           </aside>
