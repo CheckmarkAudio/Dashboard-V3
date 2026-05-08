@@ -215,7 +215,10 @@ export function AdminScheduleWidget() {
 
 export function AdminShortcutsWidget() {
   const links = [
-    { to: APP_ROUTES.admin.team, label: 'Team Manager', icon: Users },
+    // Both shortcuts target the canonical Members surface
+    // (`/admin/my-team`). The legacy `/admin/team` alias was retired
+    // in PR #160; APP_ROUTES.admin.team / .assignMockup are gone.
+    { to: APP_ROUTES.admin.members, label: 'Team Manager', icon: Users },
     { to: APP_ROUTES.admin.members, label: 'Reviews & KPIs', icon: CheckCircle2 },
     { to: APP_ROUTES.admin.templates, label: 'Templates', icon: ClipboardCheck },
     { to: APP_ROUTES.member.calendar, label: 'Calendar', icon: CalendarDays },

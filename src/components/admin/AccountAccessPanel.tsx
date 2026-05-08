@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, Key, Loader2, Mail, RotateCw, Shield, ShieldCheck, User as UserIcon } from 'lucide-react'
+import { AlertCircle, Key, Loader2, RotateCw, Shield, ShieldCheck, User as UserIcon } from 'lucide-react'
 import { supabase, withSupabaseRetry } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
+import { generateTempPassword } from '../../lib/auth/tempPassword'
 import { Button, Modal } from '../ui'
+import TempPasswordReveal from '../auth/TempPasswordReveal'
 
 /**
  * Best-effort extraction of a human-readable error message from any
@@ -23,17 +25,9 @@ function errorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-/**
- * Where the password-reset email link should land users. Uses Vite's
- * BASE_URL (e.g. "/Dashboard-V3/" on GitHub Pages) so we generate the
- * right absolute URL in dev, preview, and production without config
- * drift. The landing page handles the `type=recovery` auth event and
- * shows the "set your password" modal automatically.
- */
-function passwordResetRedirectUrl(): string {
-  if (typeof window === 'undefined') return ''
-  return window.location.origin + import.meta.env.BASE_URL
-}
+// `generateTempPassword` lives in `src/lib/auth/tempPassword.ts` so
+// both this admin reset flow and the Add Member onboarding flow share
+// the same entropy + character-class guarantees.
 
 /**
  * Account Access panel (owner-only).
@@ -162,12 +156,25 @@ export default function AccountAccessPanel() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; message: string } | null>(null)
 
-  // Reset-password modal state. Email-based flow: we ask Supabase to
-  // send the target user a recovery link; they click it and set their
-  // own password. No temp-password sharing, no out-of-band handoff.
+  // Reset-password modal state.
+  //
+  // 2026-05-08 — switched from `auth.resetPasswordForEmail` to the
+  // `admin-reset-password` edge function. Supabase's built-in SMTP only
+  // delivers recovery emails to the project-owner address on free
+  // tier; every other recipient got "Unable to process request" back
+  // from GoTrue, which surfaced as a useless modal error. Until we
+  // wire a real SMTP provider (Resend / SendGrid / etc.) we use the
+  // already-deployed admin reset flow: the owner generates a temp
+  // password, sees it in the modal with a Copy button, hands it off
+  // out-of-band (DM, in-person), and `ForcePasswordChangeModal`
+  // forces the member to change it on first login.
   const [resetTarget, setResetTarget] = useState<AccessUser | null>(null)
   const [resetPending, setResetPending] = useState(false)
-  const [resetResult, setResetResult] = useState<{ kind: 'ok' } | { kind: 'err'; message: string } | null>(null)
+  const [resetResult, setResetResult] = useState<
+    | { kind: 'ok'; tempPassword: string }
+    | { kind: 'err'; message: string }
+    | null
+  >(null)
 
   const refetch = useCallback(async () => {
     setLoading(true)
@@ -234,27 +241,36 @@ export default function AccountAccessPanel() {
     if (!resetTarget) return
     setResetPending(true)
 
-    // supabase.auth.resetPasswordForEmail triggers the project's
-    // standard recovery email — the link lands the user at
-    // `redirectTo` with a `type=recovery` hash, which AuthContext
-    // watches for and promotes to the ForcePasswordChangeModal flow.
-    //
-    // This is intentionally NOT the admin-reset-password edge function
-    // we deployed earlier: email-based recovery keeps the plaintext
-    // password off the wire entirely, matches how Gmail / Apple / etc.
-    // onboard users, and feels professional instead of "here's your
-    // temp password, go paste it somewhere."
-    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
-      resetTarget.email,
-      { redirectTo: passwordResetRedirectUrl() },
-    )
+    // Generate a strong temp password client-side, hand it to the
+    // owner-only edge function which:
+    //   1. Verifies the caller's JWT email == OWNER_EMAIL
+    //   2. Calls `auth.admin.updateUserById()` with the new password
+    //   3. Sets `requires_password_change: true` in user_metadata
+    //   4. Returns the target email on success
+    // The owner shares the temp password with the member out-of-band;
+    // on first login `ForcePasswordChangeModal` forces a change.
+    const tempPassword = generateTempPassword()
+    const { data, error: invokeErr } = await supabase.functions.invoke<{
+      ok: boolean
+      error?: string
+      email?: string
+    }>('admin-reset-password', {
+      body: { user_id: resetTarget.id, new_password: tempPassword },
+    })
     setResetPending(false)
 
-    if (resetErr) {
-      setResetResult({ kind: 'err', message: errorMessage(resetErr, 'Failed to send reset email') })
+    // Two failure shapes:
+    //   - network / 4xx / 5xx → `invokeErr` populated
+    //   - function returned 200 with `{ ok: false, error }` shape
+    if (invokeErr) {
+      setResetResult({ kind: 'err', message: errorMessage(invokeErr, 'Failed to reset password') })
       return
     }
-    setResetResult({ kind: 'ok' })
+    if (!data?.ok) {
+      setResetResult({ kind: 'err', message: data?.error ?? 'Failed to reset password' })
+      return
+    }
+    setResetResult({ kind: 'ok', tempPassword })
   }, [resetTarget])
 
   const closeResetModal = useCallback(() => {
@@ -408,20 +424,23 @@ export default function AccountAccessPanel() {
         </section>
       </div>
 
-      {/* ── Password reset modal — email-based flow ──
-          Send the user an official Supabase recovery email; they click
-          the link, land on the app, set their own password. No temp
-          password to share, no out-of-band handoff. Matches the
-          Gmail/Apple pattern. */}
+      {/* ── Password reset modal — temp-password handoff flow ──
+          Owner clicks "Reset password" → modal asks for confirmation →
+          edge function generates and sets a temp password → modal
+          reveals the temp password with a Copy button → owner shares
+          it with the member out-of-band → member logs in → forced to
+          change it via ForcePasswordChangeModal.
+          Switching back to a true email-link flow is queued behind
+          configuring a custom SMTP provider in Supabase. */}
       {resetTarget && (
         <Modal
           open
           onClose={closeResetModal}
-          title={resetResult?.kind === 'ok' ? 'Reset email sent' : 'Send password reset email'}
+          title={resetResult?.kind === 'ok' ? 'Temporary password ready' : 'Reset password'}
           description={
             resetResult?.kind === 'ok'
               ? undefined
-              : `${resetTarget.display_name} will get a secure link to choose their own password.`
+              : `Generate a one-time password for ${resetTarget.display_name}. They'll be forced to change it on first login.`
           }
           size="sm"
           footer={
@@ -434,42 +453,29 @@ export default function AccountAccessPanel() {
                   variant="primary"
                   onClick={() => void confirmReset()}
                   loading={resetPending}
-                  iconLeft={!resetPending ? <Mail size={14} aria-hidden="true" /> : undefined}
+                  iconLeft={!resetPending ? <Key size={14} aria-hidden="true" /> : undefined}
                 >
-                  Send email
+                  Generate password
                 </Button>
               </>
             )
           }
         >
           {resetResult?.kind === 'ok' ? (
-            <div className="space-y-3">
-              <div className="flex items-start gap-3 px-3 py-3 rounded-lg bg-status-success-bg border border-emerald-400/30">
-                <CheckCircle2 size={18} className="text-status-success-text mt-0.5 shrink-0" aria-hidden="true" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-status-success-text">
-                    Email sent to {resetTarget.email}
-                  </p>
-                  <p className="text-[12px] text-text-muted mt-1">
-                    {resetTarget.display_name} will receive a link to choose their own password.
-                    The link is single-use and expires after 1 hour.
-                  </p>
-                </div>
-              </div>
-              <p className="text-[11px] text-text-light">
-                Tell them to check their inbox (and spam folder, just in case).
-                If they don't receive it within a few minutes, you can send it again.
-              </p>
-            </div>
+            <TempPasswordReveal
+              email={resetTarget.email}
+              displayName={resetTarget.display_name}
+              tempPassword={resetResult.tempPassword}
+            />
           ) : resetResult?.kind === 'err' ? (
             <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
               {resetResult.message}
             </div>
           ) : (
             <p className="text-[13px] text-text-muted">
-              A password-reset email will be sent to{' '}
+              A temporary password will be generated for{' '}
               <span className="font-semibold text-text">{resetTarget.email}</span>.
-              They'll click the link and set their own password — no need to share anything.
+              You'll be able to copy it and hand it off — they'll set their own password on next login.
             </p>
           )}
         </Modal>
