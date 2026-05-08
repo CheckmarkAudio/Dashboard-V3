@@ -24,16 +24,16 @@ export function generateTempPassword(): string {
   // Guarantee at least one of each class so the password always
   // satisfies common "mixed character" rules.
   const required = [
-    upper[arr[0] % upper.length],
-    lower[arr[1] % lower.length],
-    digits[arr[2] % digits.length],
-    symbols[arr[3] % symbols.length],
+    upper.charAt((arr[0] ?? 0) % upper.length),
+    lower.charAt((arr[1] ?? 0) % lower.length),
+    digits.charAt((arr[2] ?? 0) % digits.length),
+    symbols.charAt((arr[3] ?? 0) % symbols.length),
   ]
   const rest = Array.from(arr.slice(4)).map((n) => all[n % all.length])
   // Shuffle so the required chars aren't always at the front.
   const out = [...required, ...rest]
   for (let i = out.length - 1; i > 0; i--) {
-    const j = arr[i] % (i + 1)
+    const j = (arr[i] ?? 0) % (i + 1)
     ;[out[i], out[j]] = [out[j], out[i]]
   }
   return out.join('')

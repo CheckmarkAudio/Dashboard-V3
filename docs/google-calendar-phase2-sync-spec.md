@@ -14,6 +14,24 @@ Phase 2 extends that into a controlled two-way system:
 
 Because Apple Calendar syncs through the connected Google account, the backend integration target remains **Google Calendar**, not Apple APIs directly.
 
+## Rollout Gate
+
+Phase 1 is already live on production and connected to:
+
+- Google account: `checkmarkaudio@gmail.com`
+- calendar target: `primary`
+
+Phase 2 must be rolled out in a way that does **not** interrupt the
+existing outbound path.
+
+That means:
+
+- keep current outbound sync behavior intact while inbound sync is added
+- treat inbound sync as an additive worker/path, not a rewrite
+- test every Phase 2 slice against live Phase 1 create/edit/cancel behavior
+- preserve the team operating rule until inbound sync proves stable:
+  **If it is not in Checkmark, it is not booked**
+
 ---
 
 ## Core Principle
@@ -94,6 +112,19 @@ Recommended Checkmark-only fields:
 - anything used for analytics/flywheel logic that external calendars do not model cleanly
 
 This keeps early two-way sync understandable and lowers the chance of silent damage.
+
+## First Slice Being Built
+
+The first implementation slice should be intentionally conservative:
+
+- **manual admin-triggered inbound sync**, not background automation yet
+- only for bookings that already have a `google_event_id`
+- no auto-import of brand-new external events
+- no hard-delete of Checkmark bookings from external deletes
+- external cancels map to Checkmark `cancelled`
+
+This lets the team test real Google/Apple edits against existing linked
+bookings without interrupting the stable Phase 1 outbound path.
 
 ---
 

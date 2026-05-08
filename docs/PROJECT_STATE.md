@@ -13,10 +13,10 @@
 | **Live URL** | https://dashboard-v3-dusky.vercel.app |
 | **Hosting** | Vercel (auto-deploys from `main`) |
 | **Database** | Supabase project `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") |
-| **Latest commit (main)** | `cbbb4e2` (PR #103) shipped the light-mode revamp baseline (soft borders, grey body + white cards, fintech wash on dashboard-shell, bright pure yellow `#FFD60A` for `bg-gold`, contrast scan for opacity-modified accent classes). (this PR — fix(theme): flat yellow buttons + transparent social icons) follows up on PR #103 with two polish items: (1) every `bg-gradient-to-b from-gold to-gold-muted` button across the app (12 sites: Layout Clock In, Sessions Book/Add Client, Dashboard Book a Session, MultiTaskCreateModal Send, AddFromTemplateModal Add, AdminEditTasksModal Save, AdminEditSessionsModal Save, TaskReassignRequestModal Approve, AssignedTaskBoards Request to Take, shared.tsx SubmitBar) flattened to `bg-gold hover:bg-gold-muted` so the bright yellow reads punchy without the darker-bottom dulling; marigold-tinted shadows replaced with neutral `rgba(0,0,0,0.08)` so they integrate cleanly with the new yellow. (2) `MemberHighlights` social tiles flipped from solid yellow 40×40 squares to TRANSPARENT backgrounds with the brand glyph rendered in `text-text` (deep contrast), so the icons sit visually with the count text instead of stamping a colored square that cuts into surrounding content. Hover region stays clickable via negative-margin padding trick. |
-| **Currently active** | **Light-mode polish iteration in progress** — base rev6 shipping in this PR; the user has flagged social media icons + a few specific spots may still need more work in the next round (PR #104+). Tier 2 sequence is queued — **Members page restructure** (Settings left-rail nav pattern) is the next big planned item. Lean 4 (Calendar polish — click booking title → detail modal · notes persist across nav · brighter notes + ♪ bullets) remains open as a lighter cleanup-sprint candidate. **Follow-ups filed**: (1) CSP whitelist for Vercel preview widget + recovery-script hash regeneration + stale-bundle auto-reload; (2) bring `studio_space` sectioning + recurrence display through to the `/daily` Studio Tasks widget — DONE in PR #102; (3) recurrence auto-recreate engine — read `recurrence_spec` and fire new task rows on the cadence (today the spec is captured but no-op); (4) follow-up light-mode polish round (social icons + remaining muddy/orange CTAs). **PR #91** (Codex social links / settings) is open and separate scope. Codex parallel track: **interaction-blueprint methodology** (`docs/interaction-blueprint-backlog-2026-05-01.md`). |
+| **Latest commit (main)** | `main` has moved beyond the older light-mode baseline and now includes recent booking/calendar interaction work plus **Google Calendar Phase 1 sync merged and connected live on production** (PR #152). Treat this document, not the older theme-only notes, as the canonical summary of the live state. |
+| **Currently active** | **Google Calendar Phase 1 is live on production.** Live Settings now shows `Google Calendar Sync`, connected account `checkmarkaudio@gmail.com`, and calendar target `primary`. Current safe operating rule: **Checkmark is the source of truth; Google/Apple are mirror-only surfaces until Phase 2 ships.** Immediate next build is **Phase 2 inbound sync for already-linked events first** (Google/Apple edits to existing synced bookings flowing back into `sessions`), while preserving the outbound Phase 1 path unchanged. A manual admin-only inbound sync beta is now being prepared on a branch, but it is **not** live on production yet. |
 | **Prior active** | (this PR) Light-mode revamp — soft borders + grey body / white cards + fintech wash + bright yellow gold token + contrast scan. PR #102 (`26225d8`) Studio +Add modal + recurrence + Members-pane chrome parity + `/daily` widget sectioning + modal close-on-mouseup fix. PR #101 (`0d550f6`) Studio tab on Assign + `studio_space` room sections. PR #100 (`b31f4b7`) uniform pending symbols + green approve buttons + clean diff container. PR #99 (`1ebaad3`) sitewide orange-for-edit + clickable admin queue rows + pending-row opacity fix. PR #98 (`23d5cce`) RequestDetailModal + member cancel + cancelled status. PR #97 (`08dc7c3`) member request-to-edit flow. PR #96 (`d5a541d`) Templates as inline sidebar tab. PR #94 (`f717c1e`) removed the empty "Settings for Tasks" button. PR #90 (`740667d`) Assign delete reliability. PR #89 (`8dfa922`) sticky header fix (`overflow: clip`). PR #88 (`4be99e3`) MyTasksCard pending section + divider. PR #87 (`a5a9fe2`) realtime sync for task surfaces. PR #86 (`13aaaea`) `FloatingDetailModal` portals to `document.body`. PR #85 (`3fffc6f`) unified member request actions — Delete + Transfer composer pattern. PR #84 (`56693de`) admin-delete UX polish. PR #82 (`52954df`) admin direct-delete on `/admin/templates`. |
-| **Security advisor (post-2026-05-03)** | **0 ERRORS**. ~72 WARN `authenticated_security_definer_function_executable` (by-design — every SECURITY DEFINER RPC granted to `authenticated` triggers it; new RPCs from this week's PRs each add one warn). 1 WARN `auth_leaked_password_protection` (Pro plan paywall). Live state stable. The trigger function `fill_assigned_task_team_id` does NOT appear in advisor — REVOKED from PUBLIC/anon/authenticated; only the trigger subsystem invokes it. |
+| **Security advisor (last explicitly repo-verified)** | **0 ERRORS**. Last explicitly verified repo-side note remains ~72 WARN `authenticated_security_definer_function_executable` (by-design — every SECURITY DEFINER RPC granted to `authenticated` triggers it) plus 1 WARN `auth_leaked_password_protection` (Pro plan paywall). Google Calendar rollout added new RPC / function surface, so rerun Advisor before claiming a newer exact warning count. |
 
 ---
 
@@ -111,6 +111,12 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 ---
 
 ## Timeline
+
+| Date | Commit / PR | Notes |
+|--|--|--|
+| 2026-05-07 | PR #152 merged | **Google Calendar Phase 1 sync is live on production.** `CODEX:` built and patched the Google Calendar integration, including `google_event_id` booking mapping, outbound sync hooks, admin Settings UI, Phase 1 docs/runbooks, and OAuth callback fixes. `MANUAL-GOOGLE-CLOUD:` user created the OAuth client, rotated the exposed client secret, and confirmed `checkmarkaudio@gmail.com` as the connected Google account. `MANUAL-SUPABASE:` user applied the calendar SQL manually in the Supabase SQL Editor due migration-history drift, then updated secrets and redeployed `google-calendar-auth`. `LIVE-VERIFIED:` production Settings now shows `Google Calendar Sync`, connected account `checkmarkaudio@gmail.com`, calendar target `primary`, and a Disconnect button. Phase 1 operating rule locked: `Checkmark -> Google -> Apple`; no inbound Apple/Google edits yet. |
+| 2026-05-07 | Phase 2 branch in progress | **Phase 2 safe-slice implementation started on a branch only.** `CODEX:` added a manual admin-triggered inbound sync path for **already-linked** Google events only, plus new audit/sync metadata, branch-only UI for `Pull inbound changes`, and docs/risk notes that explicitly preserve the live Phase 1 outbound contract. This beta is intentionally additive and is **not deployed to production yet**. |
+| 2026-05-07 | Docs refresh | **Phase 2 planning opened.** Added/updated: `docs/google-calendar-phase1-ops-runbook.md`, `docs/google-calendar-phase2-sync-spec.md`, `docs/google-calendar-sync-setup.md`, and catch-up notes in state/context docs so future sessions know that outbound sync is live and that the next safe milestone is inbound sync for already-linked events only. |
 
 | Date | Commit | What landed |
 |--|--|--|
@@ -237,6 +243,43 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 ---
 
 ## Active
+
+### Phase 2 kickoff — 2026-05-07
+
+**Phase 1 is live and must stay stable while Phase 2 is built.**
+
+Current production status:
+
+- Live URL: `https://dashboard-v3-dusky.vercel.app`
+- Production Settings shows **Google Calendar Sync**
+- Connected account: `checkmarkaudio@gmail.com`
+- Calendar target: `primary`
+- Sync mode today: `Checkmark -> Google -> Apple`
+
+### Phase 1 risks while Phase 2 is not live yet
+
+- **Dual-entry drift:** if staff create or edit bookings directly in Apple Calendar, those changes will not come back into Checkmark.
+- **Refresh-lag confusion:** Apple Calendar can briefly lag behind Google, which can make a correctly-synced booking look missing for a short time.
+- **Manual duplicate risk:** if someone recreates a missing-looking event in Apple by hand, Checkmark can later push the real event too, causing duplicate calendar entries.
+- **Human-source-of-truth confusion:** staff may assume the connected Apple view is authoritative and forget that Checkmark still owns the official booking state.
+- **Outbound sync regressions during unrelated booking work:** any deployment that touches booking create/edit/cancel flows, session mapping, or the Google sync helper can temporarily affect outbound sync if not tested.
+
+### Safe Phase 2 rollout order
+
+1. **Add inbound detection separately** from the current outbound path.
+2. **Apply inbound edits only for already-linked events** (`google_event_id` exists).
+3. **Allow only a restricted inbound field set first** (time/date/title/notes/location).
+4. **Handle external cancellation second**, mapping deletes/cancels to Checkmark cancellation, not hard-delete.
+5. **Leave unmatched Apple/Google-created events out of auto-import at first**; surface them for admin review instead.
+
+### Guardrail
+
+Working on Phase 2 should **not** interrupt Phase 1 if we keep it additive:
+
+- leave the existing outbound sync contract intact
+- add inbound logic behind the existing connection, not instead of it
+- avoid changing the current Google connection model or calendar target until Phase 2 inbound is proven
+- keep the team rule in force: **If it is not in Checkmark, it is not booked**
 
 ### Tier 3 — Interface tweaks + page-by-page fixes (2026-04-30)
 

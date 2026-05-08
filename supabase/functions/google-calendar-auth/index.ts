@@ -234,7 +234,16 @@ Deno.serve(async (req: Request) => {
     if (body.action === "status") {
       const { data, error } = await ctx.admin
         .from("google_calendar_connections")
-        .select("google_email, calendar_id, created_at, updated_at, last_sync_error")
+        .select(`
+          google_email,
+          calendar_id,
+          created_at,
+          updated_at,
+          last_sync_error,
+          inbound_last_synced_at,
+          inbound_last_sync_error,
+          inbound_last_sync_summary
+        `)
         .eq("team_id", ctx.teamId)
         .maybeSingle()
 

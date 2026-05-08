@@ -182,6 +182,8 @@ export interface Session {
   google_sync_status?: 'pending' | 'synced' | 'error'
   google_last_synced_at?: string | null
   google_sync_error?: string | null
+  calendar_last_changed_source?: 'checkmark' | 'google'
+  calendar_last_changed_at?: string | null
   created_at: string
 }
 

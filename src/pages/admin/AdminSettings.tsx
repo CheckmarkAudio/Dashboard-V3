@@ -9,6 +9,7 @@ import { AdminSectionNavItem, type AdminSection } from '../../components/admin/A
 import {
   disconnectGoogleCalendar,
   fetchGoogleCalendarStatus,
+  pullInboundGoogleCalendarChanges,
   startGoogleCalendarConnect,
   type GoogleCalendarConnectionStatus,
 } from '../../lib/googleCalendar'
@@ -100,6 +101,7 @@ export default function AdminSettings() {
   const [googleCalendarLoading, setGoogleCalendarLoading] = useState(true)
   const [googleCalendarConnecting, setGoogleCalendarConnecting] = useState(false)
   const [googleCalendarDisconnecting, setGoogleCalendarDisconnecting] = useState(false)
+  const [googleCalendarPulling, setGoogleCalendarPulling] = useState(false)
   const [googleCalendarStatus, setGoogleCalendarStatus] = useState<GoogleCalendarConnectionStatus | null>(null)
 
   // Quick keys
@@ -162,6 +164,23 @@ export default function AdminSettings() {
       toast((err as Error).message, 'error')
     } finally {
       setGoogleCalendarDisconnecting(false)
+    }
+  }
+
+  const handlePullInboundGoogleCalendar = async () => {
+    setGoogleCalendarPulling(true)
+    try {
+      const result = await pullInboundGoogleCalendarChanges()
+      const summary = result.summary
+      toast(
+        `Inbound sync complete: ${summary.updated_count} updated, ${summary.cancelled_count} cancelled, ${summary.unchanged_count} unchanged, ${summary.skipped_count} skipped.`,
+        'success',
+      )
+      await loadGoogleCalendar()
+    } catch (err) {
+      toast((err as Error).message, 'error')
+    } finally {
+      setGoogleCalendarPulling(false)
     }
   }
 
@@ -506,12 +525,49 @@ export default function AdminSettings() {
                         {googleCalendarStatus.calendar_id}
                       </code>
                     </div>
+                    <div className="p-3 rounded-lg border border-sky-400/20 bg-sky-500/8 text-xs text-text-muted space-y-1">
+                      <p className="font-medium text-text">Phase 2 beta: inbound sync for already-linked events</p>
+                      <p>
+                        Pull Google/Apple edits into existing Checkmark bookings manually. This does not auto-import brand-new external events and does not hard-delete bookings.
+                      </p>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-2">
+                      <div className="p-3 rounded-lg bg-surface-alt text-xs">
+                        <p className="text-text-muted">Last inbound sync</p>
+                        <p className="mt-1 font-medium text-text">
+                          {googleCalendarStatus.inbound_last_synced_at
+                            ? new Date(googleCalendarStatus.inbound_last_synced_at).toLocaleString()
+                            : 'Not run yet'}
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-surface-alt text-xs">
+                        <p className="text-text-muted">Last inbound summary</p>
+                        <p className="mt-1 font-medium text-text">
+                          {googleCalendarStatus.inbound_last_sync_summary
+                            ? `${googleCalendarStatus.inbound_last_sync_summary.updated_count ?? 0} updated · ${googleCalendarStatus.inbound_last_sync_summary.cancelled_count ?? 0} cancelled`
+                            : 'No runs yet'}
+                        </p>
+                      </div>
+                    </div>
+                    {googleCalendarStatus.inbound_last_sync_error && (
+                      <div className="p-3 rounded-lg border border-amber-400/30 bg-amber-500/10 text-xs text-amber-200">
+                        Last inbound sync error: {googleCalendarStatus.inbound_last_sync_error}
+                      </div>
+                    )}
                     {googleCalendarStatus.last_sync_error && (
                       <div className="p-3 rounded-lg border border-amber-400/30 bg-amber-500/10 text-xs text-amber-200">
                         Last sync error: {googleCalendarStatus.last_sync_error}
                       </div>
                     )}
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={handlePullInboundGoogleCalendar}
+                        disabled={googleCalendarPulling}
+                        className="px-4 py-2 rounded-lg border border-border text-sm font-semibold hover:bg-surface-hover disabled:opacity-50"
+                      >
+                        {googleCalendarPulling ? 'Pulling…' : 'Pull inbound changes'}
+                      </button>
                       <button
                         type="button"
                         onClick={handleDisconnectGoogleCalendar}

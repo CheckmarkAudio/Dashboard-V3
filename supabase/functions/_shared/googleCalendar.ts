@@ -192,3 +192,57 @@ export async function deleteGoogleCalendarEvent(
     { method: 'DELETE' },
   )
 }
+
+export interface GoogleCalendarEvent {
+  id: string
+  status?: string
+  summary?: string
+  description?: string
+  location?: string | null
+  updated?: string
+  start?: {
+    dateTime?: string
+    date?: string
+    timeZone?: string
+  }
+  end?: {
+    dateTime?: string
+    date?: string
+    timeZone?: string
+  }
+  extendedProperties?: {
+    private?: Record<string, string>
+  }
+}
+
+export interface GoogleCalendarEventListResponse {
+  items: GoogleCalendarEvent[]
+  nextPageToken?: string
+  nextSyncToken?: string
+}
+
+export async function listGoogleCalendarEvents(
+  calendarId: string,
+  accessToken: string,
+  input: {
+    pageToken?: string
+    syncToken?: string
+  } = {},
+): Promise<GoogleCalendarEventListResponse> {
+  const params = new URLSearchParams()
+  params.set('maxResults', '250')
+  params.set('showDeleted', 'true')
+  params.set('singleEvents', 'true')
+  params.set('privateExtendedProperty', 'checkmarkSessionId')
+  if (input.pageToken) params.set('pageToken', input.pageToken)
+  if (input.syncToken) {
+    params.set('syncToken', input.syncToken)
+  } else {
+    params.set('orderBy', 'updated')
+  }
+
+  return googleCalendarRequest<GoogleCalendarEventListResponse>(
+    `/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
+    accessToken,
+  )
+}
