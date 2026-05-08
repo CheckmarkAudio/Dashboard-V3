@@ -226,14 +226,26 @@ export default function Profile() {
 
 // ─── Local helper: socials read view ──────────────────────────────
 
-const SOCIAL_ICON_MAP: Record<string, { Icon: typeof Globe; href: (handle: string) => string; label: string }> = {
+interface SocialMeta {
+  Icon: typeof Globe
+  href: (handle: string) => string
+  label: string
+}
+
+const WEBSITE_META: SocialMeta = {
+  Icon: Globe,
+  label: 'Website',
+  href: (h) => (h.startsWith('http') ? h : `https://${h}`),
+}
+
+const SOCIAL_ICON_MAP: Record<string, SocialMeta> = {
   instagram:  { Icon: Instagram, label: 'Instagram',   href: (h) => h.startsWith('http') ? h : `https://instagram.com/${h.replace(/^@/, '')}` },
   twitter:    { Icon: Twitter,   label: 'Twitter / X', href: (h) => h.startsWith('http') ? h : `https://x.com/${h.replace(/^@/, '')}` },
   tiktok:     { Icon: Globe,     label: 'TikTok',      href: (h) => h.startsWith('http') ? h : `https://tiktok.com/@${h.replace(/^@/, '')}` },
   youtube:    { Icon: Youtube,   label: 'YouTube',     href: (h) => h.startsWith('http') ? h : `https://youtube.com/${h.replace(/^@/, '')}` },
   soundcloud: { Icon: Globe,     label: 'SoundCloud',  href: (h) => h.startsWith('http') ? h : `https://soundcloud.com/${h.replace(/^@/, '')}` },
   spotify:    { Icon: Globe,     label: 'Spotify',     href: (h) => h.startsWith('http') ? h : `https://open.spotify.com/${h.replace(/^@/, '')}` },
-  website:    { Icon: Globe,     label: 'Website',     href: (h) => h.startsWith('http') ? h : `https://${h}` },
+  website:    WEBSITE_META,
 }
 
 function SocialsBlock({ socials }: { socials?: MemberSocials | null }) {
@@ -245,7 +257,9 @@ function SocialsBlock({ socials }: { socials?: MemberSocials | null }) {
       <h2 className="text-[11px] font-semibold text-gold uppercase tracking-wider mb-3">Socials</h2>
       <div className="flex flex-wrap gap-2">
         {entries.map(([key, value]) => {
-          const meta = SOCIAL_ICON_MAP[key] ?? SOCIAL_ICON_MAP.website
+          // Fall back to a known-defined meta so noUncheckedIndexedAccess
+          // can prove `meta` is never undefined.
+          const meta: SocialMeta = SOCIAL_ICON_MAP[key] ?? WEBSITE_META
           const { Icon, label } = meta
           return (
             <a

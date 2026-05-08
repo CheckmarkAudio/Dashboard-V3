@@ -21,20 +21,29 @@ export function generateTempPassword(): string {
   const len = 14
   const arr = new Uint32Array(len)
   crypto.getRandomValues(arr)
+  // Helpers — `noUncheckedIndexedAccess` types `arr[i]` and
+  // `string[i]` as `T | undefined`, even though we just allocated
+  // `len` slots and `s` is a non-empty literal. Coerce safely.
+  const r = (i: number): number => arr[i] ?? 0
+  const at = (s: string, n: number): string =>
+    s.charAt(n % s.length) || s.charAt(0) || '?'
   // Guarantee at least one of each class so the password always
   // satisfies common "mixed character" rules.
   const required = [
-    upper[arr[0] % upper.length],
-    lower[arr[1] % lower.length],
-    digits[arr[2] % digits.length],
-    symbols[arr[3] % symbols.length],
+    at(upper, r(0)),
+    at(lower, r(1)),
+    at(digits, r(2)),
+    at(symbols, r(3)),
   ]
-  const rest = Array.from(arr.slice(4)).map((n) => all[n % all.length])
+  const rest = Array.from(arr.slice(4)).map((n) => at(all, n))
   // Shuffle so the required chars aren't always at the front.
   const out = [...required, ...rest]
   for (let i = out.length - 1; i > 0; i--) {
-    const j = arr[i] % (i + 1)
-    ;[out[i], out[j]] = [out[j], out[i]]
+    const j = r(i) % (i + 1)
+    const a = out[i] ?? ''
+    const b = out[j] ?? ''
+    out[i] = b
+    out[j] = a
   }
   return out.join('')
 }
