@@ -1,19 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useTasks } from '../contexts/TaskContext'
-import { Check, X, FileText, ChevronDown } from 'lucide-react'
-
-const SESSION_TYPE_LABELS: Record<string, string> = {
-  engineering: 'Engineering', training: 'Training', education: 'Education',
-  music_lesson: 'Music Lesson', consultation: 'Consultation',
-}
+import { Check, Clock, LogOut, X } from 'lucide-react'
 
 /**
  * Combine the two reflection prompts into a single notes string for
  * `time_clock_entries.notes`. Returns null when both fields are empty
- * so the column stores NULL (clean) instead of an empty header. Format
- * is deliberately plain text — Markdown renderers aren't in play in
- * the Clock Data table; admins read this verbatim.
+ * so the column stores NULL (clean) instead of an empty header.
  */
 function buildClockOutNotes(wentWell: string, toImprove: string): string | null {
   const went = wentWell.trim()
@@ -24,70 +16,91 @@ function buildClockOutNotes(wentWell: string, toImprove: string): string | null 
   return `To improve: ${improve}`
 }
 
+/**
+ * Compact "1h 23m on shift" string for the modal header.
+ */
+function elapsedShort(clockInIso: string, nowMs: number): string {
+  try {
+    const start = new Date(clockInIso).getTime()
+    if (Number.isNaN(start)) return ''
+    const totalMin = Math.max(0, Math.floor((nowMs - start) / 60_000))
+    if (totalMin < 60) return `${totalMin}m on shift`
+    const h = Math.floor(totalMin / 60)
+    const m = totalMin % 60
+    return m === 0 ? `${h}h on shift` : `${h}h ${m}m on shift`
+  } catch {
+    return ''
+  }
+}
+
 export default function SelfReportModal({
   clockInTime,
+  clockedInAtIso,
   onClose,
   onLogout,
 }: {
+  /** Display string for the clock-in time, e.g. "9:42 AM". */
   clockInTime: string
-  // 2026-05-07 — both close paths now hand the reflection text up so
-  // the parent (Layout) can pass it as the `p_notes` arg to
-  // `clock_out`. Previously the modal collected wentWell / toImprove
-  // in local state and dropped them on submit; this fixes the gap so
-  // Members > Clock Data shows the actual reflections.
+  /** ISO timestamp for the open shift; powers the elapsed counter. */
+  clockedInAtIso?: string
+  // Both close paths hand the reflection text up so the parent
+  // (Layout) can pass it as `p_notes` to clock_out. Notes are null
+  // when the user skips both reflection fields.
   onClose: (notes: string | null) => void
   onLogout: (notes: string | null) => void
 }) {
-  const { tasks, bookings } = useTasks()
   const [wentWell, setWentWell] = useState('')
   const [toImprove, setToImprove] = useState('')
   const [submitted, setSubmitted] = useState(false)
-  const [showDetails, setShowDetails] = useState(false)
 
-  const completedTasks = tasks.filter(t => t.completed)
-  const completedBookings = bookings.filter(b => b.status === 'Confirmed')
-  const totalCompleted = completedTasks.length + completedBookings.length
-
-  // Group sessions by type
-  const todayStr = new Date().toISOString().split('T')[0] ?? ''
-  const todaySessions = completedBookings.filter(b => b.date <= todayStr)
-  const sessionsByType: Record<string, typeof todaySessions> = {}
-  for (const s of todaySessions) {
-    const group = sessionsByType[s.type] ?? []
-    group.push(s)
-    sessionsByType[s.type] = group
-  }
-
-  // Live clock that updates every second
-  const [now, setNow] = useState(new Date())
+  // Live clock for the header — updates every second so the elapsed
+  // string ticks while the modal is open. Cheap; modal is short-lived.
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(interval)
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
   }, [])
-  const clockOutTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
+  const clockOutTime = new Date(now).toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
+  })
+  const elapsed = clockedInAtIso ? elapsedShort(clockedInAtIso, now) : ''
 
   const currentNotes = () => buildClockOutNotes(wentWell, toImprove)
   const handleSubmit = () => {
     setSubmitted(true)
   }
 
-  // PR #72 — portal to document.body to escape the Layout header's
-  // `backdrop-blur-md` stacking context. Without the portal, the
-  // modal's `position: fixed` re-anchored to the header element
-  // (CSS spec quirk: backdrop-filter creates a containing block for
-  // fixed descendants), making the modal appear "jammed at the top
-  // of the website with its first half cut off". Same fix the
-  // NotificationsBell dropdown uses.
+  // 2026-05-12 (clock polish) — modal owns its own portal so it
+  // escapes the Layout header's backdrop-blur stacking context (PR
+  // #72 fix). The previous content (mock-data summary counts +
+  // collapsible details accordion) was REMOVED here — it pulled
+  // from the placeholder `useTasks()` context and showed wrong
+  // numbers. Real shift summary will land when the per-member
+  // "today's completed work" RPC ships; until then, the modal
+  // focuses on the two reflection prompts + clear actions.
   const modalContent = (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => onClose(currentNotes())} />
-      <div className="relative bg-surface rounded-2xl border border-border w-full max-w-lg mx-4 p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={() => onClose(currentNotes())}
+      />
+      <div className="relative bg-surface rounded-2xl border border-border w-full max-w-md mx-4 p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-lg font-bold text-text">Self Report</h2>
-            <p className="text-[11px] text-text-muted">Clocked in: {clockInTime} · Clocking out: {clockOutTime}</p>
+            <h2 className="text-lg font-bold text-text">End of shift</h2>
+            <p className="text-[11px] text-text-muted flex items-center gap-1.5 mt-0.5">
+              <Clock size={11} className="text-gold" aria-hidden="true" />
+              <span className="tabular-nums">{clockInTime} → {clockOutTime}</span>
+              {elapsed && <span className="text-text-light">· {elapsed}</span>}
+            </p>
           </div>
-          <button onClick={() => onClose(currentNotes())} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted"><X size={18} /></button>
+          <button
+            onClick={() => onClose(currentNotes())}
+            aria-label="Close"
+            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
         </div>
 
         {submitted ? (
@@ -95,116 +108,83 @@ export default function SelfReportModal({
             <div className="w-12 h-12 rounded-full bg-gold/15 flex items-center justify-center mx-auto mb-3">
               <Check size={24} className="text-gold" />
             </div>
-            <p className="text-[15px] font-semibold text-text">Report submitted!</p>
-            <p className="text-[12px] text-text-muted mt-1">Great work today. Clocked out at {clockOutTime}</p>
+            <p className="text-[15px] font-semibold text-text">You're clocked out.</p>
+            <p className="text-[12px] text-text-muted mt-1">Have a good one.</p>
             <button
               onClick={() => onLogout(currentNotes())}
-              className="mt-5 px-6 py-2.5 rounded-xl bg-gold text-black text-[13px] font-bold hover:bg-gold-muted transition-all"
+              className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold text-black text-[13px] font-bold hover:bg-gold-muted transition-all"
             >
-              Log Out
+              <LogOut size={14} aria-hidden="true" />
+              Log out
             </button>
-            <p className="text-[10px] text-text-light mt-3">Or close this window to stay logged in</p>
+            <p className="text-[10px] text-text-light mt-3">
+              Or close this window to stay signed in.
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Summary counts */}
-            <div className="grid grid-cols-4 gap-2">
-              <div className="bg-surface-alt rounded-xl border border-border p-3 text-center">
-                <p className="text-lg font-bold text-gold">{totalCompleted}</p>
-                <p className="text-[9px] text-text-muted uppercase">Total</p>
-              </div>
-              <div className="bg-surface-alt rounded-xl border border-border p-3 text-center">
-                <p className="text-lg font-bold text-gold">{completedTasks.length}</p>
-                <p className="text-[9px] text-text-muted uppercase">Tasks</p>
-              </div>
-              <div className="bg-surface-alt rounded-xl border border-border p-3 text-center">
-                <p className="text-lg font-bold text-gold">{completedBookings.length}</p>
-                <p className="text-[9px] text-text-muted uppercase">Bookings</p>
-              </div>
-              <div className="bg-surface-alt rounded-xl border border-border p-3 text-center">
-                <p className="text-lg font-bold text-gold">{todaySessions.length}</p>
-                <p className="text-[9px] text-text-muted uppercase">Sessions</p>
-              </div>
-            </div>
-
-            {/* Collapsible completed details dropdown */}
-            {totalCompleted > 0 && (
-              <div className="border border-border rounded-xl overflow-hidden">
-                <button onClick={() => setShowDetails(!showDetails)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-alt/50 transition-colors">
-                  <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wide">View Completed Details</span>
-                  <ChevronDown size={14} className={`text-text-light transition-transform ${showDetails ? 'rotate-180' : ''}`} />
-                </button>
-
-                {showDetails && (
-                  <div className="px-4 pb-4 space-y-4">
-                    {/* Completed Tasks */}
-                    {completedTasks.length > 0 && (
-                      <div>
-                        <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Completed Tasks</p>
-                        {completedTasks.map(t => (
-                          <div key={t.id} className="flex items-center gap-1.5 text-[12px] text-text-muted py-1">
-                            <Check size={9} className="text-gold shrink-0" />
-                            <span>{t.title}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Confirmed Bookings */}
-                    {completedBookings.length > 0 && (
-                      <div>
-                        <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Confirmed Bookings</p>
-                        {completedBookings.map(b => (
-                          <div key={b.id} className="flex items-center gap-1.5 text-[12px] text-text-muted py-1">
-                            <Check size={9} className="text-gold shrink-0" />
-                            <span>{b.client} · {b.startTime}–{b.endTime}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Completed Sessions by type */}
-                    {Object.keys(sessionsByType).length > 0 && (
-                      <div>
-                        <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Completed Sessions</p>
-                        {Object.entries(sessionsByType).map(([type, sessions]) => (
-                          <div key={type} className="mb-2">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-[12px] font-semibold text-text">{SESSION_TYPE_LABELS[type] ?? type}</span>
-                              <span className="text-[9px] font-semibold text-gold bg-gold/10 px-1.5 py-0.5 rounded">{sessions.length} session{sessions.length > 1 ? 's' : ''}</span>
-                            </div>
-                            {sessions.map(s => (
-                              <div key={s.id} className="flex items-center gap-1.5 text-[11px] text-text-muted py-0.5">
-                                <FileText size={8} className="shrink-0" />
-                                <span>{s.client} · {s.startTime}–{s.endTime}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+            <p className="text-[13px] text-text-muted leading-relaxed">
+              Take a beat to reflect — these notes save with the shift and help us spot patterns. Or skip if you're rushing.
+            </p>
 
             {/* What went well */}
             <div>
-              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5">What went well?</label>
-              <textarea value={wentWell} onChange={e => setWentWell(e.target.value)} rows={2} placeholder="Highlights from today..."
-                className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2 text-sm placeholder:text-text-light focus:border-gold resize-none" />
+              <label
+                htmlFor="went-well"
+                className="text-[11px] font-semibold text-text-muted uppercase tracking-wide block mb-1.5"
+              >
+                What went well today?
+              </label>
+              <textarea
+                id="went-well"
+                value={wentWell}
+                onChange={(e) => setWentWell(e.target.value)}
+                rows={3}
+                placeholder="Wins, breakthroughs, things that clicked..."
+                className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2 text-sm text-text placeholder:text-text-light focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30 resize-y"
+              />
             </div>
 
             {/* What to improve */}
             <div>
-              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5">What to improve?</label>
-              <textarea value={toImprove} onChange={e => setToImprove(e.target.value)} rows={2} placeholder="Areas to focus on next time..."
-                className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2 text-sm placeholder:text-text-light focus:border-gold resize-none" />
+              <label
+                htmlFor="to-improve"
+                className="text-[11px] font-semibold text-text-muted uppercase tracking-wide block mb-1.5"
+              >
+                Anything to improve next time?
+              </label>
+              <textarea
+                id="to-improve"
+                value={toImprove}
+                onChange={(e) => setToImprove(e.target.value)}
+                rows={3}
+                placeholder="Friction, blockers, ideas to do better..."
+                className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2 text-sm text-text placeholder:text-text-light focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30 resize-y"
+              />
             </div>
 
-            <button onClick={handleSubmit} className="w-full py-3 rounded-xl bg-gold text-black text-sm font-bold hover:bg-gold-muted transition-all">
-              Submit Report & Clock Out
-            </button>
+            {/* Two clear actions:
+                  - Primary: Submit & Clock Out (saves the reflections)
+                  - Secondary: Skip & Clock Out (clocks out with no notes)
+                Skip removes the "do I have to fill these in?" friction
+                that bottlenecks new members on day one. */}
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <button
+                onClick={handleSubmit}
+                className="flex-1 py-2.5 rounded-xl bg-gold text-black text-sm font-bold hover:bg-gold-muted transition-all focus-ring"
+              >
+                Submit &amp; Clock Out
+              </button>
+              <button
+                onClick={() => {
+                  // Skip = no notes saved; close immediately.
+                  onClose(null)
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-surface-alt text-text-muted text-sm font-semibold border border-border hover:border-border-light hover:text-text transition-all focus-ring"
+              >
+                Skip &amp; Clock Out
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Clock, Loader2, Users } from 'lucide-react'
 import {
@@ -6,6 +6,9 @@ import {
   timeClockKeys,
   type CurrentlyClockedInRow,
 } from '../../lib/queries/timeClock'
+import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
+import MemberAvatar from '../members/MemberAvatar'
+import type { TeamMember } from '../../types'
 
 /**
  * AdminClockInWidget — "Who's on the clock" (PR #50, Lean 1).
@@ -28,6 +31,20 @@ export default function AdminClockInWidget() {
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   })
+
+  // 2026-05-12 (clock polish) — also pull team_members so we can
+  // show the canonical MemberAvatar (uploaded profile photos)
+  // instead of the static initial circle. Same shared cache the
+  // rest of the app uses, so this is free on revisits.
+  const teamQuery = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+  })
+  const memberById = useMemo(() => {
+    const map = new Map<string, TeamMember>()
+    for (const m of teamQuery.data ?? []) map.set(m.id, m)
+    return map
+  }, [teamQuery.data])
 
   // Re-render every 60s to tick the elapsed-time strings forward.
   // We don't drive this from `now` state because that would force
@@ -66,7 +83,11 @@ export default function AdminClockInWidget() {
         ) : (
           <ul className="space-y-1.5">
             {rows.map((r) => (
-              <ClockedInRow key={r.entry_id} row={r} />
+              <ClockedInRow
+                key={r.entry_id}
+                row={r}
+                member={memberById.get(r.user_id) ?? null}
+              />
             ))}
           </ul>
         )}
@@ -75,16 +96,25 @@ export default function AdminClockInWidget() {
   )
 }
 
-function ClockedInRow({ row }: { row: CurrentlyClockedInRow }) {
-  const initial = row.display_name?.charAt(0)?.toUpperCase() ?? '?'
+function ClockedInRow({
+  row,
+  member,
+}: {
+  row: CurrentlyClockedInRow
+  member: TeamMember | null
+}) {
   return (
     <li
       className="flex items-center gap-2.5 px-2 py-2 rounded-xl bg-surface/60 ring-1 ring-border/60 hover:bg-surface-hover hover:ring-gold/30 transition-colors"
     >
-      {/* Avatar — initial in a small gold-tinted circle */}
-      <div className="shrink-0 w-8 h-8 rounded-full bg-gold/15 ring-1 ring-gold/30 text-gold flex items-center justify-center text-[12px] font-bold">
-        {initial}
-      </div>
+      {/* Lean clock-polish — canonical MemberAvatar so an uploaded
+          profile photo shows here. Falls back to the gold-on-surface
+          initial circle automatically when avatar_url is null. */}
+      <MemberAvatar
+        member={member}
+        displayName={row.display_name}
+        size="md"
+      />
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-semibold text-text truncate">
           {row.display_name}
