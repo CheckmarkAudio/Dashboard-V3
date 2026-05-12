@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './contexts/AuthContext'
 import { TaskProvider } from './contexts/TaskContext'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { PresenceProvider } from './contexts/PresenceContext'
 import { ToastProvider } from './components/Toast'
 import { mark as perfMark } from './lib/perfTrace'
 import App from './App'
@@ -68,11 +69,13 @@ createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AuthProvider>
-            <TaskProvider>
-              <ToastProvider>
-                <App />
-              </ToastProvider>
-            </TaskProvider>
+            <PresenceProvider>
+              <TaskProvider>
+                <ToastProvider>
+                  <App />
+                </ToastProvider>
+              </TaskProvider>
+            </PresenceProvider>
           </AuthProvider>
         </ThemeProvider>
       </QueryClientProvider>
