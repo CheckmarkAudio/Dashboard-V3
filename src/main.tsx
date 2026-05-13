@@ -67,8 +67,13 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter basename={BASENAME}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <AuthProvider>
+        {/* AuthProvider wraps ThemeProvider as of 2026-05-13 — the
+            theme now syncs to per-profile preferences via
+            useAuth(), so it must mount inside the auth context.
+            ThemeProvider still works pre-sign-in; it falls back to
+            localStorage until profile resolves. */}
+        <AuthProvider>
+          <ThemeProvider>
             <PresenceProvider>
               <TaskProvider>
                 <ToastProvider>
@@ -76,8 +81,8 @@ createRoot(document.getElementById('root')!).render(
                 </ToastProvider>
               </TaskProvider>
             </PresenceProvider>
-          </AuthProvider>
-        </ThemeProvider>
+          </ThemeProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>
   </StrictMode>,

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppRole } from '../domain/permissions'
 import { getDefaultWorkspaceLayout } from '../domain/workspaces/registry'
 import { loadWorkspaceLayout, saveWorkspaceLayout } from '../domain/workspaces/storage'
+import { fetchUserPreferences, setUserPreference } from '../lib/preferences'
 import type {
   WorkspaceLayout,
   WorkspaceScope,
@@ -70,6 +71,11 @@ function sanitizeLayout(
   }
 }
 
+/** DB key under team_members.preferences for this scope's layout. */
+function preferenceKeyFor(scope: WorkspaceScope): string {
+  return `layout_${scope}`
+}
+
 export function useWorkspaceLayout({
   scope,
   role,
@@ -81,13 +87,51 @@ export function useWorkspaceLayout({
     return sanitizeLayout(saved ?? getDefaultWorkspaceLayout(scope), scope, role, definitions)
   })
 
+  // 2026-05-13 — per-profile layout sync. localStorage stays as the
+  // synchronous fast-path so first paint is instant. After mount,
+  // we ALSO read the DB copy and reconcile if it diverges. On every
+  // local change, we dual-write: localStorage (sync) + DB (async,
+  // debounced so rapid drag-reorders don't hammer the network).
+  const reconciledForUserId = useRef<string | null>(null)
+  useEffect(() => {
+    if (!userId || userId === 'dev-user') return
+    if (reconciledForUserId.current === userId) return
+    reconciledForUserId.current = userId
+
+    let cancelled = false
+    void (async () => {
+      const prefs = await fetchUserPreferences(userId)
+      if (cancelled) return
+      const stored = prefs[preferenceKeyFor(scope)]
+      if (stored && typeof stored === 'object' && (stored as WorkspaceLayout).scope === scope) {
+        setLayout(sanitizeLayout(stored as WorkspaceLayout, scope, role, definitions))
+      }
+      // If the DB has nothing for this scope yet, leave the local
+      // value alone — it'll be pushed up on the next change via the
+      // dual-write effect below.
+    })()
+    return () => { cancelled = true }
+  }, [userId, scope, role, definitions])
+
   useEffect(() => {
     setLayout((current) => sanitizeLayout(current, scope, role, definitions))
   }, [scope, role, definitions])
 
+  // Dual-write on layout changes: localStorage immediately for the
+  // next reload's fast path; DB on a 500ms debounce so a flurry of
+  // drag-end swaps becomes a single PATCH.
+  const dbWriteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     saveWorkspaceLayout(layout, userId)
-  }, [layout, userId])
+    if (!userId || userId === 'dev-user') return
+    if (dbWriteTimer.current) clearTimeout(dbWriteTimer.current)
+    dbWriteTimer.current = setTimeout(() => {
+      void setUserPreference(userId, preferenceKeyFor(scope), layout)
+    }, 500)
+    return () => {
+      if (dbWriteTimer.current) clearTimeout(dbWriteTimer.current)
+    }
+  }, [layout, userId, scope])
 
   const visibleWidgets = useMemo(
     () => sortWidgets(layout.widgets).filter((widget) => widget.visible),
