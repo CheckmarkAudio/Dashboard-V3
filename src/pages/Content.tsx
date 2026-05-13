@@ -6,6 +6,10 @@ import { usePresence } from '../contexts/PresenceContext'
 import { supabase } from '../lib/supabase'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import MemberAvatar from '../components/members/MemberAvatar'
+import MediaPicker from '../components/forum/MediaPicker'
+import AttachmentDisplay from '../components/forum/AttachmentDisplay'
+import { chatColorTokens, resolveChatColorKey } from '../lib/forum/chatColor'
+import type { ChatAttachment } from '../lib/forum/attachments'
 import { Send, Hash, Users } from 'lucide-react'
 import type { TeamMember } from '../types'
 
@@ -18,6 +22,7 @@ type Message = {
   sender_initial: string
   content: string
   created_at: string
+  attachments?: ChatAttachment[] | null
 }
 
 export default function Content() {
@@ -28,6 +33,8 @@ export default function Content() {
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([])
+  const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -60,15 +67,17 @@ export default function Content() {
     })
   }, [])
 
-  // Load messages for active channel
+  // Load messages for active channel — explicit columns now since
+  // we added `attachments` jsonb (selecting * is brittle when the
+  // schema grows).
   const loadMessages = useCallback(async () => {
     if (!activeChannel) return
     const { data } = await supabase
       .from('chat_messages')
-      .select('*')
+      .select('id, channel_id, sender_name, sender_id, sender_initial, content, created_at, attachments')
       .eq('channel_id', activeChannel.id)
       .order('created_at', { ascending: true })
-    if (data) setMessages(data)
+    if (data) setMessages(data as Message[])
   }, [activeChannel])
 
   useEffect(() => { loadMessages() }, [loadMessages])
@@ -94,20 +103,42 @@ export default function Content() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Send message
+  // Reset pending attachments when switching channels — they were
+  // uploaded against the previous channel's path, but more
+  // importantly the user's intent was to send them THERE.
+  useEffect(() => {
+    setPendingAttachments([])
+    setInput('')
+  }, [activeChannel?.id])
+
+  // Send message — text + attachments (either can be empty, but
+  // not both). Uploads already happened in MediaPicker; this just
+  // composes the row.
   const sendMessage = async () => {
-    if (!input.trim() || !activeChannel) return
+    if (!activeChannel) return
+    const trimmed = input.trim()
+    if (!trimmed && pendingAttachments.length === 0) return
+    if (sending) return
+
     const name = profile?.display_name ?? 'User'
     const id = profile?.id ?? 'dev-user'
     const initial = name.charAt(0).toUpperCase()
-    await supabase.from('chat_messages').insert({
-      channel_id: activeChannel.id,
-      sender_name: name,
-      sender_id: id,
-      sender_initial: initial,
-      content: input.trim(),
-    })
-    setInput('')
+    setSending(true)
+    try {
+      const { error } = await supabase.from('chat_messages').insert({
+        channel_id: activeChannel.id,
+        sender_name: name,
+        sender_id: id,
+        sender_initial: initial,
+        content: trimmed,
+        attachments: pendingAttachments,
+      })
+      if (error) throw error
+      setInput('')
+      setPendingAttachments([])
+    } finally {
+      setSending(false)
+    }
   }
 
   const formatTime = (ts: string) => {
@@ -124,6 +155,8 @@ export default function Content() {
   // dot need the full TeamMember row, not just sender_name on the
   // chat row.
   const memberById = new Map(activeMembers.map((m) => [m.id, m]))
+
+  const canSend = (input.trim().length > 0 || pendingAttachments.length > 0) && !sending
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in flex flex-col">
@@ -210,28 +243,49 @@ export default function Content() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Message input */}
-          <div className="px-5 py-3 border-t border-border shrink-0">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder={`Message #${activeChannel?.name ?? ''}...`}
-                className="flex-1 bg-surface-alt border border-border rounded-xl px-4 py-2.5 text-[14px] placeholder:text-text-light focus:border-gold"
+          {/* Message input — MediaPicker stacks above the input row
+              when there are pending attachments OR when the picker
+              popover is open. Send is disabled until there's text
+              OR at least one attachment. */}
+          {activeChannel && (
+            <div className="px-5 py-3 border-t border-border shrink-0 space-y-2">
+              <MediaPicker
+                channelId={activeChannel.id}
+                userId={profile?.id ?? 'anon'}
+                pending={pendingAttachments}
+                onAdd={(a) => setPendingAttachments((prev) => [...prev, a])}
+                onRemove={(idx) =>
+                  setPendingAttachments((prev) => prev.filter((_, i) => i !== idx))
+                }
+                disabled={sending}
               />
-              <button
-                onClick={sendMessage}
-                disabled={!input.trim()}
-                className={`px-4 py-2.5 rounded-xl transition-all ${
-                  input.trim() ? 'bg-gold text-black hover:bg-gold-muted' : 'bg-surface-alt text-text-light border border-border cursor-not-allowed'
-                }`}
-              >
-                <Send size={16} />
-              </button>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      void sendMessage()
+                    }
+                  }}
+                  placeholder={`Message #${activeChannel.name}...`}
+                  className="flex-1 bg-surface-alt border border-border rounded-xl px-4 py-2.5 text-[14px] placeholder:text-text-light focus:border-gold"
+                />
+                <button
+                  onClick={() => void sendMessage()}
+                  disabled={!canSend}
+                  className={`px-4 py-2.5 rounded-xl transition-all ${
+                    canSend ? 'bg-gold text-black hover:bg-gold-muted' : 'bg-surface-alt text-text-light border border-border cursor-not-allowed'
+                  }`}
+                  aria-label="Send message"
+                >
+                  <Send size={16} />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -244,6 +298,11 @@ export default function Content() {
  * Chat bubble. Mine = right-aligned with a gold tint, theirs =
  * left-aligned with the surface tint. Avatar is on the OUTER edge
  * either way (right edge for me, left edge for them).
+ *
+ * 2026-05-13 — sender_name now uses a per-member chat color
+ * (resolved via `team_members.preferences.chat_color` with a hash
+ * fallback) so the chat doesn't read as one long wall of gold.
+ * Attachments render below the text via `<AttachmentDisplay>`.
  */
 function ChatBubble({
   message,
@@ -256,29 +315,45 @@ function ChatBubble({
   isMe: boolean
   time: string
 }) {
+  // Per-member chat color. Override comes from the member's own
+  // preferences when we have the row; falls back to a deterministic
+  // hash of the sender_id otherwise so anonymous reads still get a
+  // stable color.
+  const overrideColor = (member?.preferences as Record<string, unknown> | null | undefined)?.chat_color
+  const colorKey = resolveChatColorKey(message.sender_id, overrideColor)
+  const tokens = chatColorTokens(colorKey)
+  const attachments = Array.isArray(message.attachments) ? message.attachments : []
+
   return (
     <div className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-      <MemberAvatar
-        member={member ?? null}
-        displayName={message.sender_name}
-        size="sm"
-      />
+      <span className={`shrink-0 inline-flex rounded-full ring-2 ${tokens.ring}`}>
+        <MemberAvatar
+          member={member ?? null}
+          displayName={message.sender_name}
+          size="sm"
+        />
+      </span>
       <div className={`flex flex-col min-w-0 max-w-[78%] ${isMe ? 'items-end' : 'items-start'}`}>
         <div className={`flex items-baseline gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-          <span className="text-[12px] font-semibold tracking-tight text-gold">
+          <span className={`text-[12px] font-semibold tracking-tight ${tokens.text}`}>
             {isMe ? 'You' : message.sender_name}
           </span>
           <span className="text-[10px] text-text-light">{time}</span>
         </div>
-        <div
-          className={`mt-0.5 px-3 py-2 rounded-2xl text-[14px] leading-relaxed break-words whitespace-pre-wrap ${
-            isMe
-              ? 'bg-gold/15 text-text border border-gold/25 rounded-br-sm'
-              : 'bg-surface-alt text-text-muted border border-border rounded-bl-sm'
-          }`}
-        >
-          {message.content}
-        </div>
+        {message.content && (
+          <div
+            className={`mt-0.5 px-3 py-2 rounded-2xl text-[14px] leading-relaxed break-words whitespace-pre-wrap ${
+              isMe
+                ? 'bg-gold/15 text-text border border-gold/25 rounded-br-sm'
+                : 'bg-surface-alt text-text-muted border border-border rounded-bl-sm'
+            }`}
+          >
+            {message.content}
+          </div>
+        )}
+        {attachments.length > 0 && (
+          <AttachmentDisplay attachments={attachments} ownBubble={isMe} />
+        )}
       </div>
     </div>
   )

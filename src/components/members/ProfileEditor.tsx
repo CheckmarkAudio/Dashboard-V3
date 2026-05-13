@@ -6,6 +6,13 @@ import { teamMemberKeys } from '../../lib/queries/teamMembers'
 import { Button, Input, Select } from '../ui'
 import ImageUpload from '../media/ImageUpload'
 import type { MemberSocials, TeamMember } from '../../types'
+import {
+  CHAT_COLOR_KEYS,
+  CHAT_COLOR_TOKENS,
+  resolveChatColorKey,
+  type ChatColorKey,
+} from '../../lib/forum/chatColor'
+import { setUserPreference } from '../../lib/preferences'
 
 /**
  * Self-serve profile editor.
@@ -81,6 +88,15 @@ export default function ProfileEditor({ member, onClose }: ProfileEditorProps) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(member.avatar_url ?? null)
   const [bannerUrl, setBannerUrl] = useState<string | null>(member.banner_url ?? null)
   const [socials, setSocials] = useState<MemberSocials>(member.socials ?? {})
+  // 2026-05-13 — chat color override. Initial value pulls from
+  // preferences if set; otherwise we display the hash-derived
+  // default so the picker shows the member's current color even
+  // without a saved override.
+  const initialChatColor = useMemo<ChatColorKey>(() => {
+    const stored = (member.preferences as Record<string, unknown> | null | undefined)?.chat_color
+    return resolveChatColorKey(member.id, stored)
+  }, [member.id, member.preferences])
+  const [chatColor, setChatColor] = useState<ChatColorKey>(initialChatColor)
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -132,6 +148,14 @@ export default function ProfileEditor({ member, onClose }: ProfileEditorProps) {
           .eq('id', member.id)
         if (updateErr) throw updateErr
 
+        // 2026-05-13 — chat color goes through setUserPreference so
+        // we don't clobber other preferences (theme, widget layouts)
+        // already stored in `preferences`. Only writes when the
+        // member actively changed it from the resolved initial.
+        if (chatColor !== initialChatColor) {
+          await setUserPreference(member.id, 'chat_color', chatColor)
+        }
+
         // Invalidate the shared list so every consumer gets the
         // new values without a hard refresh.
         await queryClient.invalidateQueries({ queryKey: teamMemberKeys.all })
@@ -153,7 +177,9 @@ export default function ProfileEditor({ member, onClose }: ProfileEditorProps) {
       avatarUrl,
       bannerUrl,
       bio,
+      chatColor,
       displayName,
+      initialChatColor,
       member.id,
       onClose,
       pronouns,
@@ -301,6 +327,43 @@ export default function ProfileEditor({ member, onClose }: ProfileEditorProps) {
               disabled={saving}
             />
           ))}
+        </div>
+      </section>
+
+      {/* Chat color (Lean 9). Auto-defaults to a hash-derived
+          color from the member's id; this picker lets the member
+          override. Renders as a row of color swatches with a
+          ring on the active selection. Selection writes to
+          team_members.preferences.chat_color via setUserPreference. */}
+      <section className="space-y-3">
+        <p className="text-[11px] font-semibold text-gold uppercase tracking-wider">Chat color</p>
+        <p className="text-[12px] text-text-muted -mt-1">
+          Used for your name in the Forum so messages are easy to scan.
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {CHAT_COLOR_KEYS.map((key) => {
+            const tokens = CHAT_COLOR_TOKENS[key]
+            const active = chatColor === key
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setChatColor(key)}
+                disabled={saving}
+                aria-pressed={active}
+                aria-label={`Use ${tokens.label}`}
+                title={tokens.label}
+                className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full transition-all focus-ring ${
+                  active
+                    ? 'ring-2 ring-offset-2 ring-offset-surface ring-text scale-105'
+                    : 'hover:scale-105'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                style={{ backgroundColor: tokens.hex }}
+              >
+                <span className="sr-only">{tokens.label}</span>
+              </button>
+            )
+          })}
         </div>
       </section>
 
