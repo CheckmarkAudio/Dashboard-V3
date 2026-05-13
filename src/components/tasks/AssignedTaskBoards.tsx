@@ -276,38 +276,32 @@ function AssignmentBoardBody({
             submitMutation.mutate(toggles)
           }}
         />
-        <div className="flex items-center gap-1.5">
-          {/* 2026-05-13 — Studio variant gets the same gold "+ New
-              Task" pill as MyTasksCard so members can request a new
-              studio task without leaving the page. Team Board (which
-              shares this body but doesn't yet support requests)
-              renders only the show-completed eye, right-aligned. */}
-          {sectionedByStudioSpace ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setRequestModalOpen(true)}
-                className="flex-1 inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-ring"
-                aria-label="Request a new studio task"
-              >
-                <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
-                New Task
-              </button>
-              <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-            </>
-          ) : (
-            <div className="ml-auto">
-              <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-            </div>
-          )}
-        </div>
+        {/* 2026-05-13 — Studio variant gets the gold "+ New Task" pill
+            as the toolbar's primary action (full width, no eye next
+            to it). Team Board has nothing toolbar-y left here, so we
+            skip the row entirely. The show-completed eye condenses
+            into the Due column header row below in both variants. */}
+        {sectionedByStudioSpace && (
+          <button
+            type="button"
+            onClick={() => setRequestModalOpen(true)}
+            className="w-full inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-ring"
+            aria-label="Request a new studio task"
+          >
+            <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+            New Task
+          </button>
+        )}
       </div>
 
       {/* PR #69 — `Due` column header anchors the right-side date so
           users know it's the due date, not assignment date. Stage
-          filter (PR #36) deferred to the flywheel-event-ledger PR. */}
-      <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1">
-        <span className="w-[18px]" aria-hidden="true" />
+          filter (PR #36) deferred to the flywheel-event-ledger PR.
+          2026-05-13 — show-completed eye lives in the left slot
+          here (was its own row in the toolbar above). One row
+          recovered, no functional change. */}
+      <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1 items-center">
+        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
         <span aria-hidden="true" />
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
       </div>
