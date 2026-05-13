@@ -14,6 +14,7 @@ import NotificationsBell from './notifications/NotificationsBell'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import MemberAvatar from './members/MemberAvatar'
 import { useToast } from './Toast'
+import TroubleshootingButton from './TroubleshootingButton'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
 import {
   clockIn,
@@ -742,6 +743,11 @@ export default function Layout() {
       </main>
 
       <ForcePasswordChangeModal />
+
+      {/* Lean 8 — global Troubleshooting button. Floats bottom-right
+          on every signed-in page. The inline form on /content was
+          retired in the same PR. */}
+      <TroubleshootingButton />
     </div>
   )
 }
