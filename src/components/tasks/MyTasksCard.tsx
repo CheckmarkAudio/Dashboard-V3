@@ -319,20 +319,10 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   // empty divider doesn't add noise.
   const hasAnyPending = pendingVisibleTasks.length > 0 || pendingNewRequests.length > 0
 
-  // Inline "+ Task" row. Sits inside the empty-state call-to-action;
-  // the real footer below the list carries the same button at the
-  // bottom of a populated widget.
-  const addTaskRow = (
-    <button
-      type="button"
-      onClick={() => setRequestModalOpen(true)}
-      className="w-full inline-flex items-center gap-2 px-2 py-1.5 rounded-[14px] text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/5 transition-colors text-left"
-      aria-label="Request a new task"
-    >
-      <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
-      Task
-    </button>
-  )
+  // 2026-05-13 — old `addTaskRow` (duplicate empty-state button)
+  // removed. The toolbar at the top of the widget always renders
+  // the "+ Task" CTA, so a second button inside the empty state
+  // was a duplicate users mistook for two different actions.
 
   // PR #37 — pending toggle. Adding the id to the set flips the row's
   // visual check state; removing it unqueues. No RPC until Submit.
@@ -377,14 +367,19 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         onClick={submitPending}
       />
       <div className="flex items-center gap-1.5">
+        {/* 2026-05-13 — promoted from a ghost-y "text-gold/80" link to
+            a proper gold CTA pill so the +Task affordance reads as
+            the primary action. Matches the Sessions page's "+ Book a
+            Session" treatment (same gold + black extra-bold + soft
+            elevation), scaled down for the widget toolbar. */}
         <button
           type="button"
           onClick={() => setRequestModalOpen(true)}
-          className="flex-1 inline-flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/5 transition-colors text-left"
+          className="flex-1 inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-ring"
           aria-label="Request a new task"
         >
-          <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
-          Task
+          <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+          New Task
         </button>
         <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
       </div>
@@ -442,14 +437,11 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             <p className="text-[14px] font-medium text-text">
               {openTasks.length === 0 && doneTasks.length > 0 ? 'All done' : 'No tasks yet'}
             </p>
-            <p className="text-[12px] text-text-light mt-0.5 mb-3">
+            <p className="text-[12px] text-text-light mt-0.5">
               {openTasks.length === 0 && doneTasks.length > 0
                 ? 'Toggle to review completed work.'
-                : 'Assigned work and checklist tasks will land here.'}
+                : 'Use "+ New Task" above to request your first one. Assigned work also lands here automatically.'}
             </p>
-            {/* Empty-state also surfaces the add affordance so a
-                brand-new member can request their first task. */}
-            {addTaskRow}
           </div>
         ) : (
           <>
