@@ -285,22 +285,32 @@ Working on Phase 2 should **not** interrupt Phase 1 if we keep it additive:
 
 User-delivered list of UI tweaks across login / clock-out modal / theme / widget grid / Calendar / Booking / Forum / Admin Hub / Assign / Tasks. Tier 3 supersedes the prior "Tier 2 EmailJS-first" sequence; EmailJS + ExportButtons + flywheel ledger remain queued behind Tier 3.
 
-**Plan: 10 Leans (small shippable PRs in dependency order). Awaiting user answers on the 8 open questions below before kicking off Lean 1.**
+**Status (2026-05-08 audit):** 8 of 10 leans shipped. Forum (Leans 8 + 9) is the only Tier 3 work remaining. After it lands, Tier 3 closes and the deferred queue (Analytics + flywheel ledger, EmailJS, ExportButtons, Clock In/Out v2) takes priority.
 
-| # | Lean | Items | Risk | Why this slot |
-|--|--|--|--|--|
-| 1 | Critical fixes | Login page back · clock-out modal de-jam · "+ Book a Session" button position | low | broken UX, blocks login |
-| 2 | Theme & surface polish | Light-mode tone-down (grey/gold/black) · mild site gradient (black/gold/white + pinch of purple) | med | propagates everywhere; reference-check each canonical page |
-| 3 | Widget grid containment | constrain to one row, no falling down the page | med-high | drag-drop is touchy (PR #34 history); foundation for Hub rearrange |
-| 4 | Calendar polish | click booking title → detail modal · notes stay open across nav · brighter notes + ♪ bullets | low | builds the shared `<BookingDetailModal />` Lean 5 reuses |
-| 5 | Booking page interactions | click row → detail/edit (reuse Lean 4 modal) · hover status → action popover (cancel/confirm/reschedule per state) | med | needs `cancel_session` / `confirm_session` / reschedule RPCs (may need schema work) |
-| 6 | Tasks tweaks | undo request-to-take · Studio Tasks room dividers (Control room · Studio A · Lobby · Studio B) | med | room dividers = new schema field on `assigned_tasks` + migration |
-| 7 | Admin Hub rearrangement | drop flywheel + quick assign · MemberHighlights at top · Notifications + Task Requests stretched to rs2 · today_calendar in middle col | low | placement-only, bumps `WORKSPACE_LAYOUT_VERSION` |
-| 8 | Forum polish | longer · own-messages right-aligned · presence bubbles (online/offline) · move Troubleshooting to a global corner button | med | Supabase Realtime Presence channel for online/offline |
-| 9 | Forum media uploads | upload button · image/video preview rendering | med-high | new Storage bucket + RLS + content sanitization |
-| 10 | Assign page revamp | Select / Select-all / Delete bulk actions · default-on Show Completed (today) · retire Legacy Assign → convert into a proper "Assign Log" page (toggle pattern like Booking/Clients) | med-high | larger refactor; ensure no data loss on Legacy retire |
+| # | Lean | Status | Where it shipped |
+|--|--|--|--|
+| 1 | Critical fixes — login form back · clock-out modal de-jam · "+ Book a Session" button | ✅ shipped | PR #72 (#162 added preview-login lockdown) |
+| 2 | Theme & surface polish — light-mode tone-down · subtle body gradient | ✅ shipped | PR #79 (multiple revisions) |
+| 3 | Widget grid containment — single-row carousel, no vertical drop | ✅ shipped | `WorkspacePanel.tsx` single-row carousel + `useWorkspaceLayout` flat order |
+| 4 | Calendar polish — click-to-detail · persistent notes · brighter notes + ♪ bullets | ✅ shipped | PRs #157–159 |
+| 5 | Booking interactions — click-to-edit · status hover popover · recurring fixes | ✅ shipped | PRs #157–160 |
+| 6 | Tasks tweaks — undo request-to-take · Studio Tasks room dividers | ✅ shipped | `cancelTaskReassignment` + Studio sections in `AssignedTaskBoards.tsx` |
+| 7 | Admin Hub rearrange — drop flywheel + quick assign · MemberHighlights up top · stretched widgets | ✅ shipped | PR #78 (registry comments mark dropped placements) |
+| 8 | Forum polish — longer · own-messages right-aligned · presence bubbles · Troubleshooting → corner button | ⚪ pending | — |
+| 9 | Forum media uploads — upload button · image/video preview | ⚪ pending | — (can reuse `member-media` Storage pattern from Tier 1 super-PR) |
+| 10 | Assign page revamp — bulk Select/Select-all/Delete · default-on Show Completed · Legacy → Assign Log | ✅ shipped | bulk select + `Select all` in `AssignAdmin.tsx` |
 
-**Deferred (post-Tier-3):** Analytics revamp + flywheel event ledger · EmailJS booking confirmations / 24h reminders / 1hr review-asks · reusable `<ExportButtons />`.
+**Auth + Profile leans (separate sequence on top of Tier 3):**
+
+| # | Lean | Status | Where it shipped |
+|--|--|--|--|
+| auth-1 | Onboarding — Add Member reveals temp password post-create | ✅ shipped | PR (Lean 1 auth) |
+| auth-2 | Login polish + 3-layer preview-login lockdown | ✅ shipped | PR #162 |
+| auth-3 | Member self-serve change password | ✅ shipped | PR #163 |
+| auth-4–7 | Profile schema + Storage bucket + ProfileEditor + site-wide MemberAvatar | ✅ shipped | PR #164 (super-PR) |
+| auth-T1 | Wider Discord-style profile (role pills · live status · stats sidebar) | ✅ shipped | PR #165 |
+
+**Deferred (post-Tier-3):** Analytics revamp + flywheel event ledger · EmailJS booking confirmations / 24h reminders / 1hr review-asks · reusable `<ExportButtons />` · Clock In/Out v2 (clock-out modal + per-member shift table).
 
 **Locked answers (user, 2026-04-30):**
 
