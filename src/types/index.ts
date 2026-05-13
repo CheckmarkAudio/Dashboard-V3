@@ -15,6 +15,14 @@ export interface TeamMember {
   timezone?: string | null
   /** JSON blob owned by the member for notification preferences. */
   notification_prefs?: Record<string, unknown> | null
+  /**
+   * Free-form per-member UI preferences. Subkeys today:
+   *   - `theme`: 'light' | 'dark' | 'system'
+   *   - `layout_<scope>`: per-page widget layout snapshot
+   * Adding a new subkey doesn't require a migration — clients write
+   * what they need and read with safe fallbacks.
+   */
+  preferences?: Record<string, unknown> | null
   phone?: string
   start_date?: string
   end_date?: string
