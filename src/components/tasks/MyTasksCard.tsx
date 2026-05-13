@@ -366,23 +366,21 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         isSubmitting={submitMutation.isPending}
         onClick={submitPending}
       />
-      <div className="flex items-center gap-1.5">
-        {/* 2026-05-13 — promoted from a ghost-y "text-gold/80" link to
-            a proper gold CTA pill so the +Task affordance reads as
-            the primary action. Matches the Sessions page's "+ Book a
-            Session" treatment (same gold + black extra-bold + soft
-            elevation), scaled down for the widget toolbar. */}
-        <button
-          type="button"
-          onClick={() => setRequestModalOpen(true)}
-          className="flex-1 inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-ring"
-          aria-label="Request a new task"
-        >
-          <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
-          New Task
-        </button>
-        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-      </div>
+      {/* 2026-05-13 — show-completed eye moved OUT of the toolbar
+          and INTO the Due column header row below. The toolbar now
+          owns just the +New Task CTA (full width) so the gold pill
+          gets the visual weight it earned. The eye condenses into
+          a corner icon next to "Due" to recover a row's worth of
+          vertical space. */}
+      <button
+        type="button"
+        onClick={() => setRequestModalOpen(true)}
+        className="w-full inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-ring"
+        aria-label="Request a new task"
+      >
+        <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+        New Task
+      </button>
     </div>
   )
 
@@ -401,9 +399,12 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
       </div>
 
       {/* PR #69 — column header. Anchors the right-aligned "Due" label
-          so users know the date column = due date, not assigned date. */}
-      <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1">
-        <span className="w-[18px]" aria-hidden="true" />
+          so users know the date column = due date, not assigned date.
+          2026-05-13 — the show-completed eye now lives here in the
+          left slot (was its own row in the toolbar above). One row
+          recovered, no functional change. */}
+      <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1 items-center">
+        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
         <span aria-hidden="true" />
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
       </div>
