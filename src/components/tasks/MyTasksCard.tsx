@@ -319,20 +319,10 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   // empty divider doesn't add noise.
   const hasAnyPending = pendingVisibleTasks.length > 0 || pendingNewRequests.length > 0
 
-  // Inline "+ Task" row. Sits inside the empty-state call-to-action;
-  // the real footer below the list carries the same button at the
-  // bottom of a populated widget.
-  const addTaskRow = (
-    <button
-      type="button"
-      onClick={() => setRequestModalOpen(true)}
-      className="w-full inline-flex items-center gap-2 px-2 py-1.5 rounded-[14px] text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/5 transition-colors text-left"
-      aria-label="Request a new task"
-    >
-      <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
-      Task
-    </button>
-  )
+  // 2026-05-13 — old `addTaskRow` (duplicate empty-state button)
+  // removed. The toolbar at the top of the widget always renders
+  // the "+ Task" CTA, so a second button inside the empty state
+  // was a duplicate users mistook for two different actions.
 
   // PR #37 — pending toggle. Adding the id to the set flips the row's
   // visual check state; removing it unqueues. No RPC until Submit.
@@ -362,34 +352,45 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   // Sticky bottom footer — two rows:
   //   - SubmitBar (greyed when pendingIds empty, gold when queued)
   //   - + Task · Show-completed eye
-  // The "N pending" expandable strip + chip have been retired —
-  // pending requests now render in a dedicated divider section
-  // above (always visible when non-empty), so the chip-toggle
-  // affordance is no longer needed.
-  const footerBar = (
-    <div className="shrink-0 space-y-1.5 pt-1.5 mt-1 border-t border-white/5">
+  // Skin pass 2026-05-06 — toolbar moved from BOTTOM to TOP per user
+  // direction "put the +task that is at the very bottom of the my
+  // tasks page, at the top of the widget instead." Was a footer with
+  // `border-t theme-divider mt-1`; now a header with `mb-2` (no
+  // border — the inset-panel below provides natural visual
+  // separation). +Task is the leading affordance now, so a brand-
+  // new member sees the request CTA before scrolling through tasks.
+  const toolbar = (
+    <div className="shrink-0 space-y-1.5 mb-2">
       <SubmitBar
         count={pendingIds.size}
         isSubmitting={submitMutation.isPending}
         onClick={submitPending}
       />
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => setRequestModalOpen(true)}
-          className="flex-1 inline-flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-[13px] font-semibold text-gold/80 hover:text-gold hover:bg-gold/5 transition-colors text-left"
-          aria-label="Request a new task"
-        >
-          <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
-          Task
-        </button>
-        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-      </div>
+      {/* 2026-05-13 — show-completed eye moved OUT of the toolbar
+          and INTO the Due column header row below. The toolbar now
+          owns just the +New Task CTA (full width) so the gold pill
+          gets the visual weight it earned. The eye condenses into
+          a corner icon next to "Due" to recover a row's worth of
+          vertical space. */}
+      <button
+        type="button"
+        onClick={() => setRequestModalOpen(true)}
+        className="w-full inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-ring"
+        aria-label="Request a new task"
+      >
+        <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+        New Task
+      </button>
     </div>
   )
 
   const body = (
     <>
+      {/* Toolbar (formerly footer). Submit Completed bar + Task
+          create + show-completed eye live at the TOP of the widget
+          now so the +Task affordance is visible without scrolling. */}
+      {toolbar}
+
       {/* PR #69 — source filter (Assigned vs Self) replaces the stage
           pill row. Stages return as real KPIs in the upcoming flywheel
           event ledger PR; until then they're decorative noise here. */}
@@ -398,14 +399,28 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
       </div>
 
       {/* PR #69 — column header. Anchors the right-aligned "Due" label
-          so users know the date column = due date, not assigned date. */}
-      <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1">
-        <span className="w-[18px]" aria-hidden="true" />
+          so users know the date column = due date, not assigned date.
+          2026-05-13 — the show-completed eye now lives here in the
+          left slot (was its own row in the toolbar above). One row
+          recovered, no functional change. */}
+      <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1 items-center">
+        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
         <span aria-hidden="true" />
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
+      {/* Skin pass 2026-05-06 — wrap the scrollable task list in
+          `.inset-panel` (matches booking + Task Requests + Notifications).
+          Inside, `divide-y divide-theme` provides hairline separators
+          between every direct child — rows, section eyebrows
+          (COMPLETED, PENDING), and the wrapping divs around active
+          tasks. The `space-y-1.5` gap is dropped so rows sit flush
+          with hairlines between them, like the booking table. Each
+          AssignedTaskRow and PendingCreateRequestRow had its own
+          `rounded-xl border border-transparent` card chrome flattened
+          to flat row + theme-aware bg-tint state. */}
+      <div className="flex-1 min-h-0 inset-panel">
+        <div className="h-full overflow-y-auto divide-y divide-theme">
         {tasksQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light py-6">
             <Loader2 size={18} className="animate-spin" />
@@ -423,14 +438,11 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             <p className="text-[14px] font-medium text-text">
               {openTasks.length === 0 && doneTasks.length > 0 ? 'All done' : 'No tasks yet'}
             </p>
-            <p className="text-[12px] text-text-light mt-0.5 mb-3">
+            <p className="text-[12px] text-text-light mt-0.5">
               {openTasks.length === 0 && doneTasks.length > 0
                 ? 'Toggle to review completed work.'
-                : 'Assigned work and checklist tasks will land here.'}
+                : 'Use "+ New Task" above to request your first one. Assigned work also lands here automatically.'}
             </p>
-            {/* Empty-state also surfaces the add affordance so a
-                brand-new member can request their first task. */}
-            {addTaskRow}
           </div>
         ) : (
           <>
@@ -446,7 +458,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
                     <div className="mx-2 my-2 flex items-center gap-2">
                       <CheckCircle2 size={11} className="text-emerald-400/70" aria-hidden="true" />
                       <p className="text-[11px] font-semibold tracking-[0.06em] text-emerald-400/70">COMPLETED</p>
-                      <div className="flex-1 h-px bg-white/[0.05]" aria-hidden="true" />
+                      <div className="flex-1 h-px bg-border" aria-hidden="true" />
                     </div>
                   )}
                   <AssignedTaskRow
@@ -506,11 +518,11 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             )}
           </>
         )}
+        </div>
       </div>
 
-      {/* PR #37 — sticky footer with + Task + show-completed eye.
-          Stays below the scroll area so the eye is always reachable. */}
-      {footerBar}
+      {/* Toolbar moved to TOP of widget body (skin pass 2026-05-06) —
+          see {toolbar} render above the source filter. */}
     </>
   )
 
@@ -563,7 +575,7 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
   const dueLabel = formatDueShort(request.due_date)
 
   return (
-    <div className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent bg-white/[0.025] hover:bg-white/[0.04]">
+    <div className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-3 py-2 bg-surface-alt/40 hover:bg-surface-hover transition-colors">
       {/* Leading square — visually substitutes for the row's normal
           checkbox. Plus icon (amber) for pending; Hourglass (rose)
           for rejected — same colors as the badge for consistency. */}
@@ -679,11 +691,12 @@ function AssignedTaskRow({
   // truth: true when either completed OR pending, false otherwise.
   const checkVisual = done !== isPending  // XOR: pending flips the visual
   const dueLabel = formatDueShort(task.due_date)
-  const isNew =
-    !done &&
-    !pendingMeta &&
-    Boolean(task.batch?.created_at) &&
-    Date.now() - new Date(task.batch!.created_at).getTime() < 24 * 60 * 60 * 1000
+  // Skin pass 2026-05-06 — `isNew` (auto-tint rows whose batch was
+  // created in the last 24h) removed per user feedback: there's no
+  // surrounding UI explaining the gold tint, so it just looked like
+  // random rows were highlighted. The transient `highlighted` flash
+  // (notification-click → 1.6s gold ring) is preserved — that one
+  // IS communicating something specific.
 
   // PR #69 — replaced "from {template}" / "Assigned directly" subtext
   // with the assignee's role tag (looked up from the team_members
@@ -750,16 +763,18 @@ function AssignedTaskRow({
           onToggle(task)
         }
       }}
-      className={`group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-2 py-2 rounded-xl border border-transparent transition-all text-left cursor-pointer ${
+      // Skin pass 2026-05-06 — flattened from rounded-xl border card
+      // to flat row inside MyTasksCard's inset-panel + divide-theme
+      // stack. State (highlighted/pending/done/new/default) now
+      // communicated by bg tint alone with theme-aware tokens.
+      className={`group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-3 py-2 transition-all text-left cursor-pointer ${
         highlighted
-          ? 'bg-gold/20 ring-2 ring-gold animate-[pulse_0.8s_ease-in-out_2]'
+          ? 'bg-gold/20 ring-2 ring-gold ring-inset animate-[pulse_0.8s_ease-in-out_2]'
           : pendingMeta
-            ? 'bg-white/[0.025] hover:bg-white/[0.04]'
+            ? 'bg-surface-alt/40 hover:bg-surface-hover'
             : done
-              ? 'bg-white/[0.018] opacity-60 hover:opacity-80'
-              : isNew
-                ? 'bg-gold/8 hover:bg-gold/12 hover:border-gold/20'
-                : 'bg-white/[0.018] hover:bg-white/[0.04] hover:border-white/10'
+              ? 'bg-surface-alt/30 opacity-60 hover:opacity-80'
+              : 'hover:bg-surface-hover'
       }`}
     >
       {/* Checkbox — independent click target. stopPropagation so the
@@ -775,12 +790,12 @@ function AssignedTaskRow({
         disabled={!canQueue}
         aria-label={done ? 'Mark incomplete' : 'Mark complete'}
         aria-pressed={checkVisual}
-        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md flex items-center justify-center transition-colors ${
+        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-md border-[1.5px] flex items-center justify-center transition-colors ${
           isPending
-            ? 'bg-gold/30 border border-gold text-gold'
+            ? 'bg-gold/30 border-gold text-gold'
             : done
-              ? 'bg-emerald-500/80 border border-emerald-500/80 text-white'
-              : 'bg-surface-alt border border-border-light group-hover:border-gold/50'
+              ? 'bg-emerald-500/80 border-emerald-500/80 text-white'
+              : 'checkbox-empty'
         } ${canQueue ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
       >
         {checkVisual && <Check size={12} strokeWidth={3} aria-hidden="true" />}
