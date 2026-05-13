@@ -36,18 +36,36 @@ function elapsedShort(clockInIso: string, nowMs: number): string {
 export default function SelfReportModal({
   clockInTime,
   clockedInAtIso,
-  onClose,
+  onDismiss,
+  onClockOut,
   onLogout,
 }: {
   /** Display string for the clock-in time, e.g. "9:42 AM". */
   clockInTime: string
   /** ISO timestamp for the open shift; powers the elapsed counter. */
   clockedInAtIso?: string
-  // Both close paths hand the reflection text up so the parent
-  // (Layout) can pass it as `p_notes` to clock_out. Notes are null
-  // when the user skips both reflection fields.
-  onClose: (notes: string | null) => void
-  onLogout: (notes: string | null) => void
+  /**
+   * Dismiss the modal WITHOUT clocking out. Fired from the X
+   * button, the backdrop click, and the Escape key (form state).
+   * The user stays on shift. Per direction "you should not be able
+   * to skip the clock out description", these paths no longer
+   * close the shift.
+   */
+  onDismiss: () => void
+  /**
+   * Clock out with the user-typed reflection. Always non-empty:
+   * the Submit button is disabled until at least one of the two
+   * fields has content. Fired once from the form's primary button.
+   * The parent should NOT also dismiss after this — the modal
+   * flips to its success state internally.
+   */
+  onClockOut: (notes: string) => void
+  /**
+   * Sign out. Fired from the success screen's "Log out" button.
+   * The shift is already closed by `onClockOut` at this point,
+   * so the parent should ONLY trigger signOut here, not clock_out.
+   */
+  onLogout: () => void
 }) {
   const [wentWell, setWentWell] = useState('')
   const [toImprove, setToImprove] = useState('')
@@ -65,10 +83,25 @@ export default function SelfReportModal({
   })
   const elapsed = clockedInAtIso ? elapsedShort(clockedInAtIso, now) : ''
 
-  const currentNotes = () => buildClockOutNotes(wentWell, toImprove)
+  const canSubmit = wentWell.trim().length > 0 || toImprove.trim().length > 0
   const handleSubmit = () => {
+    if (!canSubmit) return
+    const notes = buildClockOutNotes(wentWell, toImprove)
+    if (!notes) return // belt-and-suspenders — canSubmit guarantees this
+    onClockOut(notes)
     setSubmitted(true)
   }
+
+  // Escape dismisses the modal (stay on shift) when on the form,
+  // and just closes when on the success screen (already clocked
+  // out). Mirrors what the X button + backdrop do.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onDismiss()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onDismiss])
 
   // 2026-05-12 (clock polish) — modal owns its own portal so it
   // escapes the Layout header's backdrop-blur stacking context (PR
@@ -82,7 +115,8 @@ export default function SelfReportModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={() => onClose(currentNotes())}
+        // Backdrop = dismiss without clocking out. Stays on shift.
+        onClick={onDismiss}
       />
       <div className="relative bg-surface rounded-2xl border border-border w-full max-w-md mx-4 p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
@@ -95,8 +129,12 @@ export default function SelfReportModal({
             </p>
           </div>
           <button
-            onClick={() => onClose(currentNotes())}
-            aria-label="Close"
+            // X = dismiss without clocking out. Stays on shift. The
+            // user must explicitly hit "Submit & Clock Out" with a
+            // reflection to actually close the shift.
+            onClick={onDismiss}
+            aria-label="Close (stays on shift)"
+            title="Close (stays on shift)"
             className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted"
           >
             <X size={18} aria-hidden="true" />
@@ -110,21 +148,27 @@ export default function SelfReportModal({
             </div>
             <p className="text-[15px] font-semibold text-text">You're clocked out.</p>
             <p className="text-[12px] text-text-muted mt-1">Have a good one.</p>
-            <button
-              onClick={() => onLogout(currentNotes())}
-              className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold text-black text-[13px] font-bold hover:bg-gold-muted transition-all"
-            >
-              <LogOut size={14} aria-hidden="true" />
-              Log out
-            </button>
-            <p className="text-[10px] text-text-light mt-3">
-              Or close this window to stay signed in.
-            </p>
+            <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
+              <button
+                onClick={onDismiss}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-surface-alt text-text-muted text-[13px] font-semibold border border-border hover:text-text transition-all focus-ring"
+              >
+                Stay signed in
+              </button>
+              <button
+                onClick={onLogout}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gold text-black text-[13px] font-bold hover:bg-gold-muted transition-all focus-ring"
+              >
+                <LogOut size={14} aria-hidden="true" />
+                Log out
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
             <p className="text-[13px] text-text-muted leading-relaxed">
-              Take a beat to reflect — these notes save with the shift and help us spot patterns. Or skip if you're rushing.
+              Take a beat to reflect — these notes save with the shift and help us spot patterns over time.
+              At least one field is required.
             </p>
 
             {/* What went well */}
@@ -163,27 +207,24 @@ export default function SelfReportModal({
               />
             </div>
 
-            {/* Two clear actions:
-                  - Primary: Submit & Clock Out (saves the reflections)
-                  - Secondary: Skip & Clock Out (clocks out with no notes)
-                Skip removes the "do I have to fill these in?" friction
-                that bottlenecks new members on day one. */}
-            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            {/* Single primary action — Skip & Clock Out was removed
+                per user direction. Reflections are required to clock
+                out so we always capture something. The button is
+                disabled until at least one of the two fields has
+                content. */}
+            <div className="pt-1">
               <button
                 onClick={handleSubmit}
-                className="flex-1 py-2.5 rounded-xl bg-gold text-black text-sm font-bold hover:bg-gold-muted transition-all focus-ring"
+                disabled={!wentWell.trim() && !toImprove.trim()}
+                className="w-full py-2.5 rounded-xl bg-gold text-black text-sm font-bold hover:bg-gold-muted transition-all focus-ring disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gold"
               >
                 Submit &amp; Clock Out
               </button>
-              <button
-                onClick={() => {
-                  // Skip = no notes saved; close immediately.
-                  onClose(null)
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-surface-alt text-text-muted text-sm font-semibold border border-border hover:border-border-light hover:text-text transition-all focus-ring"
-              >
-                Skip &amp; Clock Out
-              </button>
+              {!wentWell.trim() && !toImprove.trim() && (
+                <p className="text-[11px] text-text-light text-center mt-2">
+                  Add a quick note in either field to clock out.
+                </p>
+              )}
             </div>
           </div>
         )}

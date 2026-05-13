@@ -626,20 +626,22 @@ export default function Layout() {
                   <SelfReportModal
                     clockInTime={clockInTime}
                     clockedInAtIso={openShift?.clocked_in_at}
-                    // 2026-05-07 — both paths pass the reflection
-                    // notes (or null when both fields are empty) so
-                    // they land on time_clock_entries.notes.
-                    onClose={(notes) => {
-                      setShowSelfReport(false)
+                    // X / backdrop / Escape — dismiss the modal,
+                    // user stays on shift. NO clock_out fires here.
+                    onDismiss={() => setShowSelfReport(false)}
+                    // Submit & Clock Out — fires clock_out with the
+                    // user's reflection. The modal then flips to its
+                    // success screen internally; we keep the modal
+                    // mounted so the user can pick "Log out" or
+                    // "Stay signed in" from there.
+                    onClockOut={(notes) => {
                       clockOutMutation.mutate(notes)
                     }}
-                    // Log Out path — close the shift AND end the
-                    // Supabase session. Mutation runs in parallel with
-                    // signOut so we don't block the redirect on the
-                    // clock_out RPC.
-                    onLogout={async (notes) => {
+                    // Log Out from the post-submit success screen —
+                    // shift is already closed by onClockOut, so this
+                    // ONLY signs out (no second clock_out call).
+                    onLogout={async () => {
                       setShowSelfReport(false)
-                      clockOutMutation.mutate(notes)
                       await handleSignOut()
                     }}
                   />
