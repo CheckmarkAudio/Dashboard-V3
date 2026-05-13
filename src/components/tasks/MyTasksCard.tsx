@@ -352,28 +352,29 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   // Sticky bottom footer — two rows:
   //   - SubmitBar (greyed when pendingIds empty, gold when queued)
   //   - + Task · Show-completed eye
-  // Skin pass 2026-05-06 — toolbar moved from BOTTOM to TOP per user
-  // direction "put the +task that is at the very bottom of the my
-  // tasks page, at the top of the widget instead." Was a footer with
-  // `border-t theme-divider mt-1`; now a header with `mb-2` (no
-  // border — the inset-panel below provides natural visual
-  // separation). +Task is the leading affordance now, so a brand-
-  // new member sees the request CTA before scrolling through tasks.
+  // 2026-05-13 (rev) — toolbar holds ONLY the Submit Completed bar
+  // at the top; the +New Task CTA moved to its own footer at the
+  // bottom of the widget per user direction ("lets put new task at
+  // the bottom of the widget"). Rationale: SubmitBar is reactive
+  // (only matters when checks are queued), so it stays high in the
+  // visual hierarchy. +New Task is a creation affordance — natural
+  // home is below the existing list, like an inbox compose row.
   const toolbar = (
-    <div className="shrink-0 space-y-1.5 mb-2">
+    <div className="shrink-0 mb-2">
       <SubmitBar
         count={pendingIds.size}
         isSubmitting={submitMutation.isPending}
         onClick={submitPending}
       />
-      {/* 2026-05-13 — +New Task is the secondary creation action;
-          Submit Completed is the primary commit action. Both used
-          to render as solid-gold pills, which made them look like
-          twins when SubmitBar lit up. Switched +New Task to the
-          lined-gold style (same treatment as the Sessions page's
-          "Manage Bookings" button) so the two buttons are visually
-          distinct: SubmitBar = filled gold (commit), New Task =
-          outlined gold (create). */}
+    </div>
+  )
+
+  // Footer: outlined-gold +New Task button, anchored below the
+  // task list. Style matches the Sessions page's "Manage Bookings"
+  // button (lined-gold) so it reads as a secondary creation
+  // action — distinct from SubmitBar's filled-gold commit pill.
+  const footer = (
+    <div className="shrink-0 mt-2">
       <button
         type="button"
         onClick={() => setRequestModalOpen(true)}
@@ -523,8 +524,9 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         </div>
       </div>
 
-      {/* Toolbar moved to TOP of widget body (skin pass 2026-05-06) —
-          see {toolbar} render above the source filter. */}
+      {/* 2026-05-13 (rev) — +New Task footer pinned BELOW the task
+          list. The SubmitBar still anchors the top via {toolbar}. */}
+      {footer}
     </>
   )
 
