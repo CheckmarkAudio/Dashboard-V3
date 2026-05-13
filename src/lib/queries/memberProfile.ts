@@ -149,3 +149,118 @@ export function useMemberLiveStatus(memberId: string | undefined) {
     staleTime: 30_000,
   })
 }
+
+// ─── Activity history (recent sessions + recent task completions) ──
+// Tier 2 follow-up to the Profile-page sidebar — surfaces a member's
+// last few sessions + last few completed tasks so admins (and the
+// member themselves) can scan their recent work without leaving the
+// profile. Each query is intentionally narrow (limit 5) so the
+// sidebar stays glanceable; we'll grow into deeper history pages
+// later if there's pull.
+
+export interface RecentSessionInfo {
+  sessionId: string
+  /** "Apr 23" — short date for the sidebar pill. */
+  dateLabel: string
+  /** ISO date for sorting / hover title. */
+  sessionDate: string
+  title: string
+  room: string | null
+  status: string | null
+  startTime: string | null
+}
+
+const recentSessionsKey = (memberId: string) =>
+  ['member-recent-sessions', memberId] as const
+
+async function fetchRecentSessions(memberId: string): Promise<RecentSessionInfo[]> {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('id, session_date, start_time, room, client_name, session_type, status')
+    .eq('assigned_to', memberId)
+    .neq('status', 'cancelled')
+    .order('session_date', { ascending: false })
+    .order('start_time', { ascending: false })
+    .limit(5)
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const dt = new Date(`${row.session_date}T00:00:00`)
+    const dateLabel = Number.isNaN(dt.getTime())
+      ? row.session_date
+      : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return {
+      sessionId: row.id,
+      dateLabel,
+      sessionDate: row.session_date,
+      title: row.client_name ?? row.session_type ?? 'Session',
+      room: row.room,
+      status: row.status,
+      startTime: row.start_time,
+    }
+  })
+}
+
+export function useMemberRecentSessions(memberId: string | undefined) {
+  return useQuery({
+    queryKey: recentSessionsKey(memberId ?? '__none__'),
+    queryFn: () => fetchRecentSessions(memberId!),
+    enabled: Boolean(memberId),
+    staleTime: 60_000,
+  })
+}
+
+export interface RecentTaskInfo {
+  taskId: string
+  title: string
+  completedAt: string
+  /** "2d ago" / "Today" — short relative for the sidebar. */
+  relativeLabel: string
+}
+
+const recentTasksKey = (memberId: string) =>
+  ['member-recent-completed-tasks', memberId] as const
+
+function relativeShort(ts: string): string {
+  const then = new Date(ts).getTime()
+  if (Number.isNaN(then)) return ''
+  const diffMs = Date.now() - then
+  const mins = Math.floor(diffMs / 60_000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return `${days}d ago`
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+async function fetchRecentCompletedTasks(memberId: string): Promise<RecentTaskInfo[]> {
+  const { data, error } = await supabase
+    .from('assigned_tasks')
+    .select('id, title, completed_at')
+    .eq('assigned_to', memberId)
+    .eq('is_completed', true)
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false })
+    .limit(5)
+  if (error) throw error
+  return (data ?? [])
+    .filter((row) => Boolean(row.completed_at))
+    .map((row) => ({
+      taskId: row.id,
+      title: row.title,
+      completedAt: row.completed_at as string,
+      relativeLabel: relativeShort(row.completed_at as string),
+    }))
+}
+
+export function useMemberRecentCompletedTasks(memberId: string | undefined) {
+  return useQuery({
+    queryKey: recentTasksKey(memberId ?? '__none__'),
+    queryFn: () => fetchRecentCompletedTasks(memberId!),
+    enabled: Boolean(memberId),
+    staleTime: 60_000,
+  })
+}

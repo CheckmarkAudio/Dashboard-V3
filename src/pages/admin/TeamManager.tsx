@@ -20,7 +20,7 @@ import {
 import type { TeamMember, ReportTemplate } from '../../types'
 import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
-  Mail, Phone, Save, ChevronRight, ChevronLeft,
+  Save, ChevronRight, ChevronLeft,
   MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
 } from 'lucide-react'
 
@@ -623,6 +623,16 @@ export default function TeamManager() {
         // surface — Add up top, manage per-row.
         // PR #58: stripped widget-card chrome since the table now lives inside
         // the right-pane card (would have been a double-box otherwise).
+        // 2026-05-13 — table cleanup per user direction:
+        //   "I don't want a side scroller for the members page if we
+        //    can avoid it. Remove department, and contact. Put the
+        //    email clickable link under their name."
+        // Department + Contact columns dropped. Email now lives
+        // inside the Member cell as a `mailto:` link sitting under
+        // the display_name. The remaining columns fit the right-
+        // pane width (~840px) without horizontal overflow, so the
+        // scroll wrapper stays as a defensive measure for very
+        // narrow viewports only.
         <div className="rounded-lg border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -630,11 +640,9 @@ export default function TeamManager() {
                 <tr className="border-b border-white/5">
                   <TmHeaderCell>Member</TmHeaderCell>
                   <TmHeaderCell>Job Title</TmHeaderCell>
-                  <TmHeaderCell>Department</TmHeaderCell>
                   <TmHeaderCell>Term</TmHeaderCell>
                   <TmHeaderCell>Status</TmHeaderCell>
                   <TmHeaderCell>Access</TmHeaderCell>
-                  <TmHeaderCell>Contact</TmHeaderCell>
                   <TmHeaderCell><span className="sr-only">Actions</span></TmHeaderCell>
                 </tr>
               </thead>
@@ -650,22 +658,41 @@ export default function TeamManager() {
                         isInactive ? 'opacity-50' : ''
                       } ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}
                     >
-                      {/* Member: avatar + name + email → profile link */}
+                      {/* Member: avatar + name → profile link;
+                          email is its OWN clickable mailto under the
+                          name (was buried in a separate Contact
+                          column before). Two distinct click targets
+                          in one cell — name jumps to profile, email
+                          opens the mail client. */}
                       <td className="px-5 py-4">
-                        <Link
-                          to={`/profile/${member.id}`}
-                          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-                        >
-                          <div className="w-10 h-10 rounded-full bg-surface-alt border-[2px] border-white/12 text-gold flex items-center justify-center text-[14px] font-bold shrink-0">
-                            {initial}
-                          </div>
+                        <div className="flex items-center gap-3">
+                          <Link
+                            to={`/profile/${member.id}`}
+                            className="shrink-0 hover:opacity-80 transition-opacity"
+                            aria-label={`Open ${member.display_name}'s profile`}
+                          >
+                            <div className="w-10 h-10 rounded-full bg-surface-alt border-[2px] border-white/12 text-gold flex items-center justify-center text-[14px] font-bold">
+                              {initial}
+                            </div>
+                          </Link>
                           <div className="min-w-0">
-                            <p className="text-[14px] font-medium text-text tracking-tight truncate">
+                            <Link
+                              to={`/profile/${member.id}`}
+                              className="block text-[14px] font-medium text-text tracking-tight truncate hover:text-gold transition-colors"
+                            >
                               {member.display_name}
-                            </p>
-                            <p className="text-[11px] text-text-light truncate">{member.email}</p>
+                            </Link>
+                            {member.email && (
+                              <a
+                                href={`mailto:${member.email}`}
+                                className="block text-[11px] text-text-light truncate hover:text-gold transition-colors"
+                                title={`Email ${member.display_name}`}
+                              >
+                                {member.email}
+                              </a>
+                            )}
                           </div>
-                        </Link>
+                        </div>
                       </td>
                       {/* Job Title */}
                       <td className="px-5 py-4">
@@ -674,10 +701,6 @@ export default function TeamManager() {
                             ? getPositionLabel(member.position).toLowerCase().replace(/\s+/g, '_')
                             : '—'}
                         </span>
-                      </td>
-                      {/* Department (free-text column on team_members) */}
-                      <td className="px-5 py-4">
-                        <span className="text-[13px] text-text-muted">{member.department || '—'}</span>
                       </td>
                       {/* Term: start – end (or "present") */}
                       <td className="px-5 py-4">
@@ -701,31 +724,9 @@ export default function TeamManager() {
                       <td className="px-5 py-4">
                         <TmAccessBadge role={member.role} />
                       </td>
-                      {/* Contact icons */}
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          {member.email && (
-                            <a
-                              href={`mailto:${member.email}`}
-                              className="text-text-light hover:text-gold transition-colors"
-                              title={member.email}
-                              aria-label={`Email ${member.display_name}`}
-                            >
-                              <Mail size={14} />
-                            </a>
-                          )}
-                          {member.phone && (
-                            <a
-                              href={`tel:${member.phone}`}
-                              className="text-text-light hover:text-gold transition-colors"
-                              title={member.phone}
-                              aria-label={`Call ${member.display_name}`}
-                            >
-                              <Phone size={14} />
-                            </a>
-                          )}
-                        </div>
-                      </td>
+                      {/* Contact column dropped 2026-05-13 — email
+                          inlined under the member name above; phone
+                          stays editable in the Edit Member form. */}
                       {/* Action menu — 3-dot, hover-revealed, popover */}
                       <td className="px-5 py-4 text-right relative">
                         <div className="relative inline-block" ref={openMenuId === member.id ? menuRef : undefined}>
