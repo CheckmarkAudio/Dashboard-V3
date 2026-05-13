@@ -276,22 +276,11 @@ function AssignmentBoardBody({
             submitMutation.mutate(toggles)
           }}
         />
-        {/* 2026-05-13 — Studio variant: +New Task = outlined gold
-            (creation), distinct from SubmitBar = filled gold
-            (commit). Mirrors MyTasksCard's two-button hierarchy
-            so members never confuse "make a new task" with
-            "commit my checked work." */}
-        {sectionedByStudioSpace && (
-          <button
-            type="button"
-            onClick={() => setRequestModalOpen(true)}
-            className="w-full inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl border-2 border-gold-muted bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/20 hover:border-gold transition-colors focus-ring"
-            aria-label="Request a new studio task"
-          >
-            <Plus size={14} strokeWidth={2.4} aria-hidden="true" />
-            New Task
-          </button>
-        )}
+        {/* 2026-05-13 (rev) — +New Task moved from this top toolbar
+            to a footer beneath the task list. SubmitBar stays here
+            because it's a reactive commit action; New Task is a
+            creation affordance and lives below the data, like an
+            inbox compose row. */}
       </div>
 
       {/* PR #69 — `Due` column header anchors the right-side date so
@@ -439,8 +428,23 @@ function AssignmentBoardBody({
         </div>
       </div>
 
-      {/* Toolbar moved to TOP of widget body (skin pass 2026-05-06) —
-          see Submit + Eye render above the Due-column header. */}
+      {/* 2026-05-13 (rev) — +New Task footer pinned BELOW the task
+          list (Studio variant only). Outlined-gold style so it
+          reads as a secondary creation action, distinct from the
+          filled-gold SubmitBar at the top. */}
+      {sectionedByStudioSpace && (
+        <div className="shrink-0 mt-2">
+          <button
+            type="button"
+            onClick={() => setRequestModalOpen(true)}
+            className="w-full inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl border-2 border-gold-muted bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/20 hover:border-gold transition-colors focus-ring"
+            aria-label="Request a new studio task"
+          >
+            <Plus size={14} strokeWidth={2.4} aria-hidden="true" />
+            New Task
+          </button>
+        </div>
+      )}
 
       {/* Studio-only request modal (mounted last so it portals above
           the widget content). Only available in the Studio variant
