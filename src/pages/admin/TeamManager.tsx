@@ -20,7 +20,7 @@ import {
 import type { TeamMember, ReportTemplate } from '../../types'
 import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
-  Save, ChevronRight, ChevronLeft,
+  Mail, Save, ChevronRight, ChevronLeft,
   MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
 } from 'lucide-react'
 
@@ -50,24 +50,31 @@ type MemberForm = {
   display_name: string; email: string; role: 'admin' | 'intern'
   position: string; phone: string; start_date: string; status: 'active' | 'inactive'
   managed_by: string
-  // 2026-05-08 (Lean 1) — replaces the old `send_setup_email`
-  // boolean. The "email a setup link" path silently failed (free-tier
-  // Supabase SMTP only sends to the project owner address), so we
-  // defaulted onboarding to a temp-password handoff instead:
-  //   - 'auto'   = generate a strong password client-side; the modal
-  //                reveals it after creation so the admin can copy +
-  //                hand it off (DM, in-person)
-  //   - 'manual' = admin types the password they want (e.g. for
-  //                memorable verbal handoff: "audio2026!")
-  // When SMTP comes online (separate Lean), we add an 'email' option.
-  password_mode: 'auto' | 'manual'
+  // 2026-05-13 — three onboarding paths (Gmail SMTP is wired now):
+  //   - 'email'  = create the account WITHOUT a password, then send
+  //                a Supabase recovery link to the new member. They
+  //                click the link, set their own password, done.
+  //                Recommended default — fully self-serve.
+  //   - 'auto'   = generate a strong temp password client-side; the
+  //                success modal reveals it for the admin to hand
+  //                off in person / DM. Use when the new member
+  //                isn't reachable by email yet.
+  //   - 'manual' = admin types a memorable temp password for verbal
+  //                handoff (e.g. "audio2026!"). Same outcome as
+  //                'auto' — the new member is forced to change it
+  //                on first sign-in via ForcePasswordChangeModal.
+  password_mode: 'email' | 'auto' | 'manual'
   manual_password: string
 }
 
 const EMPTY_MEMBER: MemberForm = {
   display_name: '', email: '', role: 'intern', position: 'intern',
   phone: '', start_date: '', status: 'active', managed_by: '',
-  password_mode: 'auto',
+  // Default flipped 2026-05-13 — Gmail SMTP works now, so a fresh
+  // hire with a real email address gets the self-serve path
+  // automatically. Admin can still pick auto/manual for offline
+  // handoff if needed.
+  password_mode: 'email',
   manual_password: '',
 }
 
@@ -107,7 +114,11 @@ export default function TeamManager() {
   // admin hits "Done" → form closes + members list refreshes.
   const [createdMember, setCreatedMember] = useState<{
     profile: TeamMember
-    tempPassword: string
+    /** Null when password_mode === 'email' (no password to reveal —
+     *  the new hire sets their own via the recovery link). */
+    tempPassword: string | null
+    /** Did the recovery email actually send? Email mode only. */
+    emailSent: boolean
   } | null>(null)
 
   // PR #58 — left-rail active section (Roster default; Clock Data is a
@@ -216,14 +227,24 @@ export default function TeamManager() {
     const position = formData.position === 'custom' ? customPosition : formData.position
     const email = normalizeEmail(formData.email)
 
-    // 2026-05-08 (Lean 1) — always send a password to the edge
-    // function. Auto mode generates a strong one client-side; manual
-    // mode uses what the admin typed. The old "let the server
-    // generate one + email a link" path is gone — Supabase free-tier
-    // SMTP only sends to the project owner, so the email silently
-    // failed and members were left stranded.
+    // 2026-05-13 — three onboarding paths:
+    //   - email  → throwaway password (never shown), then
+    //              resetPasswordForEmail so the new hire picks
+    //              their own. Default + recommended.
+    //   - auto   → strong password generated client-side, revealed
+    //              to the admin in the success modal for offline
+    //              handoff (DM, in-person).
+    //   - manual → admin-typed memorable password, also revealed.
+    // All three paths push a `default_password` to the edge
+    // function — for email mode we don't reveal it because
+    // resetPasswordForEmail will overwrite it the moment the new
+    // hire clicks the link. The throwaway is just a safety so the
+    // account is technically loginable (in case the email fails
+    // we can fall back to admin Reset Password).
     const tempPassword =
-      formData.password_mode === 'auto' ? generateTempPassword() : formData.manual_password
+      formData.password_mode === 'manual'
+        ? formData.manual_password
+        : generateTempPassword()
 
     // 1) Create the auth user + team_members row atomically via the Edge Function.
     const { data: result, error } = await supabase.functions.invoke<
@@ -304,12 +325,52 @@ export default function TeamManager() {
       // is fine.
     }
 
-    // 4) Lean 1 success state — flip the form into a "Step 4" reveal
-    //    so the admin sees + copies the temp password before closing.
-    //    Members list refreshes in the background so the new row is
-    //    already there when they hit Done.
-    setCreatedMember({ profile: newMember, tempPassword })
-    toast(`${newMember.display_name} added — share the temporary password`, 'success')
+    // 4) Email mode — fire Supabase recovery so the new hire gets
+    //    a self-serve link. We do this AFTER the row exists so the
+    //    link's `?type=recovery` lands on a real account. Failures
+    //    here aren't fatal — admin can still re-trigger from Account
+    //    Access; the throwaway password stays usable as a backup.
+    let emailSent = false
+    if (formData.password_mode === 'email') {
+      try {
+        const redirectTo =
+          typeof window !== 'undefined'
+            ? window.location.origin + import.meta.env.BASE_URL
+            : undefined
+        const { error: rpfeErr } = await supabase.auth.resetPasswordForEmail(
+          email,
+          redirectTo ? { redirectTo } : undefined,
+        )
+        if (rpfeErr) {
+          console.error('[TeamManager] resetPasswordForEmail failed:', rpfeErr)
+          toast(
+            `${newMember.display_name} added, but the setup email didn't send. Use Account Access to retry or copy a temp password.`,
+            'error',
+          )
+        } else {
+          emailSent = true
+        }
+      } catch (rpfeErr) {
+        console.error('[TeamManager] resetPasswordForEmail threw:', rpfeErr)
+      }
+    }
+
+    // 5) Success state — flip the form into "Step 4". For
+    //    email/auto/manual the reveal differs:
+    //      - email mode: confirm the email went out; no password
+    //        revealed (the throwaway is overwritten on recovery).
+    //      - auto/manual: reveal the temp password for handoff.
+    setCreatedMember({
+      profile: newMember,
+      tempPassword: formData.password_mode === 'email' ? null : tempPassword,
+      emailSent,
+    })
+    toast(
+      formData.password_mode === 'email'
+        ? `${newMember.display_name} added — setup email sent`
+        : `${newMember.display_name} added — share the temporary password`,
+      'success',
+    )
     setSubmitting(false)
     loadMembers()
   }
@@ -382,7 +443,7 @@ export default function TeamManager() {
       managed_by: member.managed_by ?? '',
       // password fields are only meaningful for new-member creation;
       // editing reuses the form schema with safe defaults.
-      password_mode: 'auto',
+      password_mode: 'email',
       manual_password: '',
     })
     if (!knownPosition) setCustomPosition(member.position ?? '')
@@ -870,13 +931,14 @@ export default function TeamManager() {
 
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto flex flex-col">
               <div className="p-6 space-y-5 flex-1">
-                {/* ─── Step 4 — Success ─── (Lean 1)
-                    Triggered after `admin-create-member` succeeds.
-                    Replaces the "close + toast" flow so the admin
-                    can see + copy the temp password before leaving
-                    the form. `<TempPasswordReveal />` owns the
-                    Copy button + select-all interaction. */}
-                {createdMember && (
+                {/* ─── Step 4 — Success ───
+                    Two flavors:
+                      - email mode (createdMember.tempPassword === null):
+                          confirm the recovery email went out;
+                          surface a fallback message if it didn't.
+                      - auto/manual mode: <TempPasswordReveal />
+                          for offline handoff. */}
+                {createdMember && createdMember.tempPassword !== null && (
                   <div className="space-y-4">
                     <TempPasswordReveal
                       email={createdMember.profile.email ?? ''}
@@ -894,6 +956,48 @@ export default function TeamManager() {
                         Settings → Account Access
                       </Link>
                       .
+                    </p>
+                  </div>
+                )}
+                {createdMember && createdMember.tempPassword === null && (
+                  <div className="space-y-3">
+                    <div className={`flex items-start gap-3 px-3 py-3 rounded-lg border ${
+                      createdMember.emailSent
+                        ? 'bg-status-success-bg border-emerald-400/30'
+                        : 'bg-amber-500/10 border-amber-400/30'
+                    }`}>
+                      {createdMember.emailSent ? (
+                        <Check size={18} className="text-status-success-text mt-0.5 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <Mail size={18} className="text-amber-300 mt-0.5 shrink-0" aria-hidden="true" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold ${createdMember.emailSent ? 'text-status-success-text' : 'text-amber-200'}`}>
+                          {createdMember.emailSent
+                            ? `${createdMember.profile.display_name} added — setup email sent`
+                            : `${createdMember.profile.display_name} added — setup email failed`}
+                        </p>
+                        <p className="text-[12px] text-text-muted mt-1">
+                          {createdMember.emailSent ? (
+                            <>
+                              An invitation has been sent to{' '}
+                              <span className="font-semibold text-text">{createdMember.profile.email}</span>.{' '}
+                              They'll click the link, set their own password, and they're in.
+                            </>
+                          ) : (
+                            <>
+                              The account exists but the recovery email didn't go out. Open{' '}
+                              <Link to="/admin/settings" className="text-gold hover:underline">
+                                Settings → Account Access
+                              </Link>{' '}
+                              and use Reset Password (email or temp) to retry.
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-text-light">
+                      Tip: if it doesn't arrive in 5 min, check the new hire's spam folder.
                     </p>
                   </div>
                 )}
@@ -927,23 +1031,46 @@ export default function TeamManager() {
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
                 />
 
-                {/* 2026-05-08 (Lean 1) — temp-password handoff is
-                    the canonical onboarding flow until SMTP is
-                    configured. Two modes:
-                      - Auto: client-side `generateTempPassword()` at
-                        submit; revealed in the success step so the
-                        admin can copy + hand it off.
-                      - Manual: admin types a memorable password (e.g.
-                        for verbal handoff in person).
-                    The old "Email a setup link" path is gone — Supabase
-                    free-tier SMTP only delivers to the project owner
-                    address, so it silently failed for everyone else. */}
+                {/* 2026-05-13 — three onboarding paths now that
+                    Gmail SMTP is wired:
+                      - Email setup link (default + recommended) —
+                        new hire gets a Supabase recovery link and
+                        sets their own password. Fully self-serve.
+                      - Auto-generate — strong temp password,
+                        revealed in the success step for offline
+                        handoff (no email needed).
+                      - Set my own — admin-typed memorable password
+                        for verbal handoff. */}
                 {!editingMember && (
                   <div className="space-y-3">
                     <fieldset className="rounded-xl border border-border bg-surface-alt/50 p-3 space-y-2">
                       <legend className="px-1 text-[11px] font-semibold tracking-wider uppercase text-text-light">
-                        Temporary password
+                        How they'll sign in
                       </legend>
+                      <label
+                        className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-surface-alt transition-colors"
+                        htmlFor="team-member-pw-mode-email"
+                      >
+                        <input
+                          id="team-member-pw-mode-email"
+                          type="radio"
+                          name="team-member-pw-mode"
+                          checked={formData.password_mode === 'email'}
+                          onChange={() =>
+                            setFormData({ ...formData, password_mode: 'email' })
+                          }
+                          className="mt-1 w-4 h-4 border-border accent-gold shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-text flex items-center gap-1.5">
+                            <Mail size={13} className="text-gold shrink-0" aria-hidden="true" />
+                            Email a setup link (recommended)
+                          </p>
+                          <p className="text-[12px] text-text-muted mt-0.5">
+                            We'll send them a one-time link to pick their own password. Fully self-serve.
+                          </p>
+                        </div>
+                      </label>
                       <label
                         className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-surface-alt transition-colors"
                         htmlFor="team-member-pw-mode-auto"
@@ -961,10 +1088,10 @@ export default function TeamManager() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-text flex items-center gap-1.5">
                             <KeyRound size={13} className="text-gold shrink-0" aria-hidden="true" />
-                            Auto-generate (recommended)
+                            Auto-generate temp password
                           </p>
                           <p className="text-[12px] text-text-muted mt-0.5">
-                            Strong 14-character password. Revealed after creation so you can copy it and hand it off.
+                            Strong 14-character password revealed after creation — copy + hand off in person.
                           </p>
                         </div>
                       </label>
@@ -983,7 +1110,7 @@ export default function TeamManager() {
                           className="mt-1 w-4 h-4 border-border accent-gold shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-text">Set my own</p>
+                          <p className="text-sm font-semibold text-text">Set my own temp password</p>
                           <p className="text-[12px] text-text-muted mt-0.5">
                             For memorable verbal handoff. They'll be forced to change it on first sign-in.
                           </p>
@@ -1168,9 +1295,11 @@ export default function TeamManager() {
                         ['Phone', formData.phone || '—'],
                         ['Start date', formData.start_date || '—'],
                         ['Status', formData.status],
-                        formData.password_mode === 'auto'
-                          ? ['Temp password', 'Auto-generated (revealed after create)']
-                          : ['Temp password', formData.manual_password],
+                        formData.password_mode === 'email'
+                          ? ['Sign-in', 'Email setup link to new hire']
+                          : formData.password_mode === 'auto'
+                            ? ['Temp password', 'Auto-generated (revealed after create)']
+                            : ['Temp password', formData.manual_password],
                       ]}
                     />
 

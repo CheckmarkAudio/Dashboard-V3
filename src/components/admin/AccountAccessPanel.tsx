@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Key, Loader2, RotateCw, Shield, ShieldCheck, User as UserIcon } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Key, Loader2, Mail, RotateCw, Shield, ShieldCheck, User as UserIcon } from 'lucide-react'
 import { supabase, withSupabaseRetry } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
@@ -171,7 +171,8 @@ export default function AccountAccessPanel() {
   const [resetTarget, setResetTarget] = useState<AccessUser | null>(null)
   const [resetPending, setResetPending] = useState(false)
   const [resetResult, setResetResult] = useState<
-    | { kind: 'ok'; tempPassword: string }
+    | { kind: 'ok'; tempPassword: string }   // legacy temp-password handoff
+    | { kind: 'email-sent'; email: string }  // 2026-05-13 — Gmail SMTP path
     | { kind: 'err'; message: string }
     | null
   >(null)
@@ -271,6 +272,36 @@ export default function AccountAccessPanel() {
       return
     }
     setResetResult({ kind: 'ok', tempPassword })
+  }, [resetTarget])
+
+  // 2026-05-13 — Gmail SMTP path. Owner clicks "Email reset link"
+  // and Supabase sends a real recovery email; member clicks the
+  // link and lands on RecoveryGate to set their own password. No
+  // temp-password handoff needed when SMTP is wired up. The
+  // legacy temp-password path stays as a fallback button on the
+  // modal in case email delivery fails.
+  const sendResetEmail = useCallback(async () => {
+    if (!resetTarget?.email) return
+    setResetPending(true)
+    try {
+      const redirectTo =
+        typeof window !== 'undefined'
+          ? window.location.origin + import.meta.env.BASE_URL
+          : undefined
+      const { error: rpfeErr } = await supabase.auth.resetPasswordForEmail(
+        resetTarget.email,
+        redirectTo ? { redirectTo } : undefined,
+      )
+      if (rpfeErr) {
+        setResetResult({ kind: 'err', message: errorMessage(rpfeErr, 'Failed to send reset email') })
+        return
+      }
+      setResetResult({ kind: 'email-sent', email: resetTarget.email })
+    } catch (err) {
+      setResetResult({ kind: 'err', message: errorMessage(err, 'Failed to send reset email') })
+    } finally {
+      setResetPending(false)
+    }
   }, [resetTarget])
 
   const closeResetModal = useCallback(() => {
@@ -436,26 +467,41 @@ export default function AccountAccessPanel() {
         <Modal
           open
           onClose={closeResetModal}
-          title={resetResult?.kind === 'ok' ? 'Temporary password ready' : 'Reset password'}
+          title={
+            resetResult?.kind === 'ok' ? 'Temporary password ready' :
+            resetResult?.kind === 'email-sent' ? 'Reset email sent' :
+            'Reset password'
+          }
           description={
-            resetResult?.kind === 'ok'
-              ? undefined
-              : `Generate a one-time password for ${resetTarget.display_name}. They'll be forced to change it on first login.`
+            resetResult ? undefined : `Choose how to reset ${resetTarget.display_name}'s password.`
           }
           size="sm"
           footer={
-            resetResult?.kind === 'ok' ? (
+            resetResult?.kind === 'ok' || resetResult?.kind === 'email-sent' ? (
               <Button variant="primary" onClick={closeResetModal}>Done</Button>
             ) : (
               <>
                 <Button variant="ghost" onClick={closeResetModal} disabled={resetPending}>Cancel</Button>
+                {/* Two-button footer (2026-05-13) — primary = email
+                    link (works once Gmail SMTP is configured),
+                    secondary = temp password (the offline-handoff
+                    fallback that never depends on SMTP). */}
                 <Button
-                  variant="primary"
+                  variant="ghost"
                   onClick={() => void confirmReset()}
                   loading={resetPending}
                   iconLeft={!resetPending ? <Key size={14} aria-hidden="true" /> : undefined}
                 >
-                  Generate password
+                  Use temp password
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => void sendResetEmail()}
+                  loading={resetPending}
+                  iconLeft={!resetPending ? <Mail size={14} aria-hidden="true" /> : undefined}
+                  disabled={!resetTarget.email}
+                >
+                  Email reset link
                 </Button>
               </>
             )
@@ -467,16 +513,39 @@ export default function AccountAccessPanel() {
               displayName={resetTarget.display_name}
               tempPassword={resetResult.tempPassword}
             />
+          ) : resetResult?.kind === 'email-sent' ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 px-3 py-3 rounded-lg bg-status-success-bg border border-emerald-400/30">
+                <CheckCircle2 size={18} className="text-status-success-text mt-0.5 shrink-0" aria-hidden="true" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-status-success-text">
+                    Reset link on the way
+                  </p>
+                  <p className="text-[12px] text-text-muted mt-1">
+                    {resetTarget.display_name} will get an email at{' '}
+                    <span className="font-semibold text-text">{resetResult.email}</span>{' '}
+                    within a minute. They'll click the link, set a new password, and they're back in.
+                  </p>
+                </div>
+              </div>
+              <p className="text-[11px] text-text-light">
+                If they don't see it after 5 minutes, check spam — or come back here and use "Temp password" as a backup.
+              </p>
+            </div>
           ) : resetResult?.kind === 'err' ? (
             <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
               {resetResult.message}
             </div>
           ) : (
-            <p className="text-[13px] text-text-muted">
-              A temporary password will be generated for{' '}
-              <span className="font-semibold text-text">{resetTarget.email}</span>.
-              You'll be able to copy it and hand it off — they'll set their own password on next login.
-            </p>
+            <div className="space-y-3 text-[13px] text-text-muted">
+              <p>
+                <span className="font-semibold text-text">Email reset link</span> — Supabase sends{' '}
+                <span className="font-semibold text-text">{resetTarget.email}</span> a one-time link to set a new password. Self-serve, recommended.
+              </p>
+              <p>
+                <span className="font-semibold text-text">Temp password</span> — generates a one-time password you copy and hand off in person / DM. Use this if email isn't working or for offline onboarding.
+              </p>
+            </div>
           )}
         </Modal>
       )}

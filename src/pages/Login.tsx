@@ -4,7 +4,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { Button, Input, Modal } from '../components/ui'
 import { OWNER_EMAIL } from '../domain/permissions'
-import { Eye, EyeOff, HelpCircle, LogIn, Music } from 'lucide-react'
+import { CheckCircle2, Eye, EyeOff, HelpCircle, LogIn, Mail, Music } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 
 /**
  * Lean 2 — preview-login lockdown (runtime defense layer 2 / 3).
@@ -74,6 +75,14 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
+  // 2026-05-13 — self-serve password reset. Once Gmail SMTP is
+  // wired into Supabase auth, the "Need help signing in?" modal
+  // becomes a real reset form (email-link flow) instead of a
+  // mailto-the-owner fallback. State below drives the form.
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetSending, setResetSending] = useState(false)
+  const [resetSent, setResetSent] = useState<string | null>(null)
+  const [resetError, setResetError] = useState<string | null>(null)
 
   // Preview auto-login: three independent guards must all pass before
   // we silently sign in. See `isVercelBranchPreview()` above + the
@@ -183,21 +192,73 @@ export default function Login() {
     }
   }
 
-  // Pre-fill the support email subject + body with whatever the
-  // member typed (best-effort — fine if `email` is empty). Encoding
-  // matters here because mail clients are picky about line breaks.
+  // 2026-05-13 — self-serve forgot-password handler. Calls Supabase
+  // recovery API; success goes to the modal's success state with
+  // explicit "check your email" copy. The mailto-to-owner fallback
+  // is preserved as a secondary action in case SMTP fails or the
+  // member's email isn't on file.
+  const handleResetPassword = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setResetError(null)
+    const target = resetEmail.trim().toLowerCase()
+    if (!target) {
+      setResetError('Enter your account email first.')
+      return
+    }
+    setResetSending(true)
+    try {
+      const redirectTo =
+        typeof window !== 'undefined'
+          ? window.location.origin + import.meta.env.BASE_URL
+          : undefined
+      const { error: rpfeErr } = await supabase.auth.resetPasswordForEmail(
+        target,
+        redirectTo ? { redirectTo } : undefined,
+      )
+      if (rpfeErr) {
+        // Supabase returns a generic error to avoid email enumeration;
+        // surface the message verbatim so the member can act on it.
+        setResetError(friendlyAuthError(rpfeErr.message))
+        return
+      }
+      // Supabase intentionally returns success even when the email
+      // doesn't exist (anti-enumeration). We show "check your inbox"
+      // either way — accurate when the address IS registered, and
+      // still safe to claim when it isn't.
+      setResetSent(target)
+    } catch (err) {
+      setResetError(
+        err instanceof Error ? err.message : 'Something went wrong sending the reset email.',
+      )
+    } finally {
+      setResetSending(false)
+    }
+  }
+
+  // Mailto fallback — kept around for the "I can't access this email
+  // anymore / wrong email on file" path that resetPasswordForEmail
+  // can't fix. Pre-fills the support note with whatever the member
+  // typed in either the login email field or the reset form.
   const supportSubject = encodeURIComponent('Help signing in to Checkmark')
   const supportBody = encodeURIComponent(
     [
       "Hi — I'm having trouble signing in to the Checkmark workspace.",
       '',
-      `Account email: ${email || '(please fill in)'}`,
+      `Account email: ${(resetEmail || email) || '(please fill in)'}`,
       'Issue (forgot password / email not working / other):',
       '',
       'Thanks!',
     ].join('\n'),
   )
   const supportMailto = `mailto:${OWNER_EMAIL}?subject=${supportSubject}&body=${supportBody}`
+
+  // Closing the modal resets its state so the next open is clean.
+  const closeHelpModal = () => {
+    setHelpOpen(false)
+    setResetSent(null)
+    setResetError(null)
+    setResetSending(false)
+  }
 
   return (
     <div className="min-h-screen flex bg-bg">
@@ -323,11 +384,16 @@ export default function Login() {
               <div className="flex items-center justify-center gap-1 pt-1">
                 <button
                   type="button"
-                  onClick={() => setHelpOpen(true)}
+                  onClick={() => {
+                    // Pre-fill the reset form with whatever the
+                    // member already typed in the main email field.
+                    if (email && !resetEmail) setResetEmail(email)
+                    setHelpOpen(true)
+                  }}
                   className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-gold transition-colors focus-ring rounded"
                 >
                   <HelpCircle size={12} aria-hidden="true" />
-                  Need help signing in?
+                  Forgot your password?
                 </button>
               </div>
 
@@ -339,48 +405,88 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Help modal — opened from the "Need help signing in?" link.
-          Self-serve email-link recovery is queued behind SMTP setup
-          (see Lean E in the auth roadmap), so for now the only
-          unblock is asking the owner to mint a temp password from
-          /admin/settings → Account Access. Pre-fills a mailto so
-          the member doesn't have to compose anything from scratch. */}
+      {/* 2026-05-13 — Forgot Password modal. Real self-serve flow
+          now that Gmail SMTP is wired into Supabase auth. The mailto-
+          to-owner button stays as a secondary fallback for the
+          "I can't access this email anymore" case that
+          resetPasswordForEmail can't help with. */}
       <Modal
         open={helpOpen}
-        onClose={() => setHelpOpen(false)}
-        title="Need help signing in?"
-        description="Self-serve password reset isn't available yet — for now your owner can set a temporary password for you in seconds."
+        onClose={closeHelpModal}
+        title={resetSent ? 'Check your inbox' : 'Forgot your password?'}
+        description={
+          resetSent
+            ? undefined
+            : 'Enter the email on file and we\'ll send a one-time reset link.'
+        }
         size="sm"
         footer={
-          <>
-            <Button variant="ghost" onClick={() => setHelpOpen(false)}>Close</Button>
-            <Button
-              variant="primary"
-              iconLeft={<HelpCircle size={14} aria-hidden="true" />}
-              onClick={() => {
-                window.location.href = supportMailto
-              }}
-            >
-              Email the owner
-            </Button>
-          </>
+          resetSent ? (
+            <Button variant="primary" onClick={closeHelpModal}>Done</Button>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={closeHelpModal} disabled={resetSending}>Cancel</Button>
+              <Button
+                type="submit"
+                form="forgot-password-form"
+                variant="primary"
+                loading={resetSending}
+                iconLeft={!resetSending ? <Mail size={14} aria-hidden="true" /> : undefined}
+              >
+                Email me a reset link
+              </Button>
+            </>
+          )
         }
       >
-        <div className="space-y-3 text-sm text-text-muted">
-          <p>
-            Send a quick note to <span className="font-semibold text-text">{OWNER_EMAIL}</span> and
-            they'll reset your password and share a new one with you directly. Most resets take a
-            minute or two.
-          </p>
-          <ul className="space-y-1.5 text-[13px]">
-            <li>• <span className="text-text">Forgot your password</span> — they'll mint a fresh temp password.</li>
-            <li>• <span className="text-text">Email not working / wrong email on file</span> — they'll fix it from the Members admin.</li>
-            <li>• <span className="text-text">Locked out / nothing seems to work</span> — they can investigate the account.</li>
-          </ul>
-          <p className="text-[12px] text-text-light pt-1">
-            "Email the owner" opens your mail client with a draft already filled in.
-          </p>
-        </div>
+        {resetSent ? (
+          <div className="space-y-3 text-sm text-text-muted">
+            <div className="flex items-start gap-3 px-3 py-3 rounded-lg bg-status-success-bg border border-emerald-400/30">
+              <CheckCircle2 size={18} className="text-status-success-text mt-0.5 shrink-0" aria-hidden="true" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-status-success-text">
+                  Reset link sent
+                </p>
+                <p className="text-[12px] text-text-muted mt-1">
+                  If <span className="font-semibold text-text">{resetSent}</span> is on file, you'll get an email within a minute. Click the link to set a new password.
+                </p>
+              </div>
+            </div>
+            <p className="text-[11px] text-text-light">
+              Don't see it? Check spam, or{' '}
+              <a href={supportMailto} className="text-gold hover:underline">
+                email the owner
+              </a>{' '}
+              if your address has changed.
+            </p>
+          </div>
+        ) : (
+          <form id="forgot-password-form" onSubmit={handleResetPassword} className="space-y-3">
+            <Input
+              id="forgot-email"
+              label="Account email"
+              type="email"
+              required
+              autoFocus
+              placeholder="you@example.com"
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              disabled={resetSending}
+            />
+            {resetError && (
+              <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5">
+                {resetError}
+              </div>
+            )}
+            <p className="text-[11px] text-text-light">
+              Wrong email on file or no longer have access?{' '}
+              <a href={supportMailto} className="text-gold hover:underline">
+                Email {OWNER_EMAIL}
+              </a>{' '}
+              and we'll fix it manually.
+            </p>
+          </form>
+        )}
       </Modal>
     </div>
   )
