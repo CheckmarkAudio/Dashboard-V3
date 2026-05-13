@@ -276,19 +276,19 @@ function AssignmentBoardBody({
             submitMutation.mutate(toggles)
           }}
         />
-        {/* 2026-05-13 — Studio variant gets the gold "+ New Task" pill
-            as the toolbar's primary action (full width, no eye next
-            to it). Team Board has nothing toolbar-y left here, so we
-            skip the row entirely. The show-completed eye condenses
-            into the Due column header row below in both variants. */}
+        {/* 2026-05-13 — Studio variant: +New Task = outlined gold
+            (creation), distinct from SubmitBar = filled gold
+            (commit). Mirrors MyTasksCard's two-button hierarchy
+            so members never confuse "make a new task" with
+            "commit my checked work." */}
         {sectionedByStudioSpace && (
           <button
             type="button"
             onClick={() => setRequestModalOpen(true)}
-            className="w-full inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-ring"
+            className="w-full inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl border-2 border-gold-muted bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/20 hover:border-gold transition-colors focus-ring"
             aria-label="Request a new studio task"
           >
-            <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+            <Plus size={14} strokeWidth={2.4} aria-hidden="true" />
             New Task
           </button>
         )}

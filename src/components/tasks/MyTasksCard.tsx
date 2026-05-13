@@ -366,19 +366,21 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
         isSubmitting={submitMutation.isPending}
         onClick={submitPending}
       />
-      {/* 2026-05-13 — show-completed eye moved OUT of the toolbar
-          and INTO the Due column header row below. The toolbar now
-          owns just the +New Task CTA (full width) so the gold pill
-          gets the visual weight it earned. The eye condenses into
-          a corner icon next to "Due" to recover a row's worth of
-          vertical space. */}
+      {/* 2026-05-13 — +New Task is the secondary creation action;
+          Submit Completed is the primary commit action. Both used
+          to render as solid-gold pills, which made them look like
+          twins when SubmitBar lit up. Switched +New Task to the
+          lined-gold style (same treatment as the Sessions page's
+          "Manage Bookings" button) so the two buttons are visually
+          distinct: SubmitBar = filled gold (commit), New Task =
+          outlined gold (create). */}
       <button
         type="button"
         onClick={() => setRequestModalOpen(true)}
-        className="w-full inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-ring"
+        className="w-full inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl border-2 border-gold-muted bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/20 hover:border-gold transition-colors focus-ring"
         aria-label="Request a new task"
       >
-        <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+        <Plus size={14} strokeWidth={2.4} aria-hidden="true" />
         New Task
       </button>
     </div>
