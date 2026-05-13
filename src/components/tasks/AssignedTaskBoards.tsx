@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, ArrowRightLeft, Check, Inbox, Loader2 } from 'lucide-react'
+import { AlertCircle, ArrowRightLeft, Check, Inbox, Loader2, Plus } from 'lucide-react'
+import TaskRequestModal from './requests/TaskRequestModal'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   completeAssignedTask,
@@ -80,6 +81,11 @@ function AssignmentBoardBody({
   const { profile } = useAuth()
   const queryClient = useQueryClient()
   const [showCompleted, setShowCompleted] = useState(false)
+  // 2026-05-13 — Studio Tasks widget gets the same "+ New Task"
+  // affordance as MyTasksCard (member-side request flow). Only
+  // mounted on the Studio variant so the Team Board doesn't sprout
+  // a request CTA it doesn't yet support.
+  const [requestModalOpen, setRequestModalOpen] = useState(false)
   const cacheKey = [queryKeyPrefix, profile?.id ?? 'none', showCompleted ? 'all' : 'open'] as const
 
   // PR #69 — team_members lookup so each row can show the assignee's
@@ -270,8 +276,30 @@ function AssignmentBoardBody({
             submitMutation.mutate(toggles)
           }}
         />
-        <div className="flex items-center justify-end">
-          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+        <div className="flex items-center gap-1.5">
+          {/* 2026-05-13 — Studio variant gets the same gold "+ New
+              Task" pill as MyTasksCard so members can request a new
+              studio task without leaving the page. Team Board (which
+              shares this body but doesn't yet support requests)
+              renders only the show-completed eye, right-aligned. */}
+          {sectionedByStudioSpace ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setRequestModalOpen(true)}
+                className="flex-1 inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_2px_8px_rgba(0,0,0,0.06)] focus-ring"
+                aria-label="Request a new studio task"
+              >
+                <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+                New Task
+              </button>
+              <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+            </>
+          ) : (
+            <div className="ml-auto">
+              <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -419,6 +447,13 @@ function AssignmentBoardBody({
 
       {/* Toolbar moved to TOP of widget body (skin pass 2026-05-06) —
           see Submit + Eye render above the Due-column header. */}
+
+      {/* Studio-only request modal (mounted last so it portals above
+          the widget content). Only available in the Studio variant
+          today; Team Board lacks the request-flow plumbing. */}
+      {sectionedByStudioSpace && requestModalOpen && (
+        <TaskRequestModal onClose={() => setRequestModalOpen(false)} />
+      )}
     </div>
   )
 }
