@@ -13,6 +13,7 @@ import SelfReportModal from './SelfReportModal'
 import NotificationsBell from './notifications/NotificationsBell'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import MemberAvatar from './members/MemberAvatar'
+import { useToast } from './Toast'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
 import {
   clockIn,
@@ -393,9 +394,18 @@ export default function Layout() {
   const { profile, canAccessAdmin, appRole, signOut } = useAuth()
   const { resolved: resolvedTheme, toggle: toggleTheme } = useTheme()
   const queryClient = useQueryClient()
+  const { toast } = useToast()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showSelfReport, setShowSelfReport] = useState(false)
   const [adminExpanded, setAdminExpanded] = useState(true)
+  // 2026-05-12 (clock polish) — re-render every 60s while a shift is
+  // open so the elapsed-time text on the Clock Out pill ticks
+  // forward without each consumer wiring its own interval.
+  const [, setNowTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((n) => n + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   // PR #50 — Clock In/Out is now DB-backed. The header button reads
   // the user's currently-open shift on mount and toggles based on
@@ -418,12 +428,27 @@ export default function Layout() {
         hour12: true,
       })
     : ''
+  // 2026-05-12 (clock polish) — live elapsed counter on the Clock Out
+  // pill so members can see how long they've been on the clock at a
+  // glance. Re-derived on every render; the 60s `setNowTick` interval
+  // above keeps it ticking forward while the page stays open.
+  const clockElapsed = openShift ? formatShiftElapsed(openShift.clocked_in_at) : ''
 
   const clockInMutation = useMutation({
     mutationFn: clockIn,
     onSuccess: (row) => {
       queryClient.setQueryData(timeClockKeys.myOpen(), row)
       void queryClient.invalidateQueries({ queryKey: timeClockKeys.currentlyClockedIn() })
+      // Acknowledge the action — the button silently swapping reads as
+      // unconfirmed. Toast confirms the time so multi-tab sessions
+      // can sanity-check.
+      const t = new Date(row.clocked_in_at).toLocaleTimeString('en-US', {
+        hour: 'numeric', minute: '2-digit', hour12: true,
+      })
+      toast(`Clocked in at ${t}`, 'success')
+    },
+    onError: (err) => {
+      toast(err instanceof Error ? err.message : 'Failed to clock in', 'error')
     },
   })
   const clockOutMutation = useMutation({
@@ -431,12 +456,21 @@ export default function Layout() {
     // "Went well / To improve" entries actually persist to
     // time_clock_entries.notes (Members > Clock Data reads from there).
     mutationFn: (notes?: string | null) => clockOut(notes ?? undefined),
-    onSuccess: () => {
+    onSuccess: (row) => {
       queryClient.setQueryData(timeClockKeys.myOpen(), null)
       void queryClient.invalidateQueries({ queryKey: timeClockKeys.currentlyClockedIn() })
       // Refresh the admin Clock Data table so the just-closed shift +
       // its notes show up on the Members page without a manual reload.
       void queryClient.invalidateQueries({ queryKey: timeClockKeys.all })
+      // Confirm with shift duration for confidence.
+      const mins = row.clocked_out_at
+        ? Math.max(0, Math.round((new Date(row.clocked_out_at).getTime() - new Date(row.clocked_in_at).getTime()) / 60_000))
+        : 0
+      const human = mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`
+      toast(`Clocked out · ${human} on shift`, 'success')
+    },
+    onError: (err) => {
+      toast(err instanceof Error ? err.message : 'Failed to clock out', 'error')
     },
   })
   const navigate = useNavigate()
@@ -591,31 +625,34 @@ export default function Layout() {
                 {showSelfReport && (
                   <SelfReportModal
                     clockInTime={clockInTime}
-                    // 2026-05-07 — both paths pass the reflection
-                    // notes (or null when both fields are empty) so
-                    // they land on time_clock_entries.notes.
-                    onClose={(notes) => {
-                      setShowSelfReport(false)
+                    clockedInAtIso={openShift?.clocked_in_at}
+                    // X / backdrop / Escape — dismiss the modal,
+                    // user stays on shift. NO clock_out fires here.
+                    onDismiss={() => setShowSelfReport(false)}
+                    // Submit & Clock Out — fires clock_out with the
+                    // user's reflection. The modal then flips to its
+                    // success screen internally; we keep the modal
+                    // mounted so the user can pick "Log out" or
+                    // "Stay signed in" from there.
+                    onClockOut={(notes) => {
                       clockOutMutation.mutate(notes)
                     }}
-                    // Log Out path — close the shift AND end the
-                    // Supabase session. Mutation runs in parallel with
-                    // signOut so we don't block the redirect on the
-                    // clock_out RPC.
-                    onLogout={async (notes) => {
+                    // Log Out from the post-submit success screen —
+                    // shift is already closed by onClockOut, so this
+                    // ONLY signs out (no second clock_out call).
+                    onLogout={async () => {
                       setShowSelfReport(false)
-                      clockOutMutation.mutate(notes)
                       await handleSignOut()
                     }}
                   />
                 )}
                 <button
                   onClick={() => setShowSelfReport(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all tabular-nums"
                   title={`On the clock since ${clockInTime}`}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
-                  {clockInTime} · Clock Out
+                  {clockInTime} · {clockElapsed} · Clock Out
                 </button>
               </>
             )}
@@ -707,4 +744,25 @@ export default function Layout() {
       <ForcePasswordChangeModal />
     </div>
   )
+}
+
+/**
+ * Compact shift duration string, e.g. "3m" / "1h 23m" / "8h" / "1d 4h".
+ * Mirrors the format used in the admin "On the clock" widget so the
+ * member-side pill and admin-side pill read the same.
+ */
+function formatShiftElapsed(clockInIso: string): string {
+  const start = new Date(clockInIso).getTime()
+  const ms = Math.max(0, Date.now() - start)
+  const totalMin = Math.floor(ms / 60_000)
+  if (totalMin < 1) return 'just now'
+  if (totalMin < 60) return `${totalMin}m`
+  const totalHours = Math.floor(totalMin / 60)
+  if (totalHours < 24) {
+    const m = totalMin % 60
+    return m === 0 ? `${totalHours}h` : `${totalHours}h ${m}m`
+  }
+  const days = Math.floor(totalHours / 24)
+  const h = totalHours % 24
+  return h === 0 ? `${days}d` : `${days}d ${h}h`
 }
