@@ -102,7 +102,11 @@ function parseSummaryClientName(summary: string | undefined, sessionType: string
     const clientName = summary.slice(prefixed.length).trim()
     return clientName || null
   }
-  return undefined
+  // If staff edits the visible Google/Apple title away from the
+  // Checkmark-generated "Type · Client" format, keep the edit instead
+  // of silently ignoring it. Checkmark has no separate public title
+  // field yet, so the safest early Phase 2 mapping is client_name.
+  return summary.trim() || undefined
 }
 
 function stripManagedDescription(description: string | undefined): string | null | undefined {
@@ -137,6 +141,10 @@ function requireEnv(name: string): string {
   const value = Deno.env.get(name)
   if (!value) throw new Error(`Missing env: ${name}`)
   return value
+}
+
+function canManageGoogleCalendar(role: string | null | undefined): boolean {
+  return role === "admin" || role === "owner"
 }
 
 async function getCallerContext(req: Request) {
@@ -280,8 +288,8 @@ Deno.serve(async (req: Request) => {
     const accessToken = tokens.access_token
 
     if (body.action === "delete_session_event") {
-      if (ctx.role !== "admin") {
-        return jsonResponse({ ok: false, error: "Only admins can delete synced events." }, 403)
+      if (!canManageGoogleCalendar(ctx.role)) {
+        return jsonResponse({ ok: false, error: "Only admins or owners can delete synced events." }, 403)
       }
       if (!body.google_event_id) {
         return jsonResponse({ ok: true, deleted: false })
@@ -291,8 +299,8 @@ Deno.serve(async (req: Request) => {
     }
 
     if (body.action === "pull_inbound_changes") {
-      if (ctx.role !== "admin") {
-        return jsonResponse({ ok: false, error: "Only admins can pull inbound calendar changes." }, 403)
+      if (!canManageGoogleCalendar(ctx.role)) {
+        return jsonResponse({ ok: false, error: "Only admins or owners can pull inbound calendar changes." }, 403)
       }
 
       const summary: InboundSummary = {
@@ -429,17 +437,26 @@ Deno.serve(async (req: Request) => {
       }
 
       try {
-        await applyInboundChanges(connection.google_sync_token)
-      } catch (error) {
-        const status = (error as Error & { status?: number }).status
-        if (status === 410) {
+        try {
+          await applyInboundChanges(connection.google_sync_token)
+        } catch (error) {
+          const status = (error as Error & { status?: number }).status
+          if (status !== 410) throw error
+
           await setInboundConnectionState(ctx.admin, ctx.teamId, {
             google_sync_token: null,
           })
           await applyInboundChanges(null)
-        } else {
-          throw error
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unexpected inbound sync error"
+        await setInboundConnectionState(ctx.admin, ctx.teamId, {
+          inbound_last_sync_error: message,
+          inbound_last_sync_summary: summary,
+          last_sync_error: message,
+          last_tested_at: new Date().toISOString(),
+        })
+        throw error
       }
 
       return jsonResponse({

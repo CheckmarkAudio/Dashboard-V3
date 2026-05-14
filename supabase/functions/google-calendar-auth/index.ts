@@ -44,6 +44,10 @@ function requireEnv(name: string): string {
   return value
 }
 
+function canManageGoogleCalendar(role: string | null | undefined): boolean {
+  return role === "admin" || role === "owner"
+}
+
 function callbackUrl(supabaseUrl: string): string {
   return `${supabaseUrl}/functions/v1/google-calendar-auth`
 }
@@ -257,8 +261,8 @@ Deno.serve(async (req: Request) => {
     }
 
     if (body.action === "disconnect") {
-      if (ctx.role !== "admin") {
-        return jsonResponse({ ok: false, error: "Only admins can disconnect Google Calendar" }, 403)
+      if (!canManageGoogleCalendar(ctx.role)) {
+        return jsonResponse({ ok: false, error: "Only admins or owners can disconnect Google Calendar" }, 403)
       }
 
       const { error } = await ctx.admin
@@ -274,8 +278,8 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ ok: false, error: "Unknown action" }, 400)
     }
 
-    if (ctx.role !== "admin") {
-      return jsonResponse({ ok: false, error: "Only admins can connect Google Calendar" }, 403)
+    if (!canManageGoogleCalendar(ctx.role)) {
+      return jsonResponse({ ok: false, error: "Only admins or owners can connect Google Calendar" }, 403)
     }
 
     const origin = req.headers.get("Origin") ?? ""
