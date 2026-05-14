@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -7,6 +7,7 @@ import {
   Globe,
   Instagram,
   Loader2,
+  LogOut,
   Mail,
   Pencil,
   Shield,
@@ -24,6 +25,7 @@ import LiveStatus from '../components/members/LiveStatus'
 import StatsSidebar from '../components/members/StatsSidebar'
 import { Badge, Button } from '../components/ui'
 import type { MemberSocials, TeamMember } from '../types'
+import { APP_ROUTES } from '../app/routes'
 
 /**
  * Member profile page.
@@ -44,8 +46,10 @@ import type { MemberSocials, TeamMember } from '../types'
  */
 export default function Profile() {
   const { memberId } = useParams<{ memberId: string }>()
-  const { profile: viewerProfile } = useAuth()
+  const navigate = useNavigate()
+  const { profile: viewerProfile, signOut } = useAuth()
   const [editing, setEditing] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
 
   const teamQuery = useQuery({
     queryKey: teamMemberKeys.list(),
@@ -94,6 +98,16 @@ export default function Profile() {
   const isAdmin = member.role === 'admin'
   const positionLabel = getPositionLabel(member.position)
   const positionVariant = getPositionVariant(member.position)
+
+  const handleSignOut = async () => {
+    setSigningOut(true)
+    try {
+      await signOut()
+    } finally {
+      setSigningOut(false)
+      navigate(APP_ROUTES.auth.login, { replace: true })
+    }
+  }
 
   return (
     <div className="max-w-5xl mx-auto animate-fade-in">
@@ -174,14 +188,25 @@ export default function Profile() {
                       </div>
                     </div>
                     {isOwnProfile && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        iconLeft={<Pencil size={13} aria-hidden="true" />}
-                        onClick={() => setEditing(true)}
-                      >
-                        Edit profile
-                      </Button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          iconLeft={<Pencil size={13} aria-hidden="true" />}
+                          onClick={() => setEditing(true)}
+                        >
+                          Edit profile
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          loading={signingOut}
+                          iconLeft={!signingOut ? <LogOut size={13} aria-hidden="true" /> : undefined}
+                          onClick={() => void handleSignOut()}
+                        >
+                          Log out
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>
