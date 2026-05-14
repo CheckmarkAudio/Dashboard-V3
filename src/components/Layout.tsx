@@ -27,7 +27,7 @@ import {
   LayoutDashboard, Users, Calendar, Settings, Gauge,
   Menu, X, ChevronDown, ClipboardList, CheckSquare,
   BarChart3, Briefcase, MessageSquare, Clock, Sun, Moon,
-  Loader2, MoreHorizontal,
+  Loader2, MoreHorizontal, FolderUp,
 } from 'lucide-react'
 
 /**
@@ -361,6 +361,10 @@ const mainLinks: NavLinkDef[] = [
   { to: APP_ROUTES.member.calendar, icon: Calendar, label: 'Calendar' },
   { to: APP_ROUTES.member.booking, icon: Briefcase, label: 'Booking' },
   { to: APP_ROUTES.member.content, icon: MessageSquare, label: 'Forum' },
+  // 2026-05-14 — Add Media tab. Visible to all logged-in members.
+  // Uploads go to the per-member subfolder under the shared
+  // "Checkmark Media" Drive folder via the upload-to-drive edge fn.
+  { to: APP_ROUTES.member.addMedia, icon: FolderUp, label: 'Add Media' },
 ]
 
 /* ── Menu-Sidebar v5.2 — Admin menu ──

@@ -9,6 +9,7 @@ export const APP_ROUTES = {
     booking: '/sessions',
     calendar: '/calendar',
     content: '/content',
+    addMedia: '/add-media',
   },
   admin: {
     hub: '/admin',

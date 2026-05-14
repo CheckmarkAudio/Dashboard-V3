@@ -13,6 +13,7 @@ const DailyChecklist = lazy(() => import('../../pages/DailyChecklist'))
 const Sessions       = lazy(() => import('../../pages/Sessions'))
 const Calendar       = lazy(() => import('../../pages/Calendar'))
 const Content        = lazy(() => import('../../pages/Content'))
+const AddMedia       = lazy(() => import('../../pages/AddMedia'))
 
 export interface FeatureRouteDef {
   path?: string
@@ -27,4 +28,5 @@ export const MEMBER_ROUTES: FeatureRouteDef[] = [
   { path: APP_ROUTES.member.booking,  element: <Sessions /> },
   { path: APP_ROUTES.member.calendar, element: <Calendar /> },
   { path: APP_ROUTES.member.content,  element: <Content /> },
+  { path: APP_ROUTES.member.addMedia, element: <AddMedia /> },
 ]
