@@ -24,9 +24,9 @@ interface AuthContextType {
   canAccessAdmin: boolean
   /**
    * True only when the current session was established by clicking a
-   * Supabase password-reset email link. Used by ForcePasswordChangeModal
-   * to show the "set your password" UI so the user finishes the recovery
-   * flow. Cleared once they update their password successfully.
+   * Supabase password-reset/setup link. Used by RecoveryGate to show
+   * the "set your password" UI so the user finishes the recovery flow.
+   * Cleared once they update their password successfully.
    */
   isPasswordRecovery: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
@@ -314,8 +314,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     //
     // We work around the race by checking the URL ourselves here —
     // whichever path fires first (this sync check OR the async event),
-    // isPasswordRecovery flips on, and ForcePasswordChangeModal shows
-    // up correctly.
+    // isPasswordRecovery flips on, and RecoveryGate shows up correctly.
     if (typeof window !== 'undefined') {
       const hash = window.location.hash ?? ''
       const search = window.location.search ?? ''
