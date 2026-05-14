@@ -30,7 +30,7 @@ import { Button, Input } from '../ui'
  *     of the recovery token, so no second login is needed.
  */
 export default function RecoveryGate({ children }: { children: ReactNode }) {
-  const { isPasswordRecovery, clearPasswordRecovery } = useAuth()
+  const { user, isPasswordRecovery, clearPasswordRecovery } = useAuth()
   const navigate = useNavigate()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -72,7 +72,13 @@ export default function RecoveryGate({ children }: { children: ReactNode }) {
       return
     }
     setSubmitting(true)
-    const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword })
+    const { error: updateErr } = await supabase.auth.updateUser({
+      password: newPassword,
+      data: {
+        ...user?.user_metadata,
+        requires_password_change: false,
+      },
+    })
     setSubmitting(false)
     if (updateErr) {
       setError(updateErr.message)

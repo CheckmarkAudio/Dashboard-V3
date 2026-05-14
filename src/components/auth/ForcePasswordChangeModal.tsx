@@ -20,7 +20,7 @@ import { KeyRound } from 'lucide-react'
  * modal then unmounts on the next render and the dashboard appears.
  */
 export default function ForcePasswordChangeModal() {
-  const { user, refreshProfile, isPasswordRecovery, clearPasswordRecovery } = useAuth()
+  const { user, refreshProfile, clearPasswordRecovery } = useAuth()
   const { toast } = useToast()
 
   const [newPassword, setNewPassword] = useState('')
@@ -28,14 +28,11 @@ export default function ForcePasswordChangeModal() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // Trigger in either of two scenarios:
-  //   1. Admin-created account with requires_password_change flag set
-  //      by admin-create-member (first-login onboarding)
-  //   2. User clicked the recovery link from a password-reset email —
-  //      AuthContext sets isPasswordRecovery=true on the
-  //      PASSWORD_RECOVERY event from supabase.auth.onAuthStateChange
+  // Trigger only for admin-created / temp-password accounts. Password
+  // recovery links are handled by RecoveryGate, which clears this flag
+  // when the user sets their new password so the two flows don't stack.
   const requiresChange = user?.user_metadata?.requires_password_change === true
-  if (!user || (!requiresChange && !isPasswordRecovery)) return null
+  if (!user || !requiresChange) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
