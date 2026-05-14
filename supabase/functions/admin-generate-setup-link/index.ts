@@ -59,6 +59,39 @@ function generateRandomPassword(): string {
   return out
 }
 
+async function findAuthUserIdByEmail(
+  admin: ReturnType<typeof createClient>,
+  email: string,
+): Promise<string> {
+  try {
+    const { data: existingAuth } = await admin
+      .schema("auth")
+      .from("users")
+      .select("id, email")
+      .eq("email", email)
+      .maybeSingle()
+    if (existingAuth?.id) return existingAuth.id
+  } catch (_) {
+    // Some Supabase projects do not expose the auth schema through
+    // PostgREST. Fall back to the Auth Admin API below.
+  }
+
+  try {
+    for (let page = 1; page <= 20; page++) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
+      if (error) break
+      const match = data.users.find((user) => normalizeEmail(user.email) === email)
+      if (match?.id) return match.id
+      if (data.users.length < 1000) break
+    }
+  } catch (_) {
+    // createUser below will still return a clear duplicate-email error
+    // if lookup fails but the auth user already exists.
+  }
+
+  return ""
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS })
@@ -117,10 +150,12 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ ok: false, error: "Only team admins can generate setup links" }, 403)
     }
 
+    const profileLookupColumn = userId ? "id" : "email"
+    const profileLookupValue = userId || requestedEmail
     const { data: targetProfile, error: targetProfileErr } = await admin
       .from("team_members")
       .select("id, team_id, email, display_name")
-      .eq(userId ? "id" : "email", userId || targetEmail)
+      .eq(profileLookupColumn, profileLookupValue)
       .maybeSingle()
     if (targetProfileErr || !targetProfile) {
       return jsonResponse({ ok: false, error: "Target profile not found" }, 404)
@@ -141,19 +176,7 @@ Deno.serve(async (req: Request) => {
 
     let { data: targetAuth } = await admin.auth.admin.getUserById(targetUserId)
     if (!targetAuth?.user) {
-      let authUserIdForEmail = ""
-      try {
-        const { data: existingAuth } = await admin
-          .schema("auth")
-          .from("users")
-          .select("id, email")
-          .eq("email", targetEmail)
-          .maybeSingle()
-        authUserIdForEmail = existingAuth?.id ?? ""
-      } catch (_) {
-        // If the direct auth schema probe fails, createUser below will
-        // still catch duplicate-email conflicts and return a clear error.
-      }
+      const authUserIdForEmail = await findAuthUserIdByEmail(admin, targetEmail)
 
       let createdAuthUserId = ""
       if (authUserIdForEmail) {
@@ -170,8 +193,14 @@ Deno.serve(async (req: Request) => {
           },
         })
         if (createErr || !createdAuth.user) {
+          const message = createErr?.message ?? "Failed to create auth user for member"
           return jsonResponse(
-            { ok: false, error: createErr?.message ?? "Failed to create auth user for member" },
+            {
+              ok: false,
+              error: message.includes("already")
+                ? "An Auth user already exists for this email, but the member profile could not be linked automatically. Try again in a moment or ask Codex to relink the profile."
+                : message,
+            },
             400,
           )
         }
