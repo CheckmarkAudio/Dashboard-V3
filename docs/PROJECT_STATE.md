@@ -14,7 +14,7 @@
 | **Hosting** | Vercel (auto-deploys from `main`) |
 | **Database** | Supabase project `ncljfjdcyswoeitsooty` ("Checkmark Intern Manager") |
 | **Latest commit (main)** | `main` has moved beyond the older light-mode baseline and now includes recent booking/calendar interaction work plus **Google Calendar Phase 1 sync merged and connected live on production** (PR #152). Treat this document, not the older theme-only notes, as the canonical summary of the live state. |
-| **Currently active** | **Google Calendar Phase 1 is live on production.** Live Settings now shows `Google Calendar Sync`, connected account `checkmarkaudio@gmail.com`, and calendar target `primary`. Current safe operating rule: **Checkmark is the source of truth; Google/Apple are mirror-only surfaces until Phase 2 ships.** Immediate next build is **Phase 2 inbound sync for already-linked events first** (Google/Apple edits to existing synced bookings flowing back into `sessions`), while preserving the outbound Phase 1 path unchanged. A manual admin-only inbound sync beta is now being prepared on a branch, but it is **not** live on production yet. |
+| **Currently active** | **Urgent account setup-link rescue is in flight.** Supabase SMTP delivery is not trusted for employee onboarding, so the active fix is direct admin-generated setup links: create member → copy setup link, or Settings → Account Access → generate setup link for an existing member. After this auth unblocker ships, return to **Google Calendar Phase 2 inbound sync for already-linked events first** while preserving outbound Phase 1 unchanged. |
 | **Prior active** | (this PR) Light-mode revamp — soft borders + grey body / white cards + fintech wash + bright yellow gold token + contrast scan. PR #102 (`26225d8`) Studio +Add modal + recurrence + Members-pane chrome parity + `/daily` widget sectioning + modal close-on-mouseup fix. PR #101 (`0d550f6`) Studio tab on Assign + `studio_space` room sections. PR #100 (`b31f4b7`) uniform pending symbols + green approve buttons + clean diff container. PR #99 (`1ebaad3`) sitewide orange-for-edit + clickable admin queue rows + pending-row opacity fix. PR #98 (`23d5cce`) RequestDetailModal + member cancel + cancelled status. PR #97 (`08dc7c3`) member request-to-edit flow. PR #96 (`d5a541d`) Templates as inline sidebar tab. PR #94 (`f717c1e`) removed the empty "Settings for Tasks" button. PR #90 (`740667d`) Assign delete reliability. PR #89 (`8dfa922`) sticky header fix (`overflow: clip`). PR #88 (`4be99e3`) MyTasksCard pending section + divider. PR #87 (`a5a9fe2`) realtime sync for task surfaces. PR #86 (`13aaaea`) `FloatingDetailModal` portals to `document.body`. PR #85 (`3fffc6f`) unified member request actions — Delete + Transfer composer pattern. PR #84 (`56693de`) admin-delete UX polish. PR #82 (`52954df`) admin direct-delete on `/admin/templates`. |
 | **Security advisor (last explicitly repo-verified)** | **0 ERRORS**. Last explicitly verified repo-side note remains ~72 WARN `authenticated_security_definer_function_executable` (by-design — every SECURITY DEFINER RPC granted to `authenticated` triggers it) plus 1 WARN `auth_leaked_password_protection` (Pro plan paywall). Google Calendar rollout added new RPC / function surface, so rerun Advisor before claiming a newer exact warning count. |
 
@@ -30,8 +30,8 @@
 | **Recovery flow** | Inline `<script>` in `src/index.html` detects `#type=recovery` BEFORE supabase-js init; `src/components/auth/RecoveryGate.tsx` intercepts every route when flag is set |
 | **Owner protection** | 3 layers: DB triggers (`protect_owner_update`, `protect_owner_delete`), `OWNER_EMAIL` constant in `src/domain/permissions/index.ts`, email-first `getAppRole(email)` |
 | **Permission model** | `owner` / `admin` / `member` roles; `team_members.role` is `'admin' \| 'intern'` in DB (intern = member-tier) |
-| **Account creation** | `admin-create-member` edge function (proper GoTrue admin API) called from `TeamManager.tsx`; or direct SQL with `auth.users` + `auth.identities` + `team_members` for ad-hoc adds |
-| **Account access UI** | `src/components/admin/AccountAccessPanel.tsx` — owner-only role toggle + password reset; `owner_set_member_role()` and `owner_reset_member_password()` RPCs |
+| **Account creation** | `admin-create-member` edge function (proper GoTrue admin API) called from `TeamManager.tsx`; default UI path now follows with `admin-generate-setup-link` so admins can copy/send a setup link directly |
+| **Account access UI** | `src/components/admin/AccountAccessPanel.tsx` — owner-only role toggle + direct setup-link generation for existing members; avoids relying on Supabase SMTP delivery |
 | **Tables** | Renamed to `team_*` with `intern_*` compat views (Phase B done; Approach A column rename deferred) |
 | **Code splitting** | Per-route `React.lazy()` in `src/features/{member,admin}/routes.tsx`; `<Suspense>` in `Layout.tsx` |
 | **Theme** | `light` \| `dark` \| `system`; `src/contexts/ThemeContext.tsx`; localStorage-only (DB persistence deferred) |
@@ -98,10 +98,10 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 - *Trade-off:* if two tabs ever refresh tokens simultaneously, both refresh — Supabase's server tolerates this (last write wins, session stays valid).
 - *Date:* 2026-04-16 — in `src/lib/supabase.ts`.
 
-**7. Email-based password reset over admin-shared temp passwords**
-- *Why:* matches Gmail/Apple/professional UX; no plaintext passwords in chat or email; recovery link auth is industry-standard.
-- *Trade-off:* requires email infrastructure (Supabase auto-handles this on free tier); admin can still send temp passwords via Account Access UI for special cases.
-- *Date:* 2026-04-16.
+**7. Direct setup links over SMTP-dependent email delivery**
+- *Why:* recovery/setup links are still the professional UX, but Supabase SMTP delivery proved unreliable for non-owner employee addresses. The app now asks Supabase Auth Admin API to generate the link and shows it to the owner/admin to send directly.
+- *Trade-off:* admins copy/send the link manually until a real SMTP provider is configured. This avoids plaintext passwords as the default while keeping temp passwords available as a fallback for in-person handoff.
+- *Date:* 2026-05-14.
 
 **8. Approach B for rename (tables only, defer columns)**
 - *Why:* simple `SELECT *` compat views (~80 lines of SQL) instead of column-aliasing views (~200 lines). Half the code-sweep surface. Lower typo risk per migration attempt.
@@ -114,6 +114,7 @@ These are the load-bearing decisions. If you're considering reversing one, read 
 
 | Date | Commit / PR | Notes |
 |--|--|--|
+| 2026-05-14 | Setup-link rescue in flight | **Employee login unblocker.** `CODEX:` added `admin-generate-setup-link`, deployed it to Supabase project `ncljfjdcyswoeitsooty`, and rewired Add Member / Account Access toward copyable setup links instead of SMTP-dependent reset email or default temp-password handoff. Verified with `npm run build`. |
 | 2026-05-14 | Auth safety fix in flight | **Production login lockdown follow-up.** `CODEX:` tightened preview auto-login so it now requires both a Vercel branch-preview hostname and `VITE_DEPLOY_ENV === 'preview'` from the Vercel build environment. Production builds still strip `VITE_PREVIEW_LOGIN_*` credentials, and now the runtime path also refuses auto-login if those vars drift into the wrong scope. Verified with `npm run build` and `VERCEL_ENV=production npm run build`. After merge/deploy, return to Google Calendar Phase 2 inbound sync work. |
 | 2026-05-14 | Calendar Phase 2 edge functions deployed | **Two-way calendar-sync beta hardening.** `CODEX:` updated `google-calendar-auth` / `google-calendar-sync` so owners as well as admins can manage calendar sync, removed an invalid Google Calendar extended-property list filter, preserved external title edits as `client_name`, and persisted inbound sync failures to Settings-visible connection fields. `REMOTE-SCHEMA-VERIFIED:` required Phase 2 columns exist on production despite migration-history drift. `SUPABASE-DEPLOYED:` both edge functions deployed to project `ncljfjdcyswoeitsooty`. |
 | 2026-05-07 | PR #152 merged | **Google Calendar Phase 1 sync is live on production.** `CODEX:` built and patched the Google Calendar integration, including `google_event_id` booking mapping, outbound sync hooks, admin Settings UI, Phase 1 docs/runbooks, and OAuth callback fixes. `MANUAL-GOOGLE-CLOUD:` user created the OAuth client, rotated the exposed client secret, and confirmed `checkmarkaudio@gmail.com` as the connected Google account. `MANUAL-SUPABASE:` user applied the calendar SQL manually in the Supabase SQL Editor due migration-history drift, then updated secrets and redeployed `google-calendar-auth`. `LIVE-VERIFIED:` production Settings now shows `Google Calendar Sync`, connected account `checkmarkaudio@gmail.com`, calendar target `primary`, and a Disconnect button. Phase 1 operating rule locked: `Checkmark -> Google -> Apple`; no inbound Apple/Google edits yet. |
@@ -500,8 +501,8 @@ Existing infrastructure to leverage:
 - ✅ **Vercel migration** — replaces GitHub Pages; preview URLs; no more hard-refreshes
 - ✅ **Auth hardening** — recovery, sign-out, owner protection, transient-error retry, lock-disable, implicit flow, inline hash detection
 - ✅ **Owner lockdown** — 3 layers (DB triggers + code constant + email-first resolver); `checkmarkaudio@gmail.com` cannot be demoted or deleted
-- ✅ **Account Access UI** — owner-only role toggle + password reset
-- ✅ **Email-based password reset** — proper Supabase email flow, not temp-password sharing
+- ✅ **Account Access UI** — owner-only role toggle + direct setup-link generation
+- ✅ **Setup-link onboarding** — admin-generated recovery links copied/sent directly; temp passwords remain fallback only
 - ✅ **Placeholder data cleanup** — forum mocks deleted, TaskContext seeds emptied, Flywheel mockup gracefully empty
 - ✅ **Analytics merged with Flywheel** — one page, all charts; old `/admin/flywheel` route redirects
 - ✅ **Forum nav rename** — "Content" → "Forum" (also: 5-stage flywheel restored on member Overview)
