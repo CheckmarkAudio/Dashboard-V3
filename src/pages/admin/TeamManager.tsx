@@ -11,6 +11,7 @@ import TempPasswordReveal from '../../components/auth/TempPasswordReveal'
 import { Button, Input, Select, Badge, EmptyState } from '../../components/ui'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
 import ClockDataSection from '../../components/admin/ClockDataSection'
+import MemberActivitySection from '../../components/admin/MemberActivitySection'
 import {
   loadActiveTemplates,
   loadDefaultTemplateIdsForPosition,
@@ -22,7 +23,11 @@ import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
   Save, ChevronRight, ChevronLeft,
   MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
+  Activity,
 } from 'lucide-react'
+// `Activity` icon kept as the lucide glyph for the new left-rail
+// "Activity" section (mirrors the user's mental model — Roster /
+// Clock Data / Activity).
 
 import type { BadgeVariant } from '../../components/ui'
 
@@ -30,11 +35,12 @@ import type { BadgeVariant } from '../../components/ui'
 // Settings page pattern (left section nav + right pane). Roster is the
 // existing TeamManager content; Clock Data is a placeholder section
 // that PR #59 (Clock In/Out v2) will populate with shift data.
-type MembersSectionKey = 'roster' | 'clock-data'
+type MembersSectionKey = 'roster' | 'clock-data' | 'activity'
 
 const MEMBERS_SECTIONS: AdminSection<MembersSectionKey>[] = [
-  { key: 'roster',     icon: Users, title: 'Roster',     subtitle: 'Active and inactive team members' },
-  { key: 'clock-data', icon: Clock, title: 'Clock Data', subtitle: 'Shifts and reflections' },
+  { key: 'roster',     icon: Users,    title: 'Roster',     subtitle: 'Active and inactive team members' },
+  { key: 'clock-data', icon: Clock,    title: 'Clock Data', subtitle: 'Shifts and reflections' },
+  { key: 'activity',   icon: Activity, title: 'Activity',   subtitle: 'Sessions, tasks, and shifts per member' },
 ]
 
 const POSITIONS: { value: string; label: string; badge: BadgeVariant }[] = [
@@ -525,8 +531,20 @@ export default function TeamManager() {
             push the rounded border past the viewport on narrower screens).
             `overflow-hidden` keeps anything inside clipped at the rounded
             border. Settings doesn't need this because its content is short
-            text + simple form rows. */}
-        <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px] min-w-0 overflow-hidden">
+            text + simple form rows.
+
+            2026-05-14 — when activeSection === 'activity', the card
+            chrome drops away (no bg-surface, no border, no padding) so
+            the widget-card chrome on each per-widget tile is the ONLY
+            border the eye sees. Mirrors how widgets sit flush on
+            Overview / Hub instead of nested inside another box. */}
+        <section
+          className={
+            activeSection === 'activity'
+              ? 'min-h-[320px] min-w-0'
+              : 'bg-surface rounded-xl border border-border p-6 min-h-[320px] min-w-0 overflow-hidden'
+          }
+        >
 
       {activeSection === 'roster' && (<>
       {/* Toolbar: search + filters */}
@@ -799,6 +817,13 @@ export default function TeamManager() {
       </>)}
 
       {activeSection === 'clock-data' && <ClockDataSection members={members} />}
+
+      {/* 2026-05-14 — Activity section moved from a per-row drawer
+          (originally PR #179) into the left-rail per user direction:
+          "I want activity to be in the side menu on the left, under
+          clock data". Same data, larger lateral room, member picker
+          mirrors the Clock Data tab's filter shape. */}
+      {activeSection === 'activity' && <MemberActivitySection members={members} />}
 
         </section>
       </div>
