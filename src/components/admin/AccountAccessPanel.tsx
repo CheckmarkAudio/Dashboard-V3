@@ -42,12 +42,9 @@ function normalizeAccessUser(row: Partial<AccessUser>): AccessUser {
 /**
  * Account Access panel (owner-only).
  *
- * Renders two columns — Admin Access (role='admin') and Employee Access
- * (role='intern') — with a toggle on every non-owner row that flips that
- * user's role. Calls the SECURITY DEFINER RPC `owner_set_member_role`,
- * which itself rejects any caller whose JWT email isn't OWNER_EMAIL, so
- * we have defense-in-depth: UI hides the toggles for non-owners AND the
- * DB refuses writes from them.
+ * Renders two columns — Admin Access (role='admin') and Employee Access.
+ * Owner can flip access roles. Admins can generate setup links for
+ * coworkers. The database/edge function re-checks both permissions.
  *
  * The owner's own row is shown as pinned + locked: you can never
  * demote the primary admin from this UI (and the DB trigger would
@@ -65,7 +62,8 @@ interface AccessUser {
 
 function UserRow({
   user,
-  isOwnerViewer,
+  canManageAccess,
+  canGenerateSetupLinks,
   isPrimaryOwner,
   busy,
   onToggle,
@@ -73,7 +71,8 @@ function UserRow({
   onUpdateEmail,
 }: {
   user: AccessUser
-  isOwnerViewer: boolean
+  canManageAccess: boolean
+  canGenerateSetupLinks: boolean
   isPrimaryOwner: boolean
   busy: boolean
   onToggle: (user: AccessUser) => void
@@ -203,8 +202,8 @@ function UserRow({
         </p>
       </div>
 
-      {/* Setup link — owner-only, never shown on the primary owner row */}
-      {isOwnerViewer && !isPrimaryOwner && (
+      {/* Setup link — admin/owner only, never shown on the primary owner row */}
+      {canGenerateSetupLinks && !isPrimaryOwner && (
         <button
           type="button"
           onClick={() => onGenerateSetupLink(user)}
@@ -221,12 +220,12 @@ function UserRow({
       <label
         className={[
           'flex items-center gap-2 shrink-0',
-          isOwnerViewer && !isPrimaryOwner ? 'cursor-pointer' : 'cursor-not-allowed opacity-70',
+          canManageAccess && !isPrimaryOwner ? 'cursor-pointer' : 'cursor-not-allowed opacity-70',
         ].join(' ')}
         title={
           isPrimaryOwner
             ? 'The primary owner account is locked as admin.'
-            : isOwnerViewer
+            : canManageAccess
               ? user.role === 'admin'
                 ? 'Uncheck to revoke admin access'
                 : 'Check to grant admin access'
@@ -237,7 +236,7 @@ function UserRow({
           type="checkbox"
           checked={user.role === 'admin'}
           onChange={() => onToggle(user)}
-          disabled={!isOwnerViewer || isPrimaryOwner || busy}
+          disabled={!canManageAccess || isPrimaryOwner || busy}
           aria-label={`Admin access for ${user.display_name}`}
           className="w-4 h-4 rounded border-border accent-gold"
         />
@@ -250,9 +249,12 @@ function UserRow({
 }
 
 export default function AccountAccessPanel() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const viewerEmail = (user?.email ?? '').trim().toLowerCase()
   const isOwnerViewer = viewerEmail === OWNER_EMAIL
+  const isAdminViewer = profile?.role === 'admin'
+  const canManageAccess = isOwnerViewer
+  const canGenerateSetupLinks = isOwnerViewer || isAdminViewer
 
   const [users, setUsers] = useState<AccessUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -329,11 +331,11 @@ export default function AccountAccessPanel() {
   }, [isOwnerViewer])
 
   const onGenerateSetupLink = useCallback((target: AccessUser) => {
-    if (!isOwnerViewer) return
+    if (!canGenerateSetupLinks) return
     if ((target.email ?? '').toLowerCase() === OWNER_EMAIL) return
     setResetTarget(target)
     setResetResult(null)
-  }, [isOwnerViewer])
+  }, [canGenerateSetupLinks])
 
   // Inline email correction. Owner-only path that hits the
   // `admin-update-email` edge function — that function does the
@@ -507,13 +509,15 @@ export default function AccountAccessPanel() {
         <span
           className={[
             'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold',
-            isOwnerViewer
+            canManageAccess
               ? 'text-gold bg-gold/10 border border-gold/30'
+              : canGenerateSetupLinks
+                ? 'text-emerald-300 bg-emerald-500/10 border border-emerald-400/30'
               : 'text-text-light bg-surface-alt border border-border',
           ].join(' ')}
         >
-          {isOwnerViewer ? <ShieldCheck size={12} /> : <UserIcon size={12} />}
-          {isOwnerViewer ? 'Owner · edits enabled' : 'Read-only'}
+          {canManageAccess ? <ShieldCheck size={12} /> : <UserIcon size={12} />}
+          {canManageAccess ? 'Owner · edits enabled' : canGenerateSetupLinks ? 'Setup links enabled' : 'Read-only'}
         </span>
       </header>
 
@@ -548,7 +552,8 @@ export default function AccountAccessPanel() {
               <UserRow
                 key={u.id}
                 user={u}
-                isOwnerViewer={isOwnerViewer}
+                canManageAccess={canManageAccess}
+                canGenerateSetupLinks={canGenerateSetupLinks}
                 isPrimaryOwner={u.email.toLowerCase() === OWNER_EMAIL}
                 busy={busyId === u.id}
                 onToggle={onToggle}
@@ -574,7 +579,8 @@ export default function AccountAccessPanel() {
               <UserRow
                 key={u.id}
                 user={u}
-                isOwnerViewer={isOwnerViewer}
+                canManageAccess={canManageAccess}
+                canGenerateSetupLinks={canGenerateSetupLinks}
                 isPrimaryOwner={false}
                 busy={busyId === u.id}
                 onToggle={onToggle}
