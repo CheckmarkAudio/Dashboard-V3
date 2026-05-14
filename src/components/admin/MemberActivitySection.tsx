@@ -76,13 +76,12 @@ export default function MemberActivitySection({ members }: { members: TeamMember
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
+          {/* Sitewide rule (skin pass 2026-05-06 + reaffirmed
+              2026-05-14): titles only, no decorative subtitle text. */}
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Activity size={18} className="text-gold" aria-hidden="true" />
             Activity
           </h2>
-          <p className="text-text-muted text-[12px] mt-0.5">
-            Recent sessions, completed tasks, and shifts for one member at a glance.
-          </p>
         </div>
         <div className="flex items-end gap-3">
           {member && (
