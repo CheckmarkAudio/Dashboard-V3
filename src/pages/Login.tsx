@@ -7,20 +7,23 @@ import { OWNER_EMAIL } from '../domain/permissions'
 import { Eye, EyeOff, HelpCircle, LogIn, Music } from 'lucide-react'
 
 /**
- * Lean 2 — preview-login lockdown (runtime defense layer 2 / 3).
+ * Lean 2 — preview-login lockdown (runtime defense layer 2 / 4).
  *
  * The hostname guard says: only auto-login when the page is served
  * from a Vercel branch-preview URL. Branch-preview hostnames look
  * like `dashboard-v3-git-<branch>-<team>.vercel.app`; the production
  * alias is `dashboard-v3-dusky.vercel.app`.
  *
- * This guard is paired with two more layers (see also `Lean 2`
+ * This guard is paired with three more layers (see also `Lean 2`
  * comments below):
- *   - Layer 3 (build): vite.config.ts strips the
+ *   - Layer 1 (build/runtime): vite.config.ts exposes VERCEL_ENV as
+ *     `VITE_DEPLOY_ENV`, and auto-login only runs when it is exactly
+ *     `preview`.
+ *   - Layer 4 (build): vite.config.ts strips the
  *     `VITE_PREVIEW_LOGIN_*` env vars when `VERCEL_ENV === 'production'`,
  *     so they can't appear in the production bundle even if an admin
  *     puts them in the wrong Vercel scope.
- *   - Layer 2 (runtime): we ALSO require an explicit
+ *   - Layer 3 (runtime): we ALSO require an explicit
  *     `VITE_PREVIEW_LOGIN_ALLOWED === 'true'` env var alongside the
  *     email/password creds — a deliberate "yes I really mean it"
  *     opt-in that has to be set on every preview environment.
@@ -75,38 +78,42 @@ export default function Login() {
   const [error, setError] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
 
-  // Preview auto-login: three independent guards must all pass before
+  // Preview auto-login: four independent guards must all pass before
   // we silently sign in. See `isVercelBranchPreview()` above + the
-  // build-time strip in `vite.config.ts` for the full defense story.
+  // build/deploy checks in `vite.config.ts` for the full defense story.
+  const deployEnv = import.meta.env.VITE_DEPLOY_ENV as string | undefined
   const previewEmail = import.meta.env.VITE_PREVIEW_LOGIN_EMAIL as string | undefined
   const previewPassword = import.meta.env.VITE_PREVIEW_LOGIN_PASSWORD as string | undefined
   const previewAllowed = import.meta.env.VITE_PREVIEW_LOGIN_ALLOWED as string | undefined
+  const previewBuild = deployEnv === 'preview'
+  const previewHost = isVercelBranchPreview()
   const previewReady =
+    previewBuild &&
     Boolean(previewEmail) &&
     Boolean(previewPassword) &&
     previewAllowed === 'true' &&
-    isVercelBranchPreview()
+    previewHost
   const [previewRunning, setPreviewRunning] = useState(previewReady)
   const previewFiredRef = useRef(false)
 
-  // Audit log: if the auto-login env vars are present on a hostname
-  // that ISN'T an authorized preview, surface it loudly in the
-  // console so we notice misconfiguration before a real bypass
-  // happens. (Vite's build-time strip should make this unreachable
-  // on production deployments, but a belt-and-suspenders check
-  // matters here.)
+  // Audit log: if the auto-login env vars are present outside a true
+  // preview build + preview hostname, surface it loudly in the console
+  // so we notice misconfiguration before a real bypass happens.
+  // Vite's build-time strip should make the production case
+  // unreachable, but a belt-and-suspenders check matters here.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const hasAnyPreviewVar = Boolean(previewEmail) || Boolean(previewPassword) || Boolean(previewAllowed)
-    if (hasAnyPreviewVar && !isVercelBranchPreview()) {
+    if (hasAnyPreviewVar && (!previewBuild || !previewHost)) {
       // eslint-disable-next-line no-console
       console.warn(
-        '[Login] VITE_PREVIEW_LOGIN_* env vars detected on a non-preview hostname. ' +
-          'Auto-login was refused. Audit Vercel env scopes — these vars must live in ' +
-          'the Preview scope only, never Production.',
+        '[Login] Preview auto-login vars detected outside an authorized preview deploy. ' +
+          'Auto-login was refused. Audit Vercel env scopes — preview login vars must live ' +
+          'in the Preview scope only, never Production.',
+        { deployEnv, host: window.location.hostname, previewBuild, previewHost },
       )
     }
-  }, [previewEmail, previewPassword, previewAllowed])
+  }, [deployEnv, previewAllowed, previewBuild, previewEmail, previewHost, previewPassword])
 
   // Phase 6.4 — surface the "not provisioned" message if the user was
   // rejected by AuthContext because no team_members row exists.
