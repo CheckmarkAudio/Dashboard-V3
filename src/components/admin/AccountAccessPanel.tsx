@@ -421,7 +421,8 @@ export default function AccountAccessPanel() {
     //   - network / 4xx / 5xx → `invokeErr` populated
     //   - function returned 200 with `{ ok: false, error }` shape
     if (invokeErr) {
-      setResetResult({ kind: 'err', message: errorMessage(invokeErr, 'Failed to generate setup link') })
+      const msg = await extractEdgeFunctionError(invokeErr, 'Failed to generate setup link')
+      setResetResult({ kind: 'err', message: msg })
       return
     }
     if (!data?.ok) {
