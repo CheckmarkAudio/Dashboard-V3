@@ -176,38 +176,46 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ ok: true, email: currentAuthEmail })
   }
 
-  // Reject duplicates against any other auth user. GoTrue will also
-  // refuse the underlying update, but checking up front gives a clearer
-  // error message than the generic "duplicate key" surface.
-  //
-  // Pagination: listUsers returns at most 1000 users per page in the
-  // current SDK. Loop in case a workspace ever grows past that. We bail
-  // out as soon as we find a conflict, so the typical case scans only
-  // the first page.
-  let page = 1
-  let conflict = false
-  while (true) {
-    const { data: list, error: listErr } = await admin.auth.admin.listUsers({
-      page,
-      perPage: 200,
-    })
-    if (listErr) {
-      return jsonResponse({ ok: false, error: `Failed to validate uniqueness: ${listErr.message}` }, 500)
+  // Reject duplicates up front for a clearer error message than
+  // GoTrue's generic "duplicate key" surface. Two paths because
+  // different GoTrue admin APIs are unreliable on different stacks
+  // (`listUsers` was returning "Database error finding users" on
+  // this project — known issue with paginated auth admin reads on
+  // some Postgres versions). We use a direct SQL probe against
+  // `auth.users` via the service-role schema chain instead. If that
+  // probe ever fails we soft-fall-through and let the actual
+  // `updateUserById` call below surface the conflict — better to
+  // attempt the write than to block on a flaky pre-check.
+  try {
+    const { data: dupAuth } = await admin
+      .schema("auth")
+      .from("users")
+      .select("id")
+      .eq("email", newEmail)
+      .neq("id", userId)
+      .maybeSingle()
+    if (dupAuth) {
+      return jsonResponse(
+        { ok: false, error: "Another account already uses that email." },
+        409,
+      )
     }
-    for (const u of list.users) {
-      if (u.id === userId) continue
-      if (normalizeEmail(u.email) === newEmail) {
-        conflict = true
-        break
-      }
-    }
-    if (conflict) break
-    if (list.users.length < 200) break
-    page += 1
+  } catch (_) {
+    // Probe failed — proceed and trust the GoTrue update to catch any
+    // real conflict.
   }
-  if (conflict) {
+
+  // Same probe against team_members so a typo onto another member's
+  // profile mirror is also blocked.
+  const { data: dupProfile } = await admin
+    .from("team_members")
+    .select("id")
+    .eq("email", newEmail)
+    .neq("id", userId)
+    .maybeSingle()
+  if (dupProfile) {
     return jsonResponse(
-      { ok: false, error: "Another account already uses that email." },
+      { ok: false, error: "Another team member already uses that email." },
       409,
     )
   }
