@@ -40,10 +40,12 @@ const HISTORY_LIMIT = 20
 // would crowd the widgets. User asked for "two per this page since
 // there is a left menu bar taking up space."
 const PAGE_SIZE = 2
-// Match the standard widget row height used by WorkspacePanel
-// (ROW_HEIGHT_PX = 340). Keeps the Activity widgets visually
-// consistent with Overview / Hub.
-const WIDGET_HEIGHT_PX = 340
+// Match Overview / Hub widget height. Those widgets register with
+// rowSpan: 2, which WorkspacePanel renders as 2 × ROW_HEIGHT_PX
+// (340) + 1 × ROW_GAP_PX (16) = 696px. User asked for the
+// Activity widgets to be "this long" (referencing Calendar / My
+// Tasks / Notifications on Overview).
+const WIDGET_HEIGHT_PX = 696
 const PAGE_GAP_PX = 16
 
 export default function MemberActivitySection({ members }: { members: TeamMember[] }) {
