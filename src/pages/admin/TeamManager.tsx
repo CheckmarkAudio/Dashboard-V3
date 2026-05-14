@@ -185,6 +185,36 @@ export default function TeamManager() {
     if (editingMember) {
       setSubmitting(true)
       const position = formData.position === 'custom' ? customPosition : formData.position
+
+      // Email is editable as of 2026-05-14. If the admin changed it,
+      // route through the `admin-update-email` edge function (which
+      // updates auth.users + team_members in one call) BEFORE the
+      // profile update — that way if the email change fails (dupe,
+      // invalid, owner-locked) we surface the error and bail rather
+      // than landing the rest of the profile edits with a stale email.
+      const newEmail = normalizeEmail(formData.email)
+      const oldEmail = (editingMember.email ?? '').toLowerCase()
+      if (newEmail && newEmail !== oldEmail) {
+        const { data: emailData, error: emailErr } = await supabase.functions.invoke<{
+          ok: boolean
+          email?: string
+          error?: string
+          warning?: string
+        }>('admin-update-email', {
+          body: { user_id: editingMember.id, new_email: newEmail },
+        })
+        if (emailErr || !emailData?.ok) {
+          const msg = emailData?.error ?? emailErr?.message ?? 'Failed to update email'
+          console.error('[TeamManager] admin-update-email failed:', msg, emailErr, emailData)
+          toast(msg, 'error')
+          setSubmitting(false)
+          return
+        }
+        if (emailData.warning) {
+          toast(`Email updated, but: ${emailData.warning}`, 'error')
+        }
+      }
+
       const { error } = await supabase.from('team_members').update({
         display_name: formData.display_name.trim(),
         role: formData.role,
@@ -961,15 +991,18 @@ export default function TeamManager() {
                   id="team-member-email"
                   label="Email"
                   type="email"
-                  required={!editingMember}
-                  disabled={!!editingMember}
+                  required
                   placeholder="jane@example.com"
+                  // 2026-05-14 — email is now editable after creation.
+                  // The submit handler routes through the
+                  // `admin-update-email` edge function (owner-only,
+                  // updates auth.users + team_members in one call).
                   hint={
                     editingMember
-                      ? 'Email is immutable after a member is created.'
+                      ? 'Editing the email reassigns the login identity. Owner-only.'
                       : 'Will be normalized to lowercase on save.'
                   }
-                  value={editingMember ? (editingMember.email ?? '') : formData.email}
+                  value={formData.email}
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
                 />
 

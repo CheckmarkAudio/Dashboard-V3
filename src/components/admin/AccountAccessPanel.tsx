@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Key, Loader2, RotateCw, Shield, ShieldCheck, User as UserIcon } from 'lucide-react'
+import { AlertCircle, Check, Key, Loader2, Pencil, RotateCw, Shield, ShieldCheck, User as UserIcon, X } from 'lucide-react'
 import { supabase, withSupabaseRetry } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
@@ -69,6 +69,7 @@ function UserRow({
   busy,
   onToggle,
   onGenerateSetupLink,
+  onUpdateEmail,
 }: {
   user: AccessUser
   isOwnerViewer: boolean
@@ -76,6 +77,7 @@ function UserRow({
   busy: boolean
   onToggle: (user: AccessUser) => void
   onGenerateSetupLink: (user: AccessUser) => void
+  onUpdateEmail: (user: AccessUser, newEmail: string) => Promise<boolean>
 }) {
   const initial =
     user.display_name?.charAt(0)?.toUpperCase() ||
@@ -85,10 +87,42 @@ function UserRow({
     ? user.position.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     : 'Team member'
 
+  // Inline email editor state — per-row local so opening the editor on
+  // one row doesn't lock the others. Enter saves, Escape cancels.
+  // 2026-05-14 added per user ask: "can you make emails editable in
+  // settings? I had a typo in one of the emails but couldn't fix it."
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(user.email)
+  const [submitting, setSubmitting] = useState(false)
+  const canEditEmail = isOwnerViewer && !isPrimaryOwner
+
+  const beginEdit = () => {
+    setDraft(user.email)
+    setEditing(true)
+  }
+  const cancelEdit = () => {
+    setEditing(false)
+    setDraft(user.email)
+  }
+  const saveEdit = async () => {
+    const next = draft.trim().toLowerCase()
+    if (!next || next === user.email) {
+      cancelEdit()
+      return
+    }
+    setSubmitting(true)
+    try {
+      const ok = await onUpdateEmail(user, next)
+      if (ok) setEditing(false)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <div
       className={[
-        'flex items-center gap-3 px-3 py-3 rounded-xl border transition-colors',
+        'group/row flex items-center gap-3 px-3 py-3 rounded-xl border transition-colors',
         isPrimaryOwner
           ? 'bg-gold/[0.06] border-gold/30'
           : 'bg-surface-alt/60 border-border hover:border-border-light',
@@ -99,7 +133,64 @@ function UserRow({
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-text truncate">{user.display_name}</p>
-        <p className="text-[12px] text-text-muted truncate">{user.email}</p>
+        {editing ? (
+          // Inline email editor — input + save (✓) + cancel (X). Enter
+          // saves, Escape cancels. Disabled while the network call is
+          // in flight so double-submits can't fire.
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <input
+              type="email"
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void saveEdit()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  cancelEdit()
+                }
+              }}
+              disabled={submitting}
+              aria-label={`New email for ${user.display_name}`}
+              className="flex-1 min-w-0 px-2 py-1 rounded-md text-[12px] bg-surface border border-border text-text focus-ring disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={() => void saveEdit()}
+              disabled={submitting || !draft.trim() || draft.trim().toLowerCase() === user.email}
+              aria-label="Save email"
+              className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus-ring"
+            >
+              {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={submitting}
+              aria-label="Cancel email edit"
+              className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-40 transition-colors focus-ring"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <p className="text-[12px] text-text-muted truncate">{user.email}</p>
+            {canEditEmail && (
+              <button
+                type="button"
+                onClick={beginEdit}
+                aria-label={`Edit email for ${user.display_name}`}
+                title="Edit email"
+                className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded text-text-light hover:text-gold hover:bg-surface-hover opacity-0 group-hover/row:opacity-100 transition-all focus-ring"
+              >
+                <Pencil size={11} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
         <p className="text-[11px] text-text-light mt-0.5">
           {isPrimaryOwner ? (
             <span className="inline-flex items-center gap-1 text-gold font-semibold">
@@ -242,6 +333,64 @@ export default function AccountAccessPanel() {
     setResetTarget(target)
     setResetResult(null)
   }, [isOwnerViewer])
+
+  // Inline email correction. Owner-only path that hits the
+  // `admin-update-email` edge function — that function does the
+  // owner-JWT check + service-role auth.users update + team_members
+  // mirror in one round trip. Returns true on success so the row's
+  // editor can close itself; false on error (toast carries the
+  // reason) so the editor stays open for the user to fix the value.
+  const onUpdateEmail = useCallback(
+    async (target: AccessUser, newEmail: string): Promise<boolean> => {
+      if (!isOwnerViewer) return false
+      if ((target.email ?? '').toLowerCase() === OWNER_EMAIL) {
+        setToast({ kind: 'err', message: 'The primary owner email cannot be changed here.' })
+        setTimeout(() => setToast(null), 4000)
+        return false
+      }
+
+      // Optimistic update — snap UI now, roll back on error. Mirrors
+      // the admin-toggle pattern above so the two flows feel
+      // identical to the user.
+      const prevEmail = target.email
+      setBusyId(target.id)
+      setToast(null)
+      setUsers((prev) => prev.map((u) => (u.id === target.id ? { ...u, email: newEmail } : u)))
+
+      const { data, error: invokeErr } = await supabase.functions.invoke<{
+        ok: boolean
+        email?: string
+        error?: string
+        warning?: string
+      }>('admin-update-email', {
+        body: { user_id: target.id, new_email: newEmail },
+      })
+
+      setBusyId(null)
+
+      if (invokeErr || !data?.ok) {
+        // Roll back the optimistic UI to the prior email so the row
+        // doesn't lie about its current state.
+        setUsers((prev) => prev.map((u) => (u.id === target.id ? { ...u, email: prevEmail } : u)))
+        const msg = data?.error ?? errorMessage(invokeErr, 'Failed to update email')
+        setToast({ kind: 'err', message: msg })
+        setTimeout(() => setToast(null), 5000)
+        return false
+      }
+
+      const finalEmail = data.email ?? newEmail
+      setUsers((prev) => prev.map((u) => (u.id === target.id ? { ...u, email: finalEmail } : u)))
+      setToast({
+        kind: 'ok',
+        message: data.warning
+          ? `Email updated, but: ${data.warning}`
+          : `Email updated for ${target.display_name}.`,
+      })
+      setTimeout(() => setToast(null), 4000)
+      return true
+    },
+    [isOwnerViewer],
+  )
 
   const confirmReset = useCallback(async () => {
     if (!resetTarget) return
@@ -398,6 +547,7 @@ export default function AccountAccessPanel() {
                 busy={busyId === u.id}
                 onToggle={onToggle}
                 onGenerateSetupLink={onGenerateSetupLink}
+                onUpdateEmail={onUpdateEmail}
               />
             ))
           )}
@@ -423,6 +573,7 @@ export default function AccountAccessPanel() {
                 busy={busyId === u.id}
                 onToggle={onToggle}
                 onGenerateSetupLink={onGenerateSetupLink}
+                onUpdateEmail={onUpdateEmail}
               />
             ))
           )}
