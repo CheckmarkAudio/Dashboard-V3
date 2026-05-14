@@ -135,22 +135,45 @@ Deno.serve(async (req: Request) => {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  // Look up the target so we can (a) prevent changing the owner's own
-  // email through this path, and (b) detect a no-op (current === new).
-  const { data: targetLookup, error: targetErr } = await admin.auth.admin.getUserById(userId)
-  if (targetErr || !targetLookup.user) {
-    return jsonResponse({ ok: false, error: "Target user not found" }, 404)
-  }
-  const currentEmail = normalizeEmail(targetLookup.user.email)
-  if (currentEmail === OWNER_EMAIL) {
+  // Look up the auth.users row, if one exists. Some `team_members`
+  // rows are profile-only — the member was added but never onboarded
+  // with a login. For those we skip the auth.users update and only
+  // mirror the new email into `team_members` so the typo can still
+  // be corrected.
+  const { data: targetLookup } = await admin.auth.admin.getUserById(userId)
+  const targetAuthUser = targetLookup?.user ?? null
+  const currentAuthEmail = normalizeEmail(targetAuthUser?.email ?? "")
+
+  if (currentAuthEmail === OWNER_EMAIL) {
     return jsonResponse(
       { ok: false, error: "The primary owner email is locked." },
       400,
     )
   }
-  if (currentEmail === newEmail) {
-    // No-op — return success so the UI clears its edit state cleanly.
-    return jsonResponse({ ok: true, email: currentEmail })
+
+  // If there's no auth.users row, validate the team_members row
+  // exists. Without this check, `user_id` could be anything and the
+  // update below would silently write zero rows.
+  let profileOnlyMode = false
+  let currentProfileEmail = ""
+  if (!targetAuthUser) {
+    const { data: profileLookup, error: profileLookupErr } = await admin
+      .from("team_members")
+      .select("id, email")
+      .eq("id", userId)
+      .maybeSingle()
+    if (profileLookupErr || !profileLookup) {
+      return jsonResponse({ ok: false, error: "Member not found" }, 404)
+    }
+    profileOnlyMode = true
+    currentProfileEmail = normalizeEmail(profileLookup.email ?? "")
+    // No-op short circuit.
+    if (currentProfileEmail === newEmail) {
+      return jsonResponse({ ok: true, email: newEmail })
+    }
+  } else if (currentAuthEmail === newEmail) {
+    // No-op short circuit for the auth-user path.
+    return jsonResponse({ ok: true, email: currentAuthEmail })
   }
 
   // Reject duplicates against any other auth user. GoTrue will also
@@ -189,26 +212,32 @@ Deno.serve(async (req: Request) => {
     )
   }
 
-  // Update the auth user. `email_confirm: true` so GoTrue treats the new
-  // address as verified — admins are correcting typos, not asking the
-  // member to re-confirm.
-  const { error: updateErr } = await admin.auth.admin.updateUserById(userId, {
-    email: newEmail,
-    email_confirm: true,
-  })
-  if (updateErr) {
-    return jsonResponse({ ok: false, error: updateErr.message }, 400)
+  // Update auth.users only when the member actually has a login.
+  // `email_confirm: true` so GoTrue treats the new address as
+  // verified — admins are correcting typos, not asking the member
+  // to re-confirm.
+  if (!profileOnlyMode) {
+    const { error: updateErr } = await admin.auth.admin.updateUserById(userId, {
+      email: newEmail,
+      email_confirm: true,
+    })
+    if (updateErr) {
+      return jsonResponse({ ok: false, error: updateErr.message }, 400)
+    }
   }
 
-  // Mirror the change into team_members so the rest of the app
-  // (Members page, Account Access, mailto: links) sees it.
+  // Always mirror the change into team_members. For profile-only
+  // members this IS the canonical write.
   const { error: profileErr } = await admin
     .from("team_members")
     .update({ email: newEmail })
     .eq("id", userId)
   if (profileErr) {
-    // The auth update already landed — return a partial success so the
-    // admin sees the warning and can re-sync manually if needed.
+    if (profileOnlyMode) {
+      // Nothing landed — surface the error as a hard failure.
+      return jsonResponse({ ok: false, error: profileErr.message }, 400)
+    }
+    // Auth already landed — partial success so the admin sees the warning.
     return jsonResponse(
       {
         ok: true,

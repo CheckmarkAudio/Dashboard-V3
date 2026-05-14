@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, Key, Loader2, Pencil, RotateCw, Shield, ShieldCheck, User as UserIcon, X } from 'lucide-react'
 import { supabase, withSupabaseRetry } from '../../lib/supabase'
+import { extractEdgeFunctionError } from '../../lib/edgeFunctionError'
 import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
 import { Button, Modal } from '../ui'
@@ -372,7 +373,12 @@ export default function AccountAccessPanel() {
         // Roll back the optimistic UI to the prior email so the row
         // doesn't lie about its current state.
         setUsers((prev) => prev.map((u) => (u.id === target.id ? { ...u, email: prevEmail } : u)))
-        const msg = data?.error ?? errorMessage(invokeErr, 'Failed to update email')
+        // Prefer the function's own JSON `{ error }`; otherwise dig
+        // into the FunctionsHttpError context for the body our
+        // function returned. Plain `errorMessage(invokeErr)` would
+        // surface the opaque "Edge Function returned a non-2xx
+        // status code" string and hide the real reason.
+        const msg = data?.error ?? (await extractEdgeFunctionError(invokeErr, 'Failed to update email'))
         setToast({ kind: 'err', message: msg })
         setTimeout(() => setToast(null), 5000)
         return false

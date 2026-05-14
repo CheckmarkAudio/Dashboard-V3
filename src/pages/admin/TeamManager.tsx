@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { normalizeEmail } from '../../lib/email'
+import { extractEdgeFunctionError } from '../../lib/edgeFunctionError'
 import { generateTempPassword } from '../../lib/auth/tempPassword'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
@@ -204,7 +205,11 @@ export default function TeamManager() {
           body: { user_id: editingMember.id, new_email: newEmail },
         })
         if (emailErr || !emailData?.ok) {
-          const msg = emailData?.error ?? emailErr?.message ?? 'Failed to update email'
+          // Use the function's own JSON `{ error }` first; if the
+          // invoke threw a FunctionsHttpError, dig into its `context`
+          // Response for the body we returned. Otherwise the user
+          // sees the opaque "non-2xx status code" string.
+          const msg = emailData?.error ?? (await extractEdgeFunctionError(emailErr, 'Failed to update email'))
           console.error('[TeamManager] admin-update-email failed:', msg, emailErr, emailData)
           toast(msg, 'error')
           setSubmitting(false)
