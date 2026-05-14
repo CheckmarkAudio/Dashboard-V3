@@ -24,6 +24,20 @@ function errorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
+function normalizeAccessUser(row: Partial<AccessUser>): AccessUser {
+  const email = (row.email ?? '').trim().toLowerCase()
+  const displayName = (row.display_name ?? '').trim()
+  const role = row.role === 'admin' ? 'admin' : 'intern'
+  return {
+    id: row.id ?? '',
+    email,
+    display_name: displayName || email || 'Unnamed member',
+    role,
+    position: row.position ?? null,
+    status: row.status ?? null,
+  }
+}
+
 /**
  * Account Access panel (owner-only).
  *
@@ -63,7 +77,10 @@ function UserRow({
   onToggle: (user: AccessUser) => void
   onGenerateSetupLink: (user: AccessUser) => void
 }) {
-  const initial = user.display_name?.charAt(0)?.toUpperCase() ?? user.email.charAt(0).toUpperCase()
+  const initial =
+    user.display_name?.charAt(0)?.toUpperCase() ||
+    user.email?.charAt(0)?.toUpperCase() ||
+    '?'
   const positionLabel = user.position
     ? user.position.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     : 'Team member'
@@ -178,7 +195,7 @@ export default function AccountAccessPanel() {
           .select('id, email, display_name, role, position, status')
           .order('display_name')
         if (err) throw err
-        return (data ?? []) as AccessUser[]
+        return (data ?? []).map((row) => normalizeAccessUser(row as Partial<AccessUser>))
       })
       setUsers(rows)
       setError(null)
