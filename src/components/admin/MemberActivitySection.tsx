@@ -250,9 +250,12 @@ function ActivityCarousel({ member }: { member: TeamMember }) {
                     height={WIDGET_HEIGHT_PX}
                   >
                     {(dragHandleProps) => (
+                      // Frame title visible (no hideTitle) — user wants the
+                      // standard Overview widget header (drag grip · bold
+                      // title · expand chevron). The inner CanonicalBody
+                      // drops its section band so the title isn't doubled.
                       <DashboardWidgetFrame
                         title={WIDGET_META[id].title}
-                        hideTitle
                         dragHandleProps={dragHandleProps}
                         onExpand={() => setExpandedId(id)}
                       >
@@ -386,31 +389,19 @@ function WidgetBody({ id, member }: { id: WidgetId; member: TeamMember }) {
   return <ClockBody memberId={member.id} />
 }
 
-// ─── Canonical body shell (matches NotificationsPanel) ──────────
+// ─── Canonical body shell ───────────────────────────────────────
 //
 // `inset-panel` provides the booking-style nested chrome (border +
-// rounded corners + clipped overflow). Inside, a sticky-feel
-// section header band (gold uppercase label) names the section, and
-// the rows below are flat with `divide-y divide-theme` hairlines —
-// exact recipe from `src/components/notifications/NotificationsPanel.tsx`.
-function CanonicalBody({
-  sectionIcon: SectionIcon,
-  sectionLabel,
-  children,
-}: {
-  sectionIcon: typeof Briefcase
-  sectionLabel: string
-  children: ReactNode
-}) {
+// rounded corners + clipped overflow). Rows inside use
+// `divide-y divide-theme` for needle-thin hairlines.
+//
+// The earlier section-header band was removed once the frame's own
+// title became visible — having a "SESSIONS" band UNDER a "Session
+// History" frame title was a duplicate heading.
+function CanonicalBody({ children }: { children: ReactNode }) {
   return (
     <div className="flex-1 min-h-0 inset-panel">
       <div className="h-full overflow-auto">
-        <div className="px-3 py-2 flex items-center gap-2 bg-surface-alt/40">
-          <SectionIcon size={11} className="text-gold/70" aria-hidden="true" />
-          <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
-            {sectionLabel}
-          </p>
-        </div>
         <div className="divide-y divide-theme">{children}</div>
       </div>
     </div>
@@ -506,7 +497,7 @@ function SessionsBody({ memberId }: { memberId: string }) {
     return <EmptyState icon={Briefcase} label="No sessions on record yet." />
   }
   return (
-    <CanonicalBody sectionIcon={Briefcase} sectionLabel="SESSIONS">
+    <CanonicalBody>
       {rows.map((s) => (
         <CanonicalRow
           key={s.sessionId}
@@ -540,7 +531,7 @@ function TasksBody({ memberId }: { memberId: string }) {
     return <EmptyState icon={CheckCircle2} label="No completed tasks yet." />
   }
   return (
-    <CanonicalBody sectionIcon={CheckCircle2} sectionLabel="TASKS">
+    <CanonicalBody>
       {rows.map((t) => (
         <CanonicalRow
           key={t.taskId}
@@ -566,7 +557,7 @@ function ClockBody({ memberId }: { memberId: string }) {
     return <EmptyState icon={Clock} label="No shifts recorded yet." />
   }
   return (
-    <CanonicalBody sectionIcon={Clock} sectionLabel="SHIFTS">
+    <CanonicalBody>
       {rows.map((e) => {
         const isOpen = e.clocked_out_at === null
         return (
