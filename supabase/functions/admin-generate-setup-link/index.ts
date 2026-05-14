@@ -44,6 +44,21 @@ function requireEnv(name: string): string {
   return value
 }
 
+function generateRandomPassword(): string {
+  const alphabet =
+    "ABCDEFGHJKLMNPQRSTUVWXYZ" +
+    "abcdefghjkmnpqrstuvwxyz" +
+    "23456789" +
+    "!@#$%^&*-_=+"
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  let out = ""
+  for (let i = 0; i < bytes.length; i++) {
+    out += alphabet[bytes[i] % alphabet.length]
+  }
+  return out
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS })
@@ -102,27 +117,9 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ ok: false, error: "Only team admins can generate setup links" }, 403)
     }
 
-    let targetEmail = requestedEmail
-    let targetUserId = userId
-    if (userId) {
-      const { data: targetAuth, error: targetAuthErr } = await admin.auth.admin.getUserById(userId)
-      if (targetAuthErr || !targetAuth.user) {
-        return jsonResponse({ ok: false, error: "Target user not found" }, 404)
-      }
-      targetEmail = normalizeEmail(targetAuth.user.email)
-    }
-
-    if (!targetEmail) return jsonResponse({ ok: false, error: "Target email not found" }, 404)
-    if (targetEmail === OWNER_EMAIL) {
-      return jsonResponse(
-        { ok: false, error: "Use the standard password recovery flow to reset the owner account." },
-        400,
-      )
-    }
-
     const { data: targetProfile, error: targetProfileErr } = await admin
       .from("team_members")
-      .select("id, team_id, email")
+      .select("id, team_id, email, display_name")
       .eq(userId ? "id" : "email", userId || targetEmail)
       .maybeSingle()
     if (targetProfileErr || !targetProfile) {
@@ -131,11 +128,77 @@ Deno.serve(async (req: Request) => {
     if (targetProfile.team_id !== callerProfile.team_id) {
       return jsonResponse({ ok: false, error: "Target member is outside your team" }, 403)
     }
-    targetUserId = targetProfile.id
 
-    const { data: targetAuth, error: targetAuthErr } = await admin.auth.admin.getUserById(targetUserId)
-    if (targetAuthErr || !targetAuth.user) {
-      return jsonResponse({ ok: false, error: "Target auth user not found" }, 404)
+    let targetEmail = normalizeEmail(targetProfile.email ?? requestedEmail)
+    let targetUserId = targetProfile.id
+    if (!targetEmail) return jsonResponse({ ok: false, error: "Target email not found" }, 404)
+    if (targetEmail === OWNER_EMAIL) {
+      return jsonResponse(
+        { ok: false, error: "Use the standard password recovery flow to reset the owner account." },
+        400,
+      )
+    }
+
+    let { data: targetAuth } = await admin.auth.admin.getUserById(targetUserId)
+    if (!targetAuth?.user) {
+      let authUserIdForEmail = ""
+      try {
+        const { data: existingAuth } = await admin
+          .schema("auth")
+          .from("users")
+          .select("id, email")
+          .eq("email", targetEmail)
+          .maybeSingle()
+        authUserIdForEmail = existingAuth?.id ?? ""
+      } catch (_) {
+        // If the direct auth schema probe fails, createUser below will
+        // still catch duplicate-email conflicts and return a clear error.
+      }
+
+      let createdAuthUserId = ""
+      if (authUserIdForEmail) {
+        targetUserId = authUserIdForEmail
+      } else {
+        const { data: createdAuth, error: createErr } = await admin.auth.admin.createUser({
+          email: targetEmail,
+          password: generateRandomPassword(),
+          email_confirm: true,
+          user_metadata: {
+            display_name: targetProfile.display_name ?? "",
+            created_by_admin: callerUser.user.id,
+            requires_password_change: true,
+          },
+        })
+        if (createErr || !createdAuth.user) {
+          return jsonResponse(
+            { ok: false, error: createErr?.message ?? "Failed to create auth user for member" },
+            400,
+          )
+        }
+        targetUserId = createdAuth.user.id
+        createdAuthUserId = createdAuth.user.id
+      }
+
+      if (targetUserId !== targetProfile.id) {
+        const { error: relinkErr } = await admin
+          .from("team_members")
+          .update({ id: targetUserId, email: targetEmail })
+          .eq("id", targetProfile.id)
+        if (relinkErr) {
+          if (createdAuthUserId) await admin.auth.admin.deleteUser(createdAuthUserId)
+          return jsonResponse(
+            { ok: false, error: `Created login, but could not link member profile: ${relinkErr.message}` },
+            400,
+          )
+        }
+      }
+
+      const refreshed = await admin.auth.admin.getUserById(targetUserId)
+      targetAuth = refreshed.data
+      if (!targetAuth?.user) {
+        return jsonResponse({ ok: false, error: "Target auth user not found after provisioning" }, 404)
+      }
+      targetEmail = normalizeEmail(targetAuth.user.email)
     }
 
     const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
