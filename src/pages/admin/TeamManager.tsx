@@ -531,8 +531,20 @@ export default function TeamManager() {
             push the rounded border past the viewport on narrower screens).
             `overflow-hidden` keeps anything inside clipped at the rounded
             border. Settings doesn't need this because its content is short
-            text + simple form rows. */}
-        <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px] min-w-0 overflow-hidden">
+            text + simple form rows.
+
+            2026-05-14 — when activeSection === 'activity', the card
+            chrome drops away (no bg-surface, no border, no padding) so
+            the widget-card chrome on each per-widget tile is the ONLY
+            border the eye sees. Mirrors how widgets sit flush on
+            Overview / Hub instead of nested inside another box. */}
+        <section
+          className={
+            activeSection === 'activity'
+              ? 'min-h-[320px] min-w-0'
+              : 'bg-surface rounded-xl border border-border p-6 min-h-[320px] min-w-0 overflow-hidden'
+          }
+        >
 
       {activeSection === 'roster' && (<>
       {/* Toolbar: search + filters */}
