@@ -718,6 +718,23 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-14 production login lockdown follow-up
+
+- **`CODEX:`** hardened preview auto-login after the user reported the
+  launched site could still lose the login wall. The auto-login path now
+  requires four guards: Vercel deploy env is exactly `preview`, hostname
+  is a Vercel branch-preview host, preview email/password are present,
+  and `VITE_PREVIEW_LOGIN_ALLOWED === 'true'`.
+- `vite.config.ts` exposes `VERCEL_ENV` to the client as
+  `VITE_DEPLOY_ENV` and still replaces `VITE_PREVIEW_LOGIN_*` with
+  `undefined` for `VERCEL_ENV=production` builds. This protects against
+  both env-scope drift and hostname confusion.
+- Verified in a clean worktree with `npm run build` and
+  `VERCEL_ENV=production npm run build`.
+- **Next after merge/deploy:** return to Google Calendar Phase 2 inbound
+  sync for already-linked events. Main workspace still contains unrelated
+  calendar-sync edits; do not revert them while handling auth.
+
 ### 2026-05-07 calendar-sync production handoff
 
 - **`CODEX:`** built the Google Calendar Phase 1 code path, patched the
