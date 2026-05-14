@@ -718,6 +718,34 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-14 SMTP onboarding handoff (Codex → Claude)
+
+- **`CODEX:`** ran out of tokens mid-flight on getting actual email
+  delivery working for new-member onboarding. The previous setup-link
+  rescue (PR #189 + earlier Codex work on `admin-generate-setup-link`)
+  shipped a working-but-manual flow: admin creates a member → app
+  generates a one-time Supabase recovery URL → owner copies + DMs/emails
+  it themselves. Works, but doesn't scale.
+- **`CLAUDE:`** picking up the baton 2026-05-14 to make the link delivery
+  automatic so creating a member emails them the setup link directly.
+- **Likely path:** new edge function `send-member-setup-email` that
+  takes `{ user_id, setup_link }` and POSTs to a transactional-email
+  provider (Resend / SendGrid / Postmark — Resend is simplest for V1:
+  free tier 3000/mo, dead-simple JSON API, optional DNS for branded
+  sender). Wire it into the existing Add Member success step and the
+  Settings → Account Access setup-link button so admins can flip a
+  toggle "Send via email" when generating the link. Earlier Gmail SMTP
+  attempt (Bridges' personal Gmail with App Password) hit
+  `535 5.7.8 BadCredentials`, almost certainly a Google account
+  mismatch — Resend bypasses that entire class of issue.
+- **Open question for the build:** whether to also configure Supabase
+  Auth's custom SMTP to point at Resend (so Supabase's own native
+  recovery emails work too) vs. just sending from our edge function.
+  V1 = edge function only; SMTP integration is a follow-up.
+- **Next after merge:** stranded employees can be onboarded with a
+  single Add Member click instead of copy-paste. Then back to Google
+  Calendar Phase 2 inbound sync.
+
 ### 2026-05-14 employee setup-link rescue
 
 - **`CODEX:`** took over the urgent employee-login blocker. The app had
