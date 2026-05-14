@@ -129,7 +129,7 @@ BEGIN
     updated_at
   )
   VALUES (
-    p_user_id::text,
+    p_user_id,
     p_user_id,
     p_user_id::text,
     jsonb_build_object(
