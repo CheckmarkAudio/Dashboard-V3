@@ -3,9 +3,8 @@ import { AlertCircle, Key, Loader2, RotateCw, Shield, ShieldCheck, User as UserI
 import { supabase, withSupabaseRetry } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
-import { generateTempPassword } from '../../lib/auth/tempPassword'
 import { Button, Modal } from '../ui'
-import TempPasswordReveal from '../auth/TempPasswordReveal'
+import SetupLinkReveal from '../auth/SetupLinkReveal'
 
 /**
  * Best-effort extraction of a human-readable error message from any
@@ -24,10 +23,6 @@ function errorMessage(err: unknown, fallback: string): string {
   }
   return fallback
 }
-
-// `generateTempPassword` lives in `src/lib/auth/tempPassword.ts` so
-// both this admin reset flow and the Add Member onboarding flow share
-// the same entropy + character-class guarantees.
 
 /**
  * Account Access panel (owner-only).
@@ -59,14 +54,14 @@ function UserRow({
   isPrimaryOwner,
   busy,
   onToggle,
-  onResetPassword,
+  onGenerateSetupLink,
 }: {
   user: AccessUser
   isOwnerViewer: boolean
   isPrimaryOwner: boolean
   busy: boolean
   onToggle: (user: AccessUser) => void
-  onResetPassword: (user: AccessUser) => void
+  onGenerateSetupLink: (user: AccessUser) => void
 }) {
   const initial = user.display_name?.charAt(0)?.toUpperCase() ?? user.email.charAt(0).toUpperCase()
   const positionLabel = user.position
@@ -99,14 +94,14 @@ function UserRow({
         </p>
       </div>
 
-      {/* Reset password — owner-only, never shown on the primary owner row */}
+      {/* Setup link — owner-only, never shown on the primary owner row */}
       {isOwnerViewer && !isPrimaryOwner && (
         <button
           type="button"
-          onClick={() => onResetPassword(user)}
+          onClick={() => onGenerateSetupLink(user)}
           disabled={busy}
-          title={`Reset password for ${user.display_name}`}
-          aria-label={`Reset password for ${user.display_name}`}
+          title={`Generate setup link for ${user.display_name}`}
+          aria-label={`Generate setup link for ${user.display_name}`}
           className="shrink-0 p-2 rounded-lg text-text-muted hover:bg-surface-hover hover:text-gold transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Key size={14} aria-hidden="true" />
@@ -156,22 +151,16 @@ export default function AccountAccessPanel() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; message: string } | null>(null)
 
-  // Reset-password modal state.
+  // Setup-link modal state.
   //
-  // 2026-05-08 — switched from `auth.resetPasswordForEmail` to the
-  // `admin-reset-password` edge function. Supabase's built-in SMTP only
-  // delivers recovery emails to the project-owner address on free
-  // tier; every other recipient got "Unable to process request" back
-  // from GoTrue, which surfaced as a useless modal error. Until we
-  // wire a real SMTP provider (Resend / SendGrid / etc.) we use the
-  // already-deployed admin reset flow: the owner generates a temp
-  // password, sees it in the modal with a Copy button, hands it off
-  // out-of-band (DM, in-person), and `ForcePasswordChangeModal`
-  // forces the member to change it on first login.
+  // Supabase's built-in SMTP has been unreliable for non-owner
+  // recipients in this project, so this flow does not ask Supabase to
+  // send email. The owner/admin generates the recovery link directly,
+  // then copies it into email/DM. The member chooses their own password.
   const [resetTarget, setResetTarget] = useState<AccessUser | null>(null)
   const [resetPending, setResetPending] = useState(false)
   const [resetResult, setResetResult] = useState<
-    | { kind: 'ok'; tempPassword: string }
+    | { kind: 'ok'; setupLink: string }
     | { kind: 'err'; message: string }
     | null
   >(null)
@@ -230,7 +219,7 @@ export default function AccountAccessPanel() {
     setTimeout(() => setToast(null), 4000)
   }, [isOwnerViewer])
 
-  const onResetPassword = useCallback((target: AccessUser) => {
+  const onGenerateSetupLink = useCallback((target: AccessUser) => {
     if (!isOwnerViewer) return
     if ((target.email ?? '').toLowerCase() === OWNER_EMAIL) return
     setResetTarget(target)
@@ -241,21 +230,16 @@ export default function AccountAccessPanel() {
     if (!resetTarget) return
     setResetPending(true)
 
-    // Generate a strong temp password client-side, hand it to the
-    // owner-only edge function which:
-    //   1. Verifies the caller's JWT email == OWNER_EMAIL
-    //   2. Calls `auth.admin.updateUserById()` with the new password
-    //   3. Sets `requires_password_change: true` in user_metadata
-    //   4. Returns the target email on success
-    // The owner shares the temp password with the member out-of-band;
-    // on first login `ForcePasswordChangeModal` forces a change.
-    const tempPassword = generateTempPassword()
     const { data, error: invokeErr } = await supabase.functions.invoke<{
       ok: boolean
       error?: string
       email?: string
-    }>('admin-reset-password', {
-      body: { user_id: resetTarget.id, new_password: tempPassword },
+      setup_link?: string
+    }>('admin-generate-setup-link', {
+      body: {
+        user_id: resetTarget.id,
+        redirect_to: `${window.location.origin}/login`,
+      },
     })
     setResetPending(false)
 
@@ -263,14 +247,18 @@ export default function AccountAccessPanel() {
     //   - network / 4xx / 5xx → `invokeErr` populated
     //   - function returned 200 with `{ ok: false, error }` shape
     if (invokeErr) {
-      setResetResult({ kind: 'err', message: errorMessage(invokeErr, 'Failed to reset password') })
+      setResetResult({ kind: 'err', message: errorMessage(invokeErr, 'Failed to generate setup link') })
       return
     }
     if (!data?.ok) {
-      setResetResult({ kind: 'err', message: data?.error ?? 'Failed to reset password' })
+      setResetResult({ kind: 'err', message: data?.error ?? 'Failed to generate setup link' })
       return
     }
-    setResetResult({ kind: 'ok', tempPassword })
+    if (!data.setup_link) {
+      setResetResult({ kind: 'err', message: 'No setup link returned' })
+      return
+    }
+    setResetResult({ kind: 'ok', setupLink: data.setup_link })
   }, [resetTarget])
 
   const closeResetModal = useCallback(() => {
@@ -392,7 +380,7 @@ export default function AccountAccessPanel() {
                 isPrimaryOwner={u.email.toLowerCase() === OWNER_EMAIL}
                 busy={busyId === u.id}
                 onToggle={onToggle}
-                onResetPassword={onResetPassword}
+                onGenerateSetupLink={onGenerateSetupLink}
               />
             ))
           )}
@@ -417,30 +405,23 @@ export default function AccountAccessPanel() {
                 isPrimaryOwner={false}
                 busy={busyId === u.id}
                 onToggle={onToggle}
-                onResetPassword={onResetPassword}
+                onGenerateSetupLink={onGenerateSetupLink}
               />
             ))
           )}
         </section>
       </div>
 
-      {/* ── Password reset modal — temp-password handoff flow ──
-          Owner clicks "Reset password" → modal asks for confirmation →
-          edge function generates and sets a temp password → modal
-          reveals the temp password with a Copy button → owner shares
-          it with the member out-of-band → member logs in → forced to
-          change it via ForcePasswordChangeModal.
-          Switching back to a true email-link flow is queued behind
-          configuring a custom SMTP provider in Supabase. */}
+      {/* ── Setup link modal — direct-link handoff flow ── */}
       {resetTarget && (
         <Modal
           open
           onClose={closeResetModal}
-          title={resetResult?.kind === 'ok' ? 'Temporary password ready' : 'Reset password'}
+          title={resetResult?.kind === 'ok' ? 'Setup link ready' : 'Generate setup link'}
           description={
             resetResult?.kind === 'ok'
               ? undefined
-              : `Generate a one-time password for ${resetTarget.display_name}. They'll be forced to change it on first login.`
+              : `Generate a password setup link for ${resetTarget.display_name}.`
           }
           size="sm"
           footer={
@@ -455,17 +436,17 @@ export default function AccountAccessPanel() {
                   loading={resetPending}
                   iconLeft={!resetPending ? <Key size={14} aria-hidden="true" /> : undefined}
                 >
-                  Generate password
+                  Generate link
                 </Button>
               </>
             )
           }
         >
           {resetResult?.kind === 'ok' ? (
-            <TempPasswordReveal
+            <SetupLinkReveal
               email={resetTarget.email}
               displayName={resetTarget.display_name}
-              tempPassword={resetResult.tempPassword}
+              setupLink={resetResult.setupLink}
             />
           ) : resetResult?.kind === 'err' ? (
             <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
@@ -473,9 +454,9 @@ export default function AccountAccessPanel() {
             </div>
           ) : (
             <p className="text-[13px] text-text-muted">
-              A temporary password will be generated for{' '}
+              A secure setup link will be generated for{' '}
               <span className="font-semibold text-text">{resetTarget.email}</span>.
-              You'll be able to copy it and hand it off — they'll set their own password on next login.
+              You'll be able to copy it and send it directly.
             </p>
           )}
         </Modal>

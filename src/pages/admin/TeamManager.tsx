@@ -8,6 +8,7 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
 import ConfirmModal from '../../components/ConfirmModal'
 import TempPasswordReveal from '../../components/auth/TempPasswordReveal'
+import SetupLinkReveal from '../../components/auth/SetupLinkReveal'
 import { Button, Input, Select, Badge, EmptyState } from '../../components/ui'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
 import ClockDataSection from '../../components/admin/ClockDataSection'
@@ -23,7 +24,7 @@ import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
   Save, ChevronRight, ChevronLeft,
   MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
-  Activity,
+  Activity, Link2,
 } from 'lucide-react'
 // `Activity` icon kept as the lucide glyph for the new left-rail
 // "Activity" section (mirrors the user's mental model — Roster /
@@ -56,24 +57,17 @@ type MemberForm = {
   display_name: string; email: string; role: 'admin' | 'intern'
   position: string; phone: string; start_date: string; status: 'active' | 'inactive'
   managed_by: string
-  // 2026-05-08 (Lean 1) — replaces the old `send_setup_email`
-  // boolean. The "email a setup link" path silently failed (free-tier
-  // Supabase SMTP only sends to the project owner address), so we
-  // defaulted onboarding to a temp-password handoff instead:
-  //   - 'auto'   = generate a strong password client-side; the modal
-  //                reveals it after creation so the admin can copy +
-  //                hand it off (DM, in-person)
-  //   - 'manual' = admin types the password they want (e.g. for
-  //                memorable verbal handoff: "audio2026!")
-  // When SMTP comes online (separate Lean), we add an 'email' option.
-  password_mode: 'auto' | 'manual'
+  // Setup-link is the default onboarding path: it avoids flaky SMTP
+  // delivery while still letting the member choose their own password.
+  // Temp-password modes remain as a fallback for in-person handoff.
+  password_mode: 'setup_link' | 'auto' | 'manual'
   manual_password: string
 }
 
 const EMPTY_MEMBER: MemberForm = {
   display_name: '', email: '', role: 'intern', position: 'intern',
   phone: '', start_date: '', status: 'active', managed_by: '',
-  password_mode: 'auto',
+  password_mode: 'setup_link',
   manual_password: '',
 }
 
@@ -113,7 +107,9 @@ export default function TeamManager() {
   // admin hits "Done" → form closes + members list refreshes.
   const [createdMember, setCreatedMember] = useState<{
     profile: TeamMember
-    tempPassword: string
+    tempPassword?: string
+    setupLink?: string
+    setupLinkError?: string
   } | null>(null)
 
   // PR #58 — left-rail active section (Roster default; Clock Data is a
@@ -222,14 +218,17 @@ export default function TeamManager() {
     const position = formData.position === 'custom' ? customPosition : formData.position
     const email = normalizeEmail(formData.email)
 
-    // 2026-05-08 (Lean 1) — always send a password to the edge
-    // function. Auto mode generates a strong one client-side; manual
-    // mode uses what the admin typed. The old "let the server
-    // generate one + email a link" path is gone — Supabase free-tier
-    // SMTP only sends to the project owner, so the email silently
-    // failed and members were left stranded.
-    const tempPassword =
-      formData.password_mode === 'auto' ? generateTempPassword() : formData.manual_password
+    // Default path: omit `default_password` so the edge function
+    // generates a server-side random password, then this UI asks the
+    // admin-only setup-link function for a recovery link the admin can
+    // copy/send directly. Temp-password modes remain available for
+    // in-person handoff.
+    const useSetupLink = formData.password_mode === 'setup_link'
+    const tempPassword = useSetupLink
+      ? undefined
+      : formData.password_mode === 'auto'
+        ? generateTempPassword()
+        : formData.manual_password
 
     // 1) Create the auth user + team_members row atomically via the Edge Function.
     const { data: result, error } = await supabase.functions.invoke<
@@ -244,7 +243,7 @@ export default function TeamManager() {
       body: {
         email,
         display_name: formData.display_name.trim(),
-        default_password: tempPassword,
+        ...(tempPassword ? { default_password: tempPassword } : {}),
         role: formData.role,
         position,
         phone: formData.phone.trim() || null,
@@ -310,12 +309,34 @@ export default function TeamManager() {
       // is fine.
     }
 
-    // 4) Lean 1 success state — flip the form into a "Step 4" reveal
-    //    so the admin sees + copies the temp password before closing.
-    //    Members list refreshes in the background so the new row is
-    //    already there when they hit Done.
-    setCreatedMember({ profile: newMember, tempPassword })
-    toast(`${newMember.display_name} added — share the temporary password`, 'success')
+    // 4) Success state — setup link by default, temp password as
+    //    fallback. If link generation fails, the member still exists
+    //    and the admin can retry from Settings → Account Access.
+    if (useSetupLink) {
+      const { data: linkResult, error: linkError } = await supabase.functions.invoke<{
+        ok: boolean
+        error?: string
+        setup_link?: string
+      }>('admin-generate-setup-link', {
+        body: {
+          user_id: newMember.id,
+          redirect_to: `${window.location.origin}/login`,
+        },
+      })
+
+      if (linkError || !linkResult?.ok || !linkResult.setup_link) {
+        const message = linkResult?.error || linkError?.message || 'Setup link generation failed'
+        console.error('[TeamManager] setup link generation failed:', message, linkError, linkResult)
+        setCreatedMember({ profile: newMember, setupLinkError: message })
+        toast(`${newMember.display_name} added, but setup link failed`, 'error')
+      } else {
+        setCreatedMember({ profile: newMember, setupLink: linkResult.setup_link })
+        toast(`${newMember.display_name} added — copy their setup link`, 'success')
+      }
+    } else {
+      setCreatedMember({ profile: newMember, tempPassword })
+      toast(`${newMember.display_name} added — share the temporary password`, 'success')
+    }
     setSubmitting(false)
     loadMembers()
   }
@@ -388,7 +409,7 @@ export default function TeamManager() {
       managed_by: member.managed_by ?? '',
       // password fields are only meaningful for new-member creation;
       // editing reuses the form schema with safe defaults.
-      password_mode: 'auto',
+      password_mode: 'setup_link',
       manual_password: '',
     })
     if (!knownPosition) setCustomPosition(member.position ?? '')
@@ -432,14 +453,9 @@ export default function TeamManager() {
     loadMembers()
   }
 
-  // 2026-05-08 (Lean 1) — `handleSendSetupEmail` removed. Free-tier
-  // Supabase SMTP only delivers to the project owner address, so the
-  // recovery email silently failed for every other member. The
-  // canonical "reset a member's password" path now lives in
-  // `/admin/settings → Account Access`, which uses the
-  // `admin-reset-password` edge function to mint a temp password the
-  // owner hands off directly. When SMTP is configured (separate
-  // Lean), restore the email path here.
+  // Setup links are generated directly by the admin edge function and
+  // copied/sent by the admin. We intentionally avoid Supabase SMTP here
+  // because the project has seen non-owner delivery failures.
 
   const getPositionVariant = (pos: string): BadgeVariant =>
     POSITIONS.find(p => p.value === pos)?.badge ?? 'neutral'
@@ -772,12 +788,8 @@ export default function TeamManager() {
                               >
                                 <Edit2 size={12} aria-hidden="true" /> Edit member
                               </button>
-                              {/* 2026-05-08 (Lean 1) — "Send setup email"
-                                  retired. Reset path lives at
-                                  /admin/settings → Account Access (the
-                                  Key icon there generates a temp
-                                  password the owner hands off
-                                  directly). */}
+                              {/* Setup links for existing members live at
+                                  /admin/settings → Account Access. */}
                               <button
                                 role="menuitem"
                                 onClick={() => toggleRole(member)}
@@ -895,23 +907,32 @@ export default function TeamManager() {
 
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto flex flex-col">
               <div className="p-6 space-y-5 flex-1">
-                {/* ─── Step 4 — Success ─── (Lean 1)
-                    Triggered after `admin-create-member` succeeds.
-                    Replaces the "close + toast" flow so the admin
-                    can see + copy the temp password before leaving
-                    the form. `<TempPasswordReveal />` owns the
-                    Copy button + select-all interaction. */}
+                {/* ─── Step 4 — Success ─── */}
                 {createdMember && (
                   <div className="space-y-4">
-                    <TempPasswordReveal
-                      email={createdMember.profile.email ?? ''}
-                      displayName={createdMember.profile.display_name}
-                      tempPassword={createdMember.tempPassword}
-                      headline={`${createdMember.profile.display_name} is ready to log in`}
-                      subhead="Hand off the temporary password below. They'll be required to choose their own on first sign-in."
-                    />
+                    {createdMember.setupLink ? (
+                      <SetupLinkReveal
+                        email={createdMember.profile.email ?? ''}
+                        displayName={createdMember.profile.display_name}
+                        setupLink={createdMember.setupLink}
+                        headline={`${createdMember.profile.display_name} is ready to set a password`}
+                        subhead="Copy this setup link and send it directly. They will choose their own password."
+                      />
+                    ) : createdMember.tempPassword ? (
+                      <TempPasswordReveal
+                        email={createdMember.profile.email ?? ''}
+                        displayName={createdMember.profile.display_name}
+                        tempPassword={createdMember.tempPassword}
+                        headline={`${createdMember.profile.display_name} is ready to log in`}
+                        subhead="Hand off the temporary password below. They'll be required to choose their own on first sign-in."
+                      />
+                    ) : (
+                      <div role="alert" className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+                        Member created, but the setup link could not be generated: {createdMember.setupLinkError}
+                      </div>
+                    )}
                     <p className="text-[11px] text-text-light">
-                      You can also reset their password later from{' '}
+                      You can generate another setup link later from{' '}
                       <Link
                         to="/admin/settings"
                         className="text-gold hover:underline"
@@ -952,23 +973,36 @@ export default function TeamManager() {
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
                 />
 
-                {/* 2026-05-08 (Lean 1) — temp-password handoff is
-                    the canonical onboarding flow until SMTP is
-                    configured. Two modes:
-                      - Auto: client-side `generateTempPassword()` at
-                        submit; revealed in the success step so the
-                        admin can copy + hand it off.
-                      - Manual: admin types a memorable password (e.g.
-                        for verbal handoff in person).
-                    The old "Email a setup link" path is gone — Supabase
-                    free-tier SMTP only delivers to the project owner
-                    address, so it silently failed for everyone else. */}
                 {!editingMember && (
                   <div className="space-y-3">
                     <fieldset className="rounded-xl border border-border bg-surface-alt/50 p-3 space-y-2">
                       <legend className="px-1 text-[11px] font-semibold tracking-wider uppercase text-text-light">
-                        Temporary password
+                        Account setup
                       </legend>
+                      <label
+                        className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-surface-alt transition-colors"
+                        htmlFor="team-member-pw-mode-setup-link"
+                      >
+                        <input
+                          id="team-member-pw-mode-setup-link"
+                          type="radio"
+                          name="team-member-pw-mode"
+                          checked={formData.password_mode === 'setup_link'}
+                          onChange={() =>
+                            setFormData({ ...formData, password_mode: 'setup_link' })
+                          }
+                          className="mt-1 w-4 h-4 border-border accent-gold shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-text flex items-center gap-1.5">
+                            <Link2 size={13} className="text-gold shrink-0" aria-hidden="true" />
+                            Generate setup link (recommended)
+                          </p>
+                          <p className="text-[12px] text-text-muted mt-0.5">
+                            Copy a secure link after creation and send it directly. No SMTP delivery needed.
+                          </p>
+                        </div>
+                      </label>
                       <label
                         className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-surface-alt transition-colors"
                         htmlFor="team-member-pw-mode-auto"
@@ -986,7 +1020,7 @@ export default function TeamManager() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-text flex items-center gap-1.5">
                             <KeyRound size={13} className="text-gold shrink-0" aria-hidden="true" />
-                            Auto-generate (recommended)
+                            Auto-generate temporary password
                           </p>
                           <p className="text-[12px] text-text-muted mt-0.5">
                             Strong 14-character password. Revealed after creation so you can copy it and hand it off.
@@ -1029,8 +1063,8 @@ export default function TeamManager() {
                         onChange={e =>
                           setFormData({ ...formData, manual_password: e.target.value })
                         }
-                      />
-                    )}
+                        />
+                      )}
                   </div>
                 )}
 
@@ -1175,10 +1209,8 @@ export default function TeamManager() {
                         Review &amp; create
                       </h3>
                       <p className="text-xs text-text-muted mt-1">
-                        Confirm everything below. After creation you'll see the temporary password —
-                        copy it and hand it off to{' '}
+                        Confirm everything below. After creation you'll get the setup handoff for{' '}
                         <span className="font-semibold text-text">{formData.display_name || 'the new member'}</span>.
-                        They'll be required to change it on first sign-in.
                       </p>
                     </div>
 
@@ -1193,9 +1225,11 @@ export default function TeamManager() {
                         ['Phone', formData.phone || '—'],
                         ['Start date', formData.start_date || '—'],
                         ['Status', formData.status],
-                        formData.password_mode === 'auto'
-                          ? ['Temp password', 'Auto-generated (revealed after create)']
-                          : ['Temp password', formData.manual_password],
+                        formData.password_mode === 'setup_link'
+                          ? ['Setup', 'Secure link generated after create']
+                          : formData.password_mode === 'auto'
+                            ? ['Setup', 'Auto-generated temporary password']
+                            : ['Setup', formData.manual_password],
                       ]}
                     />
 

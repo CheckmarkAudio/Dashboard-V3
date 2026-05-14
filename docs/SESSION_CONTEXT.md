@@ -718,6 +718,30 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-14 employee setup-link rescue
+
+- **`CODEX:`** took over the urgent employee-login blocker. The app had
+  drifted to temp-password handoff because Supabase SMTP recovery emails
+  were unreliable for non-owner recipients. New default strategy:
+  generate the Supabase recovery/setup link with the service-role Admin
+  API and show it to the owner/admin to copy-send directly.
+- Added and deployed `admin-generate-setup-link` to Supabase project
+  `ncljfjdcyswoeitsooty`. The function requires a signed-in admin,
+  verifies same-team target membership, rejects the owner account, merges
+  `requires_password_change: true` into existing metadata, and returns a
+  `setup_link`. It does **not** send email.
+- UI changes:
+  - Add Member defaults to `Generate setup link (recommended)`.
+  - Add Member still supports auto/manual temp passwords as fallback.
+  - Settings → Account Access key button now generates a setup link for
+    existing members instead of resetting to a temp password.
+  - Shared `SetupLinkReveal` component provides copy + mail draft actions.
+- Verified with `npm run build`.
+- **Next after merge/deploy:** confirm on production by generating a
+  setup link for one stranded employee, sending it directly, and having
+  them set their password. Then resume Google Calendar Phase 2 inbound
+  sync.
+
 ### 2026-05-14 production login lockdown follow-up
 
 - **`CODEX:`** hardened preview auto-login after the user reported the
