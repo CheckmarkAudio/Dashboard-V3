@@ -735,6 +735,33 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
   sync for already-linked events. Main workspace still contains unrelated
   calendar-sync edits; do not revert them while handling auth.
 
+### 2026-05-14 Google Calendar Phase 2 edge-function hardening
+
+- **`CODEX:`** resumed the two-way calendar-sync track after the auth fix.
+  Updated `google-calendar-auth` and `google-calendar-sync` so both
+  `admin` and `owner` profiles can manage the connected Google Calendar.
+- Hardened inbound sync before deploy:
+  - removed the invalid `privateExtendedProperty=checkmarkSessionId`
+    Events.list filter; Google requires extended-property filters in
+    `propertyName=value` form, and this worker safely filters returned
+    events against `sessions.google_event_id` instead
+  - preserved external title edits by mapping non-Checkmark-formatted
+    event summaries into `sessions.client_name`
+  - persisted inbound-sync failures to
+    `google_calendar_connections.inbound_last_sync_error` so Settings
+    shows the issue instead of silently failing
+- **`REMOTE-SCHEMA-VERIFIED:`** `google_sync_token`,
+  `inbound_last_synced_at`, `inbound_last_sync_error`,
+  `inbound_last_sync_summary`, `calendar_last_changed_source`, and
+  `calendar_last_changed_at` exist on production even though
+  `supabase migration list --linked` does not show local migration
+  `20260507213000` as applied. Treat this as known migration-history
+  drift, not missing columns.
+- **`SUPABASE-DEPLOYED:`** deployed `google-calendar-auth` and
+  `google-calendar-sync` to project `ncljfjdcyswoeitsooty`.
+- Verified: `npm run build` clean. Local `deno check` could not run
+  because `deno` is not installed on this machine.
+
 ### 2026-05-07 calendar-sync production handoff
 
 - **`CODEX:`** built the Google Calendar Phase 1 code path, patched the

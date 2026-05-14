@@ -233,7 +233,10 @@ export async function listGoogleCalendarEvents(
   params.set('maxResults', '250')
   params.set('showDeleted', 'true')
   params.set('singleEvents', 'true')
-  params.set('privateExtendedProperty', 'checkmarkSessionId')
+  // Do not filter by privateExtendedProperty here. Google requires
+  // `propertyName=value` constraints, and this worker needs to find any
+  // already-linked Checkmark event by its Google event id. The caller
+  // filters the returned page against `sessions.google_event_id`.
   if (input.pageToken) params.set('pageToken', input.pageToken)
   if (input.syncToken) {
     params.set('syncToken', input.syncToken)
