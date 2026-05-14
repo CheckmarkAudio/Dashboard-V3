@@ -58,7 +58,7 @@ import {
   useMemberAdminSessions,
   useMemberClockEntries,
 } from '../../lib/queries/memberProfile'
-import { Badge, ListPanel, ListRow, Select } from '../ui'
+import { Select } from '../ui'
 import DashboardWidgetFrame, { type DragHandleProps } from '../dashboard/DashboardWidgetFrame'
 import FloatingDetailModal from '../FloatingDetailModal'
 import type { TeamMember } from '../../types'
@@ -386,6 +386,115 @@ function WidgetBody({ id, member }: { id: WidgetId; member: TeamMember }) {
   return <ClockBody memberId={member.id} />
 }
 
+// ─── Canonical body shell (matches NotificationsPanel) ──────────
+//
+// `inset-panel` provides the booking-style nested chrome (border +
+// rounded corners + clipped overflow). Inside, a sticky-feel
+// section header band (gold uppercase label) names the section, and
+// the rows below are flat with `divide-y divide-theme` hairlines —
+// exact recipe from `src/components/notifications/NotificationsPanel.tsx`.
+function CanonicalBody({
+  sectionIcon: SectionIcon,
+  sectionLabel,
+  children,
+}: {
+  sectionIcon: typeof Briefcase
+  sectionLabel: string
+  children: ReactNode
+}) {
+  return (
+    <div className="flex-1 min-h-0 inset-panel">
+      <div className="h-full overflow-auto">
+        <div className="px-3 py-2 flex items-center gap-2 bg-surface-alt/40">
+          <SectionIcon size={11} className="text-gold/70" aria-hidden="true" />
+          <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
+            {sectionLabel}
+          </p>
+        </div>
+        <div className="divide-y divide-theme">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+// `CanonicalRow` carries the row layout used across NotificationsPanel
+// (forum + assignment rows): colored circle icon · bold title + muted
+// meta · right-side timestamp pill. Color tints come from the row's
+// own `tint` prop so each widget can pick a category accent (violet
+// for sessions, gold for tasks, emerald for shifts) without losing
+// the shared row rhythm.
+type RowTint = 'violet' | 'gold' | 'emerald'
+
+const TINT_CLASSES: Record<RowTint, { bg: string; ring: string; text: string }> = {
+  violet:  { bg: 'bg-violet-500/15',  ring: 'ring-violet-500/30',  text: 'text-violet-300' },
+  gold:    { bg: 'bg-gold/15',        ring: 'ring-gold/30',        text: 'text-gold' },
+  emerald: { bg: 'bg-emerald-500/15', ring: 'ring-emerald-500/30', text: 'text-emerald-300' },
+}
+
+function CanonicalRow({
+  to,
+  onClick,
+  icon: Icon,
+  tint,
+  title,
+  meta,
+  rightLabel,
+  rightExtra,
+}: {
+  to?: string
+  onClick?: () => void
+  icon: typeof Briefcase
+  tint: RowTint
+  title: string
+  meta: string
+  rightLabel?: string
+  rightExtra?: ReactNode
+}) {
+  const t = TINT_CLASSES[tint]
+  const inner = (
+    <div className="flex items-start gap-2.5 px-3 py-2.5">
+      <span
+        className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 ${t.bg} ${t.ring} ${t.text}`}
+        aria-hidden="true"
+      >
+        <Icon size={13} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-bold text-text truncate">{title}</p>
+        <p className="text-[12px] text-text-light truncate mt-0.5">{meta}</p>
+      </div>
+      <div className="shrink-0 flex flex-col items-end gap-1 mt-0.5">
+        {rightLabel && (
+          <span className="text-[10px] text-text-light tabular-nums whitespace-nowrap">
+            {rightLabel}
+          </span>
+        )}
+        {rightExtra}
+      </div>
+    </div>
+  )
+
+  if (to) {
+    return (
+      <Link to={to} className="block transition-[background-color] duration-150 hover:bg-surface-hover focus-ring">
+        {inner}
+      </Link>
+    )
+  }
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full text-left transition-[background-color] duration-150 hover:bg-surface-hover focus-ring"
+      >
+        {inner}
+      </button>
+    )
+  }
+  return <div className="transition-[background-color] duration-150 hover:bg-surface-hover">{inner}</div>
+}
+
 // ─── Sessions widget body ────────────────────────────────────────
 
 function SessionsBody({ memberId }: { memberId: string }) {
@@ -397,16 +506,13 @@ function SessionsBody({ memberId }: { memberId: string }) {
     return <EmptyState icon={Briefcase} label="No sessions on record yet." />
   }
   return (
-    <ListPanel title="Session History">
+    <CanonicalBody sectionIcon={Briefcase} sectionLabel="SESSIONS">
       {rows.map((s) => (
-        <ListRow
+        <CanonicalRow
           key={s.sessionId}
           to="/sessions"
-          icon={
-            <span className="icon-tile-gold w-8 h-8">
-              <Briefcase size={14} className="text-gold" aria-hidden="true" />
-            </span>
-          }
+          icon={Briefcase}
+          tint="violet"
           title={s.title}
           meta={
             [
@@ -416,14 +522,10 @@ function SessionsBody({ memberId }: { memberId: string }) {
               .filter(Boolean)
               .join(' · ') || 'Studio session'
           }
-          right={
-            <Badge variant="neutral" size="sm">
-              {s.dateLabel}
-            </Badge>
-          }
+          rightLabel={s.dateLabel}
         />
       ))}
-    </ListPanel>
+    </CanonicalBody>
   )
 }
 
@@ -438,25 +540,18 @@ function TasksBody({ memberId }: { memberId: string }) {
     return <EmptyState icon={CheckCircle2} label="No completed tasks yet." />
   }
   return (
-    <ListPanel title="Task Completion">
+    <CanonicalBody sectionIcon={CheckCircle2} sectionLabel="TASKS">
       {rows.map((t) => (
-        <ListRow
+        <CanonicalRow
           key={t.taskId}
-          icon={
-            <span className="icon-tile-gold w-8 h-8">
-              <CheckCircle2 size={14} className="text-gold" aria-hidden="true" />
-            </span>
-          }
+          icon={CheckCircle2}
+          tint="gold"
           title={t.title}
           meta="Completed"
-          right={
-            <Badge variant="neutral" size="sm">
-              {t.relativeLabel}
-            </Badge>
-          }
+          rightLabel={t.relativeLabel}
         />
       ))}
-    </ListPanel>
+    </CanonicalBody>
   )
 }
 
@@ -471,27 +566,29 @@ function ClockBody({ memberId }: { memberId: string }) {
     return <EmptyState icon={Clock} label="No shifts recorded yet." />
   }
   return (
-    <ListPanel title="Clock Data">
-      {rows.map((e) => (
-        <ListRow
-          key={e.entry_id}
-          icon={
-            <span className="icon-tile-gold w-8 h-8">
-              <Clock size={14} className="text-gold" aria-hidden="true" />
-            </span>
-          }
-          title={formatClockTitle(e)}
-          meta={e.notes ?? 'No notes'}
-          right={
-            e.clocked_out_at === null ? (
-              <Badge variant="success" size="sm">On shift</Badge>
-            ) : (
-              <Badge variant="neutral" size="sm">{formatDuration(e.duration_minutes)}</Badge>
-            )
-          }
-        />
-      ))}
-    </ListPanel>
+    <CanonicalBody sectionIcon={Clock} sectionLabel="SHIFTS">
+      {rows.map((e) => {
+        const isOpen = e.clocked_out_at === null
+        return (
+          <CanonicalRow
+            key={e.entry_id}
+            icon={Clock}
+            tint="emerald"
+            title={formatClockTitle(e)}
+            meta={e.notes ?? 'No notes'}
+            rightLabel={isOpen ? undefined : formatDuration(e.duration_minutes)}
+            rightExtra={
+              isOpen ? (
+                <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/30 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+                  On shift
+                </span>
+              ) : null
+            }
+          />
+        )
+      })}
+    </CanonicalBody>
   )
 }
 
