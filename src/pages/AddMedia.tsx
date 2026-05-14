@@ -29,10 +29,10 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { extractEdgeFunctionError } from '../lib/edgeFunctionError'
 import { Badge, PageHeader } from '../components/ui'
 
-const PARENT_FOLDER_LINK_KEY = 'VITE_GOOGLE_DRIVE_PARENT_FOLDER_LINK'
-// Set in Vercel + .env so the "Browse all submissions" button can deep-
-// link to the shared Drive folder. Reading from import.meta.env keeps
-// the value out of the bundle until it's set.
+// 2026-05-14 pivoted from Drive → Dropbox after Google killed
+// service-account quotas on personal accounts. The env var name is
+// vendor-neutral so a future swap doesn't require touching the page.
+const PARENT_FOLDER_LINK_KEY = 'VITE_MEDIA_PARENT_FOLDER_LINK'
 const PARENT_FOLDER_LINK = (import.meta.env[PARENT_FOLDER_LINK_KEY] as string | undefined) ?? null
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024
@@ -150,7 +150,7 @@ export default function AddMedia() {
           submission?: MediaSubmissionRow
           error?: string
           warning?: string
-        }>('upload-to-drive', {
+        }>('upload-to-dropbox', {
           body: form,
         })
 
@@ -267,7 +267,7 @@ export default function AddMedia() {
               Drop media here, or click to choose
             </p>
             <p className="text-[12px] text-text-muted mt-1">
-              Files go to <span className="font-semibold text-text">Checkmark Media › {memberName}</span> · cap {MAX_FILE_LABEL} per file
+              Files go to <span className="font-semibold text-text">Checkmark Media Drop › {memberName}</span> · cap {MAX_FILE_LABEL} per file
             </p>
           </div>
         </div>
