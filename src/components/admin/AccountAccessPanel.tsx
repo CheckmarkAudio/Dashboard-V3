@@ -94,7 +94,7 @@ function UserRow({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(user.email)
   const [submitting, setSubmitting] = useState(false)
-  const canEditEmail = isOwnerViewer && !isPrimaryOwner
+  const canEditEmail = canManageAccess && !isPrimaryOwner
 
   const beginEdit = () => {
     setDraft(user.email)
