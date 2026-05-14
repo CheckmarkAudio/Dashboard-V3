@@ -17,3 +17,6 @@ dist-ssr/
 backups/
 .vercel
 .env*.local
+
+# Google service account key exports — use Supabase secrets instead
+checkmarkaudio-agent-*.json
