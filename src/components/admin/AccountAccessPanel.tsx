@@ -6,6 +6,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
 import { Button, Modal } from '../ui'
 import SetupLinkReveal from '../auth/SetupLinkReveal'
+import TempPasswordReveal from '../auth/TempPasswordReveal'
+import { generateTempPassword } from '../../lib/auth/tempPassword'
 
 /**
  * Best-effort extraction of a human-readable error message from any
@@ -272,6 +274,7 @@ export default function AccountAccessPanel() {
   const [resetPending, setResetPending] = useState(false)
   const [resetResult, setResetResult] = useState<
     | { kind: 'ok'; setupLink: string }
+    | { kind: 'temp'; tempPassword: string }
     | { kind: 'err'; message: string }
     | null
   >(null)
@@ -436,6 +439,25 @@ export default function AccountAccessPanel() {
     setResetResult({ kind: 'ok', setupLink: data.setup_link })
   }, [resetTarget])
 
+  const confirmTempPassword = useCallback(async () => {
+    if (!resetTarget) return
+    const tempPassword = generateTempPassword()
+    setResetPending(true)
+
+    const { error: rpcErr } = await supabase.rpc('admin_bootstrap_member_password', {
+      p_user_id: resetTarget.id,
+      p_new_password: tempPassword,
+    })
+    setResetPending(false)
+
+    if (rpcErr) {
+      setResetResult({ kind: 'err', message: errorMessage(rpcErr, 'Failed to set temporary password') })
+      return
+    }
+
+    setResetResult({ kind: 'temp', tempPassword })
+  }, [resetTarget])
+
   const closeResetModal = useCallback(() => {
     setResetTarget(null)
     setResetResult(null)
@@ -598,15 +620,21 @@ export default function AccountAccessPanel() {
         <Modal
           open
           onClose={closeResetModal}
-          title={resetResult?.kind === 'ok' ? 'Setup link ready' : 'Generate setup link'}
-          description={
+          title={
             resetResult?.kind === 'ok'
+              ? 'Setup link ready'
+              : resetResult?.kind === 'temp'
+                ? 'Temporary password ready'
+                : 'Generate setup link'
+          }
+          description={
+            resetResult?.kind === 'ok' || resetResult?.kind === 'temp'
               ? undefined
               : `Generate a password setup link for ${resetTarget.display_name}.`
           }
           size="sm"
           footer={
-            resetResult?.kind === 'ok' ? (
+            resetResult?.kind === 'ok' || resetResult?.kind === 'temp' ? (
               <Button variant="primary" onClick={closeResetModal}>Done</Button>
             ) : (
               <>
@@ -629,9 +657,31 @@ export default function AccountAccessPanel() {
               displayName={resetTarget.display_name}
               setupLink={resetResult.setupLink}
             />
+          ) : resetResult?.kind === 'temp' ? (
+            <TempPasswordReveal
+              email={resetTarget.email}
+              displayName={resetTarget.display_name}
+              tempPassword={resetResult.tempPassword}
+            />
           ) : resetResult?.kind === 'err' ? (
-            <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-              {resetResult.message}
+            <div className="space-y-3">
+              <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                {resetResult.message}
+              </div>
+              <div className="rounded-xl border border-border bg-surface-alt/50 p-3">
+                <p className="text-[13px] text-text-muted">
+                  If Supabase cannot generate a link for this member, set a temporary password instead.
+                  They will be forced to choose their own password after login.
+                </p>
+                <Button
+                  className="mt-3"
+                  variant="secondary"
+                  onClick={() => void confirmTempPassword()}
+                  loading={resetPending}
+                >
+                  Use temporary password
+                </Button>
+              </div>
             </div>
           ) : (
             <p className="text-[13px] text-text-muted">

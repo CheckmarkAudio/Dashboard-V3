@@ -27,6 +27,17 @@ export default function SetupLinkReveal({
     return `mailto:${email}?subject=${subject}&body=${body}`
   }, [displayName, email, setupLink])
 
+  const gmailHref = useMemo(() => {
+    const params = new URLSearchParams({
+      view: 'cm',
+      fs: '1',
+      to: email,
+      su: 'Set up your Checkmark Audio account',
+      body: `Hi ${displayName},\n\nUse this secure link to set your Checkmark Audio password and sign in:\n\n${setupLink}\n\nThanks!`,
+    })
+    return `https://mail.google.com/mail/?${params.toString()}`
+  }, [displayName, email, setupLink])
+
   const onCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(setupLink)
@@ -85,11 +96,20 @@ export default function SetupLinkReveal({
 
       <div className="flex items-center gap-2 flex-wrap">
         <a
+          href={gmailHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-gold/50 bg-gold/15 px-3 text-xs font-semibold text-text transition-colors hover:bg-gold/25 focus-ring"
+        >
+          <Mail size={13} aria-hidden="true" />
+          Open Gmail draft
+        </a>
+        <a
           href={mailtoHref}
           className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface-alt px-3 text-xs font-semibold text-text transition-colors hover:bg-surface-hover focus-ring"
         >
           <Mail size={13} aria-hidden="true" />
-          Open email draft
+          Open default mail
         </a>
       </div>
     </div>
