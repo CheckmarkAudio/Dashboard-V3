@@ -5,8 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { fetchUserPreferences, setUserPreference } from '../../lib/preferences'
 import MemberAvatar from '../../components/members/MemberAvatar'
 import {
-  AlertCircle, Archive, Building2, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronLeft, ChevronRight,
-  ChevronsLeft, ChevronsRight,
+  AlertCircle, Archive, Building2, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   ClipboardList, Edit2, Flag, Layers, Loader2, Plus, Save,
   Sparkles, Tag, Trash2, Users, UserPlus, X,
 } from 'lucide-react'
@@ -90,15 +89,20 @@ export default function AssignAdmin() {
   const { toast } = useToast()
   const { user } = useAuth()
 
-  // 2026-05-13 — collapsible members rail. When `railCollapsed` is
-  // true, the sidebar shrinks from 260px to ~64px and shows just
-  // avatars (no names / role labels). The selected member's row
-  // also gets prev/next chevrons in the main pane header so admins
-  // can flip through members without expanding the rail. State
-  // persists per user via team_members.preferences (same channel
-  // theme + widget layout already use), so the choice follows
-  // members across devices.
-  const [railCollapsed, setRailCollapsed] = useState(false)
+  // 2026-05-14 — REVISED: was a full-rail collapse (whole sidebar
+  // shrunk to 64px showing icon-only avatars + tab icons), per user
+  // ask: "I just wanted to fold up the member names into the members
+  // tab and then drop down when expanded again." Now the toggle
+  // folds ONLY the member name list. Rail stays full width (260px).
+  // Studio / Templates / Other tabs always render full-size. Selected
+  // member is still steppable via prev/next chevrons in the main
+  // pane header when the list is folded so admins can switch members
+  // without re-expanding.
+  //
+  // Pref key migrated: `assign_rail_collapsed` → `assign_members_list_collapsed`.
+  // Old key still read once for back-compat so existing collapsed
+  // users don't lose their preference on the first load after deploy.
+  const [membersListCollapsed, setMembersListCollapsed] = useState(false)
   const railReconciledForUserId = useRef<string | null>(null)
   useEffect(() => {
     if (!user?.id || user.id === 'dev-user') return
@@ -108,16 +112,17 @@ export default function AssignAdmin() {
     void (async () => {
       const prefs = await fetchUserPreferences(user.id)
       if (cancelled) return
-      const stored = prefs['assign_rail_collapsed']
-      if (typeof stored === 'boolean') setRailCollapsed(stored)
+      const stored =
+        prefs['assign_members_list_collapsed'] ?? prefs['assign_rail_collapsed']
+      if (typeof stored === 'boolean') setMembersListCollapsed(stored)
     })()
     return () => { cancelled = true }
   }, [user?.id])
-  const toggleRail = useCallback(() => {
-    setRailCollapsed((prev) => {
+  const toggleMembersList = useCallback(() => {
+    setMembersListCollapsed((prev) => {
       const next = !prev
       if (user?.id && user.id !== 'dev-user') {
-        void setUserPreference(user.id, 'assign_rail_collapsed', next)
+        void setUserPreference(user.id, 'assign_members_list_collapsed', next)
       }
       return next
     })
@@ -191,9 +196,9 @@ export default function AssignAdmin() {
     setView('member')
   }, [])
 
-  // 2026-05-13 — prev/next helpers used by the rail's chevrons in
-  // collapsed mode. Wraps around (last → first / first → last) so a
-  // single direction can cycle the whole roster.
+  // 2026-05-13 — prev/next helpers used by the main-pane chevrons
+  // when the members list is folded. Wraps around (last → first /
+  // first → last) so a single direction can cycle the whole roster.
   const stepMember = useCallback(
     (delta: 1 | -1) => {
       if (activeMembers.length === 0) return
@@ -437,111 +442,102 @@ export default function AssignAdmin() {
           pattern (`grid-cols-[300px_1fr] gap-3 items-stretch`). The aside
           loses `h-fit sticky top-4` because that pinned the sidebar at
           its content height and broke the bottom-flush requirement. */}
-      {/* 2026-05-13 — grid template tracks `railCollapsed` so the
-          sidebar can shrink/grow with a smooth transition while the
-          right pane reflows. Same `items-stretch` pattern as before
-          so the bottom borders stay flush. */}
-      <div
-        className={`grid gap-6 items-stretch transition-[grid-template-columns] duration-200 ${
-          railCollapsed ? 'grid-cols-[64px_1fr]' : 'grid-cols-[260px_1fr]'
-        }`}
-      >
+      {/* 2026-05-14 — sidebar stays at 260px always; the toggle
+          inside the Members section folds ONLY the member name list
+          (accordion-style). Studio / Templates / Other tabs remain
+          full-size regardless. */}
+      <div className="grid gap-6 items-stretch grid-cols-[260px_1fr]">
         {/* ─── Sidebar ───────────────────────────────────────────── */}
         <aside className="rounded-xl border border-border bg-surface p-3">
-          {/* Header: title + collapse toggle. Title hides when
-              collapsed so just the toggle stays visible. */}
-          <div className={`flex items-center gap-2 pb-2 mb-2 border-b border-border/60 ${railCollapsed ? 'justify-center' : 'px-2'}`}>
-            {!railCollapsed && (
-              <>
-                <Users size={14} className="text-gold" aria-hidden="true" />
-                <h2 className="text-sm font-bold text-text">Members</h2>
-                {activeMembers.length > 0 && (
-                  <span className="ml-auto text-[11px] text-text-light tabular-nums">
-                    {activeMembers.length}
-                  </span>
-                )}
-              </>
+          {/* Members section header doubles as the accordion toggle.
+              Click the chevron to fold / unfold the names list
+              underneath. The header itself (icon + label + count)
+              stays visible in both states so you always know what
+              you're toggling. */}
+          <div className="flex items-center gap-2 pb-2 mb-2 border-b border-border/60 px-2">
+            <Users size={14} className="text-gold" aria-hidden="true" />
+            <h2 className="text-sm font-bold text-text">Members</h2>
+            {activeMembers.length > 0 && (
+              <span className="ml-auto text-[11px] text-text-light tabular-nums">
+                {activeMembers.length}
+              </span>
             )}
             <button
               type="button"
-              onClick={toggleRail}
-              aria-label={railCollapsed ? 'Expand members rail' : 'Collapse members rail'}
-              title={railCollapsed ? 'Expand members rail' : 'Collapse members rail'}
-              aria-pressed={railCollapsed}
-              className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg text-text-muted hover:text-gold hover:bg-surface-hover transition-colors focus-ring ${
-                railCollapsed ? '' : 'ml-1'
-              }`}
+              onClick={toggleMembersList}
+              aria-label={membersListCollapsed ? 'Expand members list' : 'Collapse members list'}
+              title={membersListCollapsed ? 'Expand members list' : 'Collapse members list'}
+              aria-pressed={membersListCollapsed}
+              aria-expanded={!membersListCollapsed}
+              className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg text-text-muted hover:text-gold hover:bg-surface-hover transition-colors focus-ring"
             >
-              {railCollapsed ? <ChevronsRight size={14} aria-hidden="true" /> : <ChevronsLeft size={14} aria-hidden="true" />}
+              {membersListCollapsed ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />}
             </button>
           </div>
-          {/* Members */}
-          <div>
-            {teamQuery.isLoading ? (
-              <div className="px-3 py-4 text-text-light flex items-center gap-2 text-[12px]">
-                <Loader2 size={14} className="animate-spin" />
-                Loading…
-              </div>
-            ) : (
-              <ul className="space-y-1">
-                {activeMembers.map((m) => {
-                  const isSelected = view === 'member' && selectedMember?.id === m.id
-                  return (
-                    <li key={m.id}>
-                      <button
-                        type="button"
-                        onClick={() => selectMember(m.id)}
-                        aria-current={isSelected ? 'true' : undefined}
-                        title={railCollapsed ? `${m.display_name}${m.position ? ` · ${m.position.replace(/_/g, ' ')}` : ''}` : undefined}
-                        className={`w-full flex items-center transition-all text-left ${
-                          railCollapsed
-                            ? 'justify-center p-1.5 rounded-xl'
-                            : 'gap-2.5 px-2 py-2 rounded-xl'
-                        } ${
-                          isSelected
-                            ? 'bg-gold/12 ring-1 ring-gold/30'
-                            : 'hover:bg-surface-hover'
-                        }`}
-                      >
-                        {/* Avatar — uses canonical MemberAvatar so
-                            uploaded profile photos surface here. The
-                            selected ring stays gold for visual continuity
-                            with the previous initial-circle treatment. */}
-                        <span
-                          className={`shrink-0 inline-flex rounded-full ${
-                            isSelected ? 'ring-1 ring-gold/50' : ''
+          {/* Members — list collapses (display: none) when toggled,
+              not animated since the container is unbounded; instant
+              fold reads as a clean accordion. When collapsed, the
+              admin can still step through members via the prev/next
+              chevrons in the main pane title row. */}
+          {!membersListCollapsed && (
+            <div>
+              {teamQuery.isLoading ? (
+                <div className="px-3 py-4 text-text-light flex items-center gap-2 text-[12px]">
+                  <Loader2 size={14} className="animate-spin" />
+                  Loading…
+                </div>
+              ) : (
+                <ul className="space-y-1">
+                  {activeMembers.map((m) => {
+                    const isSelected = view === 'member' && selectedMember?.id === m.id
+                    return (
+                      <li key={m.id}>
+                        <button
+                          type="button"
+                          onClick={() => selectMember(m.id)}
+                          aria-current={isSelected ? 'true' : undefined}
+                          className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-all text-left ${
+                            isSelected
+                              ? 'bg-gold/12 ring-1 ring-gold/30'
+                              : 'hover:bg-surface-hover'
                           }`}
                         >
-                          <MemberAvatar member={m} size="sm" />
-                        </span>
-                        {!railCollapsed && (
-                          <>
-                            <div className="flex-1 min-w-0">
-                              <p
-                                className={`text-[13px] truncate ${
-                                  isSelected ? 'font-bold text-text' : 'font-semibold text-text-muted'
-                                }`}
-                              >
-                                {m.display_name}
+                          {/* Avatar — uses canonical MemberAvatar so
+                              uploaded profile photos surface here. The
+                              selected ring stays gold for visual continuity
+                              with the previous initial-circle treatment. */}
+                          <span
+                            className={`shrink-0 inline-flex rounded-full ${
+                              isSelected ? 'ring-1 ring-gold/50' : ''
+                            }`}
+                          >
+                            <MemberAvatar member={m} size="sm" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p
+                              className={`text-[13px] truncate ${
+                                isSelected ? 'font-bold text-text' : 'font-semibold text-text-muted'
+                              }`}
+                            >
+                              {m.display_name}
+                            </p>
+                            {m.position && (
+                              <p className="text-[10px] text-text-light truncate">
+                                {m.position.replace(/_/g, ' ')}
                               </p>
-                              {m.position && (
-                                <p className="text-[10px] text-text-light truncate">
-                                  {m.position.replace(/_/g, ' ')}
-                                </p>
-                              )}
-                            </div>
-                            {isSelected && (
-                              <ChevronRight size={12} className="text-gold shrink-0" aria-hidden="true" />
                             )}
-                          </>
-                        )}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
+                          </div>
+                          {isSelected && (
+                            <ChevronRight size={12} className="text-gold shrink-0" aria-hidden="true" />
+                          )}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Studio tab — clicking swaps the main pane to the
               embedded StudioTasksPane: studio-scope tasks grouped by
@@ -552,10 +548,7 @@ export default function AssignAdmin() {
               type="button"
               onClick={() => setView('studio')}
               aria-current={view === 'studio' ? 'true' : undefined}
-              title={railCollapsed ? 'Studio · tasks by room' : undefined}
-              className={`w-full flex items-center transition-all text-left ${
-                railCollapsed ? 'justify-center p-1.5 rounded-xl' : 'gap-2 px-2 py-2 rounded-xl'
-              } ${
+              className={`w-full flex items-center gap-2 px-2 py-2 rounded-xl transition-all text-left ${
                 view === 'studio'
                   ? 'bg-gold/12 ring-1 ring-gold/30'
                   : 'hover:bg-surface-hover'
@@ -566,27 +559,23 @@ export default function AssignAdmin() {
                 className={view === 'studio' ? 'text-gold' : 'text-gold/70'}
                 aria-hidden="true"
               />
-              {!railCollapsed && (
-                <>
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className={`text-[13px] ${
-                        view === 'studio' ? 'font-bold text-text' : 'font-semibold text-text'
-                      }`}
-                    >
-                      Studio
-                    </p>
-                    <p className="text-[10px] text-text-light">
-                      {view === 'studio' ? 'Open' : 'Tasks by room'}
-                    </p>
-                  </div>
-                  <ChevronRight
-                    size={12}
-                    className={`shrink-0 ${view === 'studio' ? 'text-gold' : 'text-text-light'}`}
-                    aria-hidden="true"
-                  />
-                </>
-              )}
+              <div className="flex-1 min-w-0">
+                <p
+                  className={`text-[13px] ${
+                    view === 'studio' ? 'font-bold text-text' : 'font-semibold text-text'
+                  }`}
+                >
+                  Studio
+                </p>
+                <p className="text-[10px] text-text-light">
+                  {view === 'studio' ? 'Open' : 'Tasks by room'}
+                </p>
+              </div>
+              <ChevronRight
+                size={12}
+                className={`shrink-0 ${view === 'studio' ? 'text-gold' : 'text-text-light'}`}
+                aria-hidden="true"
+              />
             </button>
           </div>
 
@@ -600,10 +589,7 @@ export default function AssignAdmin() {
               type="button"
               onClick={() => setView('templates')}
               aria-current={view === 'templates' ? 'true' : undefined}
-              title={railCollapsed ? 'Templates' : undefined}
-              className={`w-full flex items-center transition-all text-left ${
-                railCollapsed ? 'justify-center p-1.5 rounded-xl' : 'gap-2 px-2 py-2 rounded-xl'
-              } ${
+              className={`w-full flex items-center gap-2 px-2 py-2 rounded-xl transition-all text-left ${
                 view === 'templates'
                   ? 'bg-gold/12 ring-1 ring-gold/30'
                   : 'hover:bg-surface-hover'
@@ -614,27 +600,23 @@ export default function AssignAdmin() {
                 className={view === 'templates' ? 'text-gold' : 'text-gold/70'}
                 aria-hidden="true"
               />
-              {!railCollapsed && (
-                <>
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className={`text-[13px] ${
-                        view === 'templates' ? 'font-bold text-text' : 'font-semibold text-text'
-                      }`}
-                    >
-                      Templates
-                    </p>
-                    <p className="text-[10px] text-text-light">
-                      {view === 'templates' ? 'Open' : 'Manage in this pane'}
-                    </p>
-                  </div>
-                  <ChevronRight
-                    size={12}
-                    className={`shrink-0 ${view === 'templates' ? 'text-gold' : 'text-text-light'}`}
-                    aria-hidden="true"
-                  />
-                </>
-              )}
+              <div className="flex-1 min-w-0">
+                <p
+                  className={`text-[13px] ${
+                    view === 'templates' ? 'font-bold text-text' : 'font-semibold text-text'
+                  }`}
+                >
+                  Templates
+                </p>
+                <p className="text-[10px] text-text-light">
+                  {view === 'templates' ? 'Open' : 'Manage in this pane'}
+                </p>
+              </div>
+              <ChevronRight
+                size={12}
+                className={`shrink-0 ${view === 'templates' ? 'text-gold' : 'text-text-light'}`}
+                aria-hidden="true"
+              />
             </button>
           </div>
 
@@ -644,30 +626,21 @@ export default function AssignAdmin() {
               `<Link>` so the navigation stays client-side and keeps
               the auth context warm. */}
           <div className="mt-3 pt-3 border-t border-border/60">
-            {!railCollapsed && (
-              <p className="px-2 text-[10px] uppercase tracking-wider text-text-light/70 font-semibold">
-                Other
-              </p>
-            )}
+            <p className="px-2 text-[10px] uppercase tracking-wider text-text-light/70 font-semibold">
+              Other
+            </p>
             <ul className="mt-1 space-y-0.5">
               <li>
                 <Link
                   to="/admin/assign-classic"
-                  title={railCollapsed ? 'Legacy Assign · old widget-grid view' : undefined}
-                  className={`flex items-center hover:bg-surface-hover transition-colors group rounded-xl ${
-                    railCollapsed ? 'justify-center p-1.5' : 'gap-2 px-2 py-2'
-                  }`}
+                  className="flex items-center gap-2 px-2 py-2 hover:bg-surface-hover transition-colors group rounded-xl"
                 >
                   <Archive size={14} className="text-amber-300/70 group-hover:text-amber-300 shrink-0" aria-hidden="true" />
-                  {!railCollapsed && (
-                    <>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold text-text">Legacy Assign</p>
-                        <p className="text-[10px] text-text-light">Old widget-grid view</p>
-                      </div>
-                      <ChevronRight size={12} className="text-text-light shrink-0" aria-hidden="true" />
-                    </>
-                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-text">Legacy Assign</p>
+                    <p className="text-[10px] text-text-light">Old widget-grid view</p>
+                  </div>
+                  <ChevronRight size={12} className="text-text-light shrink-0" aria-hidden="true" />
                 </Link>
               </li>
             </ul>
@@ -834,14 +807,14 @@ export default function AssignAdmin() {
           )}
 
           {/* Title row — chrome stripped since this lives inside the main
-              card now (was a double-box otherwise). 2026-05-13 — when
-              the rail is collapsed we surface ←/→ chevrons next to
-              the member name so admins can step through members
-              without re-expanding the rail. */}
+              card now (was a double-box otherwise). 2026-05-14 — when
+              the members list is folded we surface ←/→ chevrons next
+              to the title so admins can step through members without
+              re-expanding the list. */}
           <div>
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <div className="min-w-0 flex items-center gap-2">
-                {railCollapsed && activeMembers.length > 1 && (
+                {membersListCollapsed && activeMembers.length > 1 && (
                   <button
                     type="button"
                     onClick={() => stepMember(-1)}
@@ -860,7 +833,7 @@ export default function AssignAdmin() {
                     {tasks.length} task{tasks.length === 1 ? '' : 's'} · {completedCount} complete
                   </p>
                 </div>
-                {railCollapsed && activeMembers.length > 1 && (
+                {membersListCollapsed && activeMembers.length > 1 && (
                   <button
                     type="button"
                     onClick={() => stepMember(1)}
