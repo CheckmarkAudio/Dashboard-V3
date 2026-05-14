@@ -11,6 +11,7 @@ import TempPasswordReveal from '../../components/auth/TempPasswordReveal'
 import { Button, Input, Select, Badge, EmptyState } from '../../components/ui'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
 import ClockDataSection from '../../components/admin/ClockDataSection'
+import MemberActivityDrawer from '../../components/admin/MemberActivityDrawer'
 import {
   loadActiveTemplates,
   loadDefaultTemplateIdsForPosition,
@@ -22,6 +23,7 @@ import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
   Save, ChevronRight, ChevronLeft,
   MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
+  Activity,
 } from 'lucide-react'
 
 import type { BadgeVariant } from '../../components/ui'
@@ -99,6 +101,14 @@ export default function TeamManager() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // 2026-05-13 — per-row activity drawer (Option D from the
+  // Members-page punch list). Holds the member whose recent
+  // sessions / tasks / shifts are being inspected; null means the
+  // drawer is closed. Lives on the page (not the drawer) so the
+  // backdrop click + ESC can clear it without the drawer caring
+  // about its own visibility.
+  const [activityMember, setActivityMember] = useState<TeamMember | null>(null)
 
   // 2026-05-08 (Lean 1) — when an Add Member create succeeds, the
   // form swaps to a "Step 4" success view that reveals the temp
@@ -749,6 +759,16 @@ export default function TeamManager() {
                             >
                               <button
                                 role="menuitem"
+                                onClick={() => {
+                                  setActivityMember(member)
+                                  setOpenMenuId(null)
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors"
+                              >
+                                <Activity size={12} aria-hidden="true" /> View activity
+                              </button>
+                              <button
+                                role="menuitem"
                                 onClick={() => handleEdit(member)}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors"
                               >
@@ -802,6 +822,15 @@ export default function TeamManager() {
 
         </section>
       </div>
+
+      {/* Per-row activity drawer (View activity action). Mounted as
+          a sibling to the Add Member slide-over so they share the
+          same z-stack pattern; only one can be open at a time
+          because the same backdrop clears either. */}
+      <MemberActivityDrawer
+        member={activityMember}
+        onClose={() => setActivityMember(null)}
+      />
 
       {/* Slide-over form */}
       {showForm && (

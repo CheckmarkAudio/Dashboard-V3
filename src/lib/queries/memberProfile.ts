@@ -7,6 +7,11 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../supabase'
+import {
+  fetchAdminClockEntries,
+  timeClockKeys,
+  type AdminClockEntry,
+} from './timeClock'
 
 export interface MemberStats {
   sessionsThisMonth: number
@@ -262,5 +267,112 @@ export function useMemberRecentCompletedTasks(memberId: string | undefined) {
     queryFn: () => fetchRecentCompletedTasks(memberId!),
     enabled: Boolean(memberId),
     staleTime: 60_000,
+  })
+}
+
+// ─── Admin drawer history (deeper, configurable limits) ───────────
+// PR — Members admin per-row activity drawer. The Profile sidebar
+// hooks above hard-cap at 5 rows for "glance" context. The drawer
+// surfaces deeper history for admins reviewing a single member, so
+// we expose configurable-limit twins that share the same row shape
+// but use distinct query keys to avoid clobbering the sidebar cache.
+
+const adminSessionsKey = (memberId: string, limit: number) =>
+  ['member-admin-sessions', memberId, limit] as const
+
+async function fetchAdminMemberSessions(
+  memberId: string,
+  limit: number,
+): Promise<RecentSessionInfo[]> {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('id, session_date, start_time, room, client_name, session_type, status')
+    .eq('assigned_to', memberId)
+    .neq('status', 'cancelled')
+    .order('session_date', { ascending: false })
+    .order('start_time', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const dt = new Date(`${row.session_date}T00:00:00`)
+    const dateLabel = Number.isNaN(dt.getTime())
+      ? row.session_date
+      : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return {
+      sessionId: row.id,
+      dateLabel,
+      sessionDate: row.session_date,
+      title: row.client_name ?? row.session_type ?? 'Session',
+      room: row.room,
+      status: row.status,
+      startTime: row.start_time,
+    }
+  })
+}
+
+export function useMemberAdminSessions(
+  memberId: string | undefined,
+  limit = 20,
+) {
+  return useQuery({
+    queryKey: adminSessionsKey(memberId ?? '__none__', limit),
+    queryFn: () => fetchAdminMemberSessions(memberId!, limit),
+    enabled: Boolean(memberId),
+    staleTime: 60_000,
+  })
+}
+
+const adminTasksKey = (memberId: string, limit: number) =>
+  ['member-admin-completed-tasks', memberId, limit] as const
+
+async function fetchAdminMemberCompletedTasks(
+  memberId: string,
+  limit: number,
+): Promise<RecentTaskInfo[]> {
+  const { data, error } = await supabase
+    .from('assigned_tasks')
+    .select('id, title, completed_at')
+    .eq('assigned_to', memberId)
+    .eq('is_completed', true)
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return (data ?? [])
+    .filter((row) => Boolean(row.completed_at))
+    .map((row) => ({
+      taskId: row.id,
+      title: row.title,
+      completedAt: row.completed_at as string,
+      relativeLabel: relativeShort(row.completed_at as string),
+    }))
+}
+
+export function useMemberAdminCompletedTasks(
+  memberId: string | undefined,
+  limit = 20,
+) {
+  return useQuery({
+    queryKey: adminTasksKey(memberId ?? '__none__', limit),
+    queryFn: () => fetchAdminMemberCompletedTasks(memberId!, limit),
+    enabled: Boolean(memberId),
+    staleTime: 60_000,
+  })
+}
+
+/**
+ * Wraps `fetchAdminClockEntries` in react-query so the drawer can
+ * share cache with the Members > Clock Data table when the admin
+ * drills into the same member from both surfaces.
+ */
+export function useMemberClockEntries(
+  memberId: string | undefined,
+  limit = 20,
+) {
+  return useQuery<AdminClockEntry[]>({
+    queryKey: timeClockKeys.adminEntries(memberId ?? null),
+    queryFn: () => fetchAdminClockEntries(memberId ?? null, limit),
+    enabled: Boolean(memberId),
+    staleTime: 30_000,
   })
 }
