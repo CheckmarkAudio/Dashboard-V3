@@ -398,6 +398,10 @@ export default function Layout() {
   const { toast } = useToast()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showSelfReport, setShowSelfReport] = useState(false)
+  const [selfReportShift, setSelfReportShift] = useState<{
+    clockInTime: string
+    clockedInAtIso?: string
+  } | null>(null)
   const [adminExpanded, setAdminExpanded] = useState(true)
   // 2026-05-12 (clock polish) — re-render every 60s while a shift is
   // open so the elapsed-time text on the Clock Out pill ticks
@@ -493,6 +497,11 @@ export default function Layout() {
   const handleSignOut = async () => {
     try { await signOut() } catch {}
     navigate(APP_ROUTES.auth.login)
+  }
+
+  const closeSelfReport = () => {
+    setShowSelfReport(false)
+    setSelfReportShift(null)
   }
 
   const closeDrawer = () => setSidebarOpen(false)
@@ -608,6 +617,34 @@ export default function Layout() {
                 their shift (clock_out RPC) or "Log Out" (signs out
                 AND closes the shift). Live timer updates every 30s
                 while the shift is open. */}
+            {showSelfReport && selfReportShift && (
+              <SelfReportModal
+                clockInTime={selfReportShift.clockInTime}
+                clockedInAtIso={selfReportShift.clockedInAtIso}
+                // X / backdrop / Escape — dismiss the modal. Before
+                // submit this keeps the user on shift; after submit
+                // the shift is already closed and the user stays
+                // signed in. Keeping this modal outside the
+                // `clockedIn` branch prevents React from unmounting
+                // the success screen when clock_out clears myOpen.
+                onDismiss={closeSelfReport}
+                // Submit — fires clock_out with the user's
+                // reflection. The modal flips to its success screen
+                // internally and stays mounted even after the header
+                // button changes back to Clock In.
+                onClockOut={(notes) => {
+                  clockOutMutation.mutate(notes)
+                }}
+                // Log Out from the post-submit success screen —
+                // shift is already closed by onClockOut, so this
+                // ONLY signs out (no second clock_out call).
+                onLogout={async () => {
+                  closeSelfReport()
+                  await handleSignOut()
+                }}
+              />
+            )}
+
             {!clockedIn ? (
               <button
                 onClick={() => clockInMutation.mutate()}
@@ -623,32 +660,14 @@ export default function Layout() {
               </button>
             ) : (
               <>
-                {showSelfReport && (
-                  <SelfReportModal
-                    clockInTime={clockInTime}
-                    clockedInAtIso={openShift?.clocked_in_at}
-                    // X / backdrop / Escape — dismiss the modal,
-                    // user stays on shift. NO clock_out fires here.
-                    onDismiss={() => setShowSelfReport(false)}
-                    // Submit & Clock Out — fires clock_out with the
-                    // user's reflection. The modal then flips to its
-                    // success screen internally; we keep the modal
-                    // mounted so the user can pick "Log out" or
-                    // "Stay signed in" from there.
-                    onClockOut={(notes) => {
-                      clockOutMutation.mutate(notes)
-                    }}
-                    // Log Out from the post-submit success screen —
-                    // shift is already closed by onClockOut, so this
-                    // ONLY signs out (no second clock_out call).
-                    onLogout={async () => {
-                      setShowSelfReport(false)
-                      await handleSignOut()
-                    }}
-                  />
-                )}
                 <button
-                  onClick={() => setShowSelfReport(true)}
+                  onClick={() => {
+                    setSelfReportShift({
+                      clockInTime,
+                      clockedInAtIso: openShift?.clocked_in_at,
+                    })
+                    setShowSelfReport(true)
+                  }}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all tabular-nums"
                   title={`On the clock since ${clockInTime}`}
                 >

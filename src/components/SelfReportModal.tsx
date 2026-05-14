@@ -70,6 +70,7 @@ export default function SelfReportModal({
   const [wentWell, setWentWell] = useState('')
   const [toImprove, setToImprove] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [submittedAt, setSubmittedAt] = useState<number | null>(null)
 
   // Live clock for the header — updates every second so the elapsed
   // string ticks while the modal is open. Cheap; modal is short-lived.
@@ -78,7 +79,8 @@ export default function SelfReportModal({
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
   }, [])
-  const clockOutTime = new Date(now).toLocaleTimeString('en-US', {
+  const displayNow = submittedAt ?? now
+  const clockOutTime = new Date(displayNow).toLocaleTimeString('en-US', {
     hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
   })
   const elapsed = clockedInAtIso ? elapsedShort(clockedInAtIso, now) : ''
@@ -89,6 +91,7 @@ export default function SelfReportModal({
     const notes = buildClockOutNotes(wentWell, toImprove)
     if (!notes) return // belt-and-suspenders — canSubmit guarantees this
     onClockOut(notes)
+    setSubmittedAt(Date.now())
     setSubmitted(true)
   }
 
@@ -147,7 +150,9 @@ export default function SelfReportModal({
               <Check size={24} className="text-gold" />
             </div>
             <p className="text-[15px] font-semibold text-text">You're clocked out.</p>
-            <p className="text-[12px] text-text-muted mt-1">Have a good one.</p>
+            <p className="text-[12px] text-text-muted mt-1">
+              Clocked out at <span className="tabular-nums text-text">{clockOutTime}</span>.
+            </p>
             <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
               <button
                 onClick={onDismiss}
@@ -218,7 +223,7 @@ export default function SelfReportModal({
                 disabled={!wentWell.trim() && !toImprove.trim()}
                 className="w-full py-2.5 rounded-xl bg-gold text-black text-sm font-bold hover:bg-gold-muted transition-all focus-ring disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gold"
               >
-                Submit &amp; Clock Out
+                Submit
               </button>
               {!wentWell.trim() && !toImprove.trim() && (
                 <p className="text-[11px] text-text-light text-center mt-2">
