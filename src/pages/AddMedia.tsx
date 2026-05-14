@@ -10,7 +10,7 @@
 // history below the dropzone reads from `media_submissions`, scoped by
 // RLS so each member sees their own (admins see everyone's).
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -118,12 +118,24 @@ export default function AddMedia() {
 
   // Process the queue serially — one file at a time avoids piling up
   // memory in the edge function and keeps the UI's progress feedback
-  // honest. Most member uploads are 1-3 files at a time anyway.
+  // honest.
+  //
+  // ⚠️ Bug fix 2026-05-14: previously this used a `cancelled` flag in
+  // an effect that re-ran every time `pending` changed. The
+  // setPending(...uploading...) call inside the effect mutated
+  // `pending`, retriggering the effect, which fired the cleanup and
+  // flipped `cancelled = true` BEFORE the response landed. Net result:
+  // the row stayed at "Uploading…" forever even after the request
+  // completed. Now we gate via a ref so each in-flight upload owns its
+  // own state lifetime, independent of how many times the effect re-
+  // renders.
+  const inFlightRef = useRef(false)
   useEffect(() => {
+    if (inFlightRef.current) return
     const next = pending.find((p) => p.status === 'queued')
     if (!next) return
 
-    let cancelled = false
+    inFlightRef.current = true
     const run = async () => {
       setPending((prev) =>
         prev.map((p) => (p.id === next.id ? { ...p, status: 'uploading' } : p)),
@@ -141,8 +153,6 @@ export default function AddMedia() {
         }>('upload-to-drive', {
           body: form,
         })
-
-        if (cancelled) return
 
         if (error || !data?.ok) {
           const msg = data?.error ?? (await extractEdgeFunctionError(error, 'Upload failed'))
@@ -166,25 +176,22 @@ export default function AddMedia() {
           })
         } else {
           // History insert failed server-side but file landed in Drive —
-          // refetch to make sure we eventually see it (in case the row
-          // was written by a retry or admin).
+          // refetch to make sure we eventually see it.
           void queryClient.invalidateQueries({ queryKey: historyKey })
         }
       } catch (err) {
-        if (cancelled) return
         const msg = err instanceof Error ? err.message : 'Upload failed'
         setPending((prev) =>
           prev.map((p) =>
             p.id === next.id ? { ...p, status: 'error', error: msg } : p,
           ),
         )
+      } finally {
+        inFlightRef.current = false
       }
     }
 
     void run()
-    return () => {
-      cancelled = true
-    }
   }, [pending, historyKey, queryClient])
 
   const clearDone = () => setPending((prev) => prev.filter((p) => p.status !== 'done'))
