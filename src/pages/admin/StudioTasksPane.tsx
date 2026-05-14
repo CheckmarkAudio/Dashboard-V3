@@ -530,19 +530,29 @@ function SpaceSection({
           {labelDim ? 'No tasks need a room tag right now.' : 'No tasks yet.'}
         </p>
       ) : (
-        <ul className="space-y-0.5">
-          {sorted.map((task) => (
-            <li key={task.id}>
-              <StudioTaskRow
-                task={task}
-                onEdit={onEdit}
-                selectMode={selectMode}
-                isSelected={selectedIds.has(task.id)}
-                onToggleSelect={onToggleSelect}
-              />
-            </li>
-          ))}
-        </ul>
+        // 2026-05-14 — wrapped in `inset-panel` + `divide-y
+        // divide-theme` to match the canonical task-row pattern
+        // already used by AssignAdmin members tab + MyTasksCard +
+        // Activity widgets. Per user direction earlier this session:
+        // "lets nest the tasks like we nested tasks in widgets to
+        // keep things consistent." Each StudioTaskRow drops its
+        // own rounded-xl chrome since the panel handles separation
+        // via hairlines.
+        <div className="inset-panel">
+          <ul className="divide-y divide-theme">
+            {sorted.map((task) => (
+              <li key={task.id}>
+                <StudioTaskRow
+                  task={task}
+                  onEdit={onEdit}
+                  selectMode={selectMode}
+                  isSelected={selectedIds.has(task.id)}
+                  onToggleSelect={onToggleSelect}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   )
@@ -594,10 +604,15 @@ function StudioTaskRow({
 
   const done = task.is_completed
   return (
+    // 2026-05-14 — flattened: per-row `rounded-xl` chrome dropped
+    // because rows now live inside an `inset-panel` + `divide-y
+    // divide-theme` stack (matches AssignAdmin members tab +
+    // MyTasksCard + Activity widgets). Hover + select states still
+    // use bg tint so rows feel tactile without the boxed-card look.
     <div
-      className={`group flex items-center gap-3 px-3 py-2 rounded-xl transition-colors ${
+      className={`group flex items-center gap-3 px-3 py-2.5 transition-colors ${
         isSelected
-          ? 'bg-rose-500/10 ring-1 ring-rose-500/25'
+          ? 'bg-rose-500/10'
           : 'hover:bg-surface-hover'
       }`}
     >
