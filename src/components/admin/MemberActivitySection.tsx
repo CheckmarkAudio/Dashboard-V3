@@ -1,19 +1,21 @@
-// PR — Members admin per-row activity drawer.
+// PR — Members admin "Activity" left-rail section.
 //
-// User ask (2026-05-13): "lets do D. Members admin per-row activity
-// drawer first" — clicking a member row in TeamManager should open a
-// side drawer showing booking history + task completions + clock data
-// without leaving the Members page.
+// User asked for the per-member activity history to live as a left-
+// rail section alongside Roster + Clock Data instead of a per-row
+// drawer (which we shipped in #179 then moved here at user request).
+// Same data — sessions / tasks / clock — just rendered into the
+// right-pane instead of a 480px slide-over.
 //
-// Mirrors the existing Add Member slide-over chrome (right edge,
-// max-w-xl, backdrop blur, ESC + backdrop click to dismiss) so the
-// page only ever has ONE drawer pattern. Sections reuse the
-// StatsSidebar `<ListCard>` shape so the drawer feels like a deeper
-// version of what's on the public profile.
+// Mirrors `ClockDataSection`'s shape: a section header with a
+// member-picker dropdown, then a scrollable body. Picker defaults
+// to the first active member alphabetically so the page renders
+// useful content the moment the user clicks "Activity" — no empty
+// "pick a member" landing screen.
 
-import { useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  Activity,
   Briefcase,
   CalendarCheck2,
   CheckCircle2,
@@ -23,7 +25,6 @@ import {
   Clock3,
   Inbox,
   Loader2,
-  X,
 } from 'lucide-react'
 import {
   useMemberAdminCompletedTasks,
@@ -31,81 +32,109 @@ import {
   useMemberClockEntries,
   useMemberStats,
 } from '../../lib/queries/memberProfile'
+import { Select } from '../ui'
 import type { TeamMember } from '../../types'
 import type { AdminClockEntry } from '../../lib/queries/timeClock'
 
-interface MemberActivityDrawerProps {
-  member: TeamMember | null
-  onClose: () => void
-}
-
-// History limits for the drawer. Larger than the profile sidebar's
-// hard 5 cap, but still bounded so the drawer stays glanceable and
-// the queries don't pull a year of data on every open.
 const HISTORY_LIMIT = 20
 
-export default function MemberActivityDrawer({ member, onClose }: MemberActivityDrawerProps) {
-  // ESC-to-dismiss. Bound on the document so it works no matter what
-  // inside the drawer has focus (mirrors the Add Member form's
-  // implicit close on backdrop click).
-  useEffect(() => {
-    if (!member) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [member, onClose])
+export default function MemberActivitySection({ members }: { members: TeamMember[] }) {
+  const memberOptions = useMemo(
+    () =>
+      [...members]
+        .filter((m) => m.display_name)
+        .sort((a, b) => {
+          // Active members first, then alpha within each bucket.
+          const aActive = (a.status ?? 'active') === 'active'
+          const bActive = (b.status ?? 'active') === 'active'
+          if (aActive !== bActive) return aActive ? -1 : 1
+          return a.display_name.localeCompare(b.display_name)
+        }),
+    [members],
+  )
 
-  if (!member) return null
+  const [memberId, setMemberId] = useState<string>(() => memberOptions[0]?.id ?? '')
+
+  const member = useMemo(
+    () => memberOptions.find((m) => m.id === memberId) ?? null,
+    [memberOptions, memberId],
+  )
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <aside
-        className="absolute right-0 top-0 h-full w-full max-w-xl bg-surface border-l border-border shadow-2xl flex flex-col animate-slide-in"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="member-activity-drawer-title"
-      >
-        <DrawerHeader member={member} onClose={onClose} />
-        <DrawerBody member={member} />
-        <DrawerFooter member={member} />
-      </aside>
+    <div className="space-y-4">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Activity size={18} className="text-gold" aria-hidden="true" />
+            Activity
+          </h2>
+          <p className="text-text-muted text-[12px] mt-0.5">
+            Recent sessions, completed tasks, and shifts for one member at a glance.
+          </p>
+        </div>
+        <div className="min-w-[220px]">
+          <Select
+            value={memberId}
+            onChange={(e) => setMemberId(e.target.value)}
+            aria-label="Choose member to view activity"
+          >
+            {memberOptions.length === 0 && <option value="">No members</option>}
+            {memberOptions.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.display_name}
+                {m.status === 'inactive' ? ' · inactive' : ''}
+              </option>
+            ))}
+          </Select>
+        </div>
+      </div>
+
+      {member ? (
+        <ActivityBody member={member} />
+      ) : (
+        <div className="rounded-xl border border-border bg-surface-alt/40 px-4 py-12 flex flex-col items-center text-center">
+          <Inbox size={20} className="text-text-light mb-2" aria-hidden="true" />
+          <p className="text-[13px] text-text-muted">No team members yet.</p>
+          <p className="text-[11px] text-text-light mt-1">
+            Add members from the Roster tab to see their activity here.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── Header ──────────────────────────────────────────────────────
+// ─── Body ────────────────────────────────────────────────────────
 
-function DrawerHeader({ member, onClose }: { member: TeamMember; onClose: () => void }) {
-  const initial = member.display_name?.charAt(0)?.toUpperCase() ?? '?'
-  const positionLabel = member.position
-    ? member.position.replace(/_/g, ' ')
-    : null
-  const isInactive = member.status === 'inactive'
+function ActivityBody({ member }: { member: TeamMember }) {
+  const stats = useMemberStats(member.id)
+  const sessions = useMemberAdminSessions(member.id, HISTORY_LIMIT)
+  const tasks = useMemberAdminCompletedTasks(member.id, HISTORY_LIMIT)
+  const clockEntries = useMemberClockEntries(member.id, HISTORY_LIMIT)
+
+  const hoursThisWeek = computeHoursThisWeek(clockEntries.data ?? [])
 
   return (
-    <div className="px-6 py-4 border-b border-border shrink-0 flex items-start justify-between gap-3">
-      <div className="flex items-start gap-3 min-w-0">
-        <div className="w-12 h-12 rounded-full bg-surface-alt border-[2px] border-white/12 text-gold flex items-center justify-center text-[16px] font-bold shrink-0">
-          {initial}
+    <div className="space-y-4">
+      {/* Member chip — confirms which member's activity is in view
+          and gives a one-tap path to the public profile (admins
+          often want to jump from "scan their last week" to "open
+          their full profile"). */}
+      <Link
+        to={`/profile/${member.id}`}
+        className="flex items-center gap-3 rounded-xl border border-border bg-surface-alt/40 px-4 py-3 hover:bg-surface-alt/60 transition-colors group"
+      >
+        <div className="w-10 h-10 rounded-full bg-surface-alt border-[2px] border-white/12 text-gold flex items-center justify-center text-[14px] font-bold shrink-0">
+          {member.display_name?.charAt(0)?.toUpperCase() ?? '?'}
         </div>
-        <div className="min-w-0">
-          <h2
-            id="member-activity-drawer-title"
-            className="font-semibold text-base text-text truncate"
-          >
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-semibold text-text group-hover:text-gold transition-colors truncate">
             {member.display_name}
-          </h2>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {positionLabel && (
+          </p>
+          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+            {member.position && (
               <span className="text-[11px] text-text-muted capitalize">
-                {positionLabel}
+                {member.position.replace(/_/g, ' ')}
               </span>
             )}
             {member.role === 'admin' && (
@@ -116,55 +145,22 @@ function DrawerHeader({ member, onClose }: { member: TeamMember; onClose: () => 
             <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-light">
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  isInactive ? 'bg-text-light' : 'bg-emerald-400'
+                  (member.status ?? 'active') === 'active' ? 'bg-emerald-400' : 'bg-text-light'
                 }`}
                 aria-hidden="true"
               />
-              {isInactive ? 'Inactive' : 'Active'}
+              {(member.status ?? 'active') === 'active' ? 'Active' : 'Inactive'}
             </span>
           </div>
-          {member.email && (
-            <a
-              href={`mailto:${member.email}`}
-              className="block text-[11px] text-text-light truncate hover:text-gold transition-colors mt-1"
-              title={`Email ${member.display_name}`}
-            >
-              {member.email}
-            </a>
-          )}
         </div>
-      </div>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close activity drawer"
-        className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text transition-colors focus-ring shrink-0"
-      >
-        <X size={16} aria-hidden="true" />
-      </button>
-    </div>
-  )
-}
+        <ChevronRight
+          size={16}
+          className="text-text-light group-hover:text-gold transition-colors"
+          aria-hidden="true"
+        />
+      </Link>
 
-// ─── Body ────────────────────────────────────────────────────────
-
-function DrawerBody({ member }: { member: TeamMember }) {
-  const stats = useMemberStats(member.id)
-  const sessions = useMemberAdminSessions(member.id, HISTORY_LIMIT)
-  const tasks = useMemberAdminCompletedTasks(member.id, HISTORY_LIMIT)
-  const clockEntries = useMemberClockEntries(member.id, HISTORY_LIMIT)
-
-  // Quick-win "hours this week" derived from the loaded shifts so we
-  // don't add a new RPC for a single number. We sum minutes for any
-  // shift whose clocked_in_at is within the last 7 days; open shifts
-  // count their elapsed-so-far minutes.
-  const hoursThisWeek = computeHoursThisWeek(clockEntries.data ?? [])
-
-  return (
-    <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-      {/* Stats strip — three quick KPIs in a row, matching the
-          StatsSidebar tone but laid out horizontally since the
-          drawer has more lateral room than the profile sidebar. */}
+      {/* Stats strip */}
       <div className="grid grid-cols-3 gap-3">
         <StatTile
           icon={<CalendarCheck2 size={14} className="text-gold/80" aria-hidden="true" />}
@@ -283,25 +279,6 @@ function DrawerBody({ member }: { member: TeamMember }) {
   )
 }
 
-// ─── Footer ──────────────────────────────────────────────────────
-
-function DrawerFooter({ member }: { member: TeamMember }) {
-  return (
-    <div className="px-6 py-3 border-t border-border shrink-0 flex items-center justify-between gap-2">
-      <p className="text-[11px] text-text-light">
-        Last 20 records per section · Live on every open
-      </p>
-      <Link
-        to={`/profile/${member.id}`}
-        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-gold hover:text-gold/80 transition-colors"
-      >
-        View public profile
-        <ChevronRight size={12} aria-hidden="true" />
-      </Link>
-    </div>
-  )
-}
-
 // ─── Tiles + sections ────────────────────────────────────────────
 
 function StatTile({
@@ -374,7 +351,7 @@ function ListSection({
           <p className="text-[11px] italic">{emptyLabel}</p>
         </div>
       ) : (
-        <ul className="divide-y divide-border/40 max-h-[320px] overflow-y-auto">
+        <ul className="divide-y divide-border/40 max-h-[360px] overflow-y-auto">
           {children}
         </ul>
       )}
@@ -442,11 +419,6 @@ function formatDuration(minutes: number | null): string {
   return `${hours}h ${remainder}m`
 }
 
-/**
- * Sums minutes from shifts in the last 7 days. Closed shifts use
- * `duration_minutes` from the RPC; open shifts count elapsed-so-far
- * so a member currently on the clock contributes accurately.
- */
 function computeHoursThisWeek(entries: AdminClockEntry[]): string {
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
   let totalMinutes = 0
@@ -456,13 +428,10 @@ function computeHoursThisWeek(entries: AdminClockEntry[]): string {
     if (entry.duration_minutes !== null && entry.duration_minutes !== undefined) {
       totalMinutes += entry.duration_minutes
     } else {
-      // Open shift — count minutes from clock-in to now.
       totalMinutes += Math.max(0, Math.floor((Date.now() - startedAt) / 60_000))
     }
   }
   if (totalMinutes < 60) return `${totalMinutes}m`
   const hours = totalMinutes / 60
-  // Show one decimal for partial hours, no decimal for round numbers.
   return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`
 }
-

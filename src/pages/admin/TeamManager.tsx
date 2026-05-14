@@ -11,7 +11,7 @@ import TempPasswordReveal from '../../components/auth/TempPasswordReveal'
 import { Button, Input, Select, Badge, EmptyState } from '../../components/ui'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
 import ClockDataSection from '../../components/admin/ClockDataSection'
-import MemberActivityDrawer from '../../components/admin/MemberActivityDrawer'
+import MemberActivitySection from '../../components/admin/MemberActivitySection'
 import {
   loadActiveTemplates,
   loadDefaultTemplateIdsForPosition,
@@ -25,6 +25,9 @@ import {
   MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
   Activity,
 } from 'lucide-react'
+// `Activity` icon kept as the lucide glyph for the new left-rail
+// "Activity" section (mirrors the user's mental model — Roster /
+// Clock Data / Activity).
 
 import type { BadgeVariant } from '../../components/ui'
 
@@ -32,11 +35,12 @@ import type { BadgeVariant } from '../../components/ui'
 // Settings page pattern (left section nav + right pane). Roster is the
 // existing TeamManager content; Clock Data is a placeholder section
 // that PR #59 (Clock In/Out v2) will populate with shift data.
-type MembersSectionKey = 'roster' | 'clock-data'
+type MembersSectionKey = 'roster' | 'clock-data' | 'activity'
 
 const MEMBERS_SECTIONS: AdminSection<MembersSectionKey>[] = [
-  { key: 'roster',     icon: Users, title: 'Roster',     subtitle: 'Active and inactive team members' },
-  { key: 'clock-data', icon: Clock, title: 'Clock Data', subtitle: 'Shifts and reflections' },
+  { key: 'roster',     icon: Users,    title: 'Roster',     subtitle: 'Active and inactive team members' },
+  { key: 'clock-data', icon: Clock,    title: 'Clock Data', subtitle: 'Shifts and reflections' },
+  { key: 'activity',   icon: Activity, title: 'Activity',   subtitle: 'Sessions, tasks, and shifts per member' },
 ]
 
 const POSITIONS: { value: string; label: string; badge: BadgeVariant }[] = [
@@ -101,14 +105,6 @@ export default function TeamManager() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-
-  // 2026-05-13 — per-row activity drawer (Option D from the
-  // Members-page punch list). Holds the member whose recent
-  // sessions / tasks / shifts are being inspected; null means the
-  // drawer is closed. Lives on the page (not the drawer) so the
-  // backdrop click + ESC can clear it without the drawer caring
-  // about its own visibility.
-  const [activityMember, setActivityMember] = useState<TeamMember | null>(null)
 
   // 2026-05-08 (Lean 1) — when an Add Member create succeeds, the
   // form swaps to a "Step 4" success view that reveals the temp
@@ -759,16 +755,6 @@ export default function TeamManager() {
                             >
                               <button
                                 role="menuitem"
-                                onClick={() => {
-                                  setActivityMember(member)
-                                  setOpenMenuId(null)
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors"
-                              >
-                                <Activity size={12} aria-hidden="true" /> View activity
-                              </button>
-                              <button
-                                role="menuitem"
                                 onClick={() => handleEdit(member)}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors"
                               >
@@ -820,17 +806,15 @@ export default function TeamManager() {
 
       {activeSection === 'clock-data' && <ClockDataSection members={members} />}
 
+      {/* 2026-05-14 — Activity section moved from a per-row drawer
+          (originally PR #179) into the left-rail per user direction:
+          "I want activity to be in the side menu on the left, under
+          clock data". Same data, larger lateral room, member picker
+          mirrors the Clock Data tab's filter shape. */}
+      {activeSection === 'activity' && <MemberActivitySection members={members} />}
+
         </section>
       </div>
-
-      {/* Per-row activity drawer (View activity action). Mounted as
-          a sibling to the Add Member slide-over so they share the
-          same z-stack pattern; only one can be open at a time
-          because the same backdrop clears either. */}
-      <MemberActivityDrawer
-        member={activityMember}
-        onClose={() => setActivityMember(null)}
-      />
 
       {/* Slide-over form */}
       {showForm && (
