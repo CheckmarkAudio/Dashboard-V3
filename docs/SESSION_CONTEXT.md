@@ -718,8 +718,47 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-14 member-access stabilization + archive cleanup
+
+- **`CODEX:`** stabilized the urgent coworker-login path. Current
+  production direction is **manual setup links plus temp-password
+  fallback**, not SMTP-dependent email delivery. Admins can generate a
+  setup/recovery link from Add Member or Settings → Account Access, copy
+  it into Gmail/default email, and the member chooses their own password.
+- **Password-change ownership is now explicit:**
+  `RecoveryGate` handles setup/recovery links and clears
+  `requires_password_change`; `ForcePasswordChangeModal` only handles
+  temp-password/admin-created first login. This prevents the double
+  consecutive password modal that appeared after setup-link success.
+- **Supabase Auth blank-token fix:** production auth rows were normalized
+  so blank token columns use empty strings instead of NULLs. Matthan's
+  row was verified with `requires_password_change=true`, which is
+  expected until he finishes setup.
+- **PR #178 archived:** closed
+  `feat(auth): real email-link password reset across login + admin +
+  onboarding` because it was built around Supabase SMTP delivery and
+  touched `Login`, `AccountAccessPanel`, and `TeamManager` with an older
+  flow. Do **not** merge/reopen it without rebasing against current main
+  and re-reviewing `RecoveryGate`, `ForcePasswordChangeModal`, setup
+  links, and temp-password fallback.
+- **Credential hygiene:** local file
+  `checkmarkaudio-agent-936c9de96144.json` was identified as a Google
+  service account key export. It was never committed. `.gitignore` now
+  ignores `checkmarkaudio-agent-*.json`; Google service-account JSON
+  belongs in Supabase secrets (`GOOGLE_SERVICE_ACCOUNT_JSON`) if used,
+  not in the repo.
+- **Verified:** `npm run build` passes after the auth/comment cleanup.
+  `main` is synced to `origin/main`.
+- **Next:** return to Google Calendar Phase 2 inbound sync, unless the
+  user needs one more production smoke test of member setup first.
+
 ### 2026-05-14 SMTP onboarding handoff (Codex → Claude)
 
+- **Status update:** this plan is deferred/archived for now. The user
+  cannot buy/configure a sending domain yet, and Supabase SMTP delivery
+  was unreliable for the urgent employee-access use case. Keep this
+  section as historical context only; do not resume it unless the user
+  explicitly reopens automatic email delivery.
 - **`CODEX:`** ran out of tokens mid-flight on getting actual email
   delivery working for new-member onboarding. The previous setup-link
   rescue (PR #189 + earlier Codex work on `admin-generate-setup-link`)
