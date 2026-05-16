@@ -189,10 +189,11 @@ async function getCallerContext(req: Request) {
 
 async function setSessionSyncState(
   admin: ReturnType<typeof createClient>,
+  teamId: string,
   sessionId: string,
   patch: Record<string, unknown>,
 ) {
-  await admin.from("sessions").update(patch).eq("id", sessionId)
+  await admin.from("sessions").update(patch).eq("id", sessionId).eq("team_id", teamId)
 }
 
 type InboundSummary = {
@@ -232,10 +233,12 @@ Deno.serve(async (req: Request) => {
         google_event_id?: string | null
       }
     | null = null
+  let teamIdForError: string | null = null
 
   try {
     const ctx = await getCallerContext(req)
     if ("error" in ctx) return ctx.error
+    teamIdForError = ctx.teamId
 
     const googleClientId = requireEnv("GOOGLE_CLIENT_ID")
     const googleClientSecret = requireEnv("GOOGLE_CLIENT_SECRET")
@@ -267,7 +270,7 @@ Deno.serve(async (req: Request) => {
     }
     if (!connection) {
       if (body.session_id) {
-        await setSessionSyncState(ctx.admin, body.session_id, {
+        await setSessionSyncState(ctx.admin, ctx.teamId, body.session_id, {
           google_sync_status: "error",
           google_sync_error: "Google Calendar is not connected for this team.",
         })
@@ -375,7 +378,7 @@ Deno.serve(async (req: Request) => {
                 summary.unchanged_count += 1
                 continue
               }
-              await setSessionSyncState(ctx.admin, session.id, {
+              await setSessionSyncState(ctx.admin, ctx.teamId, session.id, {
                 status: "cancelled",
                 google_sync_status: "synced",
                 google_last_synced_at: new Date().toISOString(),
@@ -412,7 +415,7 @@ Deno.serve(async (req: Request) => {
               continue
             }
 
-            await setSessionSyncState(ctx.admin, session.id, {
+            await setSessionSyncState(ctx.admin, ctx.teamId, session.id, {
               ...patch,
               google_sync_status: "synced",
               google_last_synced_at: new Date().toISOString(),
@@ -512,7 +515,7 @@ Deno.serve(async (req: Request) => {
       if (session.google_event_id) {
         await deleteGoogleCalendarEvent(connection.calendar_id, session.google_event_id, accessToken)
       }
-      await setSessionSyncState(ctx.admin, session.id, {
+      await setSessionSyncState(ctx.admin, ctx.teamId, session.id, {
         google_event_id: null,
         google_sync_status: "synced",
         google_last_synced_at: new Date().toISOString(),
@@ -547,7 +550,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    await setSessionSyncState(ctx.admin, session.id, {
+    await setSessionSyncState(ctx.admin, ctx.teamId, session.id, {
       google_event_id: eventId,
       google_sync_status: "synced",
       google_last_synced_at: new Date().toISOString(),
@@ -571,7 +574,7 @@ Deno.serve(async (req: Request) => {
     })
   } catch (error) {
     console.error("[google-calendar-sync]", error)
-    if (body?.session_id) {
+    if (body?.session_id && teamIdForError) {
       try {
         const admin = createClient(requireEnv("SUPABASE_URL"), requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {
           auth: { persistSession: false, autoRefreshToken: false },
@@ -583,6 +586,7 @@ Deno.serve(async (req: Request) => {
             google_sync_error: error instanceof Error ? error.message : "Unexpected sync error",
           })
           .eq("id", body.session_id)
+          .eq("team_id", teamIdForError)
       } catch (persistError) {
         console.error("[google-calendar-sync] failed to persist sync error", persistError)
       }
