@@ -718,6 +718,28 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-15 Google Calendar Phase 2A resumed
+
+- **`CODEX:`** followed the "go with leans" direction and resumed Google
+  Calendar Phase 2A. Important correction from repo audit: the `/daily`
+  Studio Tasks by-space widget is already shipped in PR #102, so do not
+  redo that work.
+- Existing Phase 2 state: Settings → Database already has the
+  "Pull inbound changes" button; `google-calendar-sync` already supports
+  `pull_inbound_changes` for already-linked Google events only. It does
+  not auto-import new external events and does not hard-delete sessions
+  from external deletes.
+- Hardening landed: every `sessions` sync-status/error write in
+  `google-calendar-sync` is now scoped by both `session_id` and
+  `team_id`, including the catch-path error persistence under service
+  role. This keeps even metadata/error writes inside the caller's team.
+- **`SUPABASE-DEPLOYED:`** deployed `google-calendar-sync` after the
+  hardening. `npm run build` passes.
+- **Next:** production smoke-test `Pull inbound changes` on one
+  already-linked event. If it works, document the exact test result. If
+  it fails, fix only the smallest missing guard/visibility issue exposed
+  by that run.
+
 ### 2026-05-15 Studio Tasks + accordion + cancel-button fix (Claude session, parallel to onboarding)
 
 - **`CLAUDE:`** ran in parallel with the other Claude session (which
@@ -758,9 +780,9 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
   `1b73ae6` use uuid identity id for temp fallback) so check there
   before re-touching either of those.
 - **Open queue at end of session**: CSV + PDF ExportButtons (Tier 2);
-  Studio Tasks "by space" sectioning on the `/daily` widget; Flywheel
-  event ledger; Google Calendar Phase 2 inbound sync (deferred from
-  earlier today). Pick whichever the user surfaces first.
+  Flywheel event ledger; Google Calendar Phase 2 inbound sync. Studio
+  Tasks "by space" sectioning on the `/daily` widget was later verified
+  as already shipped in PR #102.
 
 ### 2026-05-14 member-access stabilization + archive cleanup
 
