@@ -718,6 +718,50 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-15 Studio Tasks + accordion + cancel-button fix (Claude session, parallel to onboarding)
+
+- **`CLAUDE:`** ran in parallel with the other Claude session (which
+  was working on the member-access stabilization captured below).
+  Stayed out of every onboarding file. Three PRs landed:
+- **PR #191** (merged): docs catch-up through PR #190 (PROJECT_STATE
+  + SESSION_CONTEXT both refreshed) + Studio Tasks pane refit to the
+  canonical `inset-panel` + `divide-y divide-theme` + flat-row chrome
+  (same family as MyTasksCard / Activity widgets / NotificationsPanel)
+  + the Members-list-only accordion fold replacing PR #176's whole-
+  rail collapse. The collapse toggle now folds JUST the names list
+  under the Members header; Studio / Templates / Other tabs always
+  render full-size; main-pane prev/next chevrons stay wired so admins
+  can step through members when the list is folded. State + preference
+  key renamed (`assign_rail_collapsed` →
+  `assign_members_list_collapsed`, old key still read once for
+  back-compat).
+- **PR #192** (merged): backfill `task_request_cancelled` enum value.
+  User reported the CANCEL? button on pending task requests errored
+  `invalid input value for enum assignment_notification_type:
+  "task_request_cancelled"`. Root cause: PR #98's migration was
+  marked MCP-applied but Postgres can't ADD an enum value AND USE it
+  in the same transaction — the CHECK + RPC body landed, the enum
+  ADD VALUE silently didn't. `unnest(enum_range(NULL::public.assignment_notification_type))`
+  on prod returned 12 values with `task_request_cancelled` missing.
+  Isolated single-statement `ALTER TYPE … ADD VALUE IF NOT EXISTS`
+  migration applied directly via MCP at PR open; file backfilled at
+  `supabase/migrations/20260514230000_backfill_task_request_cancelled_enum.sql`.
+  Cancel button works in prod immediately (no Vercel redeploy needed).
+- **Observed but not fixed (handed off to the parallel session):**
+  Settings → Generate setup link surfaced two error modes during
+  this session — `Database error checking email` (same flaky GoTrue
+  `listUsers` issue we fixed for `admin-update-email` earlier; fix
+  pattern = swap to `admin.schema('auth').from('users')` direct
+  probe) and `column "id" is of type uuid but expression is of type
+  text` from the `admin_bootstrap_member_password` RPC. The parallel
+  session shipped follow-ups (`d142a3f` normalize blank auth tokens,
+  `1b73ae6` use uuid identity id for temp fallback) so check there
+  before re-touching either of those.
+- **Open queue at end of session**: CSV + PDF ExportButtons (Tier 2);
+  Studio Tasks "by space" sectioning on the `/daily` widget; Flywheel
+  event ledger; Google Calendar Phase 2 inbound sync (deferred from
+  earlier today). Pick whichever the user surfaces first.
+
 ### 2026-05-14 member-access stabilization + archive cleanup
 
 - **`CODEX:`** stabilized the urgent coworker-login path. Current
