@@ -61,7 +61,7 @@ const clockColumns: TableColumn<AdminClockEntry>[] = [
   },
   {
     key: 'Clock_in',
-    header: 'Clock in',
+    header: 'Clock In',
     render: (entry) => (
       <span className="text-[12px] text-text-muted tabular-nums whitespace-nowrap">
         {formatDateTime(entry.clocked_in_at)}
