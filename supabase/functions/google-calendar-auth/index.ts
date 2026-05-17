@@ -58,6 +58,17 @@ function appendRedirectParam(url: string, key: string, value: string): string {
   return next.toString()
 }
 
+const DENVER_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Denver",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+})
+
+function denverTodayKey(): string {
+  return DENVER_DATE_FORMATTER.format(new Date())
+}
+
 async function getPostCallerContext(req: Request) {
   const supabaseUrl = requireEnv("SUPABASE_URL")
   const anonKey = requireEnv("SUPABASE_ANON_KEY")
@@ -260,23 +271,13 @@ Deno.serve(async (req: Request) => {
           .select("id", { count: "exact", head: true })
           .eq("team_id", ctx.teamId)
           .neq("status", "cancelled")
+          .gte("session_date", denverTodayKey())
           .or("google_event_id.is.null,google_sync_status.eq.error")
-
-        const { data: outboundError } = await ctx.admin
-          .from("sessions")
-          .select("google_sync_error, google_last_synced_at, calendar_last_changed_at, created_at")
-          .eq("team_id", ctx.teamId)
-          .eq("google_sync_status", "error")
-          .not("google_sync_error", "is", null)
-          .order("calendar_last_changed_at", { ascending: false, nullsFirst: false })
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
 
         connection = {
           ...connection,
           outbound_pending_count: outboundPendingCount ?? 0,
-          outbound_last_error: outboundError?.google_sync_error ?? null,
+          outbound_last_error: null,
         }
       }
 
