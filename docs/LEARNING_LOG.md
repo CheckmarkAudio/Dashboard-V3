@@ -51,6 +51,44 @@ Quick alphabetical jumping-off point. Click or search.
 
 ---
 
+# 2026-05-17 — Tasks descriptor refactor (PR #197)
+
+## Narrow descriptor + fat interactive shell
+
+**TL;DR:** When a row has BOTH data display (text, badges) AND
+interactive controls (checkboxes, edit/delete buttons), split them:
+let descriptors own the display + export, let the row component own
+the interaction. Both stay simple.
+
+**When you encountered it:** Asking "did we drift-proof the tasks
+pages the same as Members?" The first answer was "no, the task rows
+duplicate display logic." The refactor that followed put the
+display cells (title, due_date, recurrence pill) into the shared
+`taskExportColumns` descriptors with `render` functions, while
+keeping the checkbox + edit/delete buttons hardcoded inside
+`TaskRow` / `StudioTaskRow`.
+
+**Why it matters:** Forcing EVERYTHING into descriptors (including
+the interactive bits) would mean passing handlers, selectMode,
+isSelected, mutation callbacks, etc. through every render function.
+The descriptor type would balloon and become awkward. The pragmatic
+split — "descriptors own data display + export; row components own
+interaction" — keeps both clean.
+
+**Mental model:** Think of a row as two layers: a **data layer**
+(what does this row SHOW about the task?) and a **behavior layer**
+(what can the user DO with this row?). Descriptors are the data
+layer. Row components are the behavior layer. They meet inside the
+row's JSX but they're authored separately.
+
+**Counter-rule:** If a row is mostly data display with one tiny
+action menu at the end (like the Members roster), put EVERYTHING in
+descriptors including the menu — the action menu is small enough to
+live as one descriptor. The split only matters when interactive
+controls are heavy or share row-level state.
+
+---
+
 # 2026-05-17 — ExportButtons PR session
 
 ## GitHub Desktop loop

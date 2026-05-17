@@ -718,6 +718,16 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-17 Tasks descriptor refactor — full drift-proofing across visible rows + CSV/PDF
+
+- **`CLAUDE:`** the user spotted that the CSV formatting on the Assign page was different from Members and asked "did we drift-proof the tasks pages the same as Members?" Initial honest answer was "no — three CSV consumers share one column array, but the visible task rows have their own hardcoded JSX, so adding/restyling a display field requires touching both places." Original recommendation was "leave as-is, PR scope is big." User pushed back: "yes lets go the refactor option." Right call.
+- **The fix**: renamed `src/lib/columns/taskColumns.ts` → `.tsx` (to allow JSX); added `render` functions to the three display-cell descriptors (`title`, `due_date`, `recurrence`) alongside their existing `exportValue` functions; built `src/components/tasks/TaskDisplayCells.tsx` that iterates `visibleColumns(taskExportColumns)` and renders the display half of each descriptor (null returns collapse cleanly so cells with no data don't produce empty pill chrome).
+- **`TaskRow` (AssignAdmin) + `StudioTaskRow` (StudioTasksPane)** both now use `<TaskDisplayCells task={task} />` for the visible display half; both keep their hardcoded interactive controls (completion checkbox, edit/delete buttons, confirm-delete pill) because those carry row-level state (`selectMode`, `isSelected`, `confirmDelete`, mutation callbacks) that doesn't belong in descriptors.
+- **The canonical pattern documented**: "narrow descriptor + fat interactive shell" — descriptors own data display + export; row components own interaction. Added as a new entry at the top of `docs/LEARNING_LOG.md`.
+- **Visual parity side-effect**: `TaskRow` in AssignAdmin previously didn't show the recurrence pill (`StudioTaskRow` did). Now both show it when present. Same data was always in the CSV — visible parity is the win.
+- **Effect**: rename "Title" → "Task Name" once in `taskColumns.tsx` and the visible task rows in BOTH AssignAdmin AND StudioTasksPane update, AND the CSV column header updates, AND the BusinessHealth all-team CSV updates. Single source of truth across five surfaces (Members, Clock Data, AssignAdmin tasks, Studio Tasks, BusinessHealth).
+- **Next**: Sessions/Bookings export still needs an admin-table surface scoped first (extend Hub vs new `/admin/sessions`); Forum activity export blocked on `chat_*` schema. KPI graph export remains deferred per user.
+
 ### 2026-05-17 Tasks export — per-member + Studio Tasks wired via shared `taskExportColumns`
 
 - **`CLAUDE:`** continued the export pipeline rollout to the third + fourth admin task surfaces. Added `src/lib/columns/taskColumns.ts` — first shared `TableColumn<T>` module, exporting `taskExportColumns: TableColumn<AssignedTask>[]` covering Title, Description, Scope, Studio Space, Assigned To, Category, Due Date, Required, Completed, Completed At, Created At, Source, Recurrence. Used in two places (AssignAdmin per-member pane + StudioTasksPane), proving the descriptor pattern scales across multiple consumers of the same export schema.

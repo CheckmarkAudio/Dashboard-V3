@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { fetchUserPreferences, setUserPreference } from '../../lib/preferences'
 import MemberAvatar from '../../components/members/MemberAvatar'
 import {
-  AlertCircle, Archive, Building2, Calendar as CalendarIcon, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  AlertCircle, Archive, Building2, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   ClipboardList, Edit2, Flag, Layers, Loader2, Plus, Save,
   Sparkles, Tag, Trash2, Users, UserPlus, X,
 } from 'lucide-react'
@@ -13,6 +13,7 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
 import { Button, ExportButtons, Input, toExportColumns } from '../../components/ui'
 import { taskExportColumns } from '../../lib/columns/taskColumns'
+import { TaskDisplayCells } from '../../components/tasks/TaskDisplayCells'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import {
   completeAssignedTask,
@@ -1078,19 +1079,14 @@ const TaskRow = memo(function TaskRow({
           className="w-4 h-4 rounded border-border accent-gold cursor-pointer"
         />
       )}
-      <span
-        className={`flex-1 min-w-0 text-[13px] truncate ${
-          done ? 'line-through text-text-light' : 'text-text'
-        }`}
-      >
-        {task.title}
-      </span>
-      {task.due_date && !confirmDelete && (
-        <span className="text-[10px] text-text-light tabular-nums shrink-0 inline-flex items-center gap-1">
-          <CalendarIcon size={10} aria-hidden="true" />
-          {formatDueShort(task.due_date)}
-        </span>
-      )}
+      {/* 2026-05-17 — display cells (title, due_date, recurrence)
+          come from the shared `taskExportColumns` descriptors via
+          <TaskDisplayCells>. Same source of truth as the CSV/PDF
+          exports — rename a header or restyle a cell once in
+          taskColumns.tsx, both surfaces update in lockstep.
+          confirmDelete still hides the display cells so the wider
+          "Confirm delete" pill has room. */}
+      {!confirmDelete && <TaskDisplayCells task={task} />}
       {/* Per-row actions — Edit + Trash hidden until hover so the row
           stays clean on glance. Suppressed in select mode so the bulk
           bar is the one place the admin acts from. */}
@@ -1147,16 +1143,6 @@ const TaskRow = memo(function TaskRow({
   )
 })
 
-function formatDueShort(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(d)
-  due.setHours(0, 0, 0, 0)
-  if (due.getTime() === today.getTime()) return 'Today'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
 
 // ─── Single-task edit modal ─────────────────────────────────────────
 //
