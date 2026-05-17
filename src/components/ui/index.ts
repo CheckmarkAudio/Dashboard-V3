@@ -29,3 +29,8 @@ export {
   type ExportCellValue,
   type ExportButtonsProps,
 } from './ExportButtons'
+export {
+  type TableColumn,
+  visibleColumns,
+  toExportColumns,
+} from './tableColumn'

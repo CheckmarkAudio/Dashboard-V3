@@ -718,7 +718,11 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
-### 2026-05-16 Reusable `<ExportButtons />` (CSV + PDF) — Members + Clock Data wired
+### 2026-05-16 Reusable `<ExportButtons />` + drift-proof `TableColumn<T>` — Members + Clock Data wired
+
+- **Drift-proof column descriptors (the headline win)**: user explicitly asked for this mid-flow — "if we rename a column header, will the CSV reflect that?" Initial answer was "row data tracks, but headers + transformations don't because they're duplicated." User pushed: "this is more important to me that we update this and make it drift proof right now." So the same PR now ships `src/components/ui/tableColumn.ts` with the canonical `TableColumn<T>` descriptor + `visibleColumns()` + `toExportColumns()` helpers, and refactors both Members and Clock Data tables to drive their `<thead>` / `<td>` AND their `<ExportButtons>` from the SAME column array. Three column shapes: both surfaces, visible-only (combined cells + actions menu), export-only (Name/Email/Phone broken out for CSV; raw Duration minutes for payroll). One source of truth — rename anywhere, both surfaces update. **This is the canonical pattern for every future admin table that needs exports** (Sessions, Tasks history, Forum activity all to follow the same shape).
+
+
 
 - **`CLAUDE:`** kicked the open queue forward by shipping the
   reusable export pipeline the user has wanted as a near-term Tier 2

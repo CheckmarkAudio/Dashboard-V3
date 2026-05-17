@@ -3,7 +3,13 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Clock, Loader2, Inbox } from 'lucide-react'
 import { fetchAdminClockEntries, timeClockKeys, type AdminClockEntry } from '../../lib/queries/timeClock'
-import { Select, ExportButtons, type ExportColumn } from '../ui'
+import {
+  Select,
+  ExportButtons,
+  toExportColumns,
+  visibleColumns,
+  type TableColumn,
+} from '../ui'
 import type { TeamMember } from '../../types'
 
 const ALL_MEMBERS = '__all__' as const
@@ -28,37 +34,91 @@ function formatDuration(minutes: number | null): string {
   return `${hours}h ${remainder}m`
 }
 
-function ClockEntryRow({ entry }: { entry: AdminClockEntry }) {
-  const isOpen = entry.clocked_out_at === null
-  return (
-    <tr className="border-t border-border hover:bg-surface-hover transition-colors">
-      <td className="py-2 px-3 text-[13px]">
-        <Link to={`/profile/${entry.member_id}`} className="text-text hover:text-gold transition-colors">
-          {entry.member_name}
-        </Link>
-      </td>
-      <td className="py-2 px-3 text-[12px] text-text-muted tabular-nums whitespace-nowrap">
+// ─── Shift history columns — single source of truth ─────────────
+//
+// Same pattern as the Members roster: one `TableColumn<T>[]` powers
+// BOTH the visible `<thead>` / `<td>` AND the CSV/PDF export, so a
+// header rename or a value-format change flows to both surfaces in
+// lockstep — no parallel arrays to keep in sync.
+//
+// The Duration column is split: the visible cell shows the humanized
+// "Xh Ym" string; the CSV/PDF includes both the raw minute count
+// (single source of truth for payroll formulas) AND the humanized
+// string (so spreadsheets stay readable for non-technical reviewers).
+const clockColumns: TableColumn<AdminClockEntry>[] = [
+  {
+    key: 'member',
+    header: 'Member',
+    render: (entry) => (
+      <Link
+        to={`/profile/${entry.member_id}`}
+        className="text-text hover:text-gold transition-colors"
+      >
+        {entry.member_name}
+      </Link>
+    ),
+    exportValue: (e) => e.member_name,
+  },
+  {
+    key: 'clocked_in',
+    header: 'Clocked in',
+    render: (entry) => (
+      <span className="text-[12px] text-text-muted tabular-nums whitespace-nowrap">
         {formatDateTime(entry.clocked_in_at)}
-      </td>
-      <td className="py-2 px-3 text-[12px] tabular-nums whitespace-nowrap">
-        {isOpen ? (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            On shift
-          </span>
-        ) : (
-          <span className="text-text-muted">{formatDateTime(entry.clocked_out_at!)}</span>
-        )}
-      </td>
-      <td className="py-2 px-3 text-[12px] tabular-nums text-text-muted whitespace-nowrap">
+      </span>
+    ),
+    exportValue: (e) => formatDateTime(e.clocked_in_at),
+  },
+  {
+    key: 'clocked_out',
+    header: 'Clocked out',
+    render: (entry) => {
+      const isOpen = entry.clocked_out_at === null
+      return (
+        <span className="text-[12px] tabular-nums whitespace-nowrap">
+          {isOpen ? (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              On shift
+            </span>
+          ) : (
+            <span className="text-text-muted">{formatDateTime(entry.clocked_out_at!)}</span>
+          )}
+        </span>
+      )
+    },
+    exportValue: (e) => (e.clocked_out_at === null ? 'On shift' : formatDateTime(e.clocked_out_at)),
+  },
+  // Export-only — the visible table shows only the humanized form
+  // (next column), but exports include the raw minute count so
+  // payroll spreadsheets can sum directly.
+  {
+    key: 'duration_minutes',
+    header: 'Duration (minutes)',
+    exportValue: (e) => e.duration_minutes ?? '',
+  },
+  {
+    key: 'duration',
+    header: 'Duration',
+    render: (entry) => (
+      <span className="text-[12px] tabular-nums text-text-muted whitespace-nowrap">
         {formatDuration(entry.duration_minutes)}
-      </td>
-      <td className="py-2 px-3 text-[12px] text-text-light max-w-[280px]">
+      </span>
+    ),
+    exportValue: (e) => formatDuration(e.duration_minutes),
+  },
+  {
+    key: 'notes',
+    header: 'Notes',
+    render: (entry) => (
+      <span className="text-[12px] text-text-light max-w-[280px] inline-block">
         <span className="line-clamp-2">{entry.notes ?? ''}</span>
-      </td>
-    </tr>
-  )
-}
+      </span>
+    ),
+    exportValue: (e) => e.notes ?? '',
+  },
+]
+const clockVisibleColumns = visibleColumns(clockColumns)
 
 export default function ClockDataSection({ members }: { members: TeamMember[] }) {
   const [memberFilter, setMemberFilter] = useState<string>(ALL_MEMBERS)
@@ -79,23 +139,12 @@ export default function ClockDataSection({ members }: { members: TeamMember[] })
     [members],
   )
 
-  // 2026-05-15 — ExportButtons columns mirror the visible Shift
-  // history table. Duration exports as raw minutes (single source of
-  // truth for payroll formulas) PLUS the humanized "Xh Ym" alongside
-  // so spreadsheets stay readable for non-technical reviewers. The
-  // export reflects the active member filter (`entries` is already
-  // filter-scoped by `memberId` in the query key).
-  const clockExportColumns: ExportColumn<AdminClockEntry>[] = [
-    { header: 'Member', value: (e) => e.member_name },
-    { header: 'Clocked in', value: (e) => formatDateTime(e.clocked_in_at) },
-    {
-      header: 'Clocked out',
-      value: (e) => (e.clocked_out_at === null ? 'On shift' : formatDateTime(e.clocked_out_at)),
-    },
-    { header: 'Duration (minutes)', value: (e) => e.duration_minutes ?? '' },
-    { header: 'Duration', value: (e) => formatDuration(e.duration_minutes) },
-    { header: 'Notes', value: (e) => e.notes ?? '' },
-  ]
+  // ExportButtons columns are DERIVED from the same `clockColumns`
+  // array that powers the visible table above. Rename a header in
+  // `clockColumns` → both surfaces update in lockstep, no parallel
+  // arrays to keep in sync. The export reflects the active member
+  // filter (`entries` is already filter-scoped by `memberId` in the
+  // query key).
   const filteredMemberName =
     memberId === null
       ? null
@@ -136,7 +185,7 @@ export default function ClockDataSection({ members }: { members: TeamMember[] })
           <ExportButtons
             filename={exportFilename}
             title={exportTitle}
-            columns={clockExportColumns}
+            columns={toExportColumns(clockColumns)}
             rows={entries}
           />
         </div>
@@ -165,16 +214,25 @@ export default function ClockDataSection({ members }: { members: TeamMember[] })
           <table className="w-full text-left">
             <thead className="bg-surface-alt text-[10px] uppercase tracking-wider text-text-muted">
               <tr>
-                <th className="py-2 px-3 font-semibold">Member</th>
-                <th className="py-2 px-3 font-semibold">Clocked in</th>
-                <th className="py-2 px-3 font-semibold">Clocked out</th>
-                <th className="py-2 px-3 font-semibold">Duration</th>
-                <th className="py-2 px-3 font-semibold">Notes</th>
+                {clockVisibleColumns.map((col) => (
+                  <th key={col.key} className={`py-2 px-3 font-semibold ${col.thClassName ?? ''}`}>
+                    {col.header}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {entries.map((e) => (
-                <ClockEntryRow key={e.entry_id} entry={e} />
+              {entries.map((entry) => (
+                <tr
+                  key={entry.entry_id}
+                  className="border-t border-border hover:bg-surface-hover transition-colors"
+                >
+                  {clockVisibleColumns.map((col) => (
+                    <td key={col.key} className={`py-2 px-3 text-[13px] ${col.tdClassName ?? ''}`}>
+                      {col.render!(entry)}
+                    </td>
+                  ))}
+                </tr>
               ))}
             </tbody>
           </table>
