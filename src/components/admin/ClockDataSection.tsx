@@ -60,8 +60,8 @@ const clockColumns: TableColumn<AdminClockEntry>[] = [
     exportValue: (e) => e.member_name,
   },
   {
-    key: 'clocked_in',
-    header: 'Clocked in',
+    key: 'Clock_in',
+    header: 'Clock in',
     render: (entry) => (
       <span className="text-[12px] text-text-muted tabular-nums whitespace-nowrap">
         {formatDateTime(entry.clocked_in_at)}
@@ -70,8 +70,8 @@ const clockColumns: TableColumn<AdminClockEntry>[] = [
     exportValue: (e) => formatDateTime(e.clocked_in_at),
   },
   {
-    key: 'clocked_out',
-    header: 'Clocked out',
+    key: 'Clock_Out',
+    header: 'Clock Out',
     render: (entry) => {
       const isOpen = entry.clocked_out_at === null
       return (
