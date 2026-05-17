@@ -776,6 +776,45 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
   5. Default-if-no-direction is still Calendar Phase 2A inbound
      smoke-test.
 
+### 2026-05-16 Calendar reconnect guard
+
+- **`CODEX:`** user pressed "Push pending bookings" while Settings
+  already showed "Last outbound sync error: Token has been expired or
+  revoked." The server correctly refused because the stored Google token
+  cannot refresh, but the UI surfaced only the generic Supabase
+  "Edge Function returned a non-2xx status code" toast.
+- Fix: `src/lib/googleCalendar.ts` now uses `extractEdgeFunctionError()`
+  for Google sync function calls, so function JSON errors show directly.
+  Settings → Database detects expired/revoked/`invalid_grant` token text,
+  shows "Google Calendar needs reconnecting," exposes a Reconnect Google
+  Calendar button, and disables Push/Pull until reconnect.
+- **Next for user:** after Vercel deploys this commit, click Reconnect
+  Google Calendar, finish the Google consent screen, then click Push
+  pending bookings.
+
+### 2026-05-16 Calendar outbound recovery
+
+- **`CODEX:`** investigated why the new Bridget May 16 booking did not
+  appear in Apple Calendar. Production showed the booking had
+  `google_event_id IS NULL`, `google_sync_status='error'`, and
+  `google_sync_error='Token has been expired or revoked.'`
+- Interpretation: Checkmark attempted the outward sync, but the stored
+  Google refresh token is no longer valid. Apple Calendar cannot mirror
+  the booking until Google Calendar receives it.
+- Fix shipped: Settings → Database now shows outbound pending count /
+  last outbound error and has a "Push pending bookings" action. The
+  action is admin/owner-only and calls `google-calendar-sync` action
+  `retry_pending_sessions`, which upserts non-cancelled sessions from
+  Denver-local today forward when they are missing a Google event id or
+  have a sync error.
+- **`SUPABASE-DEPLOYED:`** deployed both `google-calendar-auth` and
+  `google-calendar-sync` after the change. `npm run build` passes.
+  Local `deno check` was attempted but unavailable (`deno` not installed).
+- **User-facing recovery path:** reconnect Google Calendar in
+  Settings → Database, then click "Push pending bookings." After that,
+  new bookings should auto-push again; Apple Calendar will show them
+  only if it is viewing/syncing that same Google calendar.
+
 ### 2026-05-16 Calendar week-grid date alignment
 
 - **`CODEX:`** fixed a calendar visual/data mismatch reported by the

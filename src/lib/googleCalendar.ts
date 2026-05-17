@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { extractEdgeFunctionError } from './edgeFunctionError'
 
 export interface GoogleCalendarConnectionStatus {
   google_email: string
@@ -15,11 +16,8 @@ export interface GoogleCalendarConnectionStatus {
     unchanged_count?: number
     skipped_count?: number
   } | null
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message
-  return fallback
+  outbound_pending_count?: number
+  outbound_last_error?: string | null
 }
 
 export async function fetchGoogleCalendarStatus(): Promise<{
@@ -98,7 +96,35 @@ export async function pullInboundGoogleCalendarChanges(): Promise<{
   })
 
   if (error || !data?.ok || !data.summary) {
-    throw new Error(data?.error || errorMessage(error, 'Failed to pull inbound Google Calendar changes'))
+    throw new Error(data?.error || (await extractEdgeFunctionError(error, 'Failed to pull inbound Google Calendar changes')))
+  }
+
+  return { summary: data.summary }
+}
+
+export async function pushPendingGoogleCalendarBookings(): Promise<{
+  summary: {
+    attempted_count: number
+    synced_count: number
+    failed_count: number
+    skipped_count: number
+  }
+}> {
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean
+    summary?: {
+      attempted_count: number
+      synced_count: number
+      failed_count: number
+      skipped_count: number
+    }
+    error?: string
+  }>('google-calendar-sync', {
+    body: { action: 'retry_pending_sessions' },
+  })
+
+  if (error || !data?.ok || !data.summary) {
+    throw new Error(data?.error || (await extractEdgeFunctionError(error, 'Failed to push pending Google Calendar bookings')))
   }
 
   return { summary: data.summary }
@@ -113,7 +139,7 @@ export async function syncSessionToGoogleCalendar(sessionId: string): Promise<vo
   })
 
   if (error || !data?.ok) {
-    throw new Error(data?.error || errorMessage(error, 'Failed to sync session to Google Calendar'))
+    throw new Error(data?.error || (await extractEdgeFunctionError(error, 'Failed to sync session to Google Calendar')))
   }
 }
 
@@ -128,6 +154,6 @@ export async function deleteSessionEventFromGoogleCalendar(googleEventId: string
   })
 
   if (error || !data?.ok) {
-    throw new Error(data?.error || errorMessage(error, 'Failed to delete Google Calendar event'))
+    throw new Error(data?.error || (await extractEdgeFunctionError(error, 'Failed to delete Google Calendar event')))
   }
 }

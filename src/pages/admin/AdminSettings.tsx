@@ -10,6 +10,7 @@ import {
   disconnectGoogleCalendar,
   fetchGoogleCalendarStatus,
   pullInboundGoogleCalendarChanges,
+  pushPendingGoogleCalendarBookings,
   startGoogleCalendarConnect,
   type GoogleCalendarConnectionStatus,
 } from '../../lib/googleCalendar'
@@ -73,6 +74,11 @@ function KeyCapInput({
   )
 }
 
+function isGoogleTokenRevoked(message: string | null | undefined): boolean {
+  const lower = (message ?? '').toLowerCase()
+  return lower.includes('expired or revoked') || lower.includes('invalid_grant')
+}
+
 export default function AdminSettings() {
   useDocumentTitle('Settings - Checkmark Workspace')
   const { profile } = useAuth()
@@ -102,6 +108,7 @@ export default function AdminSettings() {
   const [googleCalendarConnecting, setGoogleCalendarConnecting] = useState(false)
   const [googleCalendarDisconnecting, setGoogleCalendarDisconnecting] = useState(false)
   const [googleCalendarPulling, setGoogleCalendarPulling] = useState(false)
+  const [googleCalendarPushing, setGoogleCalendarPushing] = useState(false)
   const [googleCalendarStatus, setGoogleCalendarStatus] = useState<GoogleCalendarConnectionStatus | null>(null)
 
   // Quick keys
@@ -181,6 +188,28 @@ export default function AdminSettings() {
       toast((err as Error).message, 'error')
     } finally {
       setGoogleCalendarPulling(false)
+    }
+  }
+
+  const handlePushPendingGoogleCalendar = async () => {
+    if (isGoogleTokenRevoked(googleCalendarStatus?.outbound_last_error ?? googleCalendarStatus?.last_sync_error)) {
+      toast('Reconnect Google Calendar first, then push pending bookings.', 'error')
+      return
+    }
+    setGoogleCalendarPushing(true)
+    try {
+      const result = await pushPendingGoogleCalendarBookings()
+      const summary = result.summary
+      const toastType = summary.failed_count > 0 ? 'error' : 'success'
+      toast(
+        `Outbound sync complete: ${summary.synced_count} pushed, ${summary.failed_count} failed, ${summary.skipped_count} skipped.`,
+        toastType,
+      )
+      await loadGoogleCalendar()
+    } catch (err) {
+      toast((err as Error).message, 'error')
+    } finally {
+      setGoogleCalendarPushing(false)
     }
   }
 
@@ -515,6 +544,19 @@ export default function AdminSettings() {
 
                 {googleCalendarStatus ? (
                   <div className="space-y-2">
+                    {(() => {
+                      const hasTokenError = isGoogleTokenRevoked(
+                        googleCalendarStatus.outbound_last_error ?? googleCalendarStatus.last_sync_error,
+                      )
+                      return hasTokenError ? (
+                        <div className="p-3 rounded-lg border border-amber-400/30 bg-amber-500/10 text-xs text-amber-100 space-y-2">
+                          <p className="font-semibold text-amber-100">Google Calendar needs reconnecting.</p>
+                          <p>
+                            The saved Google token expired or was revoked. Reconnect first, then push pending bookings.
+                          </p>
+                        </div>
+                      ) : null
+                    })()}
                     <div className="flex items-center justify-between p-3 rounded-lg bg-surface-alt">
                       <span className="text-text-muted">Connected account</span>
                       <span className="font-medium">{googleCalendarStatus.google_email}</span>
@@ -548,7 +590,18 @@ export default function AdminSettings() {
                             : 'No runs yet'}
                         </p>
                       </div>
+                      <div className="p-3 rounded-lg bg-surface-alt text-xs">
+                        <p className="text-text-muted">Pending outbound bookings</p>
+                        <p className="mt-1 font-medium text-text">
+                          {googleCalendarStatus.outbound_pending_count ?? 0}
+                        </p>
+                      </div>
                     </div>
+                    {googleCalendarStatus.outbound_last_error && (
+                      <div className="p-3 rounded-lg border border-amber-400/30 bg-amber-500/10 text-xs text-amber-200">
+                        Last outbound sync error: {googleCalendarStatus.outbound_last_error}
+                      </div>
+                    )}
                     {googleCalendarStatus.inbound_last_sync_error && (
                       <div className="p-3 rounded-lg border border-amber-400/30 bg-amber-500/10 text-xs text-amber-200">
                         Last inbound sync error: {googleCalendarStatus.inbound_last_sync_error}
@@ -560,10 +613,28 @@ export default function AdminSettings() {
                       </div>
                     )}
                     <div className="flex flex-wrap justify-end gap-2">
+                      {isGoogleTokenRevoked(googleCalendarStatus.outbound_last_error ?? googleCalendarStatus.last_sync_error) && (
+                        <button
+                          type="button"
+                          onClick={handleConnectGoogleCalendar}
+                          disabled={googleCalendarConnecting}
+                          className="px-4 py-2 rounded-lg bg-gold hover:bg-gold-muted text-black text-sm font-semibold disabled:opacity-50"
+                        >
+                          {googleCalendarConnecting ? 'Reconnecting…' : 'Reconnect Google Calendar'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handlePushPendingGoogleCalendar}
+                        disabled={googleCalendarPushing || isGoogleTokenRevoked(googleCalendarStatus.outbound_last_error ?? googleCalendarStatus.last_sync_error)}
+                        className="px-4 py-2 rounded-lg border border-border text-sm font-semibold hover:bg-surface-hover disabled:opacity-50"
+                      >
+                        {googleCalendarPushing ? 'Pushing…' : 'Push pending bookings'}
+                      </button>
                       <button
                         type="button"
                         onClick={handlePullInboundGoogleCalendar}
-                        disabled={googleCalendarPulling}
+                        disabled={googleCalendarPulling || isGoogleTokenRevoked(googleCalendarStatus.outbound_last_error ?? googleCalendarStatus.last_sync_error)}
                         className="px-4 py-2 rounded-lg border border-border text-sm font-semibold hover:bg-surface-hover disabled:opacity-50"
                       >
                         {googleCalendarPulling ? 'Pulling…' : 'Pull inbound changes'}

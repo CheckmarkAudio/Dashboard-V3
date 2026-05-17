@@ -204,6 +204,13 @@ type InboundSummary = {
   skipped_count: number
 }
 
+type OutboundSummary = {
+  attempted_count: number
+  synced_count: number
+  failed_count: number
+  skipped_count: number
+}
+
 async function setInboundConnectionState(
   admin: ReturnType<typeof createClient>,
   teamId: string,
@@ -218,6 +225,101 @@ async function setInboundConnectionState(
     .eq("team_id", teamId)
 }
 
+function denverTodayKey(): string {
+  return DENVER_DATE_FORMATTER.format(new Date())
+}
+
+async function syncSessionToConnection(input: {
+  admin: ReturnType<typeof createClient>
+  teamId: string
+  sessionId: string
+  calendarId: string
+  accessToken: string
+}): Promise<{ eventId: string | null; action: "upserted" | "deleted" | "skipped" }> {
+  const { data: session, error: sessionErr } = await input.admin
+    .from("sessions")
+    .select(`
+      id,
+      team_id,
+      client_name,
+      session_date,
+      start_time,
+      end_time,
+      session_type,
+      status,
+      room,
+      notes,
+      google_event_id,
+      assigned_to
+    `)
+    .eq("id", input.sessionId)
+    .eq("team_id", input.teamId)
+    .maybeSingle()
+
+  if (sessionErr) throw new Error(sessionErr.message)
+  if (!session) throw new Error("Session not found")
+
+  let assignedName: string | null = null
+  if (session.assigned_to) {
+    const { data: assignee } = await input.admin
+      .from("team_members")
+      .select("display_name")
+      .eq("id", session.assigned_to)
+      .maybeSingle()
+    assignedName = assignee?.display_name ?? null
+  }
+
+  if (session.status === "cancelled") {
+    if (session.google_event_id) {
+      await deleteGoogleCalendarEvent(input.calendarId, session.google_event_id, input.accessToken)
+    }
+    await setSessionSyncState(input.admin, input.teamId, session.id, {
+      google_event_id: null,
+      google_sync_status: "synced",
+      google_last_synced_at: new Date().toISOString(),
+      google_sync_error: null,
+      calendar_last_changed_source: "checkmark",
+      calendar_last_changed_at: new Date().toISOString(),
+    })
+    return { eventId: null, action: "deleted" }
+  }
+
+  const payload = sessionPayload({
+    ...session,
+    assigned_to_name: assignedName,
+  })
+
+  let eventId = session.google_event_id
+
+  try {
+    if (eventId) {
+      await updateGoogleCalendarEvent(input.calendarId, eventId, input.accessToken, payload)
+    } else {
+      const created = await insertGoogleCalendarEvent(input.calendarId, input.accessToken, payload)
+      eventId = created.id
+    }
+  } catch (error) {
+    const status = (error as Error & { status?: number }).status
+    if (eventId && status === 404) {
+      const created = await insertGoogleCalendarEvent(input.calendarId, input.accessToken, payload)
+      eventId = created.id
+    } else {
+      throw error
+    }
+  }
+
+  await setSessionSyncState(input.admin, input.teamId, session.id, {
+    google_event_id: eventId,
+    google_sync_status: "synced",
+    google_last_synced_at: new Date().toISOString(),
+    google_sync_error: null,
+    calendar_last_changed_source: "checkmark",
+    calendar_last_changed_at: new Date().toISOString(),
+  })
+
+  return { eventId, action: "upserted" }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS })
@@ -228,7 +330,7 @@ Deno.serve(async (req: Request) => {
 
   let body:
     | {
-        action?: string
+        action?: "upsert_session" | "delete_session_event" | "pull_inbound_changes" | "retry_pending_sessions" | string
         session_id?: string
         google_event_id?: string | null
       }
@@ -470,93 +572,86 @@ Deno.serve(async (req: Request) => {
       })
     }
 
+    if (body.action === "retry_pending_sessions") {
+      if (!canManageGoogleCalendar(ctx.role)) {
+        return jsonResponse({ ok: false, error: "Only admins or owners can push pending calendar bookings." }, 403)
+      }
+
+      const summary: OutboundSummary = {
+        attempted_count: 0,
+        synced_count: 0,
+        failed_count: 0,
+        skipped_count: 0,
+      }
+
+      const { data: pendingSessions, error: pendingErr } = await ctx.admin
+        .from("sessions")
+        .select("id")
+        .eq("team_id", ctx.teamId)
+        .neq("status", "cancelled")
+        .gte("session_date", denverTodayKey())
+        .or("google_event_id.is.null,google_sync_status.eq.error")
+        .order("session_date", { ascending: true })
+        .order("start_time", { ascending: true })
+
+      if (pendingErr) {
+        return jsonResponse({ ok: false, error: pendingErr.message }, 500)
+      }
+
+      let lastError: string | null = null
+      for (const row of pendingSessions ?? []) {
+        if (!row.id) {
+          summary.skipped_count += 1
+          continue
+        }
+        summary.attempted_count += 1
+        try {
+          await syncSessionToConnection({
+            admin: ctx.admin,
+            teamId: ctx.teamId,
+            sessionId: row.id,
+            calendarId: connection.calendar_id,
+            accessToken,
+          })
+          summary.synced_count += 1
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unexpected sync error"
+          lastError = message
+          summary.failed_count += 1
+          await setSessionSyncState(ctx.admin, ctx.teamId, row.id, {
+            google_sync_status: "error",
+            google_sync_error: message,
+          })
+        }
+      }
+
+      await ctx.admin
+        .from("google_calendar_connections")
+        .update({
+          last_tested_at: new Date().toISOString(),
+          last_sync_error: lastError,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("team_id", ctx.teamId)
+
+      return jsonResponse({
+        ok: true,
+        summary,
+        calendar_id: connection.calendar_id,
+        google_email: connection.google_email,
+      })
+    }
+
     if (body.action !== "upsert_session" || !body.session_id) {
       return jsonResponse({ ok: false, error: "Unknown action" }, 400)
     }
 
-    const { data: session, error: sessionErr } = await ctx.admin
-      .from("sessions")
-      .select(`
-        id,
-        team_id,
-        client_name,
-        session_date,
-        start_time,
-        end_time,
-        session_type,
-        status,
-        room,
-        notes,
-        google_event_id,
-        assigned_to
-      `)
-      .eq("id", body.session_id)
-      .eq("team_id", ctx.teamId)
-      .maybeSingle()
-
-    if (sessionErr) {
-      return jsonResponse({ ok: false, error: sessionErr.message }, 500)
-    }
-    if (!session) {
-      return jsonResponse({ ok: false, error: "Session not found" }, 404)
-    }
-
-    let assignedName: string | null = null
-    if (session.assigned_to) {
-      const { data: assignee } = await ctx.admin
-        .from("team_members")
-        .select("display_name")
-        .eq("id", session.assigned_to)
-        .maybeSingle()
-      assignedName = assignee?.display_name ?? null
-    }
-
-    if (session.status === "cancelled") {
-      if (session.google_event_id) {
-        await deleteGoogleCalendarEvent(connection.calendar_id, session.google_event_id, accessToken)
-      }
-      await setSessionSyncState(ctx.admin, ctx.teamId, session.id, {
-        google_event_id: null,
-        google_sync_status: "synced",
-        google_last_synced_at: new Date().toISOString(),
-        google_sync_error: null,
-        calendar_last_changed_source: "checkmark",
-        calendar_last_changed_at: new Date().toISOString(),
-      })
-      return jsonResponse({ ok: true, action: "deleted" })
-    }
-
-    const payload = sessionPayload({
-      ...session,
-      assigned_to_name: assignedName,
-    })
-
-    let eventId = session.google_event_id
-
-    try {
-      if (eventId) {
-        await updateGoogleCalendarEvent(connection.calendar_id, eventId, accessToken, payload)
-      } else {
-        const created = await insertGoogleCalendarEvent(connection.calendar_id, accessToken, payload)
-        eventId = created.id
-      }
-    } catch (error) {
-      const status = (error as Error & { status?: number }).status
-      if (eventId && status === 404) {
-        const created = await insertGoogleCalendarEvent(connection.calendar_id, accessToken, payload)
-        eventId = created.id
-      } else {
-        throw error
-      }
-    }
-
-    await setSessionSyncState(ctx.admin, ctx.teamId, session.id, {
-      google_event_id: eventId,
-      google_sync_status: "synced",
-      google_last_synced_at: new Date().toISOString(),
-      google_sync_error: null,
-      calendar_last_changed_source: "checkmark",
-      calendar_last_changed_at: new Date().toISOString(),
+    const result = await syncSessionToConnection({
+      admin: ctx.admin,
+      teamId: ctx.teamId,
+      sessionId: body.session_id,
+      calendarId: connection.calendar_id,
+      accessToken,
     })
     await ctx.admin
       .from("google_calendar_connections")
@@ -568,7 +663,8 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({
       ok: true,
-      event_id: eventId,
+      action: result.action,
+      event_id: result.eventId,
       calendar_id: connection.calendar_id,
       google_email: connection.google_email,
     })
@@ -589,6 +685,23 @@ Deno.serve(async (req: Request) => {
           .eq("team_id", teamIdForError)
       } catch (persistError) {
         console.error("[google-calendar-sync] failed to persist sync error", persistError)
+      }
+    }
+    if (teamIdForError) {
+      try {
+        const admin = createClient(requireEnv("SUPABASE_URL"), requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+          auth: { persistSession: false, autoRefreshToken: false },
+        })
+        await admin
+          .from("google_calendar_connections")
+          .update({
+            last_sync_error: error instanceof Error ? error.message : "Unexpected sync error",
+            last_tested_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("team_id", teamIdForError)
+      } catch (persistError) {
+        console.error("[google-calendar-sync] failed to persist connection sync error", persistError)
       }
     }
     return jsonResponse(
