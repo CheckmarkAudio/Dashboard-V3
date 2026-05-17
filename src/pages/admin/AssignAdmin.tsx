@@ -11,7 +11,8 @@ import {
 } from 'lucide-react'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
-import { Button, Input } from '../../components/ui'
+import { Button, ExportButtons, Input, toExportColumns } from '../../components/ui'
+import { taskExportColumns } from '../../lib/columns/taskColumns'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import {
   completeAssignedTask,
@@ -845,15 +846,38 @@ export default function AssignAdmin() {
                   </button>
                 )}
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                iconLeft={<Plus size={14} aria-hidden="true" />}
-                onClick={() => setAddTaskOpen(true)}
-                disabled={!selectedMember}
-              >
-                Add Task
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* 2026-05-17 — Per-member task export. Exports the
+                    currently-loaded `tasks` array, which mirrors
+                    exactly what the admin sees in the right pane
+                    (includes completed). Filename + PDF title both
+                    incorporate the selected member's name so the
+                    download lands clearly in the user's Downloads. */}
+                <ExportButtons
+                  filename={
+                    selectedMember
+                      ? `tasks-${selectedMember.display_name}`
+                      : 'tasks'
+                  }
+                  title={
+                    selectedMember
+                      ? `Tasks — ${selectedMember.display_name}`
+                      : 'Tasks'
+                  }
+                  columns={toExportColumns(taskExportColumns)}
+                  rows={tasks}
+                  disabled={!selectedMember}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  iconLeft={<Plus size={14} aria-hidden="true" />}
+                  onClick={() => setAddTaskOpen(true)}
+                  disabled={!selectedMember}
+                >
+                  Add Task
+                </Button>
+              </div>
             </div>
 
             {tasksQuery.isLoading ? (
