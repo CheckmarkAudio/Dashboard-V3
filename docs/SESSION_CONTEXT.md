@@ -718,6 +718,56 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-16 Reusable `<ExportButtons />` (CSV + PDF) — Members + Clock Data wired
+
+- **`CLAUDE:`** kicked the open queue forward by shipping the
+  reusable export pipeline the user has wanted as a near-term Tier 2
+  item. New `src/components/ui/ExportButtons.tsx` is the canonical
+  component for any admin table that needs CSV/PDF download —
+  declare `columns: ExportColumn<T>[]` over your row type, pass
+  `rows`, and the component handles serialization, lazy-loading,
+  filename sanitization, BOM/escaping, and disabled state.
+- **CSV path**: synchronous, dep-free, RFC 4180 escaping (commas /
+  quotes / newlines wrapped + double-quote-escaped), UTF-8 BOM so
+  Excel auto-detects encoding, CRLF line endings so Excel + Sheets
+  both parse cleanly. `<base>-<yyyy-mm-dd>.csv` filename pattern.
+- **PDF path**: lazy-imports `jspdf` 4.2.1 + `jspdf-autotable` 5.0.7
+  on first click — verified in the build output that the ~390KB
+  jsPDF + 31KB autotable + 202KB html2canvas all land in their own
+  chunks, so admins who never click Export PDF never pay the cost.
+  Landscape letter, brand-gold underline + table-head fill, page
+  numbers in the footer, alternating row tint for readability.
+- **Wired on**:
+  - **Members roster** (`TeamManager.tsx`) — exports the
+    currently-filtered rows so search + position + status filters
+    all flow through; columns mirror visible table + Email + Phone;
+    "Showing N of M" mini-strip sits above the table.
+  - **Shift history** (`ClockDataSection.tsx`) — exports both raw
+    `Duration (minutes)` (single source of truth for payroll
+    formulas) AND humanized `Duration` so spreadsheets stay readable;
+    respects the member-filter dropdown; filename includes the
+    selected member's name when one is filtered.
+- **Re-exported** from `src/components/ui/index.ts` so future tables
+  pull it via the usual `import { ExportButtons, type ExportColumn }
+  from '@/components/ui'` pattern.
+- **Detective stop**: open queue item "Studio Tasks by-space on
+  `/daily` widget" was actually shipped in PR #102 already — the
+  prior PROJECT_STATE row was stale on that point. `10fe39f` from
+  the parallel Codex session already corrected the snapshot; this PR
+  just keeps that correction intact and pivots to ExportButtons.
+- **Next** (in priority order):
+  1. **Sessions/Bookings export** — needs an admin-table surface
+     scoped first (Hub? `/admin/sessions`?). Ask user before
+     redesigning a page just to host the table.
+  2. **Tasks history export** — wire ExportButtons on AssignAdmin
+     and/or BusinessHealth tables.
+  3. **Forum activity export** — once the `chat_*`-as-threads
+     schema lands.
+  4. **Deferred per user**: KPI graph export — "not yet completed
+     enough to define parameters to be recorded."
+  5. Default-if-no-direction is still Calendar Phase 2A inbound
+     smoke-test.
+
 ### 2026-05-16 Calendar week-grid date alignment
 
 - **`CODEX:`** fixed a calendar visual/data mismatch reported by the

@@ -10,7 +10,7 @@ import { useToast } from '../../components/Toast'
 import ConfirmModal from '../../components/ConfirmModal'
 import TempPasswordReveal from '../../components/auth/TempPasswordReveal'
 import SetupLinkReveal from '../../components/auth/SetupLinkReveal'
-import { Button, Input, Select, Badge, EmptyState } from '../../components/ui'
+import { Button, Input, Select, Badge, EmptyState, ExportButtons, type ExportColumn } from '../../components/ui'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
 import ClockDataSection from '../../components/admin/ClockDataSection'
 import MemberActivitySection from '../../components/admin/MemberActivitySection'
@@ -528,6 +528,20 @@ export default function TeamManager() {
   const activeCount = members.filter(m => m.status === 'active').length
   const inactiveCount = members.length - activeCount
 
+  // Export columns mirror the visible Members table + Email (which is
+  // shown inline under the display name and is the highest-value
+  // field for offline lists / payroll). `value` accessors coerce
+  // missing fields to '' so the CSV/PDF render uniformly.
+  const memberExportColumns: ExportColumn<TeamMember>[] = [
+    { header: 'Name', value: (m) => m.display_name },
+    { header: 'Email', value: (m) => m.email },
+    { header: 'Job Title', value: (m) => (m.position ? getPositionLabel(m.position) : '') },
+    { header: 'Term', value: (m) => formatTerm(m) },
+    { header: 'Status', value: (m) => (m.status === 'active' ? 'Active' : 'Inactive') },
+    { header: 'Access', value: (m) => (m.role === 'admin' ? 'Admin' : 'Standard') },
+    { header: 'Phone', value: (m) => m.phone ?? '' },
+  ]
+
   if (loading) return (
     <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
       <span className="sr-only">Loading…</span>
@@ -702,6 +716,22 @@ export default function TeamManager() {
         // pane width (~840px) without horizontal overflow, so the
         // scroll wrapper stays as a defensive measure for very
         // narrow viewports only.
+        // 2026-05-15 — ExportButtons strip sits above the table.
+        // Exports the CURRENTLY FILTERED rows (`filtered`) so what
+        // you see is what you get — search + position + status
+        // filters all flow through.
+        <>
+        <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+          <p className="text-[11px] text-text-light tabular-nums">
+            Showing {filtered.length} of {members.length} {members.length === 1 ? 'member' : 'members'}
+          </p>
+          <ExportButtons
+            filename="members"
+            title="Members Roster"
+            columns={memberExportColumns}
+            rows={filtered}
+          />
+        </div>
         <div className="rounded-lg border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -860,6 +890,7 @@ export default function TeamManager() {
             </table>
           </div>
         </div>
+        </>
       )}
       </>)}
 

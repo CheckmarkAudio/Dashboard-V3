@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Clock, Loader2, Inbox } from 'lucide-react'
 import { fetchAdminClockEntries, timeClockKeys, type AdminClockEntry } from '../../lib/queries/timeClock'
-import { Select } from '../ui'
+import { Select, ExportButtons, type ExportColumn } from '../ui'
 import type { TeamMember } from '../../types'
 
 const ALL_MEMBERS = '__all__' as const
@@ -79,6 +79,34 @@ export default function ClockDataSection({ members }: { members: TeamMember[] })
     [members],
   )
 
+  // 2026-05-15 — ExportButtons columns mirror the visible Shift
+  // history table. Duration exports as raw minutes (single source of
+  // truth for payroll formulas) PLUS the humanized "Xh Ym" alongside
+  // so spreadsheets stay readable for non-technical reviewers. The
+  // export reflects the active member filter (`entries` is already
+  // filter-scoped by `memberId` in the query key).
+  const clockExportColumns: ExportColumn<AdminClockEntry>[] = [
+    { header: 'Member', value: (e) => e.member_name },
+    { header: 'Clocked in', value: (e) => formatDateTime(e.clocked_in_at) },
+    {
+      header: 'Clocked out',
+      value: (e) => (e.clocked_out_at === null ? 'On shift' : formatDateTime(e.clocked_out_at)),
+    },
+    { header: 'Duration (minutes)', value: (e) => e.duration_minutes ?? '' },
+    { header: 'Duration', value: (e) => formatDuration(e.duration_minutes) },
+    { header: 'Notes', value: (e) => e.notes ?? '' },
+  ]
+  const filteredMemberName =
+    memberId === null
+      ? null
+      : (memberOptions.find((m) => m.id === memberId)?.display_name ?? null)
+  const exportFilename = filteredMemberName
+    ? `shift-history-${filteredMemberName}`
+    : 'shift-history'
+  const exportTitle = filteredMemberName
+    ? `Shift History — ${filteredMemberName}`
+    : 'Shift History — All members'
+
   return (
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3 flex-wrap">
@@ -92,17 +120,25 @@ export default function ClockDataSection({ members }: { members: TeamMember[] })
             <span className="mx-1 inline-flex items-center gap-1 text-emerald-300 font-semibold">on shift</span>.
           </p>
         </div>
-        <div className="min-w-[200px]">
-          <Select
-            value={memberFilter}
-            onChange={(e) => setMemberFilter(e.target.value)}
-            aria-label="Filter shifts by member"
-          >
-            <option value={ALL_MEMBERS}>All members</option>
-            {memberOptions.map((m) => (
-              <option key={m.id} value={m.id}>{m.display_name}</option>
-            ))}
-          </Select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="min-w-[200px]">
+            <Select
+              value={memberFilter}
+              onChange={(e) => setMemberFilter(e.target.value)}
+              aria-label="Filter shifts by member"
+            >
+              <option value={ALL_MEMBERS}>All members</option>
+              {memberOptions.map((m) => (
+                <option key={m.id} value={m.id}>{m.display_name}</option>
+              ))}
+            </Select>
+          </div>
+          <ExportButtons
+            filename={exportFilename}
+            title={exportTitle}
+            columns={clockExportColumns}
+            rows={entries}
+          />
         </div>
       </div>
 
