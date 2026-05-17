@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { extractEdgeFunctionError } from './edgeFunctionError'
 
 export interface GoogleCalendarConnectionStatus {
   google_email: string
@@ -17,11 +18,6 @@ export interface GoogleCalendarConnectionStatus {
   } | null
   outbound_pending_count?: number
   outbound_last_error?: string | null
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message
-  return fallback
 }
 
 export async function fetchGoogleCalendarStatus(): Promise<{
@@ -100,7 +96,7 @@ export async function pullInboundGoogleCalendarChanges(): Promise<{
   })
 
   if (error || !data?.ok || !data.summary) {
-    throw new Error(data?.error || errorMessage(error, 'Failed to pull inbound Google Calendar changes'))
+    throw new Error(data?.error || (await extractEdgeFunctionError(error, 'Failed to pull inbound Google Calendar changes')))
   }
 
   return { summary: data.summary }
@@ -128,7 +124,7 @@ export async function pushPendingGoogleCalendarBookings(): Promise<{
   })
 
   if (error || !data?.ok || !data.summary) {
-    throw new Error(data?.error || errorMessage(error, 'Failed to push pending Google Calendar bookings'))
+    throw new Error(data?.error || (await extractEdgeFunctionError(error, 'Failed to push pending Google Calendar bookings')))
   }
 
   return { summary: data.summary }
@@ -143,7 +139,7 @@ export async function syncSessionToGoogleCalendar(sessionId: string): Promise<vo
   })
 
   if (error || !data?.ok) {
-    throw new Error(data?.error || errorMessage(error, 'Failed to sync session to Google Calendar'))
+    throw new Error(data?.error || (await extractEdgeFunctionError(error, 'Failed to sync session to Google Calendar')))
   }
 }
 
@@ -158,6 +154,6 @@ export async function deleteSessionEventFromGoogleCalendar(googleEventId: string
   })
 
   if (error || !data?.ok) {
-    throw new Error(data?.error || errorMessage(error, 'Failed to delete Google Calendar event'))
+    throw new Error(data?.error || (await extractEdgeFunctionError(error, 'Failed to delete Google Calendar event')))
   }
 }

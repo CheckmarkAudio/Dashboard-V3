@@ -718,6 +718,22 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-16 Calendar reconnect guard
+
+- **`CODEX:`** user pressed "Push pending bookings" while Settings
+  already showed "Last outbound sync error: Token has been expired or
+  revoked." The server correctly refused because the stored Google token
+  cannot refresh, but the UI surfaced only the generic Supabase
+  "Edge Function returned a non-2xx status code" toast.
+- Fix: `src/lib/googleCalendar.ts` now uses `extractEdgeFunctionError()`
+  for Google sync function calls, so function JSON errors show directly.
+  Settings → Database detects expired/revoked/`invalid_grant` token text,
+  shows "Google Calendar needs reconnecting," exposes a Reconnect Google
+  Calendar button, and disables Push/Pull until reconnect.
+- **Next for user:** after Vercel deploys this commit, click Reconnect
+  Google Calendar, finish the Google consent screen, then click Push
+  pending bookings.
+
 ### 2026-05-16 Calendar outbound recovery
 
 - **`CODEX:`** investigated why the new Bridget May 16 booking did not
