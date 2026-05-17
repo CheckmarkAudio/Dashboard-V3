@@ -5,6 +5,7 @@ import CalendarDayCard from '../components/calendar/CalendarDayCard'
 import BookingDetailModal, { type BookingDetail } from '../components/calendar/BookingDetailModal'
 import { loadWeekEvents } from '../lib/calendar'
 import { addDays, startOfWeek } from '../lib/time'
+import { localDateKey } from '../lib/dates'
 import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2 } from 'lucide-react'
 
 /**
@@ -49,7 +50,7 @@ function parseClock(value: string): [number, number] {
 
 // Compute real today and this week's dates dynamically
 function getTodayKey(): string {
-  return new Date().toISOString().split('T')[0] ?? ''
+  return localDateKey()
 }
 
 function getWeekDays(weekOffset: number = 0): { day: string; date: string; key: string }[] {
@@ -57,14 +58,17 @@ function getWeekDays(weekOffset: number = 0): { day: string; date: string; key: 
   const dayOfWeek = now.getDay() // 0=Sun
   const monday = new Date(now)
   monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7) + (weekOffset * 7))
+  // Keep date-only keys local. Leaving the current evening clock time
+  // here makes `toISOString()` roll labels into tomorrow in US timezones.
+  monday.setHours(12, 0, 0, 0)
   const days: { day: string; date: string; key: string }[] = []
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-      days.push({
+    days.push({
       day: DAY_NAMES[d.getDay()] ?? '',
       date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      key: d.toISOString().split('T')[0] ?? '',
+      key: localDateKey(d),
     })
   }
   return days

@@ -21,6 +21,7 @@ import {
 } from '../lib/queries/clients'
 import { findSessionConflict } from '../domain/sessions/queries'
 import type { Session, TeamMember } from '../types'
+import { localDateKey } from '../lib/dates'
 import { X, AlertTriangle, Loader2, Plus, Mail } from 'lucide-react'
 
 const BOOKING_TYPES: { key: BookingType; label: string }[] = [
@@ -107,7 +108,7 @@ function to12(t: string): string {
   return `${hr}:${m.toString().padStart(2, '0')} ${period}`
 }
 
-const todayYMD = () => new Date().toISOString().split('T')[0] ?? ''
+const todayYMD = () => localDateKey()
 
 // Reverse map for prefilling the booking-type pill from a stored
 // session_type (engineering/training/education default to recording

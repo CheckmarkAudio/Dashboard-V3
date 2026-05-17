@@ -718,6 +718,23 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-16 Calendar week-grid date alignment
+
+- **`CODEX:`** fixed a calendar visual/data mismatch reported by the
+  user: the booking detail modal showed Saturday, May 16, 2026, but the
+  week grid rendered that booking under the May 15 column.
+- Root cause: `src/pages/Calendar.tsx#getWeekDays()` generated local
+  labels from `Date` objects but generated the internal day keys with
+  `toISOString().split('T')[0]` while preserving the current evening
+  clock time. In Mountain time, a local May 15 evening timestamp becomes
+  `2026-05-16` in UTC, so labels and data keys drifted one column.
+- Fix: use shared `localDateKey()` for Calendar page week keys, the
+  CalendarDayCard today/week/shift helpers, and CreateBookingModal's
+  today default. No Supabase writes, no edge functions, no schema
+  changes. `npm run build` passes.
+- **Next:** resume Google Calendar Phase 2A smoke test unless the user
+  reports another calendar display issue.
+
 ### 2026-05-15 Google Calendar Phase 2A resumed
 
 - **`CODEX:`** followed the "go with leans" direction and resumed Google

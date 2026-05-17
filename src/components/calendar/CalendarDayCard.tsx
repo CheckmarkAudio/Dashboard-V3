@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { loadWeekEvents } from '../../lib/calendar'
 import { addDays, startOfWeek } from '../../lib/time'
+import { localDateKey } from '../../lib/dates'
 import { useAuth } from '../../contexts/AuthContext'
 import BookingDetailModal, { type BookingDetail } from './BookingDetailModal'
 import CreateBookingModal from '../CreateBookingModal'
@@ -112,7 +113,7 @@ function durationLabel(start: string, end: string): string {
 }
 
 function todayKey(): string {
-  return new Date().toISOString().split('T')[0] ?? ''
+  return localDateKey()
 }
 
 function weekKeyForDate(dateKey: string): string {
@@ -120,13 +121,13 @@ function weekKeyForDate(dateKey: string): string {
   // Used so we only refetch when the selection crosses a week line.
   const d = new Date(`${dateKey}T12:00:00`)
   const monday = startOfWeek(d)
-  return monday.toISOString().split('T')[0] ?? ''
+  return localDateKey(monday)
 }
 
 function shiftDate(dateKey: string, days: number): string {
   const d = new Date(`${dateKey}T12:00:00`)
   d.setDate(d.getDate() + days)
-  return d.toISOString().split('T')[0] ?? ''
+  return localDateKey(d)
 }
 
 const NOTES_STORAGE_KEY = 'checkmark-booking-notes'
