@@ -718,6 +718,64 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-16 Reusable `<ExportButtons />` + drift-proof `TableColumn<T>` — Members + Clock Data wired
+
+- **Drift-proof column descriptors (the headline win)**: user explicitly asked for this mid-flow — "if we rename a column header, will the CSV reflect that?" Initial answer was "row data tracks, but headers + transformations don't because they're duplicated." User pushed: "this is more important to me that we update this and make it drift proof right now." So the same PR now ships `src/components/ui/tableColumn.ts` with the canonical `TableColumn<T>` descriptor + `visibleColumns()` + `toExportColumns()` helpers, and refactors both Members and Clock Data tables to drive their `<thead>` / `<td>` AND their `<ExportButtons>` from the SAME column array. Three column shapes: both surfaces, visible-only (combined cells + actions menu), export-only (Name/Email/Phone broken out for CSV; raw Duration minutes for payroll). One source of truth — rename anywhere, both surfaces update. **This is the canonical pattern for every future admin table that needs exports** (Sessions, Tasks history, Forum activity all to follow the same shape).
+
+- **Drift-proofing proven by the user**: user did their first-ever GitHub Desktop commit on the PR (`3ec4fb5` clock name change → `0214ff4` Clock In capitalization fix) renaming the two date headers, downloaded a fresh CSV from the Vercel preview, and confirmed the spreadsheet's row 1 reflected the new names exactly. End-to-end proof of the descriptor pattern, executed by a non-engineer through a two-line file edit. Taught the GitHub Desktop fetch → switch branch → edit → save → diff review → commit → push loop in the process.
+
+- **Notes split into Went Well / To Improve via parse-on-display**: same PR follow-up. `SelfReportModal` collects two reflection fields at clock-out and flattens them into a single `notes` string (`"Went well: ...\n\nTo improve: ..."`). New `parseClockNotes()` helper regex-extracts the two halves at render/export time so the Clock Data table and CSV/PDF both show them as separate `Went Well` and `To Improve` columns — zero schema migration, with a legacy-format fallback (unrecognized notes drop into Went Well rather than disappearing). If the storage format ever changes, only this helper needs updating.
+
+
+
+- **`CLAUDE:`** kicked the open queue forward by shipping the
+  reusable export pipeline the user has wanted as a near-term Tier 2
+  item. New `src/components/ui/ExportButtons.tsx` is the canonical
+  component for any admin table that needs CSV/PDF download —
+  declare `columns: ExportColumn<T>[]` over your row type, pass
+  `rows`, and the component handles serialization, lazy-loading,
+  filename sanitization, BOM/escaping, and disabled state.
+- **CSV path**: synchronous, dep-free, RFC 4180 escaping (commas /
+  quotes / newlines wrapped + double-quote-escaped), UTF-8 BOM so
+  Excel auto-detects encoding, CRLF line endings so Excel + Sheets
+  both parse cleanly. `<base>-<yyyy-mm-dd>.csv` filename pattern.
+- **PDF path**: lazy-imports `jspdf` 4.2.1 + `jspdf-autotable` 5.0.7
+  on first click — verified in the build output that the ~390KB
+  jsPDF + 31KB autotable + 202KB html2canvas all land in their own
+  chunks, so admins who never click Export PDF never pay the cost.
+  Landscape letter, brand-gold underline + table-head fill, page
+  numbers in the footer, alternating row tint for readability.
+- **Wired on**:
+  - **Members roster** (`TeamManager.tsx`) — exports the
+    currently-filtered rows so search + position + status filters
+    all flow through; columns mirror visible table + Email + Phone;
+    "Showing N of M" mini-strip sits above the table.
+  - **Shift history** (`ClockDataSection.tsx`) — exports both raw
+    `Duration (minutes)` (single source of truth for payroll
+    formulas) AND humanized `Duration` so spreadsheets stay readable;
+    respects the member-filter dropdown; filename includes the
+    selected member's name when one is filtered.
+- **Re-exported** from `src/components/ui/index.ts` so future tables
+  pull it via the usual `import { ExportButtons, type ExportColumn }
+  from '@/components/ui'` pattern.
+- **Detective stop**: open queue item "Studio Tasks by-space on
+  `/daily` widget" was actually shipped in PR #102 already — the
+  prior PROJECT_STATE row was stale on that point. `10fe39f` from
+  the parallel Codex session already corrected the snapshot; this PR
+  just keeps that correction intact and pivots to ExportButtons.
+- **Next** (in priority order):
+  1. **Sessions/Bookings export** — needs an admin-table surface
+     scoped first (Hub? `/admin/sessions`?). Ask user before
+     redesigning a page just to host the table.
+  2. **Tasks history export** — wire ExportButtons on AssignAdmin
+     and/or BusinessHealth tables.
+  3. **Forum activity export** — once the `chat_*`-as-threads
+     schema lands.
+  4. **Deferred per user**: KPI graph export — "not yet completed
+     enough to define parameters to be recorded."
+  5. Default-if-no-direction is still Calendar Phase 2A inbound
+     smoke-test.
+
 ### 2026-05-16 Calendar reconnect guard
 
 - **`CODEX:`** user pressed "Push pending bookings" while Settings

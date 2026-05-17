@@ -10,7 +10,17 @@ import { useToast } from '../../components/Toast'
 import ConfirmModal from '../../components/ConfirmModal'
 import TempPasswordReveal from '../../components/auth/TempPasswordReveal'
 import SetupLinkReveal from '../../components/auth/SetupLinkReveal'
-import { Button, Input, Select, Badge, EmptyState } from '../../components/ui'
+import {
+  Button,
+  Input,
+  Select,
+  Badge,
+  EmptyState,
+  ExportButtons,
+  toExportColumns,
+  visibleColumns,
+  type TableColumn,
+} from '../../components/ui'
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
 import ClockDataSection from '../../components/admin/ClockDataSection'
 import MemberActivitySection from '../../components/admin/MemberActivitySection'
@@ -528,6 +538,177 @@ export default function TeamManager() {
   const activeCount = members.filter(m => m.status === 'active').length
   const inactiveCount = members.length - activeCount
 
+  // ─── Members table columns — single source of truth ───────────
+  //
+  // ONE descriptor per column. The visible `<thead>` / `<td>` cells
+  // AND the CSV/PDF export are both derived from this array, so a
+  // header rename, a value-format change, or a new column flows to
+  // both surfaces automatically — no parallel arrays to keep in
+  // sync.
+  //
+  // Three column shapes show up here:
+  //   - both surfaces (render + exportValue): Job Title, Term,
+  //     Status, Access — header text is the SAME in the table and
+  //     in the CSV/PDF, so renaming once updates both.
+  //   - visible only (render, no exportValue): the combined
+  //     Member cell (avatar + name + email) and the Actions menu —
+  //     they don't belong in a spreadsheet.
+  //   - export only (exportValue, no render): Name, Email, Phone —
+  //     the visible table collapses these into the Member cell, but
+  //     the export wants them as separate columns for sorting,
+  //     filtering, and payroll formulas.
+  const memberColumns: TableColumn<TeamMember>[] = [
+    {
+      key: 'member',
+      header: 'Member',
+      render: (member) => {
+        const initial = member.display_name?.charAt(0)?.toUpperCase() ?? '?'
+        return (
+          <div className="flex items-center gap-3">
+            <Link
+              to={`/profile/${member.id}`}
+              className="shrink-0 hover:opacity-80 transition-opacity"
+              aria-label={`Open ${member.display_name}'s profile`}
+            >
+              <div className="w-10 h-10 rounded-full bg-surface-alt border-[2px] border-white/12 text-gold flex items-center justify-center text-[14px] font-bold">
+                {initial}
+              </div>
+            </Link>
+            <div className="min-w-0">
+              <Link
+                to={`/profile/${member.id}`}
+                className="block text-[14px] font-medium text-text tracking-tight truncate hover:text-gold transition-colors"
+              >
+                {member.display_name}
+              </Link>
+              {member.email && (
+                <a
+                  href={`mailto:${member.email}`}
+                  className="block text-[11px] text-text-light truncate hover:text-gold transition-colors"
+                  title={`Email ${member.display_name}`}
+                >
+                  {member.email}
+                </a>
+              )}
+            </div>
+          </div>
+        )
+      },
+    },
+    // Export-only siblings of the Member cell. Visible table collapses
+    // these into the avatar+name+email combo; exports want them broken
+    // apart for downstream tools (sort by name, filter by email
+    // domain, paste phone into a dialer).
+    { key: 'name', header: 'Name', exportValue: (m) => m.display_name },
+    { key: 'email', header: 'Email', exportValue: (m) => m.email },
+    {
+      key: 'job_title',
+      header: 'Job Title',
+      render: (member) => (
+        <span className="text-[13px] text-text-muted">
+          {member.position
+            ? getPositionLabel(member.position).toLowerCase().replace(/\s+/g, '_')
+            : '—'}
+        </span>
+      ),
+      exportValue: (m) => (m.position ? getPositionLabel(m.position) : ''),
+    },
+    {
+      key: 'term',
+      header: 'Term',
+      render: (member) => (
+        <span className="text-[13px] text-text-muted whitespace-nowrap">{formatTerm(member)}</span>
+      ),
+      exportValue: (m) => formatTerm(m),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (member) => {
+        const isInactive = member.status === 'inactive'
+        return (
+          <span className="flex items-center gap-1.5 text-[12px] text-text-muted">
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${isInactive ? 'bg-text-light' : 'bg-emerald-400'}`}
+              aria-hidden="true"
+            />
+            {isInactive ? 'Inactive' : 'Active'}
+          </span>
+        )
+      },
+      exportValue: (m) => (m.status === 'active' ? 'Active' : 'Inactive'),
+    },
+    {
+      key: 'access',
+      header: 'Access',
+      render: (member) => <TmAccessBadge role={member.role} />,
+      exportValue: (m) => (m.role === 'admin' ? 'Admin' : 'Standard'),
+    },
+    // Export-only — visible table collapses phone into the Edit form.
+    { key: 'phone', header: 'Phone', exportValue: (m) => m.phone ?? '' },
+    {
+      key: 'actions',
+      header: 'Actions',
+      thClassName: 'text-right',
+      tdClassName: 'text-right relative',
+      render: (member) => (
+        <div className="relative inline-block" ref={openMenuId === member.id ? menuRef : undefined}>
+          <button
+            type="button"
+            onClick={() => setOpenMenuId(openMenuId === member.id ? null : member.id)}
+            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text transition-colors opacity-60 group-hover:opacity-100 focus:opacity-100 focus-ring"
+            aria-label={`Actions for ${member.display_name}`}
+            aria-expanded={openMenuId === member.id}
+            aria-haspopup="menu"
+          >
+            <MoreVertical size={14} aria-hidden="true" />
+          </button>
+          {openMenuId === member.id && (
+            <div
+              className="absolute right-0 top-full mt-1 w-52 bg-surface border border-border rounded-xl shadow-xl z-20 py-1 animate-fade-in"
+              role="menu"
+            >
+              <button
+                role="menuitem"
+                onClick={() => handleEdit(member)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors"
+              >
+                <Edit2 size={12} aria-hidden="true" /> Edit member
+              </button>
+              {/* Setup links for existing members live at
+                  /admin/settings → Account Access. */}
+              <button
+                role="menuitem"
+                onClick={() => toggleRole(member)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-surface-hover transition-colors"
+              >
+                <Shield size={12} aria-hidden="true" />{' '}
+                {member.role === 'admin' ? 'Remove admin' : 'Make admin'}
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => toggleStatus(member)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-hover transition-colors"
+              >
+                <UserCheck size={12} aria-hidden="true" />{' '}
+                {member.status === 'active' ? 'Deactivate' : 'Activate'}
+              </button>
+              <div className="my-1 border-t border-border" />
+              <button
+                role="menuitem"
+                onClick={() => requestDelete(member)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 size={12} aria-hidden="true" /> Remove member
+              </button>
+            </div>
+          )}
+        </div>
+      ),
+    },
+  ]
+  const memberVisibleColumns = visibleColumns(memberColumns)
+
   if (loading) return (
     <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
       <span className="sr-only">Loading…</span>
@@ -702,24 +883,46 @@ export default function TeamManager() {
         // pane width (~840px) without horizontal overflow, so the
         // scroll wrapper stays as a defensive measure for very
         // narrow viewports only.
+        // 2026-05-15 — ExportButtons strip sits above the table.
+        // Exports the CURRENTLY FILTERED rows (`filtered`) so what
+        // you see is what you get — search + position + status
+        // filters all flow through.
+        <>
+        <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+          <p className="text-[11px] text-text-light tabular-nums">
+            Showing {filtered.length} of {members.length} {members.length === 1 ? 'member' : 'members'}
+          </p>
+          <ExportButtons
+            filename="members"
+            title="Members Roster"
+            // Single source of truth: export columns are derived from
+            // the same `memberColumns` array that powers the visible
+            // table. Rename a header in the array → both surfaces
+            // update in lockstep.
+            columns={toExportColumns(memberColumns)}
+            rows={filtered}
+          />
+        </div>
         <div className="rounded-lg border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/5">
-                  <TmHeaderCell>Member</TmHeaderCell>
-                  <TmHeaderCell>Job Title</TmHeaderCell>
-                  <TmHeaderCell>Term</TmHeaderCell>
-                  <TmHeaderCell>Status</TmHeaderCell>
-                  <TmHeaderCell>Access</TmHeaderCell>
-                  <TmHeaderCell><span className="sr-only">Actions</span></TmHeaderCell>
+                  {memberVisibleColumns.map((col) => (
+                    <TmHeaderCell key={col.key} className={col.thClassName}>
+                      {col.key === 'actions' ? (
+                        <span className="sr-only">{col.header}</span>
+                      ) : (
+                        col.header
+                      )}
+                    </TmHeaderCell>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(member => {
+                {filtered.map((member) => {
                   const isInactive = member.status === 'inactive'
                   const isLoading = actionLoadingId === member.id
-                  const initial = member.display_name?.charAt(0)?.toUpperCase() ?? '?'
                   return (
                     <tr
                       key={member.id}
@@ -727,132 +930,11 @@ export default function TeamManager() {
                         isInactive ? 'opacity-50' : ''
                       } ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}
                     >
-                      {/* Member: avatar + name → profile link;
-                          email is its OWN clickable mailto under the
-                          name (was buried in a separate Contact
-                          column before). Two distinct click targets
-                          in one cell — name jumps to profile, email
-                          opens the mail client. */}
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <Link
-                            to={`/profile/${member.id}`}
-                            className="shrink-0 hover:opacity-80 transition-opacity"
-                            aria-label={`Open ${member.display_name}'s profile`}
-                          >
-                            <div className="w-10 h-10 rounded-full bg-surface-alt border-[2px] border-white/12 text-gold flex items-center justify-center text-[14px] font-bold">
-                              {initial}
-                            </div>
-                          </Link>
-                          <div className="min-w-0">
-                            <Link
-                              to={`/profile/${member.id}`}
-                              className="block text-[14px] font-medium text-text tracking-tight truncate hover:text-gold transition-colors"
-                            >
-                              {member.display_name}
-                            </Link>
-                            {member.email && (
-                              <a
-                                href={`mailto:${member.email}`}
-                                className="block text-[11px] text-text-light truncate hover:text-gold transition-colors"
-                                title={`Email ${member.display_name}`}
-                              >
-                                {member.email}
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      {/* Job Title */}
-                      <td className="px-5 py-4">
-                        <span className="text-[13px] text-text-muted">
-                          {member.position
-                            ? getPositionLabel(member.position).toLowerCase().replace(/\s+/g, '_')
-                            : '—'}
-                        </span>
-                      </td>
-                      {/* Term: start – end (or "present") */}
-                      <td className="px-5 py-4">
-                        <span className="text-[13px] text-text-muted whitespace-nowrap">
-                          {formatTerm(member)}
-                        </span>
-                      </td>
-                      {/* Status dot */}
-                      <td className="px-5 py-4">
-                        <span className="flex items-center gap-1.5 text-[12px] text-text-muted">
-                          <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${
-                              isInactive ? 'bg-text-light' : 'bg-emerald-400'
-                            }`}
-                            aria-hidden="true"
-                          />
-                          {isInactive ? 'Inactive' : 'Active'}
-                        </span>
-                      </td>
-                      {/* Access pill (Admin / Standard) */}
-                      <td className="px-5 py-4">
-                        <TmAccessBadge role={member.role} />
-                      </td>
-                      {/* Contact column dropped 2026-05-13 — email
-                          inlined under the member name above; phone
-                          stays editable in the Edit Member form. */}
-                      {/* Action menu — 3-dot, hover-revealed, popover */}
-                      <td className="px-5 py-4 text-right relative">
-                        <div className="relative inline-block" ref={openMenuId === member.id ? menuRef : undefined}>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setOpenMenuId(openMenuId === member.id ? null : member.id)
-                            }
-                            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text transition-colors opacity-60 group-hover:opacity-100 focus:opacity-100 focus-ring"
-                            aria-label={`Actions for ${member.display_name}`}
-                            aria-expanded={openMenuId === member.id}
-                            aria-haspopup="menu"
-                          >
-                            <MoreVertical size={14} aria-hidden="true" />
-                          </button>
-                          {openMenuId === member.id && (
-                            <div
-                              className="absolute right-0 top-full mt-1 w-52 bg-surface border border-border rounded-xl shadow-xl z-20 py-1 animate-fade-in"
-                              role="menu"
-                            >
-                              <button
-                                role="menuitem"
-                                onClick={() => handleEdit(member)}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors"
-                              >
-                                <Edit2 size={12} aria-hidden="true" /> Edit member
-                              </button>
-                              {/* Setup links for existing members live at
-                                  /admin/settings → Account Access. */}
-                              <button
-                                role="menuitem"
-                                onClick={() => toggleRole(member)}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-surface-hover transition-colors"
-                              >
-                                <Shield size={12} aria-hidden="true" />{' '}
-                                {member.role === 'admin' ? 'Remove admin' : 'Make admin'}
-                              </button>
-                              <button
-                                role="menuitem"
-                                onClick={() => toggleStatus(member)}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-hover transition-colors"
-                              >
-                                <UserCheck size={12} aria-hidden="true" />{' '}
-                                {member.status === 'active' ? 'Deactivate' : 'Activate'}
-                              </button>
-                              <div className="my-1 border-t border-border" />
-                              <button
-                                role="menuitem"
-                                onClick={() => requestDelete(member)}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
-                              >
-                                <Trash2 size={12} aria-hidden="true" /> Remove member
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                      {memberVisibleColumns.map((col) => (
+                        <td key={col.key} className={`px-5 py-4 ${col.tdClassName ?? ''}`}>
+                          {col.render!(member)}
+                        </td>
+                      ))}
                     </tr>
                   )
                 })}
@@ -860,6 +942,7 @@ export default function TeamManager() {
             </table>
           </div>
         </div>
+        </>
       )}
       </>)}
 
@@ -1459,8 +1542,8 @@ function ReviewSummary({
 // canonical Members admin surface. `Tm` prefix avoids any future
 // collision with similarly-named atoms in other files.
 
-function TmHeaderCell({ children }: { children: React.ReactNode }) {
-  return <th className="px-5 py-3 text-left text-label">{children}</th>
+function TmHeaderCell({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <th className={`px-5 py-3 text-left text-label ${className ?? ''}`}>{children}</th>
 }
 
 function TmAccessBadge({ role }: { role?: string }) {
