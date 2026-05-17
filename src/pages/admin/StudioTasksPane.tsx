@@ -36,7 +36,8 @@ import {
 } from '../../lib/queries/taskTemplates'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../contexts/AuthContext'
-import { Button, Input } from '../../components/ui'
+import { Button, ExportButtons, Input, toExportColumns } from '../../components/ui'
+import { taskExportColumns } from '../../lib/columns/taskColumns'
 import { supabase } from '../../lib/supabase'
 import MultiTaskCreateModal from '../../components/tasks/requests/MultiTaskCreateModal'
 import type { AssignedTask } from '../../types/assignments'
@@ -361,14 +362,26 @@ export default function StudioTasksPane() {
               {tasks.length} task{tasks.length === 1 ? '' : 's'} · {completedCount} complete
             </p>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            iconLeft={<Plus size={14} aria-hidden="true" />}
-            onClick={() => setAddModalOpen(true)}
-          >
-            Add Task
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 2026-05-17 — Studio Tasks export. Same shared
+                taskExportColumns powers Members > Per-member, Studio
+                Tasks, and any future task-table surface — one source
+                of truth for column shape across the app. */}
+            <ExportButtons
+              filename="studio-tasks"
+              title="Studio Tasks"
+              columns={toExportColumns(taskExportColumns)}
+              rows={tasks}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              iconLeft={<Plus size={14} aria-hidden="true" />}
+              onClick={() => setAddModalOpen(true)}
+            >
+              Add Task
+            </Button>
+          </div>
         </div>
       </div>
 
