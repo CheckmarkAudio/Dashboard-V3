@@ -34,6 +34,49 @@ function formatDuration(minutes: number | null): string {
   return `${hours}h ${remainder}m`
 }
 
+/**
+ * Pull the "Went Well" + "To Improve" halves out of the flat `notes`
+ * string stored on each clock entry.
+ *
+ * `SelfReportModal.tsx` (the clock-out flow) collects two reflection
+ * fields from the member and flattens them into a SINGLE notes string
+ * before saving, in one of three shapes:
+ *
+ *   "Went well: <text>\n\nTo improve: <text>"   (both filled)
+ *   "Went well: <text>"                         (only wentWell)
+ *   "To improve: <text>"                        (only toImprove)
+ *
+ * Schema-wise there's still one `notes` column. This helper is read-
+ * only — it parses the formatted string at render/export time so the
+ * Members > Clock Data table + the CSV/PDF can SHOW the two halves
+ * as separate columns without any DB migration. If the format ever
+ * changes, only this function needs updating.
+ *
+ * Fallback: legacy/unformatted notes that contain neither marker get
+ * dropped into the "Went Well" column whole rather than being hidden,
+ * so historical data stays visible in both surfaces.
+ */
+function parseClockNotes(notes: string | null): { wentWell: string; toImprove: string } {
+  if (!notes) return { wentWell: '', toImprove: '' }
+  const trimmed = notes.trim()
+  if (!trimmed) return { wentWell: '', toImprove: '' }
+
+  const wentMatch = trimmed.match(/(?:^|\n)Went well:\s*([\s\S]*?)(?=\n\nTo improve:|$)/)
+  const improveMatch = trimmed.match(/(?:^|\n)To improve:\s*([\s\S]*?)$/)
+
+  const wentWell = (wentMatch?.[1] ?? '').trim()
+  const toImprove = (improveMatch?.[1] ?? '').trim()
+
+  // Neither marker found — likely a legacy / hand-edited note. Keep
+  // the data visible by putting it in Went Well rather than dropping
+  // it on the floor.
+  if (!wentWell && !toImprove) {
+    return { wentWell: trimmed, toImprove: '' }
+  }
+
+  return { wentWell, toImprove }
+}
+
 // ─── Shift history columns — single source of truth ─────────────
 //
 // Same pattern as the Members roster: one `TableColumn<T>[]` powers
@@ -41,10 +84,17 @@ function formatDuration(minutes: number | null): string {
 // header rename or a value-format change flows to both surfaces in
 // lockstep — no parallel arrays to keep in sync.
 //
-// The Duration column is split: the visible cell shows the humanized
-// "Xh Ym" string; the CSV/PDF includes both the raw minute count
-// (single source of truth for payroll formulas) AND the humanized
-// string (so spreadsheets stay readable for non-technical reviewers).
+// Two columns are derived from synthetic fields rather than direct DB
+// columns:
+//   - Duration column: visible cell shows the humanized "Xh Ym"
+//     string; the CSV/PDF includes both the raw minute count (single
+//     source of truth for payroll formulas) AND the humanized string
+//     (so spreadsheets stay readable for non-technical reviewers).
+//   - Went Well / To Improve columns: parsed at render/export time
+//     from the single `notes` column via `parseClockNotes()`. The
+//     clock-out modal collects the two fields separately but flattens
+//     them into one notes string for storage. The split here re-
+//     surfaces them as two columns without any schema migration.
 const clockColumns: TableColumn<AdminClockEntry>[] = [
   {
     key: 'member',
@@ -108,14 +158,24 @@ const clockColumns: TableColumn<AdminClockEntry>[] = [
     exportValue: (e) => formatDuration(e.duration_minutes),
   },
   {
-    key: 'notes',
-    header: 'Notes',
+    key: 'went_well',
+    header: 'Went Well',
     render: (entry) => (
-      <span className="text-[12px] text-text-light max-w-[280px] inline-block">
-        <span className="line-clamp-2">{entry.notes ?? ''}</span>
+      <span className="text-[12px] text-text-light max-w-[220px] inline-block">
+        <span className="line-clamp-2">{parseClockNotes(entry.notes).wentWell}</span>
       </span>
     ),
-    exportValue: (e) => e.notes ?? '',
+    exportValue: (e) => parseClockNotes(e.notes).wentWell,
+  },
+  {
+    key: 'to_improve',
+    header: 'To Improve',
+    render: (entry) => (
+      <span className="text-[12px] text-text-light max-w-[220px] inline-block">
+        <span className="line-clamp-2">{parseClockNotes(entry.notes).toImprove}</span>
+      </span>
+    ),
+    exportValue: (e) => parseClockNotes(e.notes).toImprove,
   },
 ]
 const clockVisibleColumns = visibleColumns(clockColumns)
