@@ -253,10 +253,37 @@ Deno.serve(async (req: Request) => {
 
       if (error) return jsonResponse({ ok: false, error: error.message }, 500)
 
+      let connection: Record<string, unknown> | null = data
+      if (connection) {
+        const { count: outboundPendingCount } = await ctx.admin
+          .from("sessions")
+          .select("id", { count: "exact", head: true })
+          .eq("team_id", ctx.teamId)
+          .neq("status", "cancelled")
+          .or("google_event_id.is.null,google_sync_status.eq.error")
+
+        const { data: outboundError } = await ctx.admin
+          .from("sessions")
+          .select("google_sync_error, google_last_synced_at, calendar_last_changed_at, created_at")
+          .eq("team_id", ctx.teamId)
+          .eq("google_sync_status", "error")
+          .not("google_sync_error", "is", null)
+          .order("calendar_last_changed_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        connection = {
+          ...connection,
+          outbound_pending_count: outboundPendingCount ?? 0,
+          outbound_last_error: outboundError?.google_sync_error ?? null,
+        }
+      }
+
       return jsonResponse({
         ok: true,
-        connected: Boolean(data),
-        connection: data ?? null,
+        connected: Boolean(connection),
+        connection: connection ?? null,
       })
     }
 

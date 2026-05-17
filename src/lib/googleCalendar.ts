@@ -15,6 +15,8 @@ export interface GoogleCalendarConnectionStatus {
     unchanged_count?: number
     skipped_count?: number
   } | null
+  outbound_pending_count?: number
+  outbound_last_error?: string | null
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -99,6 +101,34 @@ export async function pullInboundGoogleCalendarChanges(): Promise<{
 
   if (error || !data?.ok || !data.summary) {
     throw new Error(data?.error || errorMessage(error, 'Failed to pull inbound Google Calendar changes'))
+  }
+
+  return { summary: data.summary }
+}
+
+export async function pushPendingGoogleCalendarBookings(): Promise<{
+  summary: {
+    attempted_count: number
+    synced_count: number
+    failed_count: number
+    skipped_count: number
+  }
+}> {
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean
+    summary?: {
+      attempted_count: number
+      synced_count: number
+      failed_count: number
+      skipped_count: number
+    }
+    error?: string
+  }>('google-calendar-sync', {
+    body: { action: 'retry_pending_sessions' },
+  })
+
+  if (error || !data?.ok || !data.summary) {
+    throw new Error(data?.error || errorMessage(error, 'Failed to push pending Google Calendar bookings'))
   }
 
   return { summary: data.summary }
