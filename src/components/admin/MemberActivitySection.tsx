@@ -81,6 +81,8 @@ function exportNames(member: TeamMember, kind: string) {
   }
 }
 import DashboardWidgetFrame, { type DragHandleProps } from '../dashboard/DashboardWidgetFrame'
+import { useAuth } from '../../contexts/AuthContext'
+import { useSessionExpand } from '../../hooks/useSessionExpand'
 import type { TeamMember } from '../../types'
 import type { AdminClockEntry } from '../../lib/queries/timeClock'
 
@@ -200,7 +202,16 @@ function ActivityCarousel({ member }: { member: TeamMember }) {
   // chevron icon swaps Maximize2 ↔ Minimize2 via DashboardWidgetFrame's
   // new `isExpanded` prop so the affordance reads correctly in both
   // states.
-  const [expandedId, setExpandedId] = useState<WidgetId | null>(null)
+  //
+  // 2026-05-17 (Persist widget expansion PR) — survives page
+  // navigations + reloads via sessionStorage (cleared on logout).
+  // Keyed per (viewer, member) so each member's activity drill-down
+  // remembers its own expansion independently — picking a different
+  // member from the dropdown above starts that member with a clean
+  // slate rather than inheriting the prior member's expanded widget.
+  const { profile: viewer } = useAuth()
+  const expandKey = `member_activity:${member.id}`
+  const [expandedId, setExpandedId] = useSessionExpand<WidgetId>(expandKey, viewer?.id ?? null)
   const [currentPage, setCurrentPage] = useState(0)
 
   // Pack widgets into pages once per (order, expandedId) change. The

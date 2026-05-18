@@ -3,6 +3,7 @@ import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
 import { supabase, withSupabaseRetry } from '../lib/supabase'
 import { time as perfTime } from '../lib/perfTrace'
 import { normalizeEmail } from '../lib/email'
+import { clearSessionExpandState } from '../hooks/useSessionExpand'
 import type { TeamMember } from '../types'
 import {
   OWNER_EMAIL,
@@ -462,6 +463,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null)
     setIsPasswordRecovery(false)
     try { window.sessionStorage.removeItem('pending_password_recovery') } catch { /* ignore */ }
+    // 2026-05-17 (Persist widget expansion PR) — wipe per-session
+    // widget-expansion memory so a same-tab account swap doesn't
+    // inherit the prior user's "this widget was open" state. The
+    // sessionStorage keys are namespaced by user id already, but
+    // sweeping them eagerly on signOut keeps the storage tidy and
+    // matches the user's expectation that logout is a clean reset.
+    clearSessionExpandState()
   }, [])
 
   const value = useMemo(() => {
