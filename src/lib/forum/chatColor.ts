@@ -10,12 +10,16 @@
 // backgrounds. Keep it ≤10 entries — beyond that two members can
 // still collide and the palette stops being individuating.
 
+// 2026-05-17 — `rose` removed from the palette per user direction:
+// reads too red/alarming for a friendly chat surface ("looks negative
+// or alarming"). Existing stored overrides of `'rose'` fall through
+// to the deterministic hash default since `CHAT_COLOR_KEYS.includes`
+// no longer matches — no DB cleanup needed.
 export const CHAT_COLOR_KEYS = [
   'gold',
   'emerald',
   'sky',
   'violet',
-  'rose',
   'amber',
   'teal',
   'indigo',
@@ -46,7 +50,6 @@ export const CHAT_COLOR_TOKENS: Record<ChatColorKey, ChatColorTokens> = {
   emerald: { text: 'text-emerald-400',   ring: 'ring-emerald-400/40',   hex: '#34d399', label: 'Emerald' },
   sky:     { text: 'text-sky-400',       ring: 'ring-sky-400/40',       hex: '#38bdf8', label: 'Sky'     },
   violet:  { text: 'text-violet-400',    ring: 'ring-violet-400/40',    hex: '#a78bfa', label: 'Violet'  },
-  rose:    { text: 'text-rose-400',      ring: 'ring-rose-400/40',      hex: '#fb7185', label: 'Rose'    },
   amber:   { text: 'text-amber-400',     ring: 'ring-amber-400/40',     hex: '#fbbf24', label: 'Amber'   },
   teal:    { text: 'text-teal-400',      ring: 'ring-teal-400/40',      hex: '#2dd4bf', label: 'Teal'    },
   indigo:  { text: 'text-indigo-400',    ring: 'ring-indigo-400/40',    hex: '#818cf8', label: 'Indigo'  },
@@ -68,18 +71,30 @@ function hashStringToIndex(str: string, modulo: number): number {
 }
 
 /**
- * Resolve a member's chat color. Override always wins; otherwise
- * the id deterministically hashes into the palette.
+ * Resolve a member's chat color. Owner always gets gold (brand-pin —
+ * Checkmark's own messages read as the brand color sitewide).
+ * Otherwise: override wins; otherwise the id deterministically
+ * hashes into the palette.
  *
  * Pass `override` from `team_members.preferences.chat_color` (or
  * the auth profile when the caller IS the signed-in user). Unknown
  * override keys fall through to the hash default — robust against
- * future palette changes that drop an entry.
+ * future palette changes that drop an entry (e.g. the 2026-05-17
+ * removal of `'rose'`).
+ *
+ * Pass `options.isOwner: true` for the owner row. This wins over
+ * the override so the owner's color stays consistent across the
+ * forum even if their preferences row somehow has a stale color.
+ * (The picker in `ProfileEditor` is hidden for the owner so this
+ * shouldn't drift in practice, but the hard override is a safety
+ * net.)
  */
 export function resolveChatColorKey(
   memberId: string | null | undefined,
   override?: unknown,
+  options?: { isOwner?: boolean },
 ): ChatColorKey {
+  if (options?.isOwner) return 'gold'
   if (typeof override === 'string' && CHAT_COLOR_KEYS.includes(override as ChatColorKey)) {
     return override as ChatColorKey
   }
