@@ -524,29 +524,25 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
           now so the +Task affordance is visible without scrolling. */}
       {toolbar}
 
-      {/* PR #69 — source filter (Assigned vs Self) replaces the stage
-          pill row. Stages return as real KPIs in the upcoming flywheel
-          event ledger PR; until then they're decorative noise here. */}
-      <div className="shrink-0 mb-2">
+      {/* 2026-05-17 (Task tweaks rev2) — all filter affordances live
+          on ONE row now: show-completed eye + Priority pill on the
+          left, Source filter pills (All · Assigned · Self) in the
+          middle, "Due" column header on the right. Wraps cleanly on
+          narrow widths because each cluster is its own flex group.
+          The old two-row layout (Source on top, eye + Priority + Due
+          below) was redundant vertical space; consolidating recovers
+          a row + makes the filters read as one coherent toolbar. */}
+      <div className="shrink-0 flex items-center gap-2 px-2 mb-1 flex-wrap">
+        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+        <PriorityToggle
+          active={priorityOnly}
+          count={priorityVisibleCount}
+          onToggle={() => setPriorityOnly((v) => !v)}
+        />
         <SourceFilterRow counts={sourceCounts} active={sourceFilter} onChange={setSourceFilter} />
-      </div>
-
-      {/* PR #69 — column header. Anchors the right-aligned "Due" label
-          so users know the date column = due date, not assigned date.
-          2026-05-13 — the show-completed eye now lives here in the
-          left slot (was its own row in the toolbar above). One row
-          recovered, no functional change. */}
-      <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1 items-center">
-        <div className="flex items-center gap-1.5">
-          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
-          <PriorityToggle
-            active={priorityOnly}
-            count={priorityVisibleCount}
-            onToggle={() => setPriorityOnly((v) => !v)}
-          />
-        </div>
-        <span aria-hidden="true" />
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
+        <span className="ml-auto text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">
+          Due
+        </span>
       </div>
 
       {/* Skin pass 2026-05-06 — wrap the scrollable task list in
