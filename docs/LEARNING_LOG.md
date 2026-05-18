@@ -51,7 +51,42 @@ Quick alphabetical jumping-off point. Click or search.
 
 ---
 
-# 2026-05-17 — Inline widget expansion (PR #199)
+# 2026-05-17 — Extracting a shared algorithm (PR #200)
+
+## Extracting a reusable algorithm into a shared module
+
+**TL;DR:** When you find yourself copy-pasting the SAME non-trivial
+algorithm into a second component, that's the signal to extract it
+into a shared module. Even small algorithmic helpers (50–100 lines)
+benefit from living in `src/lib/<name>/` rather than being inlined
+twice.
+
+**When you encountered it:** PR #199 shipped the carousel page-
+packing algorithm inline inside `MemberActivitySection.tsx`. PR #200
+needed the same algorithm for `WorkspacePanel.tsx` (Overview + Hub).
+Instead of copy-pasting, we extracted it to
+`src/lib/carousel/packPagedWidgets.ts`, made it generic over the
+widget-id type, and both components now consume it. Same logic, ONE
+source of truth — if the packing algorithm ever needs a tweak (e.g.
+support 3-slot widgets), the change happens in one place and
+propagates to every carousel using it.
+
+**Why it matters:** Drift again. Two copies of an algorithm WILL
+diverge over time — someone fixes a bug in one and not the other,
+or someone tightens an edge case in one and leaves the other lax.
+Single source of truth keeps the behavior consistent across the app.
+
+**Mental model:** A helper function is "shareable" when (a) its
+inputs are simple values and (b) its output doesn't depend on
+component-specific UI. The packing algorithm took an ordered list of
+ids + a weight function + a page size, and returned a layout array.
+Nothing in there required knowing about React, dnd-kit, or specific
+widget types — so it could live in `src/lib/` and be imported from
+anywhere.
+
+---
+
+# 2026-05-17 — Inline widget expansion (PRs #199 + #200)
 
 ## Carousel page packing with variable widget widths
 
@@ -61,26 +96,27 @@ breaks because widget left-edges drift mid-page and the page snap
 stops working. Fix: pack widgets into pages by "slot weight" and
 insert invisible spacer divs to keep page boundaries aligned.
 
-**When you encountered it:** The Members → Activity widget carousel.
-The expand button used to open a modal; you asked to change it so
-the widget grows inline to 2× width and pushes other widgets across
-the carousel. With three widgets at 1 slot each + page size 2, all
-fits cleanly. With one of them at 2 slots, the layout needs help —
-otherwise an expanded widget that starts in the right half of a page
-would visually span the page boundary.
+**When you encountered it:** The Members → Activity widget carousel
+(PR #199), then extended in PR #200 to the Overview + Hub widget
+carousels (`WorkspacePanel`). The expand button used to open a modal
+on all three; you asked for inline 2× expansion that pushes other
+widgets across the carousel pages. PR #200 generalized the algorithm
+to support variable page sizes (Overview/Hub use 1/2/3 widgets per
+page based on viewport width, vs Activity's fixed 2).
 
 **Why it matters:** Most carousel tutorials assume uniform item
 sizes. Real product UIs often need adaptive sizing (expand, collapse,
 "hero" item). Knowing the spacer-padding technique means you can
 build expansion features without rewriting the carousel.
 
-**Mental model:** Imagine a page as a row of 2 fixed-width slots
-(left half + right half). Each widget claims 1 slot (normal) or 2
-slots (expanded). When packing left-to-right, if the next widget
-needs 2 slots but only 1 slot is left in the current page, you drop
-an empty placeholder into that orphan slot to "kick" the wide widget
-to the start of the next page. The placeholder isn't a real widget —
-it's just there to fill the gap and keep the visual rhythm.
+**Mental model:** Imagine a page as a row of fixed-width slots
+(2 slots for tablet/Activity, 3 for desktop, 1 for phone). Each
+widget claims 1 slot (normal) or 2 slots (expanded). When packing
+left-to-right, if the next widget needs 2 slots but only 1 slot is
+left in the current page, you drop an empty placeholder into that
+orphan slot to "kick" the wide widget to the start of the next page.
+The placeholder isn't a real widget — it's just there to fill the
+gap and keep the visual rhythm.
 
 **Bonus pattern — "auto-navigate on state change":** When something
 changes that moves a widget to a different page (expand, collapse,
@@ -88,6 +124,12 @@ reorder), set `currentPage` to wherever the affected widget ended up.
 Without this, the user clicks a button and "nothing visible happens"
 because they're looking at the wrong page. Auto-snap to the relevant
 page = the click feels alive.
+
+**Edge case — degenerate page size:** On phone (`pageSize=1`), every
+widget is already full width, so "expand to 2 slots" has nothing to
+expand into. Solution: hide the expand chevron entirely on small
+screens and auto-collapse any in-flight expansion when the viewport
+shrinks. Pattern: "degenerate cases get hidden, not broken."
 
 ---
 

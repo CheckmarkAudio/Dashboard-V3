@@ -718,6 +718,19 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-17 Inline 2× expand extended to Overview + Hub (PR #200)
+
+- **`CLAUDE:`** per user direction: "I love what you did, lets do it to overview and to dashboard (hub) too, I want to see how it goes." User loved the inline expand on Member Activity widgets (PR #199), wanted the same pattern on Overview + Hub.
+- **The DRY win**: instead of copy-pasting the slot-packing algorithm into `WorkspacePanel`, extracted it to a new shared module `src/lib/carousel/packPagedWidgets.ts`. Generic over the widget-id type. Supports variable page sizes (Activity uses fixed 2, WorkspacePanel uses 1/2/3 based on viewport). `MemberActivitySection` was refactored to consume it too — zero behavior change there, just DRY cleanup so any future tweak propagates to both surfaces. Two helper functions: `packedTotalPages()` + `packedPageForWidget()` for the auto-navigate-to-expanded-page pattern.
+- **WorkspacePanel rebuild**: identical pattern to PR #199 — `expandedId` state, `packedLayout` from the helper, expanded widget width = `calc(2 * normalWidth + PAGE_GAP_PX)` so it spans two normal-widget visual footprints. Same smooth 320ms easing, same subtle gold ring + drop-shadow. `FloatingDetailModal` import + usage dropped from WorkspacePanel entirely.
+- **Edge cases for variable-pageSize carousel**:
+  - **pageSize=1 (phone)**: widget is already full-width; expand has nothing to expand into. Solution: hide the expand chevron entirely on phone + auto-collapse any in-flight expansion if viewport shrinks to phone size.
+  - **Widget hidden via Workspace Controls**: if the expanded widget gets hidden via the controls panel, auto-collapse.
+  - **Drag start**: auto-collapse (same as Activity carousel — a 2-slot widget mid-drag would orphan its spacer).
+- **LEARNING_LOG**: two new entries at the top — "Extracting a reusable algorithm into a shared module" (the DRY lesson, pattern + when-to-extract heuristic) and a "degenerate page size" edge-case note appended to the page-packing entry from PR #199.
+- **Three widget carousels now use the same inline-expand pattern**: Members → Activity, Overview, Hub. `FloatingDetailModal` is no longer used for any widget expansion anywhere (still in the codebase for unrelated modal needs — task detail, request detail, etc.).
+- **Next on this track** (in PROJECT_STATE Currently active): (a) verify keyboard a11y on the expand toggle (Enter/Space already works via button default; should confirm screen-reader state announcement on collapse/expand); (b) `/daily` is a static widget grid, not a carousel — no equivalent pattern needed there.
+
 ### 2026-05-17 Activity-page widgets — expand button now grows widget inline (no more modal)
 
 - **`CLAUDE:`** per user direction: "that expand button at the top of each widget, instead of having it open a modal, can we make that extender make the widget the size of itself x2? so when you extend it, it will widen up and push the other widgets over on the carosel. can you try that out and plan it so that it is fluid, fun to use and intuitive?"
