@@ -29,6 +29,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useWorkspaceLayout } from '../../hooks/useWorkspaceLayout'
+import { useSessionExpand } from '../../hooks/useSessionExpand'
 import type { AppRole } from '../../domain/permissions'
 import type {
   WorkspaceScope,
@@ -264,7 +265,15 @@ export default function WorkspacePanel({
   // in PR #199. Click the chevron again to collapse. Auto-collapses
   // on drag start, on viewport-driven pageSize change (a 2-slot
   // widget doesn't make sense on a 1-up page), and on layout reset.
-  const [expandedId, setExpandedId] = useState<WorkspaceWidgetId | null>(null)
+  //
+  // 2026-05-17 (Persist widget expansion PR) — backed by
+  // `useSessionExpand` so the choice survives page navigations + page
+  // reloads for the rest of the session, then clears on logout (via
+  // `clearSessionExpandState` in AuthContext.signOut). Keyed by
+  // `scope` so each page (Overview / Hub / Tasks / Assign) remembers
+  // its own expansion independently, and by `userId` so an account
+  // swap in the same tab doesn't bleed state across users.
+  const [expandedId, setExpandedId] = useSessionExpand<WorkspaceWidgetId>(scope, userId)
 
   const pageSize = useViewportPageSize()
 
