@@ -718,6 +718,20 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-17 Flywheel event ledger — Phase 1 shipped (foundation)
+
+- **`CLAUDE:`** per user direction "Maybe we should Dive into the KPI's flywheel annalytics revamp" — biggest track on the queue, formerly deferred until the user could define what events count for which stage. Phase 1 nails those definitions down in code + ships the foundation.
+- **Why this matters**: the existing Flywheel widget on Overview was decorative (mixed `member_kpis` manual data with `assigned_tasks` real activity). Memory note flagged "Flywheel widget feels decorative — escalate event ledger" — that's what this PR starts. Once Phase 2 ships, every dashboard chart that says "0" today will be driven by real studio activity instead of empty arrays.
+- **The 5 stages, locked**: each maps to specific user actions. Deliver = task completed; Book = booking created; Capture = booking created where it's the client's FIRST session (Attract→Capture funnel transition); Attract = client added; Share = media uploaded. Stage definitions live in `supabase/migrations/20260517220000_flywheel_events_phase_1.sql` header comment.
+- **Schema**: new `flywheel_events` table — append-only ledger, RLS allows team SELECT but no direct INSERT (all inserts go through the SECURITY DEFINER `record_flywheel_event` RPC which validates + auto-resolves team_id). Two composite indexes for Phase 2 reads. Migration applied to prod via Supabase MCP + committed to repo (per `MANUAL-SUPABASE`/`MCP-APPLIED` convention).
+- **Client helper**: `emitFlywheelEvent()` in `src/lib/queries/flywheelEvents.ts` is fire-and-forget — swallows RPC errors with `console.warn` so emit failures never regress the user's primary action (booking save, task complete, etc.). Every emit call uses `void emitFlywheelEvent(...)` so the await isn't chained into the critical path.
+- **Read surfaces unchanged in Phase 1** — that's deliberate. BusinessHealth's `MONTHLY_TREND`/`TASKS_BY_EMPLOYEE`/`STUDIO_BUCKETS` stub arrays + AdminFlywheelWidget data source stay as they are; Phase 2 swaps them to event-driven aggregations. This means the user won't SEE a visual change from Phase 1, but the events table will start filling immediately after merge.
+- **Known scope gaps** (documented in code + PROJECT_STATE Currently active):
+  - Recurring booking children: only the parent insert emits Book. `spawn_recurring_session_instances` RPC isn't instrumented yet — Phase 4 will add server-side emit there.
+  - "Paid session" filter: Book + Capture emit on ANY session_type today (including Consult). Metadata captures session_type so Phase 2 aggregation can filter (`metadata.session_type != 'Consult'`) without changing emit logic.
+- **Phase 2 plan** (next PR): server-side aggregation RPCs (`flywheel_events_by_stage(p_start, p_end)`, `flywheel_events_by_member`, `flywheel_events_trend_daily`); swap BusinessHealth + AdminFlywheelWidget read paths. Should be a clean "data source swap" — no big UI restructure since the existing UI already expects shaped data.
+- **Smoke test to do after Vercel deploys**: complete one task on the preview → check `flywheel_events` table via Supabase MCP — expect one new row with stage='deliver'. Same for each emit hook (book on a new booking, attract on a new client, share on an upload). If all 5 fire, Phase 1 is verified.
+
 ### 2026-05-17 Sessions/Bookings export on `/sessions` — completes the export pipeline
 
 - **`CLAUDE:`** ninth admin export surface — closes out the export track. User picked "Sessions/Bookings export" as next move after the inline-expand work landed.

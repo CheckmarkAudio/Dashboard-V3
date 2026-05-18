@@ -11,6 +11,7 @@
 // If/when KPI *definitions* become owned-by-member, extend this file.
 
 import { supabase } from '../supabase'
+import { emitFlywheelEvent } from './flywheelEvents'
 import type {
   ReportTemplate,
   TaskAssignment,
@@ -357,7 +358,29 @@ export async function completeAssignedTask(
     console.error('[queries/assignments] completeAssignedTask failed:', error)
     throw new Error(error.message)
   }
-  return normalizeAssignedTask((data ?? {}) as Partial<AssignedTask>)
+  const normalized = normalizeAssignedTask((data ?? {}) as Partial<AssignedTask>)
+
+  // Flywheel: emit a Deliver event when a task transitions to completed
+  // (Phase 1 of the event-ledger revamp). Fire-and-forget — emit
+  // failures must never regress the user's task-toggle action. Metadata
+  // captures the task's flywheel-stage category so Phase 2 aggregations
+  // can break down Deliver by sub-stage if useful (e.g. "Capture tasks
+  // I finished this week").
+  if (isCompleted) {
+    void emitFlywheelEvent({
+      stage: 'deliver',
+      source_type: 'task',
+      source_id: normalized.id,
+      metadata: {
+        title: normalized.title,
+        scope: normalized.scope,
+        category: normalized.category ?? null,
+        studio_space: normalized.studio_space ?? null,
+      },
+    })
+  }
+
+  return normalized
 }
 
 export async function fetchAssignmentNotifications(
