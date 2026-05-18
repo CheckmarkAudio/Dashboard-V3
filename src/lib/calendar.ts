@@ -47,7 +47,7 @@ export async function loadWeekEvents({
   const [sessionsRes, schedulesRes, membersRes] = await Promise.all([
     supabase
       .from('sessions')
-      .select('id, project_id, client_name, session_date, start_time, end_time, session_type, status, room, notes, created_by')
+      .select('id, project_id, client_name, session_date, start_time, end_time, session_type, status, room, notes, created_by, google_event_id, google_sync_status, google_sync_error')
       .gte('session_date', weekStartYMD)
       .lte('session_date', weekEndYMD)
       .order('session_date')
@@ -85,6 +85,9 @@ export async function loadWeekEvents({
     status: 'confirmed' | 'pending' | 'cancelled'
     room: string | null
     created_by: string | null
+    google_event_id: string | null
+    google_sync_status: 'pending' | 'synced' | 'error' | null
+    google_sync_error: string | null
   }>) {
     if (s.status === 'cancelled') continue
     // Member-scoped filter: skip sessions the member isn't tied to.
@@ -102,6 +105,9 @@ export async function loadWeekEvents({
       member_name: s.created_by ? (memberNameById.get(s.created_by) ?? null) : null,
       href: '/sessions',
       subtitle: s.room,
+      google_event_id: s.google_event_id,
+      google_sync_status: s.google_sync_status ?? 'pending',
+      google_sync_error: s.google_sync_error,
     })
   }
 

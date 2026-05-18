@@ -247,6 +247,9 @@ export interface CalendarEvent {
   href?: string
   /** Optional free-form subtitle ("Studio A", "Room 2"). */
   subtitle?: string | null
+  google_event_id?: string | null
+  google_sync_status?: 'pending' | 'synced' | 'error'
+  google_sync_error?: string | null
 }
 
 export interface ArtistPipelineEntry {

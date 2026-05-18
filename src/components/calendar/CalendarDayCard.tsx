@@ -47,6 +47,9 @@ interface CalendarBooking {
   studio: string
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Completed'
   type: string
+  googleEventId?: string | null
+  googleSyncStatus?: 'pending' | 'synced' | 'error'
+  googleSyncError?: string | null
 }
 
 interface BookingNote {
@@ -205,6 +208,9 @@ export default function CalendarDayCard({
             studio: evt.subtitle ?? 'TBD',
             status: 'Confirmed' as const,
             type: uiType,
+            googleEventId: evt.google_event_id,
+            googleSyncStatus: evt.google_sync_status,
+            googleSyncError: evt.google_sync_error,
           }
         })
       setBookings(mapped)

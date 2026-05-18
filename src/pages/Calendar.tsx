@@ -25,6 +25,9 @@ interface CalendarBooking {
   studio: string
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Completed'
   type: string
+  googleEventId?: string | null
+  googleSyncStatus?: 'pending' | 'synced' | 'error'
+  googleSyncError?: string | null
 }
 
 const SESSION_TYPE_TO_UI: Record<string, string> = {
@@ -190,6 +193,9 @@ export default function Calendar() {
             studio: evt.subtitle ?? 'TBD',
             status: 'Confirmed' as const,
             type: uiType,
+            googleEventId: evt.google_event_id,
+            googleSyncStatus: evt.google_sync_status,
+            googleSyncError: evt.google_sync_error,
           }
         })
       setBookings(mapped)

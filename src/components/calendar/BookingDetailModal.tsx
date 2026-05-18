@@ -1,4 +1,4 @@
-import { Building2, CalendarDays, Clock, Edit2, User as UserIcon } from 'lucide-react'
+import { AlertCircle, Building2, CalendarCheck2, CalendarDays, Clock, Edit2, ExternalLink, Loader2, User as UserIcon } from 'lucide-react'
 import FloatingDetailModal from '../FloatingDetailModal'
 import BookingStatusPopover from './BookingStatusPopover'
 
@@ -29,6 +29,9 @@ export interface BookingDetail {
   studio: string
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Completed'
   type: string             // engineering / training / education / music_lesson / consultation
+  googleEventId?: string | null
+  googleSyncStatus?: 'pending' | 'synced' | 'error'
+  googleSyncError?: string | null
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -88,6 +91,16 @@ const STATUS_DOT: Record<BookingDetail['status'], string> = {
   Completed: 'bg-text-light',
 }
 
+const GOOGLE_SYNC_TONE: Record<NonNullable<BookingDetail['googleSyncStatus']>, string> = {
+  synced: 'bg-emerald-500/12 text-emerald-300 ring-emerald-500/35',
+  pending: 'bg-amber-500/12 text-amber-300 ring-amber-500/35',
+  error: 'bg-rose-500/12 text-rose-300 ring-rose-500/35',
+}
+
+function googleCalendarEventUrl(eventId: string): string {
+  return `https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(eventId)}`
+}
+
 export default function BookingDetailModal({
   booking,
   onClose,
@@ -105,6 +118,11 @@ export default function BookingDetailModal({
   onStatusChanged?: () => void
 }) {
   const typeLabel = TYPE_LABELS[booking.type] ?? booking.type
+  const googleSyncStatus = booking.googleSyncStatus ?? 'pending'
+  const GoogleSyncIcon =
+    googleSyncStatus === 'synced' ? CalendarCheck2 :
+    googleSyncStatus === 'error' ? AlertCircle :
+    Loader2
 
   return (
     <FloatingDetailModal
@@ -187,6 +205,30 @@ export default function BookingDetailModal({
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gold/10 ring-1 ring-gold/30 text-gold text-[11px] font-bold">
             {typeLabel}
           </span>
+        </Row>
+        <Row icon={<CalendarCheck2 size={14} className="text-gold" aria-hidden="true" />} label="Google">
+          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md ring-1 text-[11px] font-bold capitalize ${GOOGLE_SYNC_TONE[googleSyncStatus]}`}>
+            <GoogleSyncIcon
+              size={12}
+              className={googleSyncStatus === 'pending' ? 'animate-spin' : ''}
+              aria-hidden="true"
+            />
+            {googleSyncStatus}
+          </span>
+          {booking.googleEventId && (
+            <a
+              href={googleCalendarEventUrl(booking.googleEventId)}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-2 inline-flex items-center gap-1 text-[11px] font-bold text-gold hover:text-gold-muted"
+            >
+              Open
+              <ExternalLink size={11} aria-hidden="true" />
+            </a>
+          )}
+          {booking.googleSyncError && (
+            <span className="ml-2 text-[11px] text-rose-300">{booking.googleSyncError}</span>
+          )}
         </Row>
       </div>
     </FloatingDetailModal>
