@@ -456,7 +456,11 @@ export function SourceFilterRow({
   )
 }
 
-function SourcePill({
+// 2026-05-17 — exported so consumers (MyTasksCard) can inline the 3
+// pills directly in their own filter row rather than rendering the
+// wrapped `<SourceFilterRow>` (which is one flex item and breaks
+// "all filters on one row" layouts).
+export function SourcePill({
   label,
   count,
   active,

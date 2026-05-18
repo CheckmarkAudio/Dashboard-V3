@@ -52,7 +52,7 @@ import type { TeamMember } from '../../types'
 import {
   CompletedToggle,
   PriorityToggle,
-  SourceFilterRow,
+  SourcePill,
   SubmitBar,
   formatDueShort,
   formatShortName,
@@ -524,22 +524,24 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
           now so the +Task affordance is visible without scrolling. */}
       {toolbar}
 
-      {/* 2026-05-17 (Task tweaks rev2) — all filter affordances live
-          on ONE row now: show-completed eye + Priority pill on the
-          left, Source filter pills (All · Assigned · Self) in the
-          middle, "Due" column header on the right. Wraps cleanly on
-          narrow widths because each cluster is its own flex group.
-          The old two-row layout (Source on top, eye + Priority + Due
-          below) was redundant vertical space; consolidating recovers
-          a row + makes the filters read as one coherent toolbar. */}
-      <div className="shrink-0 flex items-center gap-2 px-2 mb-1 flex-wrap">
+      {/* 2026-05-17 (Task tweaks rev3) — all filter affordances on a
+          single row. The 3 SourcePills are rendered INLINE (not via
+          SourceFilterRow) so they're flex siblings of the eye +
+          Priority pill — otherwise SourceFilterRow's wrapper div
+          becomes one wide flex item that gets pushed to its own
+          line. "Self Assigned" shortened to "Self" so the full row
+          fits comfortably in the narrow widget column. Due header
+          uses `ml-auto` so it always anchors to the right edge. */}
+      <div className="shrink-0 flex items-center gap-1.5 px-2 mb-1 flex-wrap">
         <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
         <PriorityToggle
           active={priorityOnly}
           count={priorityVisibleCount}
           onToggle={() => setPriorityOnly((v) => !v)}
         />
-        <SourceFilterRow counts={sourceCounts} active={sourceFilter} onChange={setSourceFilter} />
+        <SourcePill label="All" count={sourceCounts.all} active={sourceFilter === 'all'} onClick={() => setSourceFilter('all')} />
+        <SourcePill label="Assigned" count={sourceCounts.assigned} active={sourceFilter === 'assigned'} onClick={() => setSourceFilter('assigned')} />
+        <SourcePill label="Self" count={sourceCounts.self} active={sourceFilter === 'self'} onClick={() => setSourceFilter('self')} />
         <span className="ml-auto text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">
           Due
         </span>
