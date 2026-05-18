@@ -37,8 +37,12 @@ import type {
   WidgetRowSpan,
 } from '../../domain/workspaces/types'
 import DashboardWidgetFrame, { type DragHandleProps } from './DashboardWidgetFrame'
-import FloatingDetailModal from '../FloatingDetailModal'
 import { Button, Card } from '../ui'
+import {
+  packPagedWidgets,
+  packedPageForWidget,
+  packedTotalPages,
+} from '../../lib/carousel/packPagedWidgets'
 
 /**
  * Lean 3 — single-row carousel widget grid.
@@ -99,18 +103,32 @@ function SortableWidget({
   id,
   width,
   height,
+  isExpanded,
   children,
 }: {
   id: WorkspaceWidgetId
   width: string
   height: number
+  isExpanded: boolean
   children: (dragHandleProps: DragHandleProps) => ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id })
+  // Combine the dnd-kit transform transition with our own flex-basis
+  // transition so the width grow + drag transform feel of-a-piece.
+  // Same easing as the carousel translate (320ms cubic-bezier) so the
+  // expand grow and the carousel page-scroll land together as one
+  // motion — same pattern as MemberActivitySection.
+  const combinedTransition = [
+    transition ?? '',
+    'flex-basis 320ms cubic-bezier(0.16, 1, 0.3, 1)',
+    'box-shadow 320ms cubic-bezier(0.16, 1, 0.3, 1)',
+  ]
+    .filter(Boolean)
+    .join(', ')
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: combinedTransition,
     flex: `0 0 ${width}`,
     width,
     height: `${height}px`,
@@ -119,6 +137,10 @@ function SortableWidget({
     overflow: 'hidden',
     minHeight: 0,
     opacity: isDragging ? 0.35 : 1,
+    boxShadow: isExpanded
+      ? '0 18px 40px -16px rgba(201, 168, 76, 0.32), 0 0 0 1px rgba(201, 168, 76, 0.25)'
+      : 'none',
+    borderRadius: isExpanded ? 16 : 0,
   }
   return (
     <div
@@ -235,13 +257,54 @@ export default function WorkspacePanel({
     definitions,
   })
 
+  // 2026-05-17 — `expandedId` now drives INLINE expansion (the
+  // expanded widget grows to 2 slots wide on the current page,
+  // pushing other widgets across the carousel) rather than opening a
+  // FloatingDetailModal. Same pattern shipped on MemberActivitySection
+  // in PR #199. Click the chevron again to collapse. Auto-collapses
+  // on drag start, on viewport-driven pageSize change (a 2-slot
+  // widget doesn't make sense on a 1-up page), and on layout reset.
   const [expandedId, setExpandedId] = useState<WorkspaceWidgetId | null>(null)
-  const expandedDefinition = expandedId ? definitionsById.get(expandedId) : null
-  const ExpandedComponent = expandedDefinition?.component
 
   const pageSize = useViewportPageSize()
-  const widgetCount = visibleWidgets.length
-  const totalPages = Math.max(1, Math.ceil(widgetCount / pageSize))
+
+  // pageSize=1 (phone): widget already takes the full page, so the
+  // "expand to 2 slots" affordance is meaningless. Auto-collapse + hide
+  // the expand chevron entirely on phone. Also auto-collapse if the
+  // currently expanded widget gets hidden via the controls (it
+  // disappears from `visibleWidgets`).
+  useEffect(() => {
+    if (pageSize === 1 && expandedId !== null) setExpandedId(null)
+  }, [pageSize, expandedId])
+  useEffect(() => {
+    if (!expandedId) return
+    const stillVisible = visibleWidgets.some((w) => w.id === expandedId)
+    if (!stillVisible) setExpandedId(null)
+  }, [visibleWidgets, expandedId])
+
+  const orderedIds = useMemo(
+    () => visibleWidgets.map((w) => w.id as WorkspaceWidgetId),
+    [visibleWidgets],
+  )
+
+  // Pack widgets into pages with the expansion-aware slot algorithm.
+  // Each widget has weight=1 (normal) or weight=2 (expanded). When an
+  // expanded widget would otherwise span a page boundary, the helper
+  // inserts invisible spacer placeholders to fill the orphan slots on
+  // the current page and pushes the wide widget to the start of the
+  // next page — keeps the carousel's translateX page-snap math clean.
+  // Named `packedLayout` to avoid colliding with `layout` from
+  // `useWorkspaceLayout` (which is the persisted widget-order data).
+  const packedLayout = useMemo(
+    () =>
+      packPagedWidgets(
+        orderedIds,
+        (id) => (id === expandedId ? 2 : 1),
+        pageSize,
+      ),
+    [orderedIds, expandedId, pageSize],
+  )
+  const totalPages = packedTotalPages(packedLayout)
 
   const [currentPage, setCurrentPage] = useState(0)
 
@@ -249,6 +312,16 @@ export default function WorkspacePanel({
   useEffect(() => {
     if (currentPage > totalPages - 1) setCurrentPage(Math.max(0, totalPages - 1))
   }, [currentPage, totalPages])
+
+  // When a widget expands, auto-navigate to the page it now sits on
+  // so the click ALWAYS shows visible motion (otherwise the expanded
+  // widget could end up on a different page and feel like "nothing
+  // happened"). Smooth transition handled by the carousel translate.
+  useEffect(() => {
+    if (!expandedId) return
+    const page = packedPageForWidget(packedLayout, expandedId)
+    if (page !== null) setCurrentPage(page)
+  }, [expandedId, packedLayout])
 
   const goPrev = useCallback(() => {
     setCurrentPage((p) => Math.max(0, p - 1))
@@ -315,6 +388,10 @@ export default function WorkspacePanel({
   )
 
   const handleDragStart = (event: DragStartEvent) => {
+    // Collapse any expansion before drag begins — a 2-slot widget mid-
+    // drag would orphan its spacer placeholder and break the page-pack
+    // math. User can re-expand after the drop if they want.
+    setExpandedId(null)
     setActiveId(event.active.id as WorkspaceWidgetId)
   }
 
@@ -360,23 +437,28 @@ export default function WorkspacePanel({
     clearEdgeTimer()
   }
 
-  // Carousel sizing. Widget width = (100% - (pageSize-1) * gap) / pageSize.
-  // Row height = max widget height in the visible set so every widget on
-  // every page sits on the same baseline.
-  const widgetWidth = `calc((100% - ${(pageSize - 1) * PAGE_GAP_PX}px) / ${pageSize})`
+  // Carousel sizing. Normal widget width = (100% - (pageSize-1) * gap) / pageSize.
+  // Expanded widget = two normal widths plus the gap between them (so
+  // a 2-slot widget spans exactly the visual footprint of two normal
+  // widgets sitting side by side). Row height = max widget height in
+  // the visible set so every widget on every page sits on the same
+  // baseline.
+  const normalWidgetWidth = `calc((100% - ${(pageSize - 1) * PAGE_GAP_PX}px) / ${pageSize})`
+  const expandedWidgetWidth = `calc(2 * ((100% - ${(pageSize - 1) * PAGE_GAP_PX}px) / ${pageSize}) + ${PAGE_GAP_PX}px)`
   const rowHeight = useMemo(() => {
     if (visibleWidgets.length === 0) return ROW_HEIGHT_PX
     const heights = visibleWidgets.map((w) => widgetHeight(w.rowSpan ?? 1))
     return Math.max(...heights)
   }, [visibleWidgets])
 
-  const orderedIds = useMemo(
-    () => visibleWidgets.map((w) => w.id as WorkspaceWidgetId),
-    [visibleWidgets],
-  )
-
   const showArrows = totalPages > 1
   const showDots = totalPages > 1
+  // Suppress the expand chevron on phone (pageSize=1): a single-up
+  // page is already full width, so "expand to 2 slots" has nothing
+  // to expand into.
+  const allowExpand = pageSize > 1
+  const toggleExpand = (id: WorkspaceWidgetId) =>
+    setExpandedId((prev) => (prev === id ? null : id))
 
   return (
     <div className="space-y-4">
@@ -449,20 +531,40 @@ export default function WorkspacePanel({
                 style={{
                   gap: `${PAGE_GAP_PX}px`,
                   transform: `translateX(calc(${-currentPage * 100}% - ${currentPage * PAGE_GAP_PX}px))`,
-                  transition: 'transform 280ms cubic-bezier(0.16, 1, 0.3, 1)',
+                  transition: 'transform 320ms cubic-bezier(0.16, 1, 0.3, 1)',
                   willChange: 'transform',
                 }}
               >
-                {visibleWidgets.map((widget) => {
-                  const definition = definitionsById.get(widget.id)
-                  if (!definition) return null
+                {packedLayout.map((item) => {
+                  if (item.type === 'spacer') {
+                    // Invisible placeholder that holds an orphan slot
+                    // when an expanded widget bumps to the next page.
+                    // Width matches a normal widget so the flex row's
+                    // page rhythm stays intact.
+                    return (
+                      <div
+                        key={item.key}
+                        aria-hidden="true"
+                        style={{
+                          flex: `0 0 ${normalWidgetWidth}`,
+                          height: `${rowHeight}px`,
+                          transition: 'flex-basis 320ms cubic-bezier(0.16, 1, 0.3, 1)',
+                        }}
+                      />
+                    )
+                  }
+                  const widget = visibleWidgets.find((w) => w.id === item.id)
+                  const definition = widget ? definitionsById.get(widget.id) : null
+                  if (!widget || !definition) return null
                   const WidgetComponent = definition.component
+                  const isExpanded = expandedId === item.id
                   return (
                     <SortableWidget
                       key={widget.id}
                       id={widget.id as WorkspaceWidgetId}
-                      width={widgetWidth}
+                      width={isExpanded ? expandedWidgetWidth : normalWidgetWidth}
                       height={rowHeight}
+                      isExpanded={isExpanded}
                     >
                       {(dragHandleProps) => (
                         <DashboardWidgetFrame
@@ -471,9 +573,12 @@ export default function WorkspacePanel({
                           hideTitle={definition.hideTitle}
                           visible={widget.visible}
                           dragHandleProps={dragHandleProps}
-                          onExpand={() =>
-                            setExpandedId(widget.id as WorkspaceWidgetId)
+                          onExpand={
+                            allowExpand
+                              ? () => toggleExpand(widget.id as WorkspaceWidgetId)
+                              : undefined
                           }
+                          isExpanded={isExpanded}
                         >
                           <WidgetComponent />
                         </DashboardWidgetFrame>
@@ -551,23 +656,12 @@ export default function WorkspacePanel({
           {activeWidget && activeDefinition ? (
             <DragGhost
               definition={activeDefinition}
-              width={widgetWidth}
+              width={normalWidgetWidth}
               height={rowHeight}
             />
           ) : null}
         </DragOverlay>
       </DndContext>
-
-      {expandedDefinition && ExpandedComponent && (
-        <FloatingDetailModal
-          title={expandedDefinition.title}
-          eyebrow={expandedDefinition.description}
-          onClose={() => setExpandedId(null)}
-          maxWidth={720}
-        >
-          <ExpandedComponent />
-        </FloatingDetailModal>
-      )}
     </div>
   )
 }
