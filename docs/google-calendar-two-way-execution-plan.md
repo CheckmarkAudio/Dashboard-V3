@@ -73,8 +73,8 @@ Checks:
 1. Create a future test booking in Checkmark.
 2. Open the booking detail modal.
 3. Confirm the Google row says `synced`.
-4. Click the Google `Open` link.
-5. Confirm the event exists in Google Calendar.
+4. Click the Google `Open day` link.
+5. Confirm the event exists on that date in Google Calendar.
 6. Refresh Apple Calendar and confirm whether Apple mirrors it.
 
 Pass condition:
@@ -94,12 +94,13 @@ Use one synced, non-client-critical test booking.
 
 Test:
 
-1. Open the synced booking in Google Calendar using the booking detail `Open` link.
-2. Change only the start/end time by a small amount.
-3. Save in Google Calendar.
-4. In Checkmark Settings -> Database, click `Pull inbound changes`.
-5. Reopen the booking in Checkmark.
-6. Confirm the Checkmark booking date/time updated.
+1. Open the synced booking date in Google Calendar using the booking detail `Open day` link.
+2. Open the matching Google event on that day.
+3. Change only the start/end time by a small amount.
+4. Save in Google Calendar.
+5. In Checkmark Settings -> Database, click `Pull inbound changes`.
+6. Reopen the booking in Checkmark.
+7. Confirm the Checkmark booking date/time updated.
 
 Pass condition:
 
@@ -197,6 +198,27 @@ Immediate next Codex task:
 1. Run Step 2 manual inbound smoke test.
 2. If it fails, patch `google-calendar-sync` narrowly.
 3. If it passes, document the exact result and move to Step 3.
+
+## Lessons Learned
+
+### 2026-05-17: Google event id is not a Google web URL
+
+Observed failure:
+
+- Booking detail showed `Google: synced` with a non-null `google_event_id`.
+- Clicking the original `Open` link navigated to `calendar.google.com/calendar/u/0/r/eventedit/{google_event_id}`.
+- Google returned a `500` page.
+
+Interpretation:
+
+- `google_event_id` proves the API event exists, but Google Calendar's web UI does not accept the raw API event id in that URL shape.
+- Until we store Google's `htmlLink` or build the correct encoded `eid` link with calendar id, the safe link target is the Google Calendar day view.
+
+Decision:
+
+- Booking detail should link to `Open day`, not raw event edit.
+- Use the day view to manually confirm whether the synced event exists in Google.
+- If Google shows the event but Apple does not, the issue is Apple calendar selection/refresh/mirroring, not Checkmark outbound sync.
 
 Good Claude-safe boundary:
 

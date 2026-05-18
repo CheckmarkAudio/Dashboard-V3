@@ -97,8 +97,10 @@ const GOOGLE_SYNC_TONE: Record<NonNullable<BookingDetail['googleSyncStatus']>, s
   error: 'bg-rose-500/12 text-rose-300 ring-rose-500/35',
 }
 
-function googleCalendarEventUrl(eventId: string): string {
-  return `https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(eventId)}`
+function googleCalendarDayUrl(dateKey: string): string {
+  const [year, month, day] = dateKey.split('-')
+  if (!year || !month || !day) return 'https://calendar.google.com/calendar/u/0/r'
+  return `https://calendar.google.com/calendar/u/0/r/day/${year}/${Number(month)}/${Number(day)}`
 }
 
 export default function BookingDetailModal({
@@ -217,12 +219,12 @@ export default function BookingDetailModal({
           </span>
           {booking.googleEventId && (
             <a
-              href={googleCalendarEventUrl(booking.googleEventId)}
+              href={googleCalendarDayUrl(booking.date)}
               target="_blank"
               rel="noreferrer"
               className="ml-2 inline-flex items-center gap-1 text-[11px] font-bold text-gold hover:text-gold-muted"
             >
-              Open
+              Open day
               <ExternalLink size={11} aria-hidden="true" />
             </a>
           )}
