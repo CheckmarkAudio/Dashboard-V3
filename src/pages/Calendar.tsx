@@ -3,6 +3,9 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import CreateBookingModal from '../components/CreateBookingModal'
 import CalendarDayCard from '../components/calendar/CalendarDayCard'
 import BookingDetailModal, { type BookingDetail } from '../components/calendar/BookingDetailModal'
+import DeleteBookingDialog from '../components/calendar/DeleteBookingDialog'
+import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../components/Toast'
 import { loadWeekEvents } from '../lib/calendar'
 import { addDays, startOfWeek } from '../lib/time'
 import { localDateKey } from '../lib/dates'
@@ -225,6 +228,46 @@ export default function Calendar() {
   // to CreateBookingModal in edit mode (`editSessionId`). null when
   // not editing.
   const [editSessionId, setEditSessionId] = useState<string | null>(null)
+  // 2026-05-17 — admin delete flow. Single state object carries the
+  // session id + a human label (date/time/client) for the dialog's
+  // prompt copy. Recurring-vs-single scope detection happens inside
+  // the dialog. Triggered by EITHER the Delete pill in
+  // BookingDetailModal OR the right-click context menu on the
+  // week-grid booking blocks.
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null)
+  // Context menu for right-click on a week-grid booking. Tracks the
+  // booking + screen coords so the menu floats wherever the user
+  // clicked. Closes on Escape, outside click, or after picking an
+  // action.
+  const [contextMenu, setContextMenu] = useState<{ booking: CalendarBooking; x: number; y: number } | null>(null)
+  const { isAdmin } = useAuth()
+  const { toast } = useToast()
+
+  // Close the context menu on outside click / Escape so it doesn't
+  // linger after the user moves on.
+  useEffect(() => {
+    if (!contextMenu) return
+    const onPointer = () => setContextMenu(null)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null)
+    }
+    window.addEventListener('pointerdown', onPointer)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', onPointer)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [contextMenu])
+
+  // Build the prompt label for the delete dialog from a CalendarBooking.
+  // Used by both the right-click menu and the modal's Delete pill.
+  const bookingLabel = (b: { client: string; date: string; startTime: string; endTime: string }): string => {
+    const dt = new Date(`${b.date}T00:00:00`)
+    const dateLabel = Number.isNaN(dt.getTime())
+      ? b.date
+      : dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    return `${b.client} · ${dateLabel} · ${b.startTime}–${b.endTime}`
+  }
 
   // Day-detail concerns (selected-day booking list, inline notes,
   // add-note flow) now live inside CalendarDayCard. This page owns
@@ -259,8 +302,81 @@ export default function Calendar() {
             setDetailBooking(null)
             setEditSessionId(id)
           }}
+          onDelete={() => {
+            const id = detailBooking.id
+            const label = bookingLabel(detailBooking)
+            setDetailBooking(null)
+            setDeleteTarget({ id, label })
+          }}
           onStatusChanged={() => { setDetailBooking(null); void refetch() }}
         />
+      )}
+      {deleteTarget && (
+        <DeleteBookingDialog
+          sessionId={deleteTarget.id}
+          label={deleteTarget.label}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={({ scope, deletedCount, syncWarning }) => {
+            setDeleteTarget(null)
+            const msg =
+              scope === 'future'
+                ? `Deleted ${deletedCount} booking${deletedCount === 1 ? '' : 's'}.`
+                : 'Booking deleted.'
+            toast(syncWarning ? `${msg} ${syncWarning}` : msg, syncWarning ? 'error' : 'success')
+            void refetch()
+          }}
+        />
+      )}
+      {contextMenu && isAdmin && (
+        <div
+          role="menu"
+          aria-label={`Actions for ${contextMenu.booking.client}`}
+          // stopPropagation so the outside-pointerdown handler in
+          // the useEffect doesn't immediately re-close the menu.
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="fixed z-50 min-w-[180px] bg-surface border border-border rounded-xl shadow-xl py-1 animate-fade-in"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setDetailBooking(contextMenu.booking)
+              setContextMenu(null)
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-text hover:bg-surface-hover transition-colors"
+          >
+            View details
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const id = contextMenu.booking.id
+              const label = bookingLabel(contextMenu.booking)
+              setContextMenu(null)
+              setEditSessionId(id)
+              void label
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-text hover:bg-surface-hover transition-colors"
+          >
+            Edit booking
+          </button>
+          <div className="my-1 border-t border-border" aria-hidden="true" />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const id = contextMenu.booking.id
+              const label = bookingLabel(contextMenu.booking)
+              setContextMenu(null)
+              setDeleteTarget({ id, label })
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-rose-300 hover:bg-rose-500/10 transition-colors"
+          >
+            Delete booking…
+          </button>
+        </div>
       )}
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
@@ -379,7 +495,17 @@ export default function Calendar() {
                         key={b.id}
                         type="button"
                         onClick={() => setDetailBooking(b)}
-                        title={`${b.client} · ${formatTime12(b.startTime)}–${formatTime12(b.endTime)}`}
+                        onContextMenu={(e) => {
+                          // Only admins see the context menu — members just
+                          // get the default browser menu (no admin actions
+                          // to surface). Skips preventDefault for non-admins
+                          // so they keep the native right-click experience.
+                          if (!isAdmin) return
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setContextMenu({ booking: b, x: e.clientX, y: e.clientY })
+                        }}
+                        title={`${b.client} · ${formatTime12(b.startTime)}–${formatTime12(b.endTime)}${isAdmin ? ' · Right-click for actions' : ''}`}
                         className="absolute calendar-booking-block px-1.5 py-0.5 overflow-hidden text-left cursor-pointer z-30 hover:ring-2 hover:ring-gold/50 hover:z-40 transition-all focus-ring"
                         style={{
                           top: topPx + 1,
