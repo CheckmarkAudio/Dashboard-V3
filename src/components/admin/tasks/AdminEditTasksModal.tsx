@@ -8,12 +8,14 @@ import {
   adminUpdateAssignedTask,
   fetchAllAssignedTasks,
 } from '../../../lib/queries/adminTasks'
+import { fetchTeamMembers, teamMemberKeys } from '../../../lib/queries/teamMembers'
 import {
   FlywheelStagePicker,
   type FlywheelStage,
 } from '../../tasks/requests/formAtoms'
 import { CompletedToggle, formatDueShort } from '../../tasks/shared'
 import type { AssignedTask } from '../../../types/assignments'
+import type { TeamMember } from '../../../types'
 
 /**
  * AdminEditTasksModal — PR #40.
@@ -42,6 +44,23 @@ export default function AdminEditTasksModal({ onClose }: { onClose: () => void }
   })
 
   const tasks = tasksQuery.data ?? []
+
+  // 2026-05-17 (Task tweaks PR) — assignee picker options for the
+  // edit row. Pull active team members, sorted alphabetically by
+  // display name. Inactive members excluded by default so admins
+  // don't accidentally reassign to a deactivated account.
+  const membersQuery = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+    staleTime: 60_000,
+  })
+  const assignableMembers = useMemo(() => {
+    const list = (membersQuery.data ?? []).filter(
+      (m) => (m.status ?? '').toLowerCase() !== 'inactive',
+    )
+    list.sort((a, b) => a.display_name.localeCompare(b.display_name))
+    return list
+  }, [membersQuery.data])
 
   // Build the assignee dropdown options from whichever tasks have an
   // assignee set. "Studio" rows get grouped under a special sentinel.
@@ -131,6 +150,7 @@ export default function AdminEditTasksModal({ onClose }: { onClose: () => void }
               <EditableRow
                 key={task.id}
                 task={task}
+                assignableMembers={assignableMembers}
                 isEditing={editingId === task.id}
                 onOpenEdit={() => setEditingId(task.id)}
                 onCancelEdit={() => setEditingId(null)}
@@ -167,6 +187,7 @@ function asStage(value: string | null | undefined): FlywheelStage | null {
 
 function EditableRow({
   task,
+  assignableMembers,
   isEditing,
   onOpenEdit,
   onCancelEdit,
@@ -174,6 +195,7 @@ function EditableRow({
   onError,
 }: {
   task: AssignedTask
+  assignableMembers: TeamMember[]
   isEditing: boolean
   onOpenEdit: () => void
   onCancelEdit: () => void
@@ -184,6 +206,10 @@ function EditableRow({
   const [description, setDescription] = useState(task.description ?? '')
   const [stage, setStage] = useState<FlywheelStage | null>(asStage(task.category))
   const [dueDate, setDueDate] = useState(task.due_date ?? '')
+  // 2026-05-17 (Task tweaks PR) — assignee picker state. Only
+  // editable for `scope='member'` tasks (the RPC raises on studio
+  // rows). Empty string === "unassigned" (clears the column).
+  const [assigneeId, setAssigneeId] = useState<string>(task.assigned_to ?? '')
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -200,6 +226,16 @@ function EditableRow({
       if ((dueDate || null) !== (task.due_date ?? null)) {
         if (!dueDate) payload.clearDue = true
         else payload.due_date = dueDate
+      }
+      // Reassign — only valid for member-scope tasks. Server enforces
+      // the same; double-checking here gives a cleaner error than
+      // bubbling the SQL exception. Treat empty string as "clear."
+      if (task.scope === 'member') {
+        const nextAssignee = assigneeId.trim() === '' ? null : assigneeId
+        if (nextAssignee !== (task.assigned_to ?? null)) {
+          if (nextAssignee === null) payload.clearAssignedTo = true
+          else payload.assigned_to = nextAssignee
+        }
       }
       return adminUpdateAssignedTask(task.id, payload)
     },
@@ -263,6 +299,46 @@ function EditableRow({
           onChange={(e) => setTitle(e.target.value)}
           className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[13px] text-text focus:outline-none focus:border-gold/50"
         />
+      </div>
+
+      {/* 2026-05-17 (Task tweaks PR) — Assignee reassign picker.
+          Only meaningful for member-scope tasks; studio tasks
+          (assigned_to NULL by definition) skip the picker and show
+          a small disabled hint so the admin knows the field doesn't
+          apply. Empty option = clear assignment (rare but supported
+          by the RPC for parking a task back in the unassigned pool). */}
+      <div className="space-y-1">
+        <label className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">
+          Assigned to
+        </label>
+        {task.scope === 'member' ? (
+          <select
+            value={assigneeId}
+            onChange={(e) => setAssigneeId(e.target.value)}
+            className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[13px] text-text focus:outline-none focus:border-gold/50"
+          >
+            <option value="">— Unassigned —</option>
+            {assignableMembers.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.display_name}
+                {m.position ? ` · ${m.position}` : ''}
+              </option>
+            ))}
+            {/* If the current assignee isn't in the active list
+                (e.g. deactivated mid-task), surface them as a
+                disabled-feeling fallback so the admin sees what
+                they're about to change away from. */}
+            {task.assigned_to && !assignableMembers.find((m) => m.id === task.assigned_to) && (
+              <option value={task.assigned_to}>
+                {task.assigned_to_name ?? 'Former member'} (inactive)
+              </option>
+            )}
+          </select>
+        ) : (
+          <p className="text-[12px] text-text-light italic px-1">
+            Studio task — assignee not applicable (any team member can complete).
+          </p>
+        )}
       </div>
 
       <div className="space-y-1">

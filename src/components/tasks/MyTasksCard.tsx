@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -6,6 +6,7 @@ import {
   Check,
   CheckCircle2,
   Edit2,
+  GripVertical,
   Hourglass,
   Inbox,
   Loader2,
@@ -13,6 +14,24 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { setUserPreference } from '../../lib/preferences'
 import { useAuth } from '../../contexts/AuthContext'
 import { completeAssignedTask, fetchMemberAssignedTasks } from '../../lib/queries/assignments'
 import {
@@ -32,6 +51,7 @@ import type { AssignedTask } from '../../types/assignments'
 import type { TeamMember } from '../../types'
 import {
   CompletedToggle,
+  PriorityToggle,
   SourceFilterRow,
   SubmitBar,
   formatDueShort,
@@ -82,6 +102,53 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   // by who put the task in the queue: someone else (admin / approver)
   // vs the user themselves.
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
+  // 2026-05-17 (Task tweaks PR) — Priority filter, per-session. When
+  // on, only is_required tasks render. Stacks with sourceFilter.
+  const [priorityOnly, setPriorityOnly] = useState(false)
+  // 2026-05-17 (Task tweaks PR) — User-defined task order. Seeded
+  // once from `team_members.preferences.my_tasks_order` on profile
+  // load; every drag-end mutates this in-memory + fires a
+  // debounced DB write so the order follows the user across devices
+  // (same pattern as `useWorkspaceLayout`).
+  const [savedOrder, setSavedOrder] = useState<string[]>(() => {
+    const fromPrefs = (profile?.preferences as Record<string, unknown> | null)?.['my_tasks_order']
+    return Array.isArray(fromPrefs) ? (fromPrefs.filter((v) => typeof v === 'string') as string[]) : []
+  })
+  // Track which user we hydrated for so a profile swap doesn't keep
+  // the previous user's order in state.
+  const hydratedForUserId = useRef<string | null>(profile?.id ?? null)
+  useEffect(() => {
+    if (!profile?.id) return
+    if (hydratedForUserId.current === profile.id) return
+    hydratedForUserId.current = profile.id
+    const fromPrefs = (profile.preferences as Record<string, unknown> | null)?.['my_tasks_order']
+    setSavedOrder(
+      Array.isArray(fromPrefs) ? (fromPrefs.filter((v) => typeof v === 'string') as string[]) : [],
+    )
+  }, [profile?.id, profile?.preferences])
+  // Debounced DB persistence so a burst of drag-end swaps becomes
+  // one PATCH (mirrors `useWorkspaceLayout`'s 500ms timer).
+  const orderWriteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const persistOrder = (next: string[]) => {
+    setSavedOrder(next)
+    if (!profile?.id) return
+    if (orderWriteTimer.current) clearTimeout(orderWriteTimer.current)
+    orderWriteTimer.current = setTimeout(() => {
+      void setUserPreference(profile.id, 'my_tasks_order', next)
+    }, 500)
+  }
+  useEffect(() => () => {
+    if (orderWriteTimer.current) clearTimeout(orderWriteTimer.current)
+  }, [])
+
+  // Dnd-kit sensors. Pointer needs a small distance threshold so
+  // click-to-open-detail still fires on a quick tap (anything < 5px
+  // counts as a click). Keyboard sensor lifted from WorkspacePanel
+  // for sortable a11y.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
   // PR #37 — pending → Submit pattern. Checking a box adds the task
   // id to this set (visual state only, no RPC). Submit Completed
   // button commits all queued ids in parallel.
@@ -228,7 +295,23 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     const open = tasks.filter((task) => !task.is_completed)
     const done = tasks.filter((task) => task.is_completed)
 
+    // 2026-05-17 (Task tweaks PR) — sort honors the user's saved
+    // drag order first; only tasks NOT in the saved order fall back
+    // to the historic auto-sort (priority → due → newness). New
+    // assignments (not yet in the user's saved order) bubble to the
+    // TOP so the user notices them, then settle into their preferred
+    // spot once the user drags them.
+    const orderIndex = new Map<string, number>()
+    savedOrder.forEach((id, idx) => orderIndex.set(id, idx))
     open.sort((a, b) => {
+      const aIdx = orderIndex.get(a.id)
+      const bIdx = orderIndex.get(b.id)
+      // Both saved → respect saved order.
+      if (aIdx !== undefined && bIdx !== undefined) return aIdx - bIdx
+      // Only one saved → unsaved (new) wins to the top.
+      if (aIdx === undefined && bIdx !== undefined) return -1
+      if (bIdx === undefined && aIdx !== undefined) return 1
+      // Neither saved → original fallback sort (priority → due → newness).
       if (a.is_required !== b.is_required) return a.is_required ? -1 : 1
       const aDue = a.due_date ?? '9999-12-31'
       const bDue = b.due_date ?? '9999-12-31'
@@ -238,7 +321,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
 
     done.sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''))
     return { openTasks: open, doneTasks: done }
-  }, [tasksQuery.data])
+  }, [tasksQuery.data, savedOrder])
 
   // PR #69 — team_members lookup so each row can show the assignee's
   // role (e.g. [marketing], [engineer]) instead of "from {template}".
@@ -293,12 +376,23 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   }, [openTasks])
 
   const preFilterVisible = showCompleted ? [...openTasks, ...doneTasks] : openTasks
-  const visibleTasks =
+  const sourceFilteredVisible =
     sourceFilter === 'all'
       ? preFilterVisible
       : sourceFilter === 'self'
         ? preFilterVisible.filter((t) => isSelfAssigned(t))
         : preFilterVisible.filter((t) => !isSelfAssigned(t))
+
+  // 2026-05-17 (Task tweaks PR) — Priority count + filter.
+  // Count is computed against the source-filtered list so it always
+  // reflects "priority within the current view," not the raw archive.
+  const priorityVisibleCount = useMemo(
+    () => sourceFilteredVisible.filter((t) => t.is_required).length,
+    [sourceFilteredVisible],
+  )
+  const visibleTasks = priorityOnly
+    ? sourceFilteredVisible.filter((t) => t.is_required)
+    : sourceFilteredVisible
 
   // Split into active vs pending — pending rows render dimmer below
   // a divider so the user's working list stays focused on what's
@@ -312,6 +406,42 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     }
     return { activeVisibleTasks: active, pendingVisibleTasks: pending }
   }, [visibleTasks, pendingByTask])
+
+  // 2026-05-17 (Task tweaks PR) — drag-end handler for the active
+  // task list. Computes the new visible order via `arrayMove`, then
+  // splices that subset back into `savedOrder` at the positions
+  // currently occupied by visible task ids. Tasks that are filtered
+  // out (priority off / source filter / completed eye off) keep
+  // their relative position in the saved order so toggling a filter
+  // off later reveals them in the same spot the user remembered.
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const visibleIds = activeVisibleTasks.map((t) => t.id)
+    const oldIndex = visibleIds.indexOf(String(active.id))
+    const newIndex = visibleIds.indexOf(String(over.id))
+    if (oldIndex === -1 || newIndex === -1) return
+    const newVisibleOrder = arrayMove(visibleIds, oldIndex, newIndex)
+
+    // Splice the rearranged visible-subset back into the full saved
+    // order. Start from the current canonical sort (openTasks order,
+    // which already honors savedOrder + new-task-bubble-up) so that
+    // brand-new tasks not yet in savedOrder also get a stable spot
+    // after the first drag.
+    const visibleSet = new Set(visibleIds)
+    const canonical = openTasks.map((t) => t.id) // includes filtered + unfiltered, in current display order
+    const iter = newVisibleOrder[Symbol.iterator]()
+    const nextOrder: string[] = []
+    for (const id of canonical) {
+      if (visibleSet.has(id)) {
+        const n = iter.next()
+        if (!n.done) nextOrder.push(n.value)
+      } else {
+        nextOrder.push(id)
+      }
+    }
+    persistOrder(nextOrder)
+  }
 
   // The pending section appears whenever there's anything in it —
   // either a task with an outgoing pending request, or a brand-new
@@ -407,7 +537,14 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
           left slot (was its own row in the toolbar above). One row
           recovered, no functional change. */}
       <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1 items-center">
-        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+        <div className="flex items-center gap-1.5">
+          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+          <PriorityToggle
+            active={priorityOnly}
+            count={priorityVisibleCount}
+            onToggle={() => setPriorityOnly((v) => !v)}
+          />
+        </div>
         <span aria-hidden="true" />
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
       </div>
@@ -449,37 +586,43 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
           </div>
         ) : (
           <>
-            {activeVisibleTasks.map((task) => {
-              const separatorBefore =
-                showCompleted &&
-                task.is_completed &&
-                openTasks.length > 0 &&
-                task.id === doneTasks[0]?.id
-              return (
-                <div key={task.id}>
-                  {separatorBefore && (
-                    <div className="mx-2 my-2 flex items-center gap-2">
-                      <CheckCircle2 size={11} className="text-emerald-400/70" aria-hidden="true" />
-                      <p className="text-[11px] font-semibold tracking-[0.06em] text-emerald-400/70">COMPLETED</p>
-                      <div className="flex-1 h-px bg-border" aria-hidden="true" />
-                    </div>
-                  )}
-                  <AssignedTaskRow
-                    task={task}
-                    highlighted={highlightedId === task.id}
-                    isPending={pendingIds.has(task.id)}
-                    pendingMeta={null}
-                    onToggle={(nextTask) => togglePending(nextTask.id)}
-                    onOpenDetail={(nextTask) => setDetailTask(nextTask)}
-                    rowRef={(node) => {
-                      if (node) rowRefs.current.set(task.id, node)
-                      else rowRefs.current.delete(task.id)
-                    }}
-                    memberMap={memberMap}
-                  />
-                </div>
-              )
-            })}
+            {/* 2026-05-17 (Task tweaks PR) — Active tasks now sit
+                inside a SortableContext + DndContext so admins +
+                members can drag-reorder. Drag handle is a small
+                grip on the left edge of each row (group-hover for
+                visibility — doesn't compete with the existing
+                click-to-open-detail behavior). Saved per-user to
+                `team_members.preferences.my_tasks_order`. */}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext
+                items={activeVisibleTasks.map((t) => t.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {activeVisibleTasks.map((task) => {
+                  const separatorBefore =
+                    showCompleted &&
+                    task.is_completed &&
+                    openTasks.length > 0 &&
+                    task.id === doneTasks[0]?.id
+                  return (
+                    <SortableAssignedTaskRow
+                      key={task.id}
+                      task={task}
+                      separatorBefore={separatorBefore}
+                      highlighted={highlightedId === task.id}
+                      isPending={pendingIds.has(task.id)}
+                      onToggle={(nextTask) => togglePending(nextTask.id)}
+                      onOpenDetail={(nextTask) => setDetailTask(nextTask)}
+                      rowRef={(node) => {
+                        if (node) rowRefs.current.set(task.id, node)
+                        else rowRefs.current.delete(task.id)
+                      }}
+                      memberMap={memberMap}
+                    />
+                  )
+                })}
+              </SortableContext>
+            </DndContext>
 
             {/* 2026-05-02 — Pending section.
                 Divider with PENDING eyebrow; below: tasks with a
@@ -662,6 +805,80 @@ function PendingCreateRequestRow({ request }: { request: MyTaskRequest }) {
       >
         {dueLabel ?? '—'}
       </span>
+    </div>
+  )
+}
+
+/**
+ * 2026-05-17 (Task tweaks PR) — Sortable wrapper around
+ * `AssignedTaskRow`. Renders a small left-edge grip handle (only
+ * appears on row hover so it doesn't compete visually with the
+ * checkbox + title in the resting state). The handle owns the
+ * dnd-kit listeners; the rest of the row keeps the click-to-open-
+ * detail behavior unchanged. `isPending` here is the
+ * Submit-Completed queue state on the parent — distinct from the
+ * mid-flight pending state used downstream. Pending mid-flight
+ * tasks are routed through the OLD non-sortable render path so
+ * users can't drag a row that's mid-request.
+ */
+function SortableAssignedTaskRow({
+  task,
+  separatorBefore,
+  highlighted,
+  isPending,
+  onToggle,
+  onOpenDetail,
+  rowRef,
+  memberMap,
+}: {
+  task: AssignedTask
+  separatorBefore: boolean
+  highlighted: boolean
+  isPending: boolean
+  onToggle: (task: AssignedTask) => void
+  onOpenDetail: (task: AssignedTask) => void
+  rowRef: (node: HTMLDivElement | null) => void
+  memberMap: Map<string, TeamMember>
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: task.id })
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : 1,
+    position: 'relative',
+  }
+  return (
+    <div ref={setNodeRef} style={style} className="group/sortable">
+      {separatorBefore && (
+        <div className="mx-2 my-2 flex items-center gap-2">
+          <CheckCircle2 size={11} className="text-emerald-400/70" aria-hidden="true" />
+          <p className="text-[11px] font-semibold tracking-[0.06em] text-emerald-400/70">COMPLETED</p>
+          <div className="flex-1 h-px bg-border" aria-hidden="true" />
+        </div>
+      )}
+      {/* Grip handle — pinned to the left edge, visible on hover.
+          Keyboard-accessible via aria-roledescription so screen-readers
+          announce "sortable" when focused. */}
+      <button
+        type="button"
+        aria-label={`Drag to reorder ${task.title}`}
+        {...attributes}
+        {...listeners}
+        className="absolute left-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-4 h-6 rounded text-text-light/40 opacity-0 group-hover/sortable:opacity-100 focus-visible:opacity-100 hover:text-text-muted cursor-grab active:cursor-grabbing transition-opacity"
+      >
+        <GripVertical size={12} aria-hidden="true" />
+      </button>
+      <AssignedTaskRow
+        task={task}
+        highlighted={highlighted}
+        isPending={isPending}
+        pendingMeta={null}
+        onToggle={onToggle}
+        onOpenDetail={onOpenDetail}
+        rowRef={rowRef}
+        memberMap={memberMap}
+      />
     </div>
   )
 }

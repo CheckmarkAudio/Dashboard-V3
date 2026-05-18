@@ -20,6 +20,7 @@ import type { AssignedTask } from '../../types/assignments'
 import type { TeamMember } from '../../types'
 import {
   CompletedToggle,
+  PriorityToggle,
   SubmitBar,
   formatDueShort,
   formatShortName,
@@ -81,6 +82,9 @@ function AssignmentBoardBody({
   const { profile } = useAuth()
   const queryClient = useQueryClient()
   const [showCompleted, setShowCompleted] = useState(false)
+  // 2026-05-17 (Task tweaks PR) — Priority filter, per-session.
+  // When on, the visible list is narrowed to is_required=true rows.
+  const [priorityOnly, setPriorityOnly] = useState(false)
   // 2026-05-13 — Studio Tasks widget gets the same "+ New Task"
   // affordance as MyTasksCard (member-side request flow). Only
   // mounted on the Studio variant so the Team Board doesn't sprout
@@ -226,16 +230,29 @@ function AssignmentBoardBody({
     },
   })
 
-  const visibleTasks = useMemo(() => {
+  // Pre-filter tasks (completed eye) — used both for the visible list
+  // and for the Priority pill's count (so the count reflects what the
+  // user could see, not the whole archive).
+  const preFilteredTasks = useMemo(() => {
     const tasks = tasksQuery.data ?? []
-    const openFiltered = showCompleted ? tasks : tasks.filter((task) => !task.is_completed)
-    return [...openFiltered].sort((a, b) => {
+    return showCompleted ? tasks : tasks.filter((task) => !task.is_completed)
+  }, [showCompleted, tasksQuery.data])
+
+  // Priority count drives the pill's tabular suffix.
+  const priorityCount = useMemo(
+    () => preFilteredTasks.filter((t) => t.is_required).length,
+    [preFilteredTasks],
+  )
+
+  const visibleTasks = useMemo(() => {
+    const filtered = priorityOnly ? preFilteredTasks.filter((t) => t.is_required) : preFilteredTasks
+    return [...filtered].sort((a, b) => {
       const aDue = a.due_date ?? '9999-12-31'
       const bDue = b.due_date ?? '9999-12-31'
       if (aDue !== bDue) return aDue.localeCompare(bDue)
       return a.title.localeCompare(b.title)
     })
-  }, [showCompleted, tasksQuery.data])
+  }, [preFilteredTasks, priorityOnly])
 
   // For the Studio Tasks widget: group visible tasks by studio_space.
   // Sections render in a fixed order (Control Room · Studio A · Studio B)
@@ -290,7 +307,14 @@ function AssignmentBoardBody({
           here (was its own row in the toolbar above). One row
           recovered, no functional change. */}
       <div className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2 mb-1 items-center">
-        <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+        <div className="flex items-center gap-1.5">
+          <CompletedToggle show={showCompleted} onToggle={() => setShowCompleted((value) => !value)} />
+          <PriorityToggle
+            active={priorityOnly}
+            count={priorityCount}
+            onToggle={() => setPriorityOnly((v) => !v)}
+          />
+        </div>
         <span aria-hidden="true" />
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold/70 whitespace-nowrap">Due</span>
       </div>

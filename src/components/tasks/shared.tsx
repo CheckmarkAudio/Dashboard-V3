@@ -281,6 +281,51 @@ export function CompletedToggle({ show, onToggle }: { show: boolean; onToggle: (
   )
 }
 
+/**
+ * 2026-05-17 (Task tweaks PR) — Priority filter pill.
+ *
+ * Drops into every task widget toolbar (My Tasks · Studio Tasks ·
+ * Team Tasks) next to the show-completed eye. When active, the
+ * widget filters its visible task list to only rows where
+ * `is_required === true` (the existing "priority" flag — same field
+ * the inline gold Flame icon already reads). Per-session state at
+ * the call site (no persistence) so flipping it on doesn't surprise
+ * the user next visit. `count` is the number of priority tasks
+ * currently in the unfiltered visible set — shown as a tabular pill
+ * suffix so the user can see at a glance whether toggling it on will
+ * narrow the list to zero rows.
+ *
+ * Visual rhythm matches the gold pill style used by `SourcePill` /
+ * `StagePill` so all three filter affordances read as one family.
+ */
+export function PriorityToggle({
+  active,
+  count,
+  onToggle,
+}: {
+  active: boolean
+  count: number
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      title={active ? 'Show all tasks' : 'Show priority tasks only'}
+      className={`shrink-0 inline-flex items-center gap-1.5 h-6 px-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors ${
+        active
+          ? 'bg-gold/15 text-gold ring-1 ring-gold/40'
+          : 'bg-white/[0.04] text-text-muted hover:text-text hover:bg-white/[0.08]'
+      }`}
+    >
+      <Flame size={11} strokeWidth={2.5} className={active ? 'text-gold' : 'text-text-light'} aria-hidden="true" />
+      Priority
+      <span className={`tabular-nums ${active ? 'text-gold/80' : 'text-text-light/70'}`}>{count}</span>
+    </button>
+  )
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────
 
 // Map a stored task category to a canonical flywheel stage. DB stores
