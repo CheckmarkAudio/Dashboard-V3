@@ -718,6 +718,15 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-17 Member Activity widgets — CSV/PDF exports on Session History, Task Completion, Clock Data
+
+- **`CLAUDE:`** per user direction: "we need to make csv file production possible for the session history and task completion widgets that are on the activity page under members, using the same coding structure, and also if you can put the pdf and csv link to the previous clock in data spreadsheet we worked on earlier into the clock in widget on the member activity page as well."
+- **Extracted shared clockColumns**: the existing inline `clockColumns` array + `parseClockNotes` + helpers from `ClockDataSection.tsx` moved to new `src/lib/columns/clockColumns.tsx`. Both the main Members > Clock Data tab AND the Activity-page Clock widget now consume the same array — rename a header in `clockColumns.tsx` and both surfaces flip. Drift-proofing now reaches the widget layer.
+- **Two new columns modules**: `sessionColumns.tsx` (over `RecentSessionInfo`) and `memberTaskCompletionColumns.tsx` (over `RecentTaskInfo`). Kept separate from `taskExportColumns` because the widget data is a narrow summary (taskId, title, completedAt, relativeLabel) not the full `AssignedTask` — conflating would force every export to either include unused fields or carry custom skips.
+- **Widget UI**: small right-aligned `<ExportButtons>` strip at the top of each of the three widget bodies (above the scrollable `CanonicalBody`). Filename + PDF title via new `exportNames(member, kind)` helper — e.g. `shift-history-Bridget Reinhard-2026-05-17.csv`, `session-history-Gavin Hammond.csv`. `WidgetBody` signature changed from `memberId: string` to `member: TeamMember` so each body has access to display_name for the filename.
+- **Eight admin export surfaces** are now live total: Members roster, main Clock Data tab, AssignAdmin per-member tasks, Studio Tasks, BusinessHealth all-team history, plus the three new activity widgets.
+- **Next**: full Sessions/Bookings table still needs an admin-table surface scoped first; Forum activity export blocked on `chat_*` schema. KPI graph export remains deferred per user.
+
 ### 2026-05-17 Tasks descriptor refactor — full drift-proofing across visible rows + CSV/PDF
 
 - **`CLAUDE:`** the user spotted that the CSV formatting on the Assign page was different from Members and asked "did we drift-proof the tasks pages the same as Members?" Initial honest answer was "no — three CSV consumers share one column array, but the visible task rows have their own hardcoded JSX, so adding/restyling a display field requires touching both places." Original recommendation was "leave as-is, PR scope is big." User pushed back: "yes lets go the refactor option." Right call.
@@ -726,7 +735,7 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 - **The canonical pattern documented**: "narrow descriptor + fat interactive shell" — descriptors own data display + export; row components own interaction. Added as a new entry at the top of `docs/LEARNING_LOG.md`.
 - **Visual parity side-effect**: `TaskRow` in AssignAdmin previously didn't show the recurrence pill (`StudioTaskRow` did). Now both show it when present. Same data was always in the CSV — visible parity is the win.
 - **Effect**: rename "Title" → "Task Name" once in `taskColumns.tsx` and the visible task rows in BOTH AssignAdmin AND StudioTasksPane update, AND the CSV column header updates, AND the BusinessHealth all-team CSV updates. Single source of truth across five surfaces (Members, Clock Data, AssignAdmin tasks, Studio Tasks, BusinessHealth).
-- **Next**: Sessions/Bookings export still needs an admin-table surface scoped first (extend Hub vs new `/admin/sessions`); Forum activity export blocked on `chat_*` schema. KPI graph export remains deferred per user.
+- **Shipped as PR #197**, commit `eb97208`.
 
 ### 2026-05-17 BusinessHealth all-team task history export — presets + Refresh + date filter all wired
 

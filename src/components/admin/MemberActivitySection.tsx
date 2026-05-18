@@ -58,7 +58,23 @@ import {
   useMemberAdminSessions,
   useMemberClockEntries,
 } from '../../lib/queries/memberProfile'
-import { Select } from '../ui'
+import { ExportButtons, Select, toExportColumns } from '../ui'
+import { clockColumns } from '../../lib/columns/clockColumns'
+import { sessionColumns } from '../../lib/columns/sessionColumns'
+import { memberTaskCompletionColumns } from '../../lib/columns/memberTaskCompletionColumns'
+
+/**
+ * Build a safe, member-name-scoped filename + PDF title for each
+ * widget export so multi-member downloads land cleanly in the user's
+ * Downloads folder. Sanitized to a whitelist by ExportButtons before
+ * being handed to the anchor download.
+ */
+function exportNames(member: TeamMember, kind: string) {
+  return {
+    filename: `${kind}-${member.display_name}`,
+    title: `${kind.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} — ${member.display_name}`,
+  }
+}
 import DashboardWidgetFrame, { type DragHandleProps } from '../dashboard/DashboardWidgetFrame'
 import FloatingDetailModal from '../FloatingDetailModal'
 import type { TeamMember } from '../../types'
@@ -384,9 +400,23 @@ function SortableWidget({
 // ─── Widget body dispatcher ──────────────────────────────────────
 
 function WidgetBody({ id, member }: { id: WidgetId; member: TeamMember }) {
-  if (id === 'sessions') return <SessionsBody memberId={member.id} />
-  if (id === 'tasks') return <TasksBody memberId={member.id} />
-  return <ClockBody memberId={member.id} />
+  if (id === 'sessions') return <SessionsBody member={member} />
+  if (id === 'tasks') return <TasksBody member={member} />
+  return <ClockBody member={member} />
+}
+
+// ─── Per-widget ExportButtons strip ──────────────────────────────
+//
+// Small pinned strip rendered at the top of each widget body, above
+// the scrollable CanonicalBody. Right-aligned so the title row above
+// stays clean. Disabled state when zero rows surfaces the standard
+// "No rows to export yet" tooltip from ExportButtons.
+function WidgetExportStrip({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-end pb-1.5 -mt-1">
+      {children}
+    </div>
+  )
 }
 
 // ─── Canonical body shell ───────────────────────────────────────
@@ -488,98 +518,139 @@ function CanonicalRow({
 
 // ─── Sessions widget body ────────────────────────────────────────
 
-function SessionsBody({ memberId }: { memberId: string }) {
-  const sessions = useMemberAdminSessions(memberId, HISTORY_LIMIT)
+function SessionsBody({ member }: { member: TeamMember }) {
+  const sessions = useMemberAdminSessions(member.id, HISTORY_LIMIT)
   if (sessions.error) return <ErrorState error={sessions.error} />
   if (sessions.isLoading) return <LoadingState />
   const rows = sessions.data ?? []
-  if (rows.length === 0) {
-    return <EmptyState icon={Briefcase} label="No sessions on record yet." />
-  }
+  const { filename, title } = exportNames(member, 'session-history')
   return (
-    <CanonicalBody>
-      {rows.map((s) => (
-        <CanonicalRow
-          key={s.sessionId}
-          to="/sessions"
-          icon={Briefcase}
-          tint="violet"
-          title={s.title}
-          meta={
-            [
-              s.room,
-              s.status && s.status !== 'scheduled' ? s.status : null,
-            ]
-              .filter(Boolean)
-              .join(' · ') || 'Studio session'
-          }
-          rightLabel={s.dateLabel}
+    <>
+      <WidgetExportStrip>
+        <ExportButtons
+          filename={filename}
+          title={title}
+          columns={toExportColumns(sessionColumns)}
+          rows={rows}
         />
-      ))}
-    </CanonicalBody>
+      </WidgetExportStrip>
+      {rows.length === 0 ? (
+        <EmptyState icon={Briefcase} label="No sessions on record yet." />
+      ) : (
+        <CanonicalBody>
+          {rows.map((s) => (
+            <CanonicalRow
+              key={s.sessionId}
+              to="/sessions"
+              icon={Briefcase}
+              tint="violet"
+              title={s.title}
+              meta={
+                [
+                  s.room,
+                  s.status && s.status !== 'scheduled' ? s.status : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || 'Studio session'
+              }
+              rightLabel={s.dateLabel}
+            />
+          ))}
+        </CanonicalBody>
+      )}
+    </>
   )
 }
 
 // ─── Tasks widget body ───────────────────────────────────────────
 
-function TasksBody({ memberId }: { memberId: string }) {
-  const tasks = useMemberAdminCompletedTasks(memberId, HISTORY_LIMIT)
+function TasksBody({ member }: { member: TeamMember }) {
+  const tasks = useMemberAdminCompletedTasks(member.id, HISTORY_LIMIT)
   if (tasks.error) return <ErrorState error={tasks.error} />
   if (tasks.isLoading) return <LoadingState />
   const rows = tasks.data ?? []
-  if (rows.length === 0) {
-    return <EmptyState icon={CheckCircle2} label="No completed tasks yet." />
-  }
+  const { filename, title } = exportNames(member, 'task-completion')
   return (
-    <CanonicalBody>
-      {rows.map((t) => (
-        <CanonicalRow
-          key={t.taskId}
-          icon={CheckCircle2}
-          tint="gold"
-          title={t.title}
-          meta="Completed"
-          rightLabel={t.relativeLabel}
+    <>
+      <WidgetExportStrip>
+        <ExportButtons
+          filename={filename}
+          title={title}
+          columns={toExportColumns(memberTaskCompletionColumns)}
+          rows={rows}
         />
-      ))}
-    </CanonicalBody>
+      </WidgetExportStrip>
+      {rows.length === 0 ? (
+        <EmptyState icon={CheckCircle2} label="No completed tasks yet." />
+      ) : (
+        <CanonicalBody>
+          {rows.map((t) => (
+            <CanonicalRow
+              key={t.taskId}
+              icon={CheckCircle2}
+              tint="gold"
+              title={t.title}
+              meta="Completed"
+              rightLabel={t.relativeLabel}
+            />
+          ))}
+        </CanonicalBody>
+      )}
+    </>
   )
 }
 
 // ─── Clock widget body ───────────────────────────────────────────
 
-function ClockBody({ memberId }: { memberId: string }) {
-  const entries = useMemberClockEntries(memberId, HISTORY_LIMIT)
+function ClockBody({ member }: { member: TeamMember }) {
+  const entries = useMemberClockEntries(member.id, HISTORY_LIMIT)
   if (entries.error) return <ErrorState error={entries.error} />
   if (entries.isLoading) return <LoadingState />
   const rows = entries.data ?? []
-  if (rows.length === 0) {
-    return <EmptyState icon={Clock} label="No shifts recorded yet." />
-  }
+  const { filename, title } = exportNames(member, 'shift-history')
   return (
-    <CanonicalBody>
-      {rows.map((e) => {
-        const isOpen = e.clocked_out_at === null
-        return (
-          <CanonicalRow
-            key={e.entry_id}
-            icon={Clock}
-            tint="emerald"
-            title={formatClockTitle(e)}
-            meta={e.notes ?? 'No notes'}
-            rightLabel={isOpen ? undefined : formatDuration(e.duration_minutes)}
-            rightExtra={
-              isOpen ? (
-                <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/30 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
-                  On shift
-                </span>
-              ) : null
-            }
-          />
-        )
-      })}
-    </CanonicalBody>
+    <>
+      <WidgetExportStrip>
+        {/* Reuses the SAME `clockColumns` array that powers the main
+            Members > Clock Data tab — single source of truth across
+            both surfaces. Rename a header in `clockColumns.tsx` and
+            both the main tab AND this widget's CSV/PDF update in
+            lockstep. */}
+        <ExportButtons
+          filename={filename}
+          title={title}
+          columns={toExportColumns(clockColumns)}
+          rows={rows}
+        />
+      </WidgetExportStrip>
+      {rows.length === 0 ? (
+        <EmptyState icon={Clock} label="No shifts recorded yet." />
+      ) : (
+        <CanonicalBody>
+          {rows.map((e) => {
+            const isOpen = e.clocked_out_at === null
+            return (
+              <CanonicalRow
+                key={e.entry_id}
+                icon={Clock}
+                tint="emerald"
+                title={formatClockTitle(e)}
+                meta={e.notes ?? 'No notes'}
+                rightLabel={isOpen ? undefined : formatDuration(e.duration_minutes)}
+                rightExtra={
+                  isOpen ? (
+                    <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/30 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+                      On shift
+                    </span>
+                  ) : null
+                }
+              />
+            )
+          })}
+        </CanonicalBody>
+      )}
+    </>
   )
 }
 
