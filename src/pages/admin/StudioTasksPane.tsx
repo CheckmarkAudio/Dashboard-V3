@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Calendar as CalendarIcon,
   Check,
   CheckSquare,
   ChevronDown,
@@ -11,7 +10,6 @@ import {
   Layers,
   Loader2,
   Plus,
-  Repeat,
   Save,
   Trash2,
   X,
@@ -38,6 +36,7 @@ import { useToast } from '../../components/Toast'
 import { useAuth } from '../../contexts/AuthContext'
 import { Button, ExportButtons, Input, toExportColumns } from '../../components/ui'
 import { taskExportColumns } from '../../lib/columns/taskColumns'
+import { TaskDisplayCells } from '../../components/tasks/TaskDisplayCells'
 import { supabase } from '../../lib/supabase'
 import MultiTaskCreateModal from '../../components/tasks/requests/MultiTaskCreateModal'
 import type { AssignedTask } from '../../types/assignments'
@@ -650,25 +649,14 @@ function StudioTaskRow({
           className="w-4 h-4 rounded border-border accent-gold cursor-pointer"
         />
       )}
-      <span
-        className={`flex-1 min-w-0 text-[13px] truncate ${
-          done ? 'line-through text-text-light' : 'text-text'
-        }`}
-      >
-        {task.title}
-      </span>
-      {task.recurrence_spec && !confirmDelete && (
-        <span className="text-[10px] text-gold/80 shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gold/10 ring-1 ring-gold/25 font-semibold uppercase tracking-wider">
-          <Repeat size={10} aria-hidden="true" />
-          {task.recurrence_spec.frequency}
-        </span>
-      )}
-      {task.due_date && !confirmDelete && (
-        <span className="text-[10px] text-text-light tabular-nums shrink-0 inline-flex items-center gap-1">
-          <CalendarIcon size={10} aria-hidden="true" />
-          {task.due_date}
-        </span>
-      )}
+      {/* 2026-05-17 — display cells (title, recurrence, due_date)
+          come from the shared `taskExportColumns` descriptors via
+          <TaskDisplayCells>. Same source of truth as the CSV/PDF
+          exports — rename a header or restyle a cell once in
+          taskColumns.tsx, both surfaces update in lockstep.
+          confirmDelete still hides the display cells so the wider
+          "Confirm delete" pill has room. */}
+      {!confirmDelete && <TaskDisplayCells task={task} />}
       {/* Per-row Edit + Trash hidden in select mode so the bulk bar
           is the one place admins act from. */}
       {!selectMode && !confirmDelete && (
