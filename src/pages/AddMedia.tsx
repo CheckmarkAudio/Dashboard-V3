@@ -27,6 +27,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { extractEdgeFunctionError } from '../lib/edgeFunctionError'
+import { emitFlywheelEvent } from '../lib/queries/flywheelEvents'
 import { Badge, PageHeader } from '../components/ui'
 
 // 2026-05-14 pivoted from Drive → Dropbox after Google killed
@@ -179,6 +180,21 @@ export default function AddMedia() {
           // refetch to make sure we eventually see it.
           void queryClient.invalidateQueries({ queryKey: historyKey })
         }
+        // Flywheel — Phase 1: every successful upload = a Share event.
+        // Fire-and-forget; emit failures must not regress the upload.
+        // Metadata captures filename + size so Phase 2 can show "top
+        // contributors this week" without re-joining to the submission
+        // row. Source id is the media_submissions.id when available.
+        void emitFlywheelEvent({
+          stage: 'share',
+          source_type: 'media_upload',
+          source_id: data.submission?.id ?? null,
+          metadata: {
+            file_name: next.file.name,
+            file_size_bytes: next.file.size,
+            file_type: next.file.type || null,
+          },
+        })
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Upload failed'
         setPending((prev) =>

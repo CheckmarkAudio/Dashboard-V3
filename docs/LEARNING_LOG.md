@@ -51,6 +51,88 @@ Quick alphabetical jumping-off point. Click or search.
 
 ---
 
+# 2026-05-17 — Event ledger pattern (Flywheel Phase 1)
+
+## Fire-and-forget side-effect emits
+
+**TL;DR:** When you want to record analytics events (or any
+non-critical side effect) from a user action, NEVER block the user's
+primary action on the emit. Wrap the emit in a fire-and-forget helper
+that swallows errors with a `console.warn` and returns synchronously
+(or with `void` so callers don't accidentally `await` it).
+
+**When you encountered it:** Phase 1 of the Flywheel event ledger.
+Five different user actions (task complete, booking create, client
+create, media upload, etc.) needed to emit a `flywheel_events` row.
+The temptation was to `await emitFlywheelEvent(...)` inside each
+action's success path. The right move: `void emitFlywheelEvent(...)`
++ a helper that catches its own errors.
+
+**Why it matters:** If the analytics RPC has a momentary blip
+(network, RLS issue, server hiccup), and the emit is `await`-ed,
+the user's task-complete or booking-save will FAIL. That's a
+catastrophic regression for an analytics side effect. The user
+won't care that we missed one analytics row — they will care a
+LOT if their booking didn't save.
+
+**Mental model:** Think of the emit as "writing to a journal we
+keep on the side." Journals are great when they work, but if the
+journal is locked the cook still cooks dinner. The kitchen doesn't
+shut down because the journal is broken.
+
+**Pattern in code:**
+```ts
+// In the helper:
+export async function emitFlywheelEvent(input): Promise<string | null> {
+  try {
+    const { error } = await supabase.rpc('record_flywheel_event', ...)
+    if (error) { console.warn(...); return null }
+    return data
+  } catch (err) { console.warn(...); return null }
+}
+
+// At every call site:
+void emitFlywheelEvent({ stage: 'deliver', source_type: 'task', ... })
+// (NOT await — even if the emit takes a moment, the user is moving on)
+```
+
+**Counter-rule:** If the side effect IS critical to the user's
+action (e.g. payment recorded must happen before "purchase
+confirmed" toast), then it's NOT a side effect — it's part of the
+primary action and should be awaited + errored properly. Only use
+this pattern for genuinely auxiliary effects.
+
+---
+
+## Append-only ledger tables (no UPDATE/DELETE policies)
+
+**TL;DR:** For event-history tables (analytics ledgers, audit logs,
+billing events), set up RLS so that ONLY SELECT is allowed from app
+code, and direct INSERTs are blocked too — funnel all inserts
+through a single SECURITY DEFINER RPC that validates inputs. No
+UPDATE or DELETE policy at all means history is immutable from the
+app layer. If a row truly needs deleting, an operator does it via
+SQL with full intent.
+
+**When you encountered it:** `flywheel_events` table. App code
+never INSERTs directly; everything goes through `record_flywheel_event()`.
+There's no INSERT/UPDATE/DELETE policy, so RLS denies those operations
+even if a malicious or buggy client tried.
+
+**Why it matters:** Analytics integrity. If an event got logged
+once, you want it to stay logged. If a buggy retry path could
+double-emit, the RPC can dedupe; if it could delete, the RPC's job
+is harder. Locking out UPDATE/DELETE entirely makes the history
+worth what it claims to be.
+
+**Mental model:** Cash register receipts. You can READ a receipt
+from yesterday. You can WRITE today's receipts through the printer
+(the RPC). You CANNOT go back and change a receipt from yesterday,
+even if you really want to — the printer's the only path in, and
+it only emits new receipts.
+
+---
+
 # 2026-05-17 — Extracting a shared algorithm (PR #200)
 
 ## Extracting a reusable algorithm into a shared module
