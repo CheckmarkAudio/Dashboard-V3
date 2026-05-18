@@ -115,3 +115,81 @@ export async function adminDeleteSession(
     }
   }
 }
+
+/**
+ * Delete THIS session + every future sibling in its recurring series.
+ * Calls the `admin_delete_future_sessions` RPC (added 2026-05-17 for
+ * the Calendar polish PR). Use `adminDeleteSession` for single-row
+ * deletes; this function is specifically for the "this and all future
+ * events?" scope a user picks in the delete dialog.
+ *
+ * Best-effort sweep of every returned google_event_id from Google
+ * Calendar — failures are aggregated into a single `syncWarning`
+ * string so the modal can show ONE banner instead of a stack of
+ * toasts when a long recurring series has multiple Google events.
+ */
+export async function adminDeleteFutureSessions(
+  sessionId: string,
+  opts: { cancelNote?: string } = {},
+): Promise<{ deletedCount: number; syncWarning: string | null }> {
+  const { data, error } = await supabase.rpc('admin_delete_future_sessions', {
+    p_session_id: sessionId,
+    p_cancel_note: opts.cancelNote ?? null,
+  })
+  if (error) {
+    console.error('[queries/adminSessions] adminDeleteFutureSessions failed:', error)
+    throw new Error(error.message)
+  }
+  const payload = (data ?? {}) as {
+    deleted_count?: number
+    deleted_google_event_ids?: string[]
+  }
+  const googleIds = payload.deleted_google_event_ids ?? []
+  const deletedCount = payload.deleted_count ?? 0
+
+  const syncErrors: string[] = []
+  for (const id of googleIds) {
+    if (!id) continue
+    try {
+      await deleteSessionEventFromGoogleCalendar(id)
+    } catch (syncError) {
+      syncErrors.push(syncError instanceof Error ? syncError.message : 'Unknown Google Calendar delete failure')
+    }
+  }
+
+  const syncWarning =
+    syncErrors.length === 0
+      ? null
+      : syncErrors.length === 1
+        ? syncErrors[0]!
+        : `${syncErrors.length} Google Calendar events failed to delete. First error: ${syncErrors[0]}`
+
+  return { deletedCount, syncWarning }
+}
+
+/**
+ * Look up the recurrence shape of a single session so the UI can
+ * decide whether to show the scope picker in the delete dialog.
+ * Returns null on miss (cross-team uuid or deleted row). The
+ * Calendar week-grid doesn't carry recurrence fields on its
+ * `CalendarBooking` projection, so we fetch them on-demand when the
+ * user clicks Delete.
+ */
+export async function fetchSessionRecurrenceShape(
+  sessionId: string,
+): Promise<{ isTemplate: boolean; isChild: boolean } | null> {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('id, recurrence_spec, recurrence_parent_id')
+    .eq('id', sessionId)
+    .maybeSingle()
+  if (error) {
+    console.error('[queries/adminSessions] fetchSessionRecurrenceShape failed:', error)
+    return null
+  }
+  if (!data) return null
+  return {
+    isTemplate: data.recurrence_spec !== null,
+    isChild: data.recurrence_parent_id !== null,
+  }
+}

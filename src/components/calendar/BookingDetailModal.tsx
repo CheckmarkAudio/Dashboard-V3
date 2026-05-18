@@ -1,6 +1,7 @@
-import { AlertCircle, Building2, CalendarCheck2, CalendarDays, Clock, Edit2, ExternalLink, Loader2, User as UserIcon } from 'lucide-react'
+import { AlertCircle, Building2, CalendarCheck2, CalendarDays, Clock, Edit2, ExternalLink, Loader2, Trash2, User as UserIcon } from 'lucide-react'
 import FloatingDetailModal from '../FloatingDetailModal'
 import BookingStatusPopover from './BookingStatusPopover'
+import { useAuth } from '../../contexts/AuthContext'
 
 /**
  * BookingDetailModal — read-only summary of a single booking, opened
@@ -107,6 +108,7 @@ export default function BookingDetailModal({
   booking,
   onClose,
   onEdit,
+  onDelete,
   onStatusChanged,
 }: {
   booking: BookingDetail
@@ -115,10 +117,16 @@ export default function BookingDetailModal({
   // Parent is responsible for what edit means (typically: close this
   // modal + open CreateBookingModal in edit mode with `editSessionId`).
   onEdit?: () => void
+  // 2026-05-17 — when set AND viewer is admin, the footer surfaces a
+  // Delete pill. Parent owns the actual delete flow (typically: close
+  // this modal + open DeleteBookingDialog with the same session id).
+  // Recurring-vs-single scope picking happens in the dialog, not here.
+  onDelete?: () => void
   // PR #158 — bubbled when the user flips status via the hover
   // popover (Confirm / Cancel / Restore). Parent should refetch.
   onStatusChanged?: () => void
 }) {
+  const { isAdmin } = useAuth()
   const typeLabel = TYPE_LABELS[booking.type] ?? booking.type
   const googleSyncStatus = booking.googleSyncStatus ?? 'pending'
   const GoogleSyncIcon =
@@ -165,6 +173,20 @@ export default function BookingDetailModal({
       ariaLabel={`Booking detail for ${booking.client}`}
       footer={
         <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border bg-surface-alt/40 rounded-b-[18px]">
+          {/* Delete (admin only) sits to the LEFT of Close + Edit so
+              the gold "Edit" primary action stays the rightmost +
+              most prominent — destructive actions live on the far
+              left of the footer per sitewide convention. */}
+          {isAdmin && onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold text-rose-300 hover:text-white hover:bg-rose-500/80 transition-colors mr-auto focus-ring"
+            >
+              <Trash2 size={13} aria-hidden="true" />
+              Delete
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
