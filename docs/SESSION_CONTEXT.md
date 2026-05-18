@@ -718,6 +718,13 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-17 BusinessHealth all-team task history export — presets + Refresh + date filter all wired
+
+- **`CLAUDE:`** continued the export pipeline rollout to BusinessHealth (the Analytics page). Replaced the original stub "Export PDF" + "Print" row (placeholder since the page was first built — neither button was wired) with a real `<ExportButtons>` fed by the shared `taskExportColumns` from PR #195. This is the fifth surface using the canonical pattern.
+- **Three "while I was here" wires that had also been stubs**: (1) Preset pills (Today / Week / Month / Quarter / Year / All Time) now actually set `from`/`to` via a new `presetToRange()` helper using Denver-local date math (Monday-start weeks per studio cadence, `localDateKey()` for evening-timezone safety per `c6c5bf6`'s earlier lesson); (2) Refresh button now invalidates the `team-assigned-tasks` query so a stale cache doesn't hide recent completions; (3) the date range filter actually filters now — a task qualifies if EITHER its `completed_at` OR its `created_at` falls in the range, which matches retrospective-report intent ("show me all activity in the last month" rather than just "show me what was created in the last month").
+- **Filename + PDF title** encode the active range: `all-team-tasks-2026-05-01-to-2026-05-31.csv` or `all-team-tasks-all-time.csv` for unfiltered. "Showing N of M team tasks · range from → to" strip sits above ExportButtons so admins see exactly what the filter is catching before they click download.
+- **Next**: Sessions/Bookings export still needs an admin-table surface scoped first — ask user about extending Hub vs new `/admin/sessions` page. After that: Forum activity (post-`chat_*` schema). KPI graph export remains parked per user.
+
 ### 2026-05-17 Tasks export — per-member + Studio Tasks wired via shared `taskExportColumns`
 
 - **`CLAUDE:`** continued the export pipeline rollout to the third + fourth admin task surfaces. Added `src/lib/columns/taskColumns.ts` — first shared `TableColumn<T>` module, exporting `taskExportColumns: TableColumn<AssignedTask>[]` covering Title, Description, Scope, Studio Space, Assigned To, Category, Due Date, Required, Completed, Completed At, Created At, Source, Recurrence. Used in two places (AssignAdmin per-member pane + StudioTasksPane), proving the descriptor pattern scales across multiple consumers of the same export schema.

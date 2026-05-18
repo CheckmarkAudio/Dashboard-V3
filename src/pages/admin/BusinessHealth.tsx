@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTasks } from '../../contexts/TaskContext'
 import { fetchTeamAssignedTasks } from '../../lib/queries/assignments'
-import { Check, Download, Printer, RefreshCcw, Target, CheckSquare, Briefcase, Info, PieChart as PieChartIcon } from 'lucide-react'
+import { Check, RefreshCcw, Target, CheckSquare, Briefcase, Info, PieChart as PieChartIcon } from 'lucide-react'
+import { ExportButtons, toExportColumns } from '../../components/ui'
+import { taskExportColumns } from '../../lib/columns/taskColumns'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, LineChart, Line, CartesianGrid,
@@ -111,9 +113,71 @@ function HealthGauge({ pct }: { pct: number }) {
 
 // ── Page ───────────────────────────────────────────────────────────────
 
+// Local-date helpers — keep all date math in local Denver time per the
+// project convention (see PR #c6c5bf6 "Calendar local-date key fix").
+// Date inputs and ISO timestamps both get compared against the same
+// YYYY-MM-DD local format so evening timezones don't slide rows by one
+// day in the export.
+function localDateKey(d: Date): string {
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function isoToLocalDateKey(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.valueOf())) return null
+  return localDateKey(d)
+}
+
+// Translate a preset into a {from, to} window. Local week starts Monday
+// to match the studio's actual work-week cadence.
+function presetToRange(preset: Preset): { from: string; to: string } {
+  const today = new Date()
+  const todayKey = localDateKey(today)
+
+  if (preset === 'today') return { from: todayKey, to: todayKey }
+
+  if (preset === 'week') {
+    const day = today.getDay() // 0 (Sun) – 6 (Sat)
+    const offsetToMon = day === 0 ? 6 : day - 1
+    const start = new Date(today)
+    start.setDate(today.getDate() - offsetToMon)
+    const end = new Date(start)
+    end.setDate(start.getDate() + 6)
+    return { from: localDateKey(start), to: localDateKey(end) }
+  }
+
+  if (preset === 'month') {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1)
+    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    return { from: localDateKey(start), to: localDateKey(end) }
+  }
+
+  if (preset === 'quarter') {
+    const q = Math.floor(today.getMonth() / 3)
+    const start = new Date(today.getFullYear(), q * 3, 1)
+    const end = new Date(today.getFullYear(), q * 3 + 3, 0)
+    return { from: localDateKey(start), to: localDateKey(end) }
+  }
+
+  if (preset === 'year') {
+    return {
+      from: localDateKey(new Date(today.getFullYear(), 0, 1)),
+      to: localDateKey(new Date(today.getFullYear(), 11, 31)),
+    }
+  }
+
+  // 'all'
+  return { from: '1900-01-01', to: '2999-12-31' }
+}
+
 export default function BusinessHealth() {
   useDocumentTitle('Analytics - Checkmark Workspace')
   const { profile } = useAuth()
+  const queryClient = useQueryClient()
   // `useTasks` still drives the task-drilldown list + bookings until
   // the Phase 2 flywheel ledger arrives. Task aggregation for the
   // flywheel bars now comes from real assigned_tasks via Supabase
@@ -126,12 +190,44 @@ export default function BusinessHealth() {
   const [from, setFrom] = useState('1900-01-01')
   const [to, setTo] = useState('2999-12-31')
 
+  // Preset → date range. Clicking a preset pill rewrites from/to so
+  // the export reflects the user's expectation. Manual date-picker
+  // changes don't reset the preset, but they will visually un-match.
+  useEffect(() => {
+    const range = presetToRange(preset)
+    setFrom(range.from)
+    setTo(range.to)
+  }, [preset])
+
   const assignedTasksQuery = useQuery({
     queryKey: ['team-assigned-tasks', profile?.id ?? 'none', 'all'] as const,
     queryFn: () => fetchTeamAssignedTasks(profile!.id, { includeCompleted: true }),
     enabled: Boolean(profile?.id),
   })
   const assignedTasks = assignedTasksQuery.data ?? []
+
+  // Tasks filtered by the active from/to range. A task qualifies when
+  // EITHER its completed_at (when finished) OR its created_at (when
+  // added) falls inside the window — gives "task activity in this
+  // period" rather than just "tasks created in this period," which is
+  // what admins actually want for retrospective reports.
+  const filteredTasks = useMemo(() => {
+    if (from === '1900-01-01' && to === '2999-12-31') return assignedTasks
+    const inRange = (key: string | null) => key !== null && key >= from && key <= to
+    return assignedTasks.filter((t) => {
+      const completedKey = isoToLocalDateKey(t.completed_at)
+      const createdKey = isoToLocalDateKey(t.created_at)
+      return inRange(completedKey) || inRange(createdKey)
+    })
+  }, [assignedTasks, from, to])
+
+  // Pretty label for the export filename + PDF title. Matches the
+  // currently active preset OR the manual date range.
+  const rangeLabel = useMemo(() => {
+    if (from === '1900-01-01' && to === '2999-12-31') return 'all-time'
+    if (from === to) return from
+    return `${from}-to-${to}`
+  }, [from, to])
 
   // ── Derived stats — per-stage task counts from real assigned_tasks ──
 
@@ -279,19 +375,48 @@ export default function BusinessHealth() {
             <span className="text-text-muted text-sm">to</span>
             <input type="date" value={to} onChange={e => setTo(e.target.value)} className="flex-1 h-9 px-3 rounded-lg border border-border bg-surface-alt text-sm" aria-label="End date" />
           </div>
-          <button type="button" className="h-9 px-4 rounded-lg bg-gold text-black text-sm font-semibold hover:bg-gold-muted focus-ring flex items-center gap-1.5">
-            <RefreshCcw size={14} /> Refresh
+          {/* Refresh — wired 2026-05-17. Invalidates the cached
+              assignedTasks query so the export reflects any new
+              completions/edits without a page reload. */}
+          <button
+            type="button"
+            onClick={() => {
+              void queryClient.invalidateQueries({
+                queryKey: ['team-assigned-tasks', profile?.id ?? 'none', 'all'],
+              })
+            }}
+            disabled={assignedTasksQuery.isFetching}
+            className="h-9 px-4 rounded-lg bg-gold text-black text-sm font-semibold hover:bg-gold-muted focus-ring flex items-center gap-1.5 disabled:opacity-60"
+          >
+            <RefreshCcw size={14} className={assignedTasksQuery.isFetching ? 'animate-spin' : ''} />
+            {assignedTasksQuery.isFetching ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2">
-        <button type="button" className="h-9 px-4 rounded-lg bg-gold text-black text-sm font-semibold hover:bg-gold-muted focus-ring flex items-center gap-1.5">
-          <Download size={14} /> Export PDF
-        </button>
-        <button type="button" className="h-9 px-4 rounded-lg border border-border bg-surface text-text text-sm font-semibold hover:bg-surface-hover focus-ring flex items-center gap-1.5">
-          <Printer size={14} /> Print
-        </button>
+      {/* All-team task export — wired 2026-05-17. Replaces the
+          original stub Export PDF + Print buttons. Uses the shared
+          `taskExportColumns` from PR #195 so the CSV/PDF schema is
+          identical to the per-member + Studio Tasks exports. Rows
+          come from `filteredTasks` so the active date range (preset
+          or manual) flows through. Filename + PDF title include the
+          range label so downloads land clearly named in Downloads. */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-[11px] text-text-light tabular-nums">
+          Showing {filteredTasks.length} of {assignedTasks.length} team task
+          {assignedTasks.length === 1 ? '' : 's'} · range {from} → {to}
+        </p>
+        <ExportButtons
+          filename={`all-team-tasks-${rangeLabel}`}
+          title={
+            rangeLabel === 'all-time'
+              ? 'All Team Tasks — All Time'
+              : `All Team Tasks — ${from} to ${to}`
+          }
+          columns={toExportColumns(taskExportColumns)}
+          rows={filteredTasks}
+          disabled={assignedTasksQuery.isLoading}
+        />
       </div>
 
       {/* ── 3. Flywheel Activity (done opaque + open translucent) ──
