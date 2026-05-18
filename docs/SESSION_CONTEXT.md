@@ -718,12 +718,22 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-17 Tasks descriptor refactor — full drift-proofing across visible rows + CSV/PDF
+
+- **`CLAUDE:`** the user spotted that the CSV formatting on the Assign page was different from Members and asked "did we drift-proof the tasks pages the same as Members?" Initial honest answer was "no — three CSV consumers share one column array, but the visible task rows have their own hardcoded JSX, so adding/restyling a display field requires touching both places." Original recommendation was "leave as-is, PR scope is big." User pushed back: "yes lets go the refactor option." Right call.
+- **The fix**: renamed `src/lib/columns/taskColumns.ts` → `.tsx` (to allow JSX); added `render` functions to the three display-cell descriptors (`title`, `due_date`, `recurrence`) alongside their existing `exportValue` functions; built `src/components/tasks/TaskDisplayCells.tsx` that iterates `visibleColumns(taskExportColumns)` and renders the display half of each descriptor (null returns collapse cleanly so cells with no data don't produce empty pill chrome).
+- **`TaskRow` (AssignAdmin) + `StudioTaskRow` (StudioTasksPane)** both now use `<TaskDisplayCells task={task} />` for the visible display half; both keep their hardcoded interactive controls (completion checkbox, edit/delete buttons, confirm-delete pill) because those carry row-level state (`selectMode`, `isSelected`, `confirmDelete`, mutation callbacks) that doesn't belong in descriptors.
+- **The canonical pattern documented**: "narrow descriptor + fat interactive shell" — descriptors own data display + export; row components own interaction. Added as a new entry at the top of `docs/LEARNING_LOG.md`.
+- **Visual parity side-effect**: `TaskRow` in AssignAdmin previously didn't show the recurrence pill (`StudioTaskRow` did). Now both show it when present. Same data was always in the CSV — visible parity is the win.
+- **Effect**: rename "Title" → "Task Name" once in `taskColumns.tsx` and the visible task rows in BOTH AssignAdmin AND StudioTasksPane update, AND the CSV column header updates, AND the BusinessHealth all-team CSV updates. Single source of truth across five surfaces (Members, Clock Data, AssignAdmin tasks, Studio Tasks, BusinessHealth).
+- **Next**: Sessions/Bookings export still needs an admin-table surface scoped first (extend Hub vs new `/admin/sessions`); Forum activity export blocked on `chat_*` schema. KPI graph export remains deferred per user.
+
 ### 2026-05-17 BusinessHealth all-team task history export — presets + Refresh + date filter all wired
 
 - **`CLAUDE:`** continued the export pipeline rollout to BusinessHealth (the Analytics page). Replaced the original stub "Export PDF" + "Print" row (placeholder since the page was first built — neither button was wired) with a real `<ExportButtons>` fed by the shared `taskExportColumns` from PR #195. This is the fifth surface using the canonical pattern.
 - **Three "while I was here" wires that had also been stubs**: (1) Preset pills (Today / Week / Month / Quarter / Year / All Time) now actually set `from`/`to` via a new `presetToRange()` helper using Denver-local date math (Monday-start weeks per studio cadence, `localDateKey()` for evening-timezone safety per `c6c5bf6`'s earlier lesson); (2) Refresh button now invalidates the `team-assigned-tasks` query so a stale cache doesn't hide recent completions; (3) the date range filter actually filters now — a task qualifies if EITHER its `completed_at` OR its `created_at` falls in the range, which matches retrospective-report intent ("show me all activity in the last month" rather than just "show me what was created in the last month").
 - **Filename + PDF title** encode the active range: `all-team-tasks-2026-05-01-to-2026-05-31.csv` or `all-team-tasks-all-time.csv` for unfiltered. "Showing N of M team tasks · range from → to" strip sits above ExportButtons so admins see exactly what the filter is catching before they click download.
-- **Next**: Sessions/Bookings export still needs an admin-table surface scoped first — ask user about extending Hub vs new `/admin/sessions` page. After that: Forum activity (post-`chat_*` schema). KPI graph export remains parked per user.
+- **Shipped as PR #196**, commit `55ce0e6`.
 
 ### 2026-05-17 Tasks export — per-member + Studio Tasks wired via shared `taskExportColumns`
 
