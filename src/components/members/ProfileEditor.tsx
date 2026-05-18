@@ -12,6 +12,7 @@ import {
   resolveChatColorKey,
   type ChatColorKey,
 } from '../../lib/forum/chatColor'
+import { OWNER_EMAIL } from '../../domain/permissions'
 import { setUserPreference } from '../../lib/preferences'
 
 /**
@@ -92,10 +93,14 @@ export default function ProfileEditor({ member, onClose }: ProfileEditorProps) {
   // preferences if set; otherwise we display the hash-derived
   // default so the picker shows the member's current color even
   // without a saved override.
+  // Owner = Checkmark — color is brand-pinned to gold regardless of
+  // any stored override. The picker section below is hidden for the
+  // owner since there's nothing to choose.
+  const isOwner = member.email?.toLowerCase() === OWNER_EMAIL.toLowerCase()
   const initialChatColor = useMemo<ChatColorKey>(() => {
     const stored = (member.preferences as Record<string, unknown> | null | undefined)?.chat_color
-    return resolveChatColorKey(member.id, stored)
-  }, [member.id, member.preferences])
+    return resolveChatColorKey(member.id, stored, { isOwner })
+  }, [member.id, member.preferences, isOwner])
   const [chatColor, setChatColor] = useState<ChatColorKey>(initialChatColor)
 
   const [saving, setSaving] = useState(false)
@@ -334,38 +339,43 @@ export default function ProfileEditor({ member, onClose }: ProfileEditorProps) {
           color from the member's id; this picker lets the member
           override. Renders as a row of color swatches with a
           ring on the active selection. Selection writes to
-          team_members.preferences.chat_color via setUserPreference. */}
-      <section className="space-y-3">
-        <p className="text-[11px] font-semibold text-gold uppercase tracking-wider">Chat color</p>
-        <p className="text-[12px] text-text-muted -mt-1">
-          Used for your name in the Forum so messages are easy to scan.
-        </p>
-        <div className="flex items-center gap-2 flex-wrap">
-          {CHAT_COLOR_KEYS.map((key) => {
-            const tokens = CHAT_COLOR_TOKENS[key]
-            const active = chatColor === key
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setChatColor(key)}
-                disabled={saving}
-                aria-pressed={active}
-                aria-label={`Use ${tokens.label}`}
-                title={tokens.label}
-                className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full transition-all focus-ring ${
-                  active
-                    ? 'ring-2 ring-offset-2 ring-offset-surface ring-text scale-105'
-                    : 'hover:scale-105'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                style={{ backgroundColor: tokens.hex }}
-              >
-                <span className="sr-only">{tokens.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      </section>
+          team_members.preferences.chat_color via setUserPreference.
+          2026-05-17 — hidden for the owner (Checkmark): their chat
+          color is hard-pinned to brand gold in resolveChatColorKey,
+          so showing a picker that does nothing would be confusing. */}
+      {!isOwner && (
+        <section className="space-y-3">
+          <p className="text-[11px] font-semibold text-gold uppercase tracking-wider">Chat color</p>
+          <p className="text-[12px] text-text-muted -mt-1">
+            Used for your name in the Forum so messages are easy to scan.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            {CHAT_COLOR_KEYS.map((key) => {
+              const tokens = CHAT_COLOR_TOKENS[key]
+              const active = chatColor === key
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setChatColor(key)}
+                  disabled={saving}
+                  aria-pressed={active}
+                  aria-label={`Use ${tokens.label}`}
+                  title={tokens.label}
+                  className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full transition-all focus-ring ${
+                    active
+                      ? 'ring-2 ring-offset-2 ring-offset-surface ring-text scale-105'
+                      : 'hover:scale-105'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  style={{ backgroundColor: tokens.hex }}
+                >
+                  <span className="sr-only">{tokens.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {error && (
         <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">

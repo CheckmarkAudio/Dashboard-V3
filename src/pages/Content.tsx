@@ -9,6 +9,7 @@ import MemberAvatar from '../components/members/MemberAvatar'
 import MediaPicker from '../components/forum/MediaPicker'
 import AttachmentDisplay from '../components/forum/AttachmentDisplay'
 import { chatColorTokens, resolveChatColorKey } from '../lib/forum/chatColor'
+import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
 import { Send, Hash, Users } from 'lucide-react'
 import type { TeamMember } from '../types'
@@ -320,7 +321,10 @@ function ChatBubble({
   // hash of the sender_id otherwise so anonymous reads still get a
   // stable color.
   const overrideColor = (member?.preferences as Record<string, unknown> | null | undefined)?.chat_color
-  const colorKey = resolveChatColorKey(message.sender_id, overrideColor)
+  // Owner = Checkmark — always rendered in brand gold so their
+  // messages read as the studio voice sitewide (2026-05-17).
+  const isOwner = member?.email?.toLowerCase() === OWNER_EMAIL.toLowerCase()
+  const colorKey = resolveChatColorKey(message.sender_id, overrideColor, { isOwner })
   const tokens = chatColorTokens(colorKey)
   const attachments = Array.isArray(message.attachments) ? message.attachments : []
 
