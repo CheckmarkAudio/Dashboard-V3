@@ -718,6 +718,18 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-17 Sessions polish #2 (preview) — Bookings page restructured with left-rail tabs
+
+- **`CLAUDE:`** per user direction: "add calendar view also to the booking page - to do this, we want a left side bar modeled like the 'assign' and 'settings' pages where we have 'bookings' 'Calendar' and 'clients' on the side bar. I would like to preview this first because I am deciding if I would like to fully merge calendar with bookings menu item."
+- **Layout swap**: `/sessions` page no longer renders an inline Bookings/Clients pill-tab in the PageHeader child slot. Now uses the canonical two-pane AdminSettings/AssignAdmin chrome (`bg-surface rounded-xl border border-border`) with a 260px left rail × right pane.
+- **Three left-rail entries** via `<AdminSectionNavItem>`: Bookings (Briefcase), Calendar (CalendarDays), Clients (UserSquare). Each shows icon + title + subtitle with gold active-state ring. URL hash → tab: `#clients` and `#calendar` both work for deep-linking.
+- **Calendar tab strategy** — single-source-of-truth. Added `embedded?: boolean` prop to `src/pages/Calendar.tsx` default export. When `embedded=true`: (a) `useDocumentTitle('Booking Agent - ...')` instead of 'Calendar - ...' so the host's title wins, (b) drops the outer `max-w-6xl mx-auto` wrapper class, (c) suppresses the page-level `<h1>Calendar</h1>` (Sessions' PageHeader already says "Booking"). Week nav, day card, week grid, all modals, right-click context menu — all shared. Standalone `/calendar` route still renders `<Calendar />` with no prop, unchanged behavior.
+- **Bookings tab body** — category-pill row + admin Export/Manage/Book CTAs lifted from PageHeader child slot into the tab body so each section owns its own sub-toolbar. CTAs compacted from `w-[248px]` → `w-[200px]` so all three fit on one row inside the narrower right pane. Table chrome unchanged.
+- **Clients tab** — unchanged behavior, still uses `<ClientsPanel>` + `registerAddClient` ref. The "Add Client" CTA lives in the PageHeader `actions` slot when Clients is the active section.
+- **Top-nav `/calendar` route intact** — per user's explicit "preview first" direction, so they can compare side-by-side. `Layout.tsx` memberLinks NOT TOUCHED. After preview review, user will decide whether to drop the top-nav Calendar entry and let the Booking page own Calendar (one entry point, cleaner nav) or keep both.
+- **Removed**: the old inline `ViewToggleButton` component at the bottom of Sessions.tsx (replaced by AdminSectionNavItem).
+- **Next**: wait for user preview review + decision on whether to (a) merge fully (drop top-nav `/calendar`), (b) keep both entry points, (c) iterate on the layout before committing. Don't touch `Layout.tsx` until they signal.
+
 ### 2026-05-17 Task widget tweaks (3-pack) — reorder + Priority filter + admin reassign
 
 - **`CLAUDE:`** per user direction: "Tasks tweaks: (1) make tasks re-arrangable under 'my tasks' widget, have it remember how you rearranged it for future sessions. (2) add 'priority' task tab under 'Studio tasks', 'my tasks' & Team Tasks where priority tasks will be filtered into there. (3) make Users changeable to already created tasks on admin side."

@@ -5,10 +5,12 @@ import CreateBookingModal from '../components/CreateBookingModal'
 import AdminEditSessionsModal from '../components/admin/sessions/AdminEditSessionsModal'
 import ClientsPanel from '../components/clients/ClientsPanel'
 import BookingStatusPopover from '../components/calendar/BookingStatusPopover'
+import Calendar from './Calendar'
+import { AdminSectionNavItem, type AdminSection } from '../components/admin/AdminSectionNavItem'
 import { loadSessionsWindow, type SessionCategory, type SessionListItem } from '../domain/sessions/queries'
 import { ExportButtons, PageHeader, toExportColumns } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
-import { AlertCircle, Briefcase, ChevronDown, Loader2, Pencil, Plus, UserSquare } from 'lucide-react'
+import { AlertCircle, Briefcase, CalendarDays, ChevronDown, Loader2, Pencil, Plus, UserSquare } from 'lucide-react'
 import { adminSessionColumns } from '../lib/columns/adminSessionColumns'
 import { adminSessionKeys, fetchAllSessions } from '../lib/queries/adminSessions'
 
@@ -25,7 +27,17 @@ const CATEGORIES: readonly ('All' | SessionCategory)[] = [
 ] as const
 type CategoryTab = typeof CATEGORIES[number]
 
-type ViewTab = 'bookings' | 'clients'
+// 2026-05-17 (Sessions polish #2) — third tab "calendar" embeds the
+// /calendar page's week view inside the right pane. Top-nav Calendar
+// entry stays during the preview so the user can compare and decide
+// whether to merge them.
+type ViewTab = 'bookings' | 'calendar' | 'clients'
+
+const SECTIONS: AdminSection<ViewTab>[] = [
+  { key: 'bookings', icon: Briefcase,    title: 'Bookings',  subtitle: 'Upcoming + past sessions list' },
+  { key: 'calendar', icon: CalendarDays, title: 'Calendar',  subtitle: 'Week-view grid + booking blocks' },
+  { key: 'clients',  icon: UserSquare,   title: 'Clients',   subtitle: 'Roster of people who book sessions' },
+]
 
 /* ── Status pill — tonal, button-shaped so it's obvious you can click it.
    Wrapped in BookingStatusPopover at the call site (PR #158); this is
@@ -77,16 +89,18 @@ export default function Sessions() {
   })
   const allAdminSessions = adminSessionsQuery.data ?? []
 
-  // PR #64 — top-level Bookings ↔ Clients toggle. Replaces the
-  // standalone /admin/clients page (which the user asked to retire).
-  // URL hash drives the initial state so a deep link (or the booking-
-  // modal "Manage clients" hint) can jump straight to the Clients view.
-  const [view, setView] = useState<ViewTab>(() =>
-    typeof window !== 'undefined' && window.location.hash === '#clients' ? 'clients' : 'bookings',
-  )
+  // PR #64 — top-level tab state. URL hash drives initial value so
+  // deep links work (`#clients`, `#calendar`). Sessions polish #2
+  // (2026-05-17) added `#calendar` as the third tab.
+  const [view, setView] = useState<ViewTab>(() => {
+    if (typeof window === 'undefined') return 'bookings'
+    if (window.location.hash === '#clients') return 'clients'
+    if (window.location.hash === '#calendar') return 'calendar'
+    return 'bookings'
+  })
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const next = view === 'clients' ? '#clients' : ''
+    const next = view === 'bookings' ? '' : `#${view}`
     if (window.location.hash !== next) {
       history.replaceState(null, '', `${window.location.pathname}${next}`)
     }
@@ -164,12 +178,13 @@ export default function Sessions() {
     ? sessions
     : sessions.filter((row) => row.category === activeCategory)
 
-  // PR #65 — same gold-CTA shape as the Overview Book a Session button.
-  // 2026-05-06 — for the bookings view, the Manage + Book buttons
-  // moved DOWN onto the category-pill row (right-justified) per user
-  // direction, so the actions slot is empty there. Clients view still
-  // surfaces "Add Client" in the actions slot since it has no filter
-  // row to host inline buttons.
+  // 2026-05-17 (Sessions polish #2) — section-specific header action.
+  // Bookings tab: "Book a Session" gold CTA (always for members, kept
+  // for admins too — Manage Bookings + Export live inside the tab on
+  // the category-pill row).
+  // Calendar tab: same "Book a Session" CTA (the calendar tab needs a
+  // way to start a booking without forcing the user back to Bookings).
+  // Clients tab: "Add Client" gold CTA.
   const headerAction =
     view === 'clients' ? (
       <button
@@ -179,6 +194,15 @@ export default function Sessions() {
       >
         <Plus size={14} strokeWidth={2.4} />
         Add Client
+      </button>
+    ) : view === 'calendar' ? (
+      <button
+        type="button"
+        onClick={() => setShowBooking(true)}
+        className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
+      >
+        <Plus size={14} strokeWidth={2.4} />
+        Book a Session
       </button>
     ) : null
 
@@ -204,228 +228,202 @@ export default function Sessions() {
         icon={Briefcase}
         title="Booking"
         actions={headerAction}
-      >
-        {/* View toggle — Bookings / Clients. Sits in the page-header
-            child slot so it stays anchored to the title row, just like
-            the category pills used to. Same gold-gradient active state
-            as the top nav for visual consistency. */}
-        <div
-          role="tablist"
-          aria-label="Booking page view"
-          className="flex gap-1.5"
+      />
+
+      {/* 2026-05-17 (Sessions polish #2) — two-pane layout modeled on
+          the AdminSettings + Members admin chrome: 280px left section
+          rail + right pane that hosts the active tab's content.
+          Bookings · Calendar · Clients live as peer sections. The
+          top-nav `/calendar` route stays intact during the preview so
+          the user can decide whether to fully merge Calendar into the
+          Booking menu item (and drop the separate top-nav entry). */}
+      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 items-start">
+        {/* ── Left rail: section nav ── */}
+        <aside
+          className="bg-surface rounded-xl border border-border p-2 space-y-1"
+          aria-label="Booking page sections"
         >
-          <ViewToggleButton
-            active={view === 'bookings'}
-            onClick={() => setView('bookings')}
-            icon={<Briefcase size={14} aria-hidden="true" />}
-            label="Bookings"
-          />
-          <ViewToggleButton
-            active={view === 'clients'}
-            onClick={() => setView('clients')}
-            icon={<UserSquare size={14} aria-hidden="true" />}
-            label="Clients"
-          />
-        </div>
+          <p className="px-3 pt-3 pb-2 text-label">Booking</p>
+          {SECTIONS.map((section) => (
+            <AdminSectionNavItem
+              key={section.key}
+              section={section}
+              active={view === section.key}
+              onSelect={() => setView(section.key)}
+            />
+          ))}
+        </aside>
 
-        {/* Bookings-only sub-row: category pills on the LEFT, Manage +
-            Book CTAs justified to the RIGHT. Wraps cleanly when the
-            row gets tight (CTAs stay together; pills wrap first). */}
-        {view === 'bookings' && (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex gap-1.5 flex-wrap">
-              {CATEGORIES.map((cat) => {
-                const active = activeCategory === cat
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setActiveCategory(cat)}
-                    className={`inline-flex items-center h-9 px-3.5 rounded-[22px] text-[13px] font-semibold transition-all focus-ring whitespace-nowrap ${
-                      active
-                        ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-                        : 'text-text-muted hover:text-text hover:bg-surface-hover'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                )
-              })}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap justify-end ml-auto">
-              {isAdmin && (
-                <ExportButtons
-                  filename="bookings"
-                  title="Bookings"
-                  columns={toExportColumns(adminSessionColumns)}
-                  rows={allAdminSessions}
-                  disabled={adminSessionsQuery.isLoading}
-                />
-              )}
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => setShowAdminEdit(true)}
-                  // 2026-05-06 — border bumped from gold/25 (faint) to
-                  // border-gold-muted (full-opacity darker gold) so the
-                  // outline reads as a real "lined" button in light
-                  // mode instead of blending into the gold/12 wash.
-                  // Width matched to BookButton + QuickAssign + Book a
-                  // Session (248px = 4×w-14 + 3×gap-2) so the three
-                  // gold pills stack as a coherent button family.
-                  className="inline-flex items-center justify-center gap-2 h-10 px-4 w-[248px] rounded-2xl border-2 border-gold-muted bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/20 hover:border-gold transition-all focus-ring"
-                  title="Edit or cancel existing bookings"
-                >
-                  <Pencil size={14} strokeWidth={2.2} />
-                  Manage Bookings
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowBooking(true)}
-                // 2026-05-06 — width matches Overview Book a Session
-                // (= 4×w-14 social bubbles + 3×gap-2). Sitewide.
-                className="inline-flex items-center justify-center gap-2 h-10 px-4 w-[248px] rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight border border-gold-muted hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
-              >
-                <Plus size={14} strokeWidth={2.4} />
-                Book a Session
-              </button>
-            </div>
-          </div>
-        )}
-      </PageHeader>
-
-      {view === 'bookings' ? (
-        <div className="widget-card overflow-hidden">
-          <div className="px-5 py-4 border-b theme-divider flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-section text-text">Current bookings</h2>
-            <span className="text-caption">
-              {loading ? '…' : `${filtered.length} result${filtered.length === 1 ? '' : 's'}`}
-            </span>
-          </div>
-
-          {/* Skin pass 2026-05-06 — wrap the data table in a nested
-              bordered panel so row dividers visibly clip at the
-              panel edge instead of running full-width through the
-              widget-card. Padding around the panel separates the
-              two borders so the nesting reads. `divide-theme` was
-              also softened in light mode (border-light) so the row
-              lines feel like needle-thin separators inside the
-              nested panel rather than full divisions. */}
-          <div className="p-4 sm:p-5">
-            <div className="rounded-xl border border-border overflow-hidden">
-              <div className="overflow-x-auto">
-                {loading ? (
-                  <div className="px-5 py-10 flex items-center justify-center text-text-light">
-                    <Loader2 size={18} className="animate-spin" />
-                  </div>
-                ) : error ? (
-                  <div className="px-5 py-8 flex items-center gap-2 text-sm text-amber-300">
-                    <AlertCircle size={16} />
-                    <span>{error}</span>
-                  </div>
-                ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b theme-divider bg-surface-alt/40">
-                    <th className="px-5 py-3 text-left text-label">Client</th>
-                    <th className="px-5 py-3 text-left text-label">Date</th>
-                    <th className="px-5 py-3 text-left text-label">Engineer</th>
-                    <th className="px-5 py-3 text-left text-label">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-theme">
-                  {filtered.map((booking) => (
-                    <tr
-                      key={booking.id}
-                      ref={(node) => {
-                        if (node) rowRefs.current.set(booking.id, node)
-                        else rowRefs.current.delete(booking.id)
-                      }}
-                      className={`hover:bg-surface-hover transition-colors ${
-                        highlightedId === booking.id
-                          ? 'ring-2 ring-gold/80 ring-inset bg-gold/5'
-                          : ''
-                      }`}
-                    >
-                      <td className="px-5 py-4">
-                        <p className="text-[14px] font-medium text-text tracking-tight">{booking.client}</p>
-                        <p className="text-[11px] text-text-light">{booking.description}</p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <p className="text-[13px] text-text-muted">{booking.date}</p>
-                        <p className="text-[11px] text-text-light">{booking.startTime} – {booking.endTime}</p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <p className="text-[13px] text-text-muted">{booking.engineer}</p>
-                        <p className="text-[11px] text-text-light">{booking.studio}</p>
-                      </td>
-                      <td className="px-5 py-4">
-                        {/* PR #158 (Active #3) — hover/click the status
-                            pill → action popover (Confirm · Reschedule
-                            · Cancel · Restore depending on current
-                            state). Reschedule opens the editor. */}
-                        <BookingStatusPopover
-                          sessionId={booking.id}
-                          status={booking.status}
-                          onChanged={() => void refetch()}
-                          onReschedule={() => setEditSessionId(booking.id)}
-                        >
-                          <StatusLabel status={booking.status} />
-                        </BookingStatusPopover>
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-5 py-10 text-center text-text-muted text-sm">
-                        No bookings {activeCategory === 'All' ? 'yet' : `in ${activeCategory}`}.
-                      </td>
-                    </tr>
+        {/* ── Right pane: active section content ── */}
+        <section className="min-w-0">
+          {view === 'bookings' && (
+            <div className="space-y-4">
+              {/* Bookings sub-toolbar — category pills on the LEFT,
+                  Export + Manage + Book CTAs justified to the RIGHT.
+                  Used to live in the PageHeader's child slot; lifted
+                  into the tab body so each section owns its own
+                  sub-toolbar (Calendar's week-nav + Clients' search
+                  follow the same pattern). */}
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex gap-1.5 flex-wrap">
+                  {CATEGORIES.map((cat) => {
+                    const active = activeCategory === cat
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setActiveCategory(cat)}
+                        className={`inline-flex items-center h-9 px-3.5 rounded-[22px] text-[13px] font-semibold transition-all focus-ring whitespace-nowrap ${
+                          active
+                            ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                            : 'text-text-muted hover:text-text hover:bg-surface-hover'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap justify-end ml-auto">
+                  {isAdmin && (
+                    <ExportButtons
+                      filename="bookings"
+                      title="Bookings"
+                      columns={toExportColumns(adminSessionColumns)}
+                      rows={allAdminSessions}
+                      disabled={adminSessionsQuery.isLoading}
+                    />
                   )}
-                </tbody>
-              </table>
-                )}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminEdit(true)}
+                      className="inline-flex items-center justify-center gap-2 h-10 px-4 w-[200px] rounded-2xl border-2 border-gold-muted bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/20 hover:border-gold transition-all focus-ring"
+                      title="Edit or cancel existing bookings"
+                    >
+                      <Pencil size={14} strokeWidth={2.2} />
+                      Manage Bookings
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowBooking(true)}
+                    className="inline-flex items-center justify-center gap-2 h-10 px-4 w-[200px] rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight border border-gold-muted hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
+                  >
+                    <Plus size={14} strokeWidth={2.4} />
+                    Book a Session
+                  </button>
+                </div>
+              </div>
+
+              <div className="widget-card overflow-hidden">
+                <div className="px-5 py-4 border-b theme-divider flex items-center justify-between gap-3 flex-wrap">
+                  <h2 className="text-section text-text">Current bookings</h2>
+                  <span className="text-caption">
+                    {loading ? '…' : `${filtered.length} result${filtered.length === 1 ? '' : 's'}`}
+                  </span>
+                </div>
+
+                <div className="p-4 sm:p-5">
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <div className="overflow-x-auto">
+                      {loading ? (
+                        <div className="px-5 py-10 flex items-center justify-center text-text-light">
+                          <Loader2 size={18} className="animate-spin" />
+                        </div>
+                      ) : error ? (
+                        <div className="px-5 py-8 flex items-center gap-2 text-sm text-amber-300">
+                          <AlertCircle size={16} />
+                          <span>{error}</span>
+                        </div>
+                      ) : (
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b theme-divider bg-surface-alt/40">
+                              <th className="px-5 py-3 text-left text-label">Client</th>
+                              <th className="px-5 py-3 text-left text-label">Date</th>
+                              <th className="px-5 py-3 text-left text-label">Engineer</th>
+                              <th className="px-5 py-3 text-left text-label">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-theme">
+                            {filtered.map((booking) => (
+                              <tr
+                                key={booking.id}
+                                ref={(node) => {
+                                  if (node) rowRefs.current.set(booking.id, node)
+                                  else rowRefs.current.delete(booking.id)
+                                }}
+                                className={`hover:bg-surface-hover transition-colors ${
+                                  highlightedId === booking.id
+                                    ? 'ring-2 ring-gold/80 ring-inset bg-gold/5'
+                                    : ''
+                                }`}
+                              >
+                                <td className="px-5 py-4">
+                                  <p className="text-[14px] font-medium text-text tracking-tight">{booking.client}</p>
+                                  <p className="text-[11px] text-text-light">{booking.description}</p>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <p className="text-[13px] text-text-muted">{booking.date}</p>
+                                  <p className="text-[11px] text-text-light">{booking.startTime} – {booking.endTime}</p>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <p className="text-[13px] text-text-muted">{booking.engineer}</p>
+                                  <p className="text-[11px] text-text-light">{booking.studio}</p>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <BookingStatusPopover
+                                    sessionId={booking.id}
+                                    status={booking.status}
+                                    onChanged={() => void refetch()}
+                                    onReschedule={() => setEditSessionId(booking.id)}
+                                  >
+                                    <StatusLabel status={booking.status} />
+                                  </BookingStatusPopover>
+                                </td>
+                              </tr>
+                            ))}
+                            {filtered.length === 0 && (
+                              <tr>
+                                <td colSpan={4} className="px-5 py-10 text-center text-text-muted text-sm">
+                                  No bookings {activeCategory === 'All' ? 'yet' : `in ${activeCategory}`}.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      ) : (
-        <ClientsPanel
-          registerAddClient={(open) => {
-            openAddClientRef.current = open
-          }}
-        />
-      )}
+          )}
+
+          {view === 'calendar' && (
+            // Renders the SAME Calendar page component used at `/calendar`
+            // (single source of truth — booking blocks, day card, week
+            // nav, modals, right-click delete menu). `embedded` skips
+            // the outer max-w wrapper + the page H1 so the calendar
+            // slots cleanly inside this pane.
+            <Calendar embedded />
+          )}
+
+          {view === 'clients' && (
+            <ClientsPanel
+              registerAddClient={(open) => {
+                openAddClientRef.current = open
+              }}
+            />
+          )}
+        </section>
+      </div>
     </div>
   )
 }
 
-function ViewToggleButton({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean
-  onClick: () => void
-  icon: React.ReactNode
-  label: string
-}) {
-  return (
-    <button
-      role="tab"
-      type="button"
-      aria-selected={active}
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[22px] text-[13px] font-semibold transition-all focus-ring whitespace-nowrap ${
-        active
-          ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-          : 'text-text-muted hover:text-text hover:bg-surface-hover'
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
-  )
-}
+// 2026-05-17 (Sessions polish #2) — removed `ViewToggleButton`. The
+// inline pill-tab pattern was replaced by the AdminSectionNavItem
+// left rail, which carries icons + title + subtitle and matches the
+// Settings/Assign pages chrome convention.

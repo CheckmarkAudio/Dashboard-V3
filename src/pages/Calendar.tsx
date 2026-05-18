@@ -152,8 +152,23 @@ function assignBookingLanes<T extends { startTime: string; endTime: string }>(
   return result
 }
 
-export default function Calendar() {
-  useDocumentTitle('Calendar - Checkmark Workspace')
+/**
+ * Calendar — week-view + day card + booking modals.
+ *
+ * Default usage: rendered as the `/calendar` route page. Pass
+ * `embedded` when mounting inside another page (Sessions polish #2
+ * preview mounts this inside the Bookings page's Calendar tab) — the
+ * embedded variant skips the `useDocumentTitle` side-effect (parent
+ * page owns the title) and the outer `max-w-6xl mx-auto` wrapper +
+ * page-level H1 so the calendar slots cleanly into the parent's
+ * right-pane container. All state, fetch logic, and modal rendering
+ * stay identical between the two surfaces — single source of truth.
+ */
+export default function Calendar({ embedded = false }: { embedded?: boolean } = {}) {
+  // When embedded, defer to the host page's document title (Sessions
+  // sets 'Booking Agent - ...' already). Always call the hook —
+  // rules-of-hooks — but pick a title that won't fight the host's.
+  useDocumentTitle(embedded ? 'Booking Agent - Checkmark Workspace' : 'Calendar - Checkmark Workspace')
   const TODAY_KEY = getTodayKey()
   const [weekOffset, setWeekOffset] = useState(0)
   const WEEK = getWeekDays(weekOffset)
@@ -285,7 +300,12 @@ export default function Calendar() {
   }, [bookings])
 
   return (
-    <div className="max-w-6xl mx-auto animate-fade-in">
+    // Embedded mode drops the page-level `max-w-6xl mx-auto` so the
+    // calendar fills the host's right pane (Sessions tab container)
+    // and lets that container own width constraints. animate-fade-in
+    // is harmless either way — running fades on tab swap reads as a
+    // nice transition, not noise.
+    <div className={embedded ? 'animate-fade-in' : 'max-w-6xl mx-auto animate-fade-in'}>
       {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime(''); void refetch() }} prefillDate={bookingPrefillDate} prefillTime={bookingPrefillTime} />}
       {editSessionId && (
         <CreateBookingModal
@@ -378,10 +398,15 @@ export default function Calendar() {
           </button>
         </div>
       )}
-      {/* Header */}
+      {/* Header — embedded mode drops the page H1 (Sessions' PageHeader
+          already says "Booking") but keeps the week-nav chevrons +
+          status row on the right since they're calendar-specific
+          controls, not page chrome. */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
+          {!embedded && (
+            <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
+          )}
           {loading && <Loader2 size={14} className="animate-spin text-text-light" aria-label="Loading calendar" />}
           {error && (
             <span className="flex items-center gap-1 text-xs text-amber-300">
