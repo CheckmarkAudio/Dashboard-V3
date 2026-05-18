@@ -12,6 +12,7 @@ import { useToast } from './Toast'
 import { type BookingType, type StudioSpace } from '../contexts/TaskContext'
 import { supabase } from '../lib/supabase'
 import { syncSessionToGoogleCalendar } from '../lib/googleCalendar'
+import { emitFlywheelEvent } from '../lib/queries/flywheelEvents'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import {
   clientKeys,
@@ -445,6 +446,63 @@ export default function CreateBookingModal({
       }
     } catch (err) {
       toast(`Booking saved, but Google Calendar sync failed: ${(err as Error).message}`, 'error')
+    }
+
+    // Flywheel — Phase 1 emit hook. Only fire on insert (not on edit
+    // updates); fire-and-forget so emit failures don't regress the
+    // booking save. Emits TWO stages from a single booking action:
+    //
+    //   • Book — every new booking counts as activity in the Book
+    //     stage. Metadata carries session_type + room so Phase 2
+    //     aggregations can filter (e.g. "paid sessions only" means
+    //     metadata.session_type != 'Consult'). Recurring bookings
+    //     today only emit ONE Book event for the parent insert;
+    //     spawn_recurring_session_instances child rows are NOT yet
+    //     instrumented — Phase 2 will add that server-side.
+    //
+    //   • Capture — only when this is the client's FIRST session
+    //     (any type). The funnel says: Attract = lead arrives;
+    //     Capture = lead becomes a paying client; Book = activity.
+    //     "First session" is the cleanest proxy for the
+    //     Attract→Capture transition for a music studio. Skipped
+    //     when payload.client_id is null (free-form name, no linked
+    //     client record to check history against).
+    if (!isEditMode && data?.id) {
+      const newSessionId = data.id
+      void emitFlywheelEvent({
+        stage: 'book',
+        source_type: 'session',
+        source_id: newSessionId,
+        metadata: {
+          session_type: payload.session_type,
+          room: payload.room,
+          client_id: payload.client_id ?? null,
+          recurring: Boolean(payload.recurrence_spec),
+        },
+      })
+      if (payload.client_id) {
+        const linkedClientId = payload.client_id
+        void (async () => {
+          const { count } = await supabase
+            .from('sessions')
+            .select('id', { count: 'exact', head: true })
+            .eq('client_id', linkedClientId)
+            .neq('id', newSessionId)
+          // count === 0 means the only session for this client is
+          // the one we just created → Capture event.
+          if ((count ?? 0) === 0) {
+            await emitFlywheelEvent({
+              stage: 'capture',
+              source_type: 'session',
+              source_id: newSessionId,
+              metadata: {
+                client_id: linkedClientId,
+                session_type: payload.session_type,
+              },
+            })
+          }
+        })()
+      }
     }
 
     setSubmitting(false)

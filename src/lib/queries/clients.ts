@@ -4,6 +4,7 @@
 // `supabase/migrations/20260429100000_clients_table.sql`.
 
 import { supabase } from '../supabase'
+import { emitFlywheelEvent } from './flywheelEvents'
 
 const LOG_PREFIX = '[queries/clients]'
 
@@ -50,7 +51,24 @@ export async function createClient(input: CreateClientInput): Promise<Client> {
     console.error(`${LOG_PREFIX} createClient failed:`, error)
     throw new Error(error.message)
   }
-  return data as Client
+  const client = data as Client
+
+  // Flywheel — Phase 1: every new client = an Attract event.
+  // Fire-and-forget so emit failures don't regress the client save.
+  // Metadata captures whether contact details came along (email/phone)
+  // so Phase 2 can split "warm lead" vs "name-only" if useful.
+  void emitFlywheelEvent({
+    stage: 'attract',
+    source_type: 'client',
+    source_id: client.id,
+    metadata: {
+      name: client.name,
+      has_email: Boolean(client.email),
+      has_phone: Boolean(client.phone),
+    },
+  })
+
+  return client
 }
 
 export async function updateClient(id: string, patch: UpdateClientInput): Promise<Client> {
