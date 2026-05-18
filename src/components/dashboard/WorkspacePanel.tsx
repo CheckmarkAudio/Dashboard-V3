@@ -288,18 +288,25 @@ export default function WorkspacePanel({
   )
 
   // Pack widgets into pages with the expansion-aware slot algorithm.
-  // Each widget has weight=1 (normal) or weight=2 (expanded). When an
-  // expanded widget would otherwise span a page boundary, the helper
-  // inserts invisible spacer placeholders to fill the orphan slots on
-  // the current page and pushes the wide widget to the start of the
-  // next page — keeps the carousel's translateX page-snap math clean.
+  // 2026-05-17 (rev) — user direction: "use the exact same method as
+  // the activity log." The expanded widget fills the ENTIRE page
+  // regardless of pageSize, instead of growing to a fixed 2 slots.
+  //   - pageSize=2 (Activity / tablet): expanded weight = 2 = full page ✓
+  //   - pageSize=3 (desktop):            expanded weight = 3 = full page ✓
+  //   - pageSize=1 (phone):              chevron is suppressed (see allowExpand)
+  // Other widgets on the same page get bumped to the next page where
+  // they re-pack at normal width. The carousel gains pages on expand
+  // → arrow buttons + page dots appear → the user can navigate to
+  // the displaced widgets. This matches the Activity-log behavior
+  // exactly — the expanded widget IS the page, briefly.
+  //
   // Named `packedLayout` to avoid colliding with `layout` from
   // `useWorkspaceLayout` (which is the persisted widget-order data).
   const packedLayout = useMemo(
     () =>
       packPagedWidgets(
         orderedIds,
-        (id) => (id === expandedId ? 2 : 1),
+        (id) => (id === expandedId ? pageSize : 1),
         pageSize,
       ),
     [orderedIds, expandedId, pageSize],
@@ -438,13 +445,15 @@ export default function WorkspacePanel({
   }
 
   // Carousel sizing. Normal widget width = (100% - (pageSize-1) * gap) / pageSize.
-  // Expanded widget = two normal widths plus the gap between them (so
-  // a 2-slot widget spans exactly the visual footprint of two normal
-  // widgets sitting side by side). Row height = max widget height in
-  // the visible set so every widget on every page sits on the same
-  // baseline.
+  // Expanded widget = the entire viewport (100% — fills one whole
+  // carousel page). Matches the Activity widget carousel where
+  // pageSize=2 + expanded=2 slots = page-filling. On desktop where
+  // pageSize=3, an expanded widget spans all three slots' worth of
+  // visual footprint (3 widget widths + 2 gaps = 100%). Row height =
+  // max widget height in the visible set so every widget on every
+  // page sits on the same baseline.
   const normalWidgetWidth = `calc((100% - ${(pageSize - 1) * PAGE_GAP_PX}px) / ${pageSize})`
-  const expandedWidgetWidth = `calc(2 * ((100% - ${(pageSize - 1) * PAGE_GAP_PX}px) / ${pageSize}) + ${PAGE_GAP_PX}px)`
+  const expandedWidgetWidth = '100%'
   const rowHeight = useMemo(() => {
     if (visibleWidgets.length === 0) return ROW_HEIGHT_PX
     const heights = visibleWidgets.map((w) => widgetHeight(w.rowSpan ?? 1))
