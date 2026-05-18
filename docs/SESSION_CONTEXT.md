@@ -718,6 +718,15 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-17 Member Activity widgets — CSV/PDF exports on Session History, Task Completion, Clock Data
+
+- **`CLAUDE:`** per user direction: "we need to make csv file production possible for the session history and task completion widgets that are on the activity page under members, using the same coding structure, and also if you can put the pdf and csv link to the previous clock in data spreadsheet we worked on earlier into the clock in widget on the member activity page as well."
+- **Extracted shared clockColumns**: the existing inline `clockColumns` array + `parseClockNotes` + helpers from `ClockDataSection.tsx` moved to new `src/lib/columns/clockColumns.tsx`. Both the main Members > Clock Data tab AND the Activity-page Clock widget now consume the same array — rename a header in `clockColumns.tsx` and both surfaces flip. Drift-proofing now reaches the widget layer.
+- **Two new columns modules**: `sessionColumns.tsx` (over `RecentSessionInfo`) and `memberTaskCompletionColumns.tsx` (over `RecentTaskInfo`). Kept separate from `taskExportColumns` because the widget data is a narrow summary (taskId, title, completedAt, relativeLabel) not the full `AssignedTask` — conflating would force every export to either include unused fields or carry custom skips.
+- **Widget UI**: small right-aligned `<ExportButtons>` strip at the top of each of the three widget bodies (above the scrollable `CanonicalBody`). Filename + PDF title via new `exportNames(member, kind)` helper — e.g. `shift-history-Bridget Reinhard-2026-05-17.csv`, `session-history-Gavin Hammond.csv`. `WidgetBody` signature changed from `memberId: string` to `member: TeamMember` so each body has access to display_name for the filename.
+- **Eight admin export surfaces** are now live total: Members roster, main Clock Data tab, AssignAdmin per-member tasks, Studio Tasks, BusinessHealth all-team history, plus the three new activity widgets.
+- **Next**: full Sessions/Bookings table still needs an admin-table surface scoped first; Forum activity export blocked on `chat_*` schema. KPI graph export remains deferred per user.
+
 ### 2026-05-17 Tasks export — per-member + Studio Tasks wired via shared `taskExportColumns`
 
 - **`CLAUDE:`** continued the export pipeline rollout to the third + fourth admin task surfaces. Added `src/lib/columns/taskColumns.ts` — first shared `TableColumn<T>` module, exporting `taskExportColumns: TableColumn<AssignedTask>[]` covering Title, Description, Scope, Studio Space, Assigned To, Category, Due Date, Required, Completed, Completed At, Created At, Source, Recurrence. Used in two places (AssignAdmin per-member pane + StudioTasksPane), proving the descriptor pattern scales across multiple consumers of the same export schema.
