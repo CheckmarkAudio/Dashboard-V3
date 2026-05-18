@@ -227,10 +227,13 @@ export async function listGoogleCalendarEvents(
   input: {
     pageToken?: string
     syncToken?: string
+    timeMin?: string
+    timeMax?: string
+    maxResults?: number
   } = {},
 ): Promise<GoogleCalendarEventListResponse> {
   const params = new URLSearchParams()
-  params.set('maxResults', '250')
+  params.set('maxResults', String(input.maxResults ?? 250))
   params.set('showDeleted', 'true')
   params.set('singleEvents', 'true')
   // Do not filter by privateExtendedProperty here. Google requires
@@ -241,7 +244,9 @@ export async function listGoogleCalendarEvents(
   if (input.syncToken) {
     params.set('syncToken', input.syncToken)
   } else {
-    params.set('orderBy', 'updated')
+    if (input.timeMin) params.set('timeMin', input.timeMin)
+    if (input.timeMax) params.set('timeMax', input.timeMax)
+    params.set('orderBy', input.timeMin || input.timeMax ? 'startTime' : 'updated')
   }
 
   return googleCalendarRequest<GoogleCalendarEventListResponse>(

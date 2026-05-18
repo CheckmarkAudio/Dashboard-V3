@@ -220,6 +220,24 @@ Decision:
 - Use the day view to manually confirm whether the synced event exists in Google.
 - If Google shows the event but Apple does not, the issue is Apple calendar selection/refresh/mirroring, not Checkmark outbound sync.
 
+### 2026-05-17 Lesson: inbound pull must be bounded
+
+Observed:
+
+- `Pull inbound changes` could spin continuously after reconnect.
+- The worker was allowed to page through the connected Google Calendar without a date window on its first full scan.
+
+Decision:
+
+- First recovery/full scans are limited to the recent/future booking window and capped by page count.
+- The app timeout stops the button from staying in a loading state forever.
+- Do not store a Google `nextSyncToken` produced from the bounded recovery scan; Google sync tokens are tied to the exact query shape that produced them.
+
+Follow-up:
+
+- Phase 2B should replace the recovery scan with a linked-event-specific lookup strategy or a stable incremental token strategy.
+- If Checkmark shows `Synced` but Apple does not, first verify the event appears in Google Calendar day view. Apple can lag or mirror the wrong Google calendar.
+
 Good Claude-safe boundary:
 
 - Codex owns calendar sync, edge functions, Supabase sync-state logic, and calendar runbooks.

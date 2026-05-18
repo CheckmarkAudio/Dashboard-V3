@@ -1,6 +1,21 @@
 import { supabase } from './supabase'
 import { extractEdgeFunctionError } from './edgeFunctionError'
 
+const INBOUND_SYNC_TIMEOUT_MS = 30000
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs)
+  })
+
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}
+
 export interface GoogleCalendarConnectionStatus {
   google_email: string
   calendar_id: string
@@ -81,19 +96,23 @@ export async function pullInboundGoogleCalendarChanges(): Promise<{
     skipped_count: number
   }
 }> {
-  const { data, error } = await supabase.functions.invoke<{
-    ok: boolean
-    summary?: {
-      processed_count: number
-      updated_count: number
-      cancelled_count: number
-      unchanged_count: number
-      skipped_count: number
-    }
-    error?: string
-  }>('google-calendar-sync', {
-    body: { action: 'pull_inbound_changes' },
-  })
+  const { data, error } = await withTimeout(
+    supabase.functions.invoke<{
+      ok: boolean
+      summary?: {
+        processed_count: number
+        updated_count: number
+        cancelled_count: number
+        unchanged_count: number
+        skipped_count: number
+      }
+      error?: string
+    }>('google-calendar-sync', {
+      body: { action: 'pull_inbound_changes' },
+    }),
+    INBOUND_SYNC_TIMEOUT_MS,
+    'Inbound Google Calendar sync took too long. Please try again after a hard refresh.',
+  )
 
   if (error || !data?.ok || !data.summary) {
     throw new Error(data?.error || (await extractEdgeFunctionError(error, 'Failed to pull inbound Google Calendar changes')))

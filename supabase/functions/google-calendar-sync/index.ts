@@ -211,6 +211,26 @@ type OutboundSummary = {
   skipped_count: number
 }
 
+const INBOUND_FULL_SCAN_PAST_DAYS = 30
+const INBOUND_FULL_SCAN_FUTURE_DAYS = 365
+const INBOUND_MAX_PAGES = 8
+
+function inboundFullScanWindow(): { timeMin: string; timeMax: string } {
+  const now = new Date()
+  const timeMin = new Date(now)
+  timeMin.setUTCDate(timeMin.getUTCDate() - INBOUND_FULL_SCAN_PAST_DAYS)
+  timeMin.setUTCHours(0, 0, 0, 0)
+
+  const timeMax = new Date(now)
+  timeMax.setUTCDate(timeMax.getUTCDate() + INBOUND_FULL_SCAN_FUTURE_DAYS)
+  timeMax.setUTCHours(23, 59, 59, 999)
+
+  return {
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
+  }
+}
+
 async function setInboundConnectionState(
   admin: ReturnType<typeof createClient>,
   teamId: string,
@@ -419,11 +439,19 @@ Deno.serve(async (req: Request) => {
       const applyInboundChanges = async (syncToken?: string | null) => {
         let nextPageToken: string | undefined
         let nextSyncToken: string | undefined
+        let pageCount = 0
+        const fullScanWindow = syncToken ? null : inboundFullScanWindow()
 
         do {
+          pageCount += 1
+          if (pageCount > INBOUND_MAX_PAGES) {
+            throw new Error("Inbound sync scanned too many Google Calendar pages. Try again after narrowing the calendar window or contact support.")
+          }
+
           const page = await listGoogleCalendarEvents(connection.calendar_id, accessToken, {
             pageToken: nextPageToken,
             syncToken: syncToken ?? undefined,
+            ...(fullScanWindow ?? {}),
           })
           nextPageToken = page.nextPageToken
           nextSyncToken = page.nextSyncToken ?? nextSyncToken
@@ -528,15 +556,21 @@ Deno.serve(async (req: Request) => {
             summary.updated_count += 1
           }
 
-          if (!nextPageToken && nextSyncToken) {
-            await setInboundConnectionState(ctx.admin, ctx.teamId, {
-              google_sync_token: nextSyncToken,
+          if (!nextPageToken) {
+            const statePatch: Record<string, unknown> = {
               inbound_last_synced_at: new Date().toISOString(),
               inbound_last_sync_error: null,
               inbound_last_sync_summary: summary,
               last_sync_error: null,
               last_tested_at: new Date().toISOString(),
-            })
+            }
+
+            // Google sync tokens are tied to the exact query shape that produced
+            // them. The first recovery scan is intentionally date-bounded so it
+            // returns fast; do not store that token for later unbounded syncs.
+            if (syncToken && nextSyncToken) statePatch.google_sync_token = nextSyncToken
+
+            await setInboundConnectionState(ctx.admin, ctx.teamId, statePatch)
           }
         } while (nextPageToken)
       }
