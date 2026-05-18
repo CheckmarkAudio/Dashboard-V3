@@ -51,6 +51,46 @@ Quick alphabetical jumping-off point. Click or search.
 
 ---
 
+# 2026-05-17 — Inline widget expansion (PR #199)
+
+## Carousel page packing with variable widget widths
+
+**TL;DR:** When a carousel's items can have different widths (e.g.
+a widget that grows 2× when "expanded"), straightforward flex layout
+breaks because widget left-edges drift mid-page and the page snap
+stops working. Fix: pack widgets into pages by "slot weight" and
+insert invisible spacer divs to keep page boundaries aligned.
+
+**When you encountered it:** The Members → Activity widget carousel.
+The expand button used to open a modal; you asked to change it so
+the widget grows inline to 2× width and pushes other widgets across
+the carousel. With three widgets at 1 slot each + page size 2, all
+fits cleanly. With one of them at 2 slots, the layout needs help —
+otherwise an expanded widget that starts in the right half of a page
+would visually span the page boundary.
+
+**Why it matters:** Most carousel tutorials assume uniform item
+sizes. Real product UIs often need adaptive sizing (expand, collapse,
+"hero" item). Knowing the spacer-padding technique means you can
+build expansion features without rewriting the carousel.
+
+**Mental model:** Imagine a page as a row of 2 fixed-width slots
+(left half + right half). Each widget claims 1 slot (normal) or 2
+slots (expanded). When packing left-to-right, if the next widget
+needs 2 slots but only 1 slot is left in the current page, you drop
+an empty placeholder into that orphan slot to "kick" the wide widget
+to the start of the next page. The placeholder isn't a real widget —
+it's just there to fill the gap and keep the visual rhythm.
+
+**Bonus pattern — "auto-navigate on state change":** When something
+changes that moves a widget to a different page (expand, collapse,
+reorder), set `currentPage` to wherever the affected widget ended up.
+Without this, the user clicks a button and "nothing visible happens"
+because they're looking at the wrong page. Auto-snap to the relevant
+page = the click feels alive.
+
+---
+
 # 2026-05-17 — Tasks descriptor refactor (PR #197)
 
 ## Narrow descriptor + fat interactive shell

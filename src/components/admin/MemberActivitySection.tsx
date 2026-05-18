@@ -76,7 +76,6 @@ function exportNames(member: TeamMember, kind: string) {
   }
 }
 import DashboardWidgetFrame, { type DragHandleProps } from '../dashboard/DashboardWidgetFrame'
-import FloatingDetailModal from '../FloatingDetailModal'
 import type { TeamMember } from '../../types'
 import type { AdminClockEntry } from '../../lib/queries/timeClock'
 
@@ -182,6 +181,41 @@ export default function MemberActivitySection({ members }: { members: TeamMember
 
 // ─── Carousel ────────────────────────────────────────────────────
 
+// Each widget consumes "slot weight" — normal=1, expanded=2. Page
+// width = PAGE_SIZE slots (2). When packing widgets into pages, an
+// expanded widget that won't fit in the current page's remaining
+// slots pushes to the next page; the now-orphan slot gets a non-
+// interactive spacer placeholder so the flex row stays page-aligned
+// (otherwise widget left-edges drift mid-page and the carousel can't
+// cleanly snap).
+type WidgetLayoutItem =
+  | { type: 'widget'; id: WidgetId; weight: 1 | 2; page: number }
+  | { type: 'spacer'; key: string; page: number }
+
+function packWidgets(order: WidgetId[], expandedId: WidgetId | null): WidgetLayoutItem[] {
+  const out: WidgetLayoutItem[] = []
+  let page = 0
+  let posInPage = 0 // 0 (left half) or 1 (right half)
+  for (const id of order) {
+    const weight: 1 | 2 = id === expandedId ? 2 : 1
+    // An expanded (weight 2) widget needs to start fresh at slot 0
+    // of a page. If we're at slot 1, drop a spacer to fill that slot
+    // and bump the widget to the next page.
+    if (weight === 2 && posInPage === 1) {
+      out.push({ type: 'spacer', key: `spacer-before-${id}`, page })
+      page += 1
+      posInPage = 0
+    }
+    out.push({ type: 'widget', id, weight, page })
+    posInPage += weight
+    if (posInPage >= PAGE_SIZE) {
+      page += 1
+      posInPage = 0
+    }
+  }
+  return out
+}
+
 function ActivityCarousel({ member }: { member: TeamMember }) {
   // Session-only widget order. The sitewide WorkspacePanel persists
   // ordering per scope/role/userId, but these widgets are a
@@ -189,29 +223,68 @@ function ActivityCarousel({ member }: { member: TeamMember }) {
   // table with three more rows. Resets on every page mount.
   const [order, setOrder] = useState<WidgetId[]>(DEFAULT_ORDER)
   const [activeId, setActiveId] = useState<WidgetId | null>(null)
+  // 2026-05-17 — `expandedId` now drives INLINE expansion (the
+  // expanded widget grows to 2× width, pushing other widgets across
+  // the carousel) rather than opening a FloatingDetailModal. Click
+  // the expand chevron again to collapse back to normal width. The
+  // chevron icon swaps Maximize2 ↔ Minimize2 via DashboardWidgetFrame's
+  // new `isExpanded` prop so the affordance reads correctly in both
+  // states.
   const [expandedId, setExpandedId] = useState<WidgetId | null>(null)
-
-  const totalPages = Math.max(1, Math.ceil(order.length / PAGE_SIZE))
   const [currentPage, setCurrentPage] = useState(0)
 
+  // Pack widgets into pages once per (order, expandedId) change —
+  // see comment on WidgetLayoutItem above for the packing rules.
+  const layout = useMemo(() => packWidgets(order, expandedId), [order, expandedId])
+  const totalPages = layout.length > 0
+    ? Math.max(...layout.map((item) => item.page)) + 1
+    : 1
+
+  // Clamp + reset behavior:
+  //   - if totalPages shrinks below currentPage (collapse/reorder), pin to the last page
   useEffect(() => {
     if (currentPage > totalPages - 1) setCurrentPage(Math.max(0, totalPages - 1))
   }, [currentPage, totalPages])
 
   // Reset to page 0 when the picked member changes — feels less
   // surprising than landing mid-carousel on freshly-swapped data.
+  // Also collapse any expanded widget so the new member's widgets
+  // start in the standard 2-per-page view.
   useEffect(() => {
     setCurrentPage(0)
+    setExpandedId(null)
   }, [member.id])
 
-  const widgetWidth = `calc((100% - ${(PAGE_SIZE - 1) * PAGE_GAP_PX}px) / ${PAGE_SIZE})`
+  // When a widget expands, auto-navigate to the page that contains
+  // it so the user always SEES the expansion happen — otherwise an
+  // expanded widget on a different page would feel like the click
+  // did nothing. Smooth transition handled by the carousel
+  // translate's CSS transition.
+  useEffect(() => {
+    if (!expandedId) return
+    const target = layout.find((item) => item.type === 'widget' && item.id === expandedId)
+    if (target) setCurrentPage(target.page)
+  }, [expandedId, layout])
+
+  const normalWidth = `calc((100% - ${(PAGE_SIZE - 1) * PAGE_GAP_PX}px) / ${PAGE_SIZE})`
+  // Expanded widget fills the entire viewport. Subtracting nothing
+  // here: a page is `100% + PAGE_GAP_PX` (track gap), and one widget
+  // at 100% sits flush against page boundaries.
+  const expandedWidth = '100%'
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  const handleDragStart = (e: DragStartEvent) => setActiveId(e.active.id as WidgetId)
+  // Dragging an expanded widget would break the page packing math
+  // (a 2-slot widget dragged into a 1-slot position would orphan a
+  // spacer mid-row). Collapse before drag begins; user can re-
+  // expand afterward if they want.
+  const handleDragStart = (e: DragStartEvent) => {
+    setExpandedId(null)
+    setActiveId(e.active.id as WidgetId)
+  }
   const handleDragEnd = (e: DragEndEvent) => {
     setActiveId(null)
     const { active, over } = e
@@ -229,10 +302,11 @@ function ActivityCarousel({ member }: { member: TeamMember }) {
   }
   const handleDragCancel = () => setActiveId(null)
 
-  const expandedMeta = expandedId ? WIDGET_META[expandedId] : null
-
   const showArrows = totalPages > 1
   const showDots = totalPages > 1
+
+  const toggleExpand = (id: WidgetId) =>
+    setExpandedId((prev) => (prev === id ? null : id))
 
   return (
     <div className="space-y-3">
@@ -254,32 +328,51 @@ function ActivityCarousel({ member }: { member: TeamMember }) {
                 style={{
                   gap: `${PAGE_GAP_PX}px`,
                   transform: `translateX(calc(${-currentPage * 100}% - ${currentPage * PAGE_GAP_PX}px))`,
-                  transition: 'transform 280ms cubic-bezier(0.16, 1, 0.3, 1)',
+                  transition: 'transform 320ms cubic-bezier(0.16, 1, 0.3, 1)',
                   willChange: 'transform',
                 }}
               >
-                {order.map((id) => (
-                  <SortableWidget
-                    key={id}
-                    id={id}
-                    width={widgetWidth}
-                    height={WIDGET_HEIGHT_PX}
-                  >
-                    {(dragHandleProps) => (
-                      // Frame title visible (no hideTitle) — user wants the
-                      // standard Overview widget header (drag grip · bold
-                      // title · expand chevron). The inner CanonicalBody
-                      // drops its section band so the title isn't doubled.
-                      <DashboardWidgetFrame
-                        title={WIDGET_META[id].title}
-                        dragHandleProps={dragHandleProps}
-                        onExpand={() => setExpandedId(id)}
-                      >
-                        <WidgetBody id={id} member={member} />
-                      </DashboardWidgetFrame>
-                    )}
-                  </SortableWidget>
-                ))}
+                {layout.map((item) => {
+                  if (item.type === 'spacer') {
+                    // Non-interactive placeholder that holds the
+                    // orphan slot when an expanded widget bumps to
+                    // the next page. Same width as a normal widget
+                    // so the flex row keeps its page rhythm.
+                    return (
+                      <div
+                        key={item.key}
+                        aria-hidden="true"
+                        style={{
+                          flex: `0 0 ${normalWidth}`,
+                          height: `${WIDGET_HEIGHT_PX}px`,
+                          transition: 'flex-basis 320ms cubic-bezier(0.16, 1, 0.3, 1)',
+                        }}
+                      />
+                    )
+                  }
+                  const { id } = item
+                  const isExpanded = id === expandedId
+                  return (
+                    <SortableWidget
+                      key={id}
+                      id={id}
+                      width={isExpanded ? expandedWidth : normalWidth}
+                      height={WIDGET_HEIGHT_PX}
+                      isExpanded={isExpanded}
+                    >
+                      {(dragHandleProps) => (
+                        <DashboardWidgetFrame
+                          title={WIDGET_META[id].title}
+                          dragHandleProps={dragHandleProps}
+                          onExpand={() => toggleExpand(id)}
+                          isExpanded={isExpanded}
+                        >
+                          <WidgetBody id={id} member={member} />
+                        </DashboardWidgetFrame>
+                      )}
+                    </SortableWidget>
+                  )
+                })}
               </div>
             </SortableContext>
           </div>
@@ -334,7 +427,7 @@ function ActivityCarousel({ member }: { member: TeamMember }) {
         >
           {activeId ? (
             <div
-              style={{ width: widgetWidth, height: `${WIDGET_HEIGHT_PX}px` }}
+              style={{ width: normalWidth, height: `${WIDGET_HEIGHT_PX}px` }}
               className="widget-card bg-surface shadow-2xl ring-2 ring-gold/60 rounded-2xl overflow-hidden cursor-grabbing flex items-center justify-center"
             >
               <p className="text-[13px] font-bold text-text">{WIDGET_META[activeId].title}</p>
@@ -342,16 +435,6 @@ function ActivityCarousel({ member }: { member: TeamMember }) {
           ) : null}
         </DragOverlay>
       </DndContext>
-
-      {expandedMeta && (
-        <FloatingDetailModal
-          title={expandedMeta.title}
-          onClose={() => setExpandedId(null)}
-          maxWidth={720}
-        >
-          <WidgetBody id={expandedMeta.id} member={member} />
-        </FloatingDetailModal>
-      )}
     </div>
   )
 }
@@ -362,21 +445,35 @@ function SortableWidget({
   id,
   width,
   height,
+  isExpanded,
   children,
 }: {
   id: WidgetId
   width: string
   height: number
+  isExpanded: boolean
   children: (dragHandleProps: DragHandleProps) => ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id })
+  // Combine the dnd-kit transition (transform-only for drag) with our
+  // own `flex-basis` transition so the width animation feels of-a-
+  // piece with the carousel translate. Same easing curve + duration as
+  // the carousel scroll so the expand "lands" at the same moment the
+  // carousel pages over to the expanded widget.
+  const combinedTransition = [
+    transition ?? '',
+    'flex-basis 320ms cubic-bezier(0.16, 1, 0.3, 1)',
+    'box-shadow 320ms cubic-bezier(0.16, 1, 0.3, 1)',
+  ]
+    .filter(Boolean)
+    .join(', ')
   return (
     <div
       ref={setNodeRef}
       style={{
         transform: CSS.Transform.toString(transform),
-        transition,
+        transition: combinedTransition,
         flex: `0 0 ${width}`,
         width,
         height: `${height}px`,
@@ -385,6 +482,14 @@ function SortableWidget({
         overflow: 'hidden',
         minHeight: 0,
         opacity: isDragging ? 0.35 : 1,
+        // Subtle elevation when expanded — communicates "this is the
+        // active focus" without changing the widget's chrome (the
+        // frame itself stays the same shape). Soft gold-tinged ring
+        // matches the dashboard's brand accent.
+        boxShadow: isExpanded
+          ? '0 18px 40px -16px rgba(201, 168, 76, 0.32), 0 0 0 1px rgba(201, 168, 76, 0.25)'
+          : 'none',
+        borderRadius: isExpanded ? 16 : 0,
       }}
       className={isDragging ? 'rounded-2xl ring-2 ring-dashed ring-gold/40' : ''}
     >
