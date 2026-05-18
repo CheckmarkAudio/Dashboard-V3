@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import CreateBookingModal from '../components/CreateBookingModal'
 import AdminEditSessionsModal from '../components/admin/sessions/AdminEditSessionsModal'
 import ClientsPanel from '../components/clients/ClientsPanel'
 import BookingStatusPopover from '../components/calendar/BookingStatusPopover'
 import { loadSessionsWindow, type SessionCategory, type SessionListItem } from '../domain/sessions/queries'
-import { PageHeader } from '../components/ui'
+import { ExportButtons, PageHeader, toExportColumns } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
 import { AlertCircle, Briefcase, ChevronDown, Loader2, Pencil, Plus, UserSquare } from 'lucide-react'
+import { adminSessionColumns } from '../lib/columns/adminSessionColumns'
+import { adminSessionKeys, fetchAllSessions } from '../lib/queries/adminSessions'
 
 // PR #15 — matches the highlight-task pattern in MyTasksCard. When a
 // session-assign notification is clicked elsewhere in the app, the
@@ -57,6 +60,22 @@ function StatusLabel({ status }: { status: string }) {
 export default function Sessions() {
   useDocumentTitle('Booking Agent - Checkmark Workspace')
   const { isAdmin } = useAuth()
+
+  // 2026-05-17 — admin-only fetch of the full sessions library for
+  // CSV/PDF export. Distinct from `loadSessionsWindow` (used by the
+  // member-accessible carousel below) because exports want the
+  // complete row shape — client, room, status, assigned_to_name,
+  // notes, google_event_id, etc. Lazy-enabled via the `enabled` gate
+  // so members never trigger the admin-only RPC. Includes past
+  // sessions by default because exports are usually retrospective
+  // reports.
+  const adminSessionsQuery = useQuery({
+    queryKey: adminSessionKeys.list(true),
+    queryFn: () => fetchAllSessions({ includePast: true }),
+    enabled: isAdmin === true,
+    staleTime: 60_000,
+  })
+  const allAdminSessions = adminSessionsQuery.data ?? []
 
   // PR #64 — top-level Bookings ↔ Clients toggle. Replaces the
   // standalone /admin/clients page (which the user asked to retire).
@@ -234,6 +253,15 @@ export default function Sessions() {
               })}
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end ml-auto">
+              {isAdmin && (
+                <ExportButtons
+                  filename="bookings"
+                  title="Bookings"
+                  columns={toExportColumns(adminSessionColumns)}
+                  rows={allAdminSessions}
+                  disabled={adminSessionsQuery.isLoading}
+                />
+              )}
               {isAdmin && (
                 <button
                   type="button"
