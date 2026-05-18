@@ -718,6 +718,15 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-17 Sessions/Bookings export on `/sessions` — completes the export pipeline
+
+- **`CLAUDE:`** ninth admin export surface — closes out the export track. User picked "Sessions/Bookings export" as next move after the inline-expand work landed.
+- **Where it lives**: turned out to be the easy path — the existing `/sessions` page already has a full table UI (admin-gated edit + status pill popovers + the works). Just dropped `<ExportButtons>` into the existing Bookings-only sub-row, immediately before Manage Bookings + Book a Session. No new admin sub-page needed; no design work.
+- **Data layer**: existing `fetchAllSessions({ includePast: true })` from `src/lib/queries/adminSessions.ts` calls the `admin_list_all_sessions` RPC — member-inaccessible, returns the full `AdminSession` shape (client, room, notes, assigned_to_name, google_event_id, etc.). Wrapped in a `useQuery` with `enabled: isAdmin === true` so members never trigger it. Cached on its own key (`adminSessionKeys.list(true)`) so it doesn't fight with the member-side `loadSessionsWindow` query that drives the visible table.
+- **Shared module**: new `src/lib/columns/adminSessionColumns.tsx` — 13 columns covering the full row, with smart formatters (12-hour clock for times, `T00:00:00` suffix on session_date to avoid UTC drift per `c6c5bf6`'s lesson, raw-minute + humanized Duration so payroll spreadsheets + readable PDFs both work). Distinct from `sessionColumns.tsx` (which is over the narrower `RecentSessionInfo` for the Activity widget) — same naming pattern as we used with task/memberTaskCompletion columns.
+- **Pipeline status**: nine admin export surfaces across five shared columns modules. Members, main Clock Data, AssignAdmin per-member tasks, Studio Tasks, BusinessHealth all-team history, Activity Sessions widget, Activity Task Completion widget, Activity Clock widget, and `/sessions` bookings.
+- **Next on the queue**: Forum activity export (blocked on `chat_*` schema design); KPI graph export (deferred per user). With the export pipeline closed, the next big tracks are: (a) Calendar Phase 2A — user needs to reconnect Google + verify "Push pending bookings"; (b) Flywheel event ledger schema; (c) a11y verification on the inline-expand toggles. Pick when you're ready.
+
 ### 2026-05-17 Inline 2× expand extended to Overview + Hub (PR #200)
 
 - **`CLAUDE:`** per user direction: "I love what you did, lets do it to overview and to dashboard (hub) too, I want to see how it goes." User loved the inline expand on Member Activity widgets (PR #199), wanted the same pattern on Overview + Hub.
