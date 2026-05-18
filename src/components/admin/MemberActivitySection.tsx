@@ -62,6 +62,11 @@ import { ExportButtons, Select, toExportColumns } from '../ui'
 import { clockColumns } from '../../lib/columns/clockColumns'
 import { sessionColumns } from '../../lib/columns/sessionColumns'
 import { memberTaskCompletionColumns } from '../../lib/columns/memberTaskCompletionColumns'
+import {
+  packPagedWidgets,
+  packedPageForWidget,
+  packedTotalPages,
+} from '../../lib/carousel/packPagedWidgets'
 
 /**
  * Build a safe, member-name-scoped filename + PDF title for each
@@ -181,41 +186,6 @@ export default function MemberActivitySection({ members }: { members: TeamMember
 
 // ─── Carousel ────────────────────────────────────────────────────
 
-// Each widget consumes "slot weight" — normal=1, expanded=2. Page
-// width = PAGE_SIZE slots (2). When packing widgets into pages, an
-// expanded widget that won't fit in the current page's remaining
-// slots pushes to the next page; the now-orphan slot gets a non-
-// interactive spacer placeholder so the flex row stays page-aligned
-// (otherwise widget left-edges drift mid-page and the carousel can't
-// cleanly snap).
-type WidgetLayoutItem =
-  | { type: 'widget'; id: WidgetId; weight: 1 | 2; page: number }
-  | { type: 'spacer'; key: string; page: number }
-
-function packWidgets(order: WidgetId[], expandedId: WidgetId | null): WidgetLayoutItem[] {
-  const out: WidgetLayoutItem[] = []
-  let page = 0
-  let posInPage = 0 // 0 (left half) or 1 (right half)
-  for (const id of order) {
-    const weight: 1 | 2 = id === expandedId ? 2 : 1
-    // An expanded (weight 2) widget needs to start fresh at slot 0
-    // of a page. If we're at slot 1, drop a spacer to fill that slot
-    // and bump the widget to the next page.
-    if (weight === 2 && posInPage === 1) {
-      out.push({ type: 'spacer', key: `spacer-before-${id}`, page })
-      page += 1
-      posInPage = 0
-    }
-    out.push({ type: 'widget', id, weight, page })
-    posInPage += weight
-    if (posInPage >= PAGE_SIZE) {
-      page += 1
-      posInPage = 0
-    }
-  }
-  return out
-}
-
 function ActivityCarousel({ member }: { member: TeamMember }) {
   // Session-only widget order. The sitewide WorkspacePanel persists
   // ordering per scope/role/userId, but these widgets are a
@@ -233,12 +203,15 @@ function ActivityCarousel({ member }: { member: TeamMember }) {
   const [expandedId, setExpandedId] = useState<WidgetId | null>(null)
   const [currentPage, setCurrentPage] = useState(0)
 
-  // Pack widgets into pages once per (order, expandedId) change —
-  // see comment on WidgetLayoutItem above for the packing rules.
-  const layout = useMemo(() => packWidgets(order, expandedId), [order, expandedId])
-  const totalPages = layout.length > 0
-    ? Math.max(...layout.map((item) => item.page)) + 1
-    : 1
+  // Pack widgets into pages once per (order, expandedId) change. The
+  // shared `packPagedWidgets` helper (also used by `WorkspacePanel`)
+  // handles the slot-weight + spacer logic — see its docstring for
+  // the page-spanning prevention rationale.
+  const layout = useMemo(
+    () => packPagedWidgets(order, (id) => (id === expandedId ? 2 : 1), PAGE_SIZE),
+    [order, expandedId],
+  )
+  const totalPages = packedTotalPages(layout)
 
   // Clamp + reset behavior:
   //   - if totalPages shrinks below currentPage (collapse/reorder), pin to the last page
@@ -262,8 +235,8 @@ function ActivityCarousel({ member }: { member: TeamMember }) {
   // translate's CSS transition.
   useEffect(() => {
     if (!expandedId) return
-    const target = layout.find((item) => item.type === 'widget' && item.id === expandedId)
-    if (target) setCurrentPage(target.page)
+    const page = packedPageForWidget(layout, expandedId)
+    if (page !== null) setCurrentPage(page)
   }, [expandedId, layout])
 
   const normalWidth = `calc((100% - ${(PAGE_SIZE - 1) * PAGE_GAP_PX}px) / ${PAGE_SIZE})`
