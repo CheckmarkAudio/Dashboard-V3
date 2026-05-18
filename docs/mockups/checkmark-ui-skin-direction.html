@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checkmark UI Skin Direction</title>
+  <style>
+    :root {
+      --bg: #e8e8ec;
+      --surface: #ffffff;
+      --surface-2: #f5f5f7;
+      --surface-3: #ededf1;
+      --text: #050507;
+      --muted: #52525b;
+      --faint: #7a7a85;
+      --border: #dedee5;
+      --border-strong: #c9c9d3;
+      --gold: #ffd60a;
+      --gold-deep: #7a510f;
+      --black: #121217;
+      --blue: #4f8cff;
+      --violet: #9a7cff;
+      --pink: #e85fa3;
+      --cyan: #10b9d6;
+      --green: #12b981;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse 72% 62% at 0% 0%, rgba(255, 214, 10, .22), transparent 72%),
+        radial-gradient(ellipse 72% 66% at 100% 100%, rgba(139, 124, 255, .14), transparent 70%),
+        var(--bg);
+      color: var(--text);
+      letter-spacing: 0;
+    }
+
+    .page {
+      width: min(1440px, calc(100vw - 32px));
+      margin: 16px auto 48px;
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse 90% 80% at 0% 0%, rgba(255, 220, 160, .50), transparent 74%),
+        radial-gradient(ellipse 90% 80% at 100% 100%, rgba(195, 200, 215, .50), transparent 74%),
+        var(--bg);
+      box-shadow: 0 18px 70px rgba(20, 20, 28, .13);
+    }
+
+    .topbar {
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      border-bottom: 1px solid rgba(0,0,0,.06);
+      background: rgba(255,255,255,.58);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      min-width: 260px;
+    }
+    .mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: var(--black);
+      color: var(--gold);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+      font-weight: 900;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.05;
+      font-weight: 760;
+    }
+    .brand p {
+      margin: 3px 0 0;
+      color: var(--gold-deep);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: rgba(255,255,255,.62);
+    }
+    .nav button {
+      border: 0;
+      border-radius: 14px;
+      background: transparent;
+      color: var(--muted);
+      padding: 10px 13px;
+      font-size: 13px;
+      font-weight: 720;
+    }
+    .nav button.active {
+      background: var(--gold);
+      color: #050505;
+      box-shadow: 0 8px 22px rgba(255, 214, 10, .32);
+    }
+
+    .profile {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-end;
+      min-width: 260px;
+    }
+    .clock {
+      border: 1px solid rgba(122,81,15,.24);
+      color: var(--gold-deep);
+      background: rgba(255,214,10,.20);
+      border-radius: 16px;
+      padding: 10px 14px;
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: var(--black);
+      color: var(--gold);
+      display: grid;
+      place-items: center;
+      font-weight: 850;
+      border: 3px solid var(--surface);
+      box-shadow: 0 0 0 1px var(--border);
+    }
+
+    .hero {
+      padding: 48px 48px 26px;
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 40px;
+      align-items: end;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--gold-deep);
+      background: rgba(255,214,10,.28);
+      border: 1px solid rgba(122,81,15,.16);
+      border-radius: 999px;
+      padding: 8px 11px;
+      font-size: 11px;
+      font-weight: 850;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .hero h2 {
+      margin: 20px 0 14px;
+      font-size: clamp(42px, 5vw, 76px);
+      line-height: .93;
+      font-weight: 840;
+      max-width: 760px;
+    }
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.65;
+      max-width: 570px;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+    }
+    .btn {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 16px;
+      font-weight: 820;
+      font-size: 13px;
+      background: rgba(255,255,255,.64);
+      color: var(--text);
+    }
+    .btn.primary {
+      border-color: rgba(0,0,0,.05);
+      background: var(--gold);
+      box-shadow: 0 14px 28px rgba(255,214,10,.28);
+    }
+
+    .system-preview {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.72);
+      border-radius: 28px;
+      box-shadow: 0 18px 60px rgba(20,20,28,.12);
+      overflow: hidden;
+    }
+    .preview-head {
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding: 0 18px;
+    }
+    .preview-head strong {
+      font-size: 13px;
+    }
+    .dots {
+      display: flex;
+      gap: 6px;
+    }
+    .dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border-strong);
+    }
+    .preview-body {
+      display: grid;
+      grid-template-columns: 176px 1fr;
+      min-height: 360px;
+    }
+    .mini-rail {
+      border-right: 1px solid var(--border);
+      padding: 14px;
+      background: rgba(245,245,247,.72);
+    }
+    .rail-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border-radius: 12px;
+      padding: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 720;
+      margin-bottom: 4px;
+    }
+    .rail-item.active {
+      color: var(--text);
+      background: var(--surface);
+      box-shadow: 0 1px 0 rgba(0,0,0,.04);
+    }
+    .workspace {
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 14px;
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      overflow: hidden;
+      box-shadow: 0 8px 26px rgba(20,20,28,.06);
+    }
+    .panel-header {
+      min-height: 58px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .panel-header h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 820;
+    }
+    .panel-header span {
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 780;
+    }
+    .issue {
+      padding: 13px 16px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid rgba(0,0,0,.055);
+    }
+    .issue:last-child { border-bottom: 0; }
+    .icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      color: var(--gold-deep);
+      background: rgba(255,214,10,.22);
+      border: 1px solid rgba(122,81,15,.12);
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .issue strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+    .issue small {
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 680;
+    }
+    .tag {
+      border-radius: 999px;
+      padding: 5px 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 820;
+      white-space: nowrap;
+    }
+
+    .direction {
+      padding: 18px 48px 46px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .direction-card {
+      min-height: 236px;
+      background: rgba(255,255,255,.72);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: 0 10px 34px rgba(20,20,28,.08);
+    }
+    .direction-card h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.15;
+    }
+    .direction-card p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .list {
+      display: grid;
+      gap: 8px;
+    }
+    .list div {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .list b {
+      color: var(--text);
+    }
+    .check {
+      width: 18px;
+      height: 18px;
+      border-radius: 7px;
+      background: var(--black);
+      color: var(--gold);
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      font-size: 12px;
+      margin-top: -1px;
+    }
+
+    .service-band {
+      margin: 0 48px 48px;
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      background: rgba(255,255,255,.74);
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(20,20,28,.09);
+    }
+    .service-head {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+    }
+    .service-head h3 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1;
+    }
+    .service-head p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 540px;
+    }
+    .service-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .service {
+      min-height: 190px;
+      padding: 22px;
+      border-right: 1px solid var(--border);
+    }
+    .service:last-child { border-right: 0; }
+    .service h4 {
+      margin: 14px 0 8px;
+      font-size: 15px;
+    }
+    .service p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .source-note {
+      padding: 0 48px 44px;
+      color: var(--faint);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .source-note a { color: var(--gold-deep); font-weight: 760; }
+
+    @media (max-width: 980px) {
+      .topbar { height: auto; padding: 18px; gap: 16px; flex-wrap: wrap; }
+      .brand, .profile { min-width: 0; }
+      .nav { order: 3; width: 100%; overflow: auto; justify-content: flex-start; }
+      .hero, .direction { grid-template-columns: 1fr; padding-left: 22px; padding-right: 22px; }
+      .preview-body, .workspace { grid-template-columns: 1fr; }
+      .mini-rail { display: none; }
+      .service-band { margin-left: 22px; margin-right: 22px; }
+      .service-head { display: block; }
+      .service-grid { grid-template-columns: 1fr; }
+      .service { border-right: 0; border-bottom: 1px solid var(--border); }
+      .source-note { padding-left: 22px; padding-right: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">✓</div>
+        <div>
+          <h1>Checkmark Audio</h1>
+          <p>Studio operating system</p>
+        </div>
+      </div>
+      <nav class="nav" aria-label="Mock navigation">
+        <button class="active">Overview</button>
+        <button>Tasks</button>
+        <button>Calendar</button>
+        <button>Booking</button>
+        <button>Assign</button>
+        <button>Members</button>
+      </nav>
+      <div class="profile">
+        <div class="clock">12:36 PM · Clock Out</div>
+        <div class="avatar">C</div>
+      </div>
+    </header>
+
+    <section class="hero" aria-labelledby="hero-title">
+      <div>
+        <div class="eyebrow">UI skin direction · mockup only</div>
+        <h2 id="hero-title">Precise product system, warm studio rhythm.</h2>
+        <p>
+          A Checkmark-flavored direction that borrows Linear's calm operational density
+          and California Vending's clear service-card storytelling, while keeping our
+          yellow-gold actions, soft grey body, white cards, and wash gradients.
+        </p>
+        <div class="hero-actions">
+          <button class="btn primary">Primary action</button>
+          <button class="btn">Secondary action</button>
+        </div>
+      </div>
+
+      <div class="system-preview" aria-label="Dashboard skin preview">
+        <div class="preview-head">
+          <strong>Today · Studio Ops</strong>
+          <div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        </div>
+        <div class="preview-body">
+          <aside class="mini-rail">
+            <div class="rail-item active">Inbox <span>8</span></div>
+            <div class="rail-item">My tasks <span>14</span></div>
+            <div class="rail-item">Reviews <span>3</span></div>
+            <div class="rail-item">Pulse <span>5</span></div>
+            <div class="rail-item">Bookings <span>9</span></div>
+          </aside>
+          <div class="workspace">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h3>Operational queue</h3>
+                  <span>Focused rows, clear status, no noisy chrome</span>
+                </div>
+                <span class="tag">Live</span>
+              </div>
+              <div class="issue">
+                <div class="icon">♪</div>
+                <div><strong>Mix prep for Luna session</strong><small>Deliver · due today</small></div>
+                <span class="tag">High</span>
+              </div>
+              <div class="issue">
+                <div class="icon">✓</div>
+                <div><strong>Approve social clip edits</strong><small>Share · Bridget requested</small></div>
+                <span class="tag">Review</span>
+              </div>
+              <div class="issue">
+                <div class="icon">↻</div>
+                <div><strong>Studio A recurring reset</strong><small>Weekly · studio pool</small></div>
+                <span class="tag">Studio</span>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h3>Flywheel pulse</h3>
+                  <span>Compact metrics with real work attached</span>
+                </div>
+              </div>
+              <div class="issue"><div class="icon">D</div><div><strong>Deliver</strong><small>3 sessions active</small></div><span class="tag">+2</span></div>
+              <div class="issue"><div class="icon">S</div><div><strong>Share</strong><small>5 content tasks</small></div><span class="tag">On pace</span></div>
+              <div class="issue"><div class="icon">B</div><div><strong>Book</strong><small>2 leads ready</small></div><span class="tag">Watch</span></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="direction" aria-label="Design direction cards">
+      <article class="direction-card">
+        <h3>Linear-inspired operating density</h3>
+        <p>Dense but calm work surfaces: narrow dividers, compact rows, clear metadata, and precise state labels.</p>
+        <div class="list">
+          <div><span class="check">✓</span><span><b>Use for:</b> Tasks, Assign, approvals, logs, admin queue surfaces.</span></div>
+          <div><span class="check">✓</span><span><b>Avoid:</b> oversized cards when the user needs repeated scanning.</span></div>
+        </div>
+      </article>
+      <article class="direction-card">
+        <h3>Service-card clarity</h3>
+        <p>California Vending's page rhythm translates into clear modules: pain point, recommended action, and who it serves.</p>
+        <div class="list">
+          <div><span class="check">✓</span><span><b>Use for:</b> Settings, onboarding, members, documentation-heavy admin pages.</span></div>
+          <div><span class="check">✓</span><span><b>Avoid:</b> marketing copy inside daily work widgets.</span></div>
+        </div>
+      </article>
+      <article class="direction-card">
+        <h3>Checkmark skin</h3>
+        <p>Keep our identity: soft grey shell, white cards, bright yellow-gold action fills, black ink text, and subtle wash gradients.</p>
+        <div class="list">
+          <div><span class="check">✓</span><span><b>Use tokens:</b> update `src/index.css` and shared classes first.</span></div>
+          <div><span class="check">✓</span><span><b>Verify:</b> full page, sibling widgets, light/dark, desktop/narrow.</span></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="service-band" aria-label="Service rhythm adaptation">
+      <div class="service-head">
+        <div>
+          <div class="eyebrow">Service-page rhythm adapted for ops</div>
+          <h3>Useful outside daily widgets</h3>
+        </div>
+        <p>
+          The more editorial service-card rhythm should live where people need orientation:
+          Settings, Members, onboarding, and future client/contract surfaces.
+        </p>
+      </div>
+      <div class="service-grid">
+        <article class="service">
+          <span class="tag">Settings</span>
+          <h4>Explain what changes site-wide</h4>
+          <p>Use cards for configuration groups with clear consequences and confirmation states.</p>
+        </article>
+        <article class="service">
+          <span class="tag">Members</span>
+          <h4>Show role and activity context</h4>
+          <p>Use service-card sections for member health, permissions, clock data, and onboarding.</p>
+        </article>
+        <article class="service">
+          <span class="tag">Clients</span>
+          <h4>Make next actions obvious</h4>
+          <p>Cards can summarize stage, pain point, and recommended follow-up without crowding the work queue.</p>
+        </article>
+        <article class="service">
+          <span class="tag">Docs</span>
+          <h4>Translate systems into habits</h4>
+          <p>Use this rhythm for internal help panels and workflow explainers, not for hot-path task rows.</p>
+        </article>
+      </div>
+    </section>
+
+    <p class="source-note">
+      Inspiration sources reviewed: <a href="https://linear.app/homepage">Linear homepage</a> for precise product-system density and
+      <a href="https://californiavendingcompany.com/companies-we-serve">California Vending companies-we-serve page</a> for service-card structure.
+      This mockup is an original Checkmark direction using our current color/wash language.
+    </p>
+  </main>
+</body>
+</html>
