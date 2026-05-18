@@ -361,10 +361,13 @@ const mainLinks: NavLinkDef[] = [
   { to: APP_ROUTES.member.calendar, icon: Calendar, label: 'Calendar' },
   { to: APP_ROUTES.member.booking, icon: Briefcase, label: 'Booking' },
   { to: APP_ROUTES.member.content, icon: MessageSquare, label: 'Forum' },
-  // 2026-05-14 — Add Media tab. Visible to all logged-in members.
+  // 2026-05-14 — Media tab. Visible to all logged-in members.
   // Uploads go to the per-member subfolder under the shared
   // "Checkmark Media" Drive folder via the upload-to-drive edge fn.
-  { to: APP_ROUTES.member.addMedia, icon: FolderUp, label: 'Add Media' },
+  // 2026-05-17 — label shortened from "Add Media" to "Media" per
+  // user direction (cleaner nav read; the page still handles upload
+  // as its primary action so the route key stays `addMedia`).
+  { to: APP_ROUTES.member.addMedia, icon: FolderUp, label: 'Media' },
 ]
 
 /* ── Menu-Sidebar v5.2 — Admin menu ──

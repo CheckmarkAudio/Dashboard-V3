@@ -58,7 +58,7 @@ interface PendingUpload {
 }
 
 export default function AddMedia() {
-  useDocumentTitle('Add Media - Checkmark Workspace')
+  useDocumentTitle('Media - Checkmark Workspace')
   const { profile } = useAuth()
   const queryClient = useQueryClient()
 
@@ -219,7 +219,7 @@ export default function AddMedia() {
     <div className="max-w-[1100px] mx-auto space-y-6 animate-fade-in">
       <PageHeader
         icon={FolderOpen}
-        title="Add Media"
+        title="Media"
         actions={
           PARENT_FOLDER_LINK ? (
             <a
