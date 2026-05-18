@@ -718,6 +718,16 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-17 Activity-page widgets — expand button now grows widget inline (no more modal)
+
+- **`CLAUDE:`** per user direction: "that expand button at the top of each widget, instead of having it open a modal, can we make that extender make the widget the size of itself x2? so when you extend it, it will widen up and push the other widgets over on the carosel. can you try that out and plan it so that it is fluid, fun to use and intuitive?"
+- **The pattern**: each widget has a "slot weight" (normal=1, expanded=2). A page holds 2 slots. New `packWidgets(order, expandedId)` helper iterates widgets left-to-right and assigns each to a page; if an expanded widget would otherwise span a page boundary, an invisible spacer placeholder is dropped into the orphan slot to push the wide widget to the next page. Keeps the carousel's `translateX` page snap working with adaptive widget widths.
+- **Smooth feel**: `flex-basis 320ms cubic-bezier(0.16, 1, 0.3, 1)` width transition + matching carousel translate easing → the expand grow and the carousel page-scroll "land together" as one motion. Subtle gold-tinged ring + soft drop-shadow on the expanded widget so the focus state reads cleanly.
+- **Intuitive bits**: auto-navigate to the expanded widget's new page so the click ALWAYS shows visible motion; click the chevron again to collapse (icon swaps Maximize2 ↔ Minimize2 via new `isExpanded` prop on `DashboardWidgetFrame`); auto-collapse on member-dropdown change + on drag-start so neither breaks the page-packing math.
+- **Scope hygiene**: only affects MemberActivitySection (the three widgets the user asked about). Overview / Hub widgets that still use `FloatingDetailModal` via `WorkspacePanel` are untouched — `isExpanded` is optional and they don't pass it, so the modal behavior is preserved over there.
+- **LEARNING_LOG**: new top entry "Carousel page packing with variable widget widths" documents the spacer technique + the "auto-navigate on state change" pattern.
+- **Next on this track** (added to PROJECT_STATE "Currently active"): consider extending the same inline-expand to Overview/Hub widgets if user wants — those pages have different layout constraints (longer widget grids, persistent layout per user) so it's a separate scoping. Also: keyboard a11y check on the toggle (Enter/Space work via button default; should verify screen reader announcement on state change).
+
 ### 2026-05-17 Member Activity widgets — CSV/PDF exports on Session History, Task Completion, Clock Data
 
 - **`CLAUDE:`** per user direction: "we need to make csv file production possible for the session history and task completion widgets that are on the activity page under members, using the same coding structure, and also if you can put the pdf and csv link to the previous clock in data spreadsheet we worked on earlier into the clock in widget on the member activity page as well."

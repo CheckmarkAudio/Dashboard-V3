@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '../ui'
 
 // Drag-handle props are exactly what @dnd-kit hands out from
@@ -21,10 +21,18 @@ interface DashboardWidgetFrameProps {
   onMoveDown?: () => void
   onToggleVisibility?: () => void
   dragHandleProps?: DragHandleProps
-  // Expand — click the title to open this widget as a floating modal
-  // (see WorkspacePanel). The frame only emits the intent; the panel
-  // owns the modal state and renders the overlay.
+  // Expand — click the title or the corner chevron to expand this
+  // widget. The frame only emits the intent; the parent decides what
+  // to do (open a FloatingDetailModal, expand in-place in a carousel,
+  // or anything else). The icon is a square-out chevron by default;
+  // pass `isExpanded={true}` to flip it to a square-in chevron AND
+  // swap the aria-label from "Expand" to "Collapse" — used by inline-
+  // expand consumers (MemberActivitySection carousel) so the click
+  // target communicates "collapse" when the widget is already
+  // expanded. Modal-style consumers (WorkspacePanel) leave the prop
+  // undefined / false so the icon stays a static Maximize2.
   onExpand?: () => void
+  isExpanded?: boolean
   /**
    * Hide the frame's title bar (title text + description), leaving
    * only the corner controls (drag handle, expand, visibility,
@@ -53,9 +61,12 @@ export default function DashboardWidgetFrame({
   onToggleVisibility,
   dragHandleProps,
   onExpand,
+  isExpanded = false,
   hideTitle = false,
   children,
 }: DashboardWidgetFrameProps) {
+  const ExpandIcon = isExpanded ? Minimize2 : Maximize2
+  const expandLabel = isExpanded ? 'Collapse' : 'Expand'
   // Bind drag attributes/listeners to the grip element only — NOT the
   // title, since the title itself is a click target for the modal.
   const gripProps = dragHandleProps
@@ -114,7 +125,7 @@ export default function DashboardWidgetFrame({
             <button
               type="button"
               onClick={onExpand}
-              aria-label={`Expand ${title}`}
+              aria-label={`${expandLabel} ${title}`}
               className="min-w-0 text-left -m-1 p-1 rounded-lg hover:bg-white/[0.03] transition-colors focus-ring group/title"
             >
               <h2 className="text-[15px] font-bold tracking-tight text-text group-hover/title:text-gold transition-colors leading-tight">
@@ -132,10 +143,11 @@ export default function DashboardWidgetFrame({
             <button
               type="button"
               onClick={onExpand}
-              aria-label={`Expand ${title}`}
+              aria-label={`${expandLabel} ${title}`}
+              title={`${expandLabel} ${title}`}
               className="p-1.5 rounded-md text-gold/50 hover:text-gold hover:bg-gold/10 transition-colors focus-ring"
             >
-              <Maximize2 size={13} />
+              <ExpandIcon size={13} />
             </button>
           )}
           {onMoveUp && (
