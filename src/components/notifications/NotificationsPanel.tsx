@@ -475,29 +475,58 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 key={c.channel_id}
                 className={`relative transition-[background-color] duration-150 ease-out ${stateBg}`}
               >
-                <div className={`flex items-start gap-2.5 ${rowPad}`}>
-                  {/* Speech-bubble = the inline-reply trigger. Buttoned
-                      with a hover glow + active push so it reads as
-                      clickable; aria-expanded reflects the row state. */}
-                  <button
-                    type="button"
-                    onClick={toggleExpand}
-                    aria-expanded={isExpanded}
-                    aria-label={isExpanded ? `Close reply to ${c.channel_name}` : `Reply to ${c.channel_name}`}
-                    title={isExpanded ? 'Close' : 'Quick reply'}
-                    className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 transition-all duration-150 active:scale-95 focus-ring ${
-                      isExpanded
-                        ? 'bg-violet-500/30 ring-violet-400/60 text-violet-200 shadow-[0_0_0_3px_rgba(167,139,250,0.18)]'
-                        : 'bg-violet-500/15 ring-violet-500/30 text-violet-300 hover:bg-violet-500/25 hover:ring-violet-400/50 hover:shadow-[0_0_0_3px_rgba(167,139,250,0.12)]'
-                    }`}
-                  >
-                    <MessageSquare size={13} aria-hidden="true" />
-                  </button>
+                <div className={`flex items-start gap-2 ${rowPad}`}>
+                  {/* 2026-05-19 — twin circular buttons on the left
+                      give the user a clear choice: "reply here" vs
+                      "open the full thread." Both are tactile + share
+                      the same violet palette so they read as a pair.
+                      Previously the only "go to forum" link was a
+                      tiny text-link buried inside the expanded reply
+                      form — easy to miss when the user actually
+                      wants to jump into the thread to respond
+                      properly with formatting / attachments. */}
+                  <div className="shrink-0 flex items-center gap-1">
+                    {/* Speech-bubble = the inline-reply trigger.
+                        Buttoned with a hover glow + active push so it
+                        reads as clickable; aria-expanded reflects the
+                        row state. */}
+                    <button
+                      type="button"
+                      onClick={toggleExpand}
+                      aria-expanded={isExpanded}
+                      aria-label={isExpanded ? `Close reply to ${c.channel_name}` : `Reply to ${c.channel_name}`}
+                      title={isExpanded ? 'Close' : 'Quick reply'}
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 transition-all duration-150 active:scale-95 focus-ring ${
+                        isExpanded
+                          ? 'bg-violet-500/30 ring-violet-400/60 text-violet-200 shadow-[0_0_0_3px_rgba(167,139,250,0.18)]'
+                          : 'bg-violet-500/15 ring-violet-500/30 text-violet-300 hover:bg-violet-500/25 hover:ring-violet-400/50 hover:shadow-[0_0_0_3px_rgba(167,139,250,0.12)]'
+                      }`}
+                    >
+                      <MessageSquare size={13} aria-hidden="true" />
+                    </button>
+
+                    {/* Open-in-forum link button. Same circular
+                        chrome as the speech-bubble so the two read
+                        as parallel actions (reply here vs go there).
+                        ExternalLink icon makes the destination
+                        unambiguous. Per user direction "make the
+                        clickable link to take you to the forum more
+                        easier an enviting to click in case someone
+                        wants to go directly to the forum to respond." */}
+                    <Link
+                      to={channelHref}
+                      aria-label={`Open #${c.channel_name} in forum`}
+                      title="Open in forum"
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 bg-violet-500/15 ring-violet-500/30 text-violet-300 hover:bg-violet-500/25 hover:ring-violet-400/50 hover:shadow-[0_0_0_3px_rgba(167,139,250,0.12)] transition-all duration-150 active:scale-95 focus-ring"
+                    >
+                      <ExternalLink size={12} strokeWidth={2.4} aria-hidden="true" />
+                    </Link>
+                  </div>
 
                   {/* Title + preview = also a quick-reply trigger (same
                       behavior as the speech-bubble icon). The full-Forum
-                      navigation lives in the small "Open #channel" link
-                      inside the expanded form below. */}
+                      navigation also lives in the dedicated
+                      ExternalLink button to the left. */}
                   <button
                     type="button"
                     onClick={toggleExpand}
