@@ -13,6 +13,41 @@ interface State {
   error: Error | null
 }
 
+// 2026-05-19 (Stale-chunk auto-recovery) — sessionStorage key holding
+// the unix-ms timestamp of the last auto-reload. We only auto-reload
+// if the LAST attempt is older than RELOAD_GUARD_WINDOW_MS. Using a
+// timestamp (instead of a one-shot boolean) means a single user
+// session can recover from multiple deploys — but a persistently
+// broken bundle that fails again within seconds surfaces the crash
+// UI instead of looping forever.
+const RELOAD_GUARD_KEY = 'errorBoundary:lastChunkReloadAt'
+const RELOAD_GUARD_WINDOW_MS = 30_000  // 30s — generous for a slow reload, tight enough to stop a real loop
+
+/**
+ * Returns true when the error looks like a stale-chunk failure from a
+ * deploy mid-session — the browser has the old index.html cached with
+ * old chunk hashes, but Vercel already replaced the assets, so the
+ * lazy import 404s.
+ *
+ * Match string-list (covers Vite + Webpack + Safari + Chrome wording):
+ *   - "Failed to fetch dynamically imported module" (Vite, Chrome)
+ *   - "error loading dynamically imported module" (Vite, Safari)
+ *   - "Importing a module script failed" (Safari fallback)
+ *   - "Loading chunk" / "Loading CSS chunk" (Webpack-style)
+ *   - "ChunkLoadError" (the class name some bundlers throw)
+ */
+function isStaleChunkError(error: Error): boolean {
+  const message = `${error.name} ${error.message}`.toLowerCase()
+  return (
+    message.includes('failed to fetch dynamically imported module') ||
+    message.includes('error loading dynamically imported module') ||
+    message.includes('importing a module script failed') ||
+    message.includes('loading chunk') ||
+    message.includes('loading css chunk') ||
+    message.includes('chunkloaderror')
+  )
+}
+
 /**
  * Generic React error boundary. Class component is required — React 19
  * still has no hooks-based API for rendering fallbacks on render-time throws.
@@ -20,6 +55,13 @@ interface State {
  * Wraps any subtree so a single broken component can't white-screen the app.
  * Falls back to a friendly card with "Try again" (resets the boundary) and
  * "Go home" (full reload to `/`). Logs the error to the console for dev.
+ *
+ * 2026-05-19 — stale-chunk auto-recovery: when the caught error looks
+ * like a Vercel-deploy-mid-session chunk failure, the boundary
+ * triggers one full page reload (guarded by a sessionStorage flag so
+ * a persistent failure doesn't loop). The user sees a brief reload
+ * instead of the crash card, which matches what they'd manually do
+ * with Cmd+Shift+R anyway.
  */
 export default class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null }
@@ -30,6 +72,27 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ErrorBoundary]', this.props.label ?? 'unknown', error, info.componentStack)
+
+    // Auto-recover from stale-chunk errors after a deploy. Skip if we
+    // reloaded within the guard window (means the new bundle ALSO
+    // failed and looping won't help) — fall through to the normal
+    // crash UI in that case.
+    if (isStaleChunkError(error)) {
+      let recentlyReloaded = false
+      try {
+        const last = Number(window.sessionStorage.getItem(RELOAD_GUARD_KEY) ?? '0')
+        recentlyReloaded = Date.now() - last < RELOAD_GUARD_WINDOW_MS
+      } catch {
+        // Storage can throw in private-mode browsers; fall through to
+        // attempting the reload (worst case: a private-mode user sees
+        // the crash UI on the second consecutive failure).
+      }
+      if (!recentlyReloaded) {
+        try { window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now())) } catch { /* ignore */ }
+        console.warn('[ErrorBoundary] stale-chunk detected; reloading once to pull the fresh bundle')
+        window.location.reload()
+      }
+    }
   }
 
   reset = () => {
