@@ -505,21 +505,23 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       <MessageSquare size={13} aria-hidden="true" />
                     </button>
 
-                    {/* Open-in-forum link button. Same circular
-                        chrome as the speech-bubble so the two read
-                        as parallel actions (reply here vs go there).
-                        ExternalLink icon makes the destination
-                        unambiguous. Per user direction "make the
-                        clickable link to take you to the forum more
-                        easier an enviting to click in case someone
-                        wants to go directly to the forum to respond." */}
+                    {/* Open-in-forum pill. Per user "make the new
+                        link a bit more obvious" — promoted from a
+                        twin circular icon to a pill with icon +
+                        "Open" label so it reads as an explicit
+                        affordance, not just decoration. Same h-7 +
+                        violet palette as the speech-bubble so the
+                        two still read as a coherent pair, but the
+                        label removes any ambiguity about what it
+                        does + invites the click. */}
                     <Link
                       to={channelHref}
                       aria-label={`Open #${c.channel_name} in forum`}
                       title="Open in forum"
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 bg-violet-500/15 ring-violet-500/30 text-violet-300 hover:bg-violet-500/25 hover:ring-violet-400/50 hover:shadow-[0_0_0_3px_rgba(167,139,250,0.12)] transition-all duration-150 active:scale-95 focus-ring"
+                      className="inline-flex items-center gap-1 h-7 px-2 rounded-full ring-1 bg-violet-500/15 ring-violet-500/30 text-violet-200 text-[10px] font-bold uppercase tracking-wider hover:bg-violet-500/30 hover:ring-violet-400/60 hover:text-white hover:shadow-[0_0_0_3px_rgba(167,139,250,0.18)] transition-all duration-150 active:scale-95 focus-ring"
                     >
-                      <ExternalLink size={12} strokeWidth={2.4} aria-hidden="true" />
+                      <ExternalLink size={11} strokeWidth={2.6} aria-hidden="true" />
+                      Open
                     </Link>
                   </div>
 
@@ -616,38 +618,31 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       placeholder={`Reply to #${c.channel_name}…`}
                       className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-violet-500/25 text-[12px] text-text placeholder:text-text-light focus:border-violet-400/60 focus:outline-none resize-none min-h-[34px]"
                     />
-                    <div className="flex items-center justify-between gap-2">
-                      <Link
-                        to={channelHref}
-                        className="inline-flex items-center gap-1 text-[10px] text-text-light hover:text-violet-300 transition-colors"
+                    {/* 2026-05-19 — dropped the redundant "Open
+                        #channel" text-link that used to live here.
+                        The new prominent "Open" pill in the row
+                        header (visible in both collapsed AND
+                        expanded states) replaces it. */}
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
                         onClick={() => {
                           setExpandedChannelId(null)
                           setReplyText('')
                         }}
+                        className="px-2 py-1 rounded-md text-[11px] font-medium text-text-light hover:text-text transition-colors focus-ring"
                       >
-                        <ExternalLink size={10} aria-hidden="true" /> Open #{c.channel_name}
-                      </Link>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setExpandedChannelId(null)
-                            setReplyText('')
-                          }}
-                          className="px-2 py-1 rounded-md text-[11px] font-medium text-text-light hover:text-text transition-colors focus-ring"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void submitReply()}
-                          disabled={!replyText.trim() || replyBusy}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-violet-500 text-white text-[11px] font-bold hover:bg-violet-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring"
-                        >
-                          <Send size={11} aria-hidden="true" />
-                          {replyBusy ? 'Sending…' : 'Send'}
-                        </button>
-                      </div>
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void submitReply()}
+                        disabled={!replyText.trim() || replyBusy}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-violet-500 text-white text-[11px] font-bold hover:bg-violet-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring"
+                      >
+                        <Send size={11} aria-hidden="true" />
+                        {replyBusy ? 'Sending…' : 'Send'}
+                      </button>
                     </div>
                     <p className="text-[10px] text-text-light/70">⌘/Ctrl + Enter to send · Esc to cancel</p>
                   </div>
