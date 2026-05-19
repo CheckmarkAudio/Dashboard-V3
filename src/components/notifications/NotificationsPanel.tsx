@@ -475,29 +475,60 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 key={c.channel_id}
                 className={`relative transition-[background-color] duration-150 ease-out ${stateBg}`}
               >
-                <div className={`flex items-start gap-2.5 ${rowPad}`}>
-                  {/* Speech-bubble = the inline-reply trigger. Buttoned
-                      with a hover glow + active push so it reads as
-                      clickable; aria-expanded reflects the row state. */}
-                  <button
-                    type="button"
-                    onClick={toggleExpand}
-                    aria-expanded={isExpanded}
-                    aria-label={isExpanded ? `Close reply to ${c.channel_name}` : `Reply to ${c.channel_name}`}
-                    title={isExpanded ? 'Close' : 'Quick reply'}
-                    className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 transition-all duration-150 active:scale-95 focus-ring ${
-                      isExpanded
-                        ? 'bg-violet-500/30 ring-violet-400/60 text-violet-200 shadow-[0_0_0_3px_rgba(167,139,250,0.18)]'
-                        : 'bg-violet-500/15 ring-violet-500/30 text-violet-300 hover:bg-violet-500/25 hover:ring-violet-400/50 hover:shadow-[0_0_0_3px_rgba(167,139,250,0.12)]'
-                    }`}
-                  >
-                    <MessageSquare size={13} aria-hidden="true" />
-                  </button>
+                <div className={`flex items-start gap-2 ${rowPad}`}>
+                  {/* 2026-05-19 — twin circular buttons on the left
+                      give the user a clear choice: "reply here" vs
+                      "open the full thread." Both are tactile + share
+                      the same violet palette so they read as a pair.
+                      Previously the only "go to forum" link was a
+                      tiny text-link buried inside the expanded reply
+                      form — easy to miss when the user actually
+                      wants to jump into the thread to respond
+                      properly with formatting / attachments. */}
+                  <div className="shrink-0 flex items-center gap-1">
+                    {/* Speech-bubble = the inline-reply trigger.
+                        Buttoned with a hover glow + active push so it
+                        reads as clickable; aria-expanded reflects the
+                        row state. */}
+                    <button
+                      type="button"
+                      onClick={toggleExpand}
+                      aria-expanded={isExpanded}
+                      aria-label={isExpanded ? `Close reply to ${c.channel_name}` : `Reply to ${c.channel_name}`}
+                      title={isExpanded ? 'Close' : 'Quick reply'}
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 transition-all duration-150 active:scale-95 focus-ring ${
+                        isExpanded
+                          ? 'bg-violet-500/30 ring-violet-400/60 text-violet-200 shadow-[0_0_0_3px_rgba(167,139,250,0.18)]'
+                          : 'bg-violet-500/15 ring-violet-500/30 text-violet-300 hover:bg-violet-500/25 hover:ring-violet-400/50 hover:shadow-[0_0_0_3px_rgba(167,139,250,0.12)]'
+                      }`}
+                    >
+                      <MessageSquare size={13} aria-hidden="true" />
+                    </button>
+
+                    {/* Open-in-forum pill. Per user "make the new
+                        link a bit more obvious" — promoted from a
+                        twin circular icon to a pill with icon +
+                        "Open" label so it reads as an explicit
+                        affordance, not just decoration. Same h-7 +
+                        violet palette as the speech-bubble so the
+                        two still read as a coherent pair, but the
+                        label removes any ambiguity about what it
+                        does + invites the click. */}
+                    <Link
+                      to={channelHref}
+                      aria-label={`Open #${c.channel_name} in forum`}
+                      title="Open in forum"
+                      className="inline-flex items-center gap-1 h-7 px-2 rounded-full ring-1 bg-violet-500/15 ring-violet-500/30 text-violet-200 text-[10px] font-bold uppercase tracking-wider hover:bg-violet-500/30 hover:ring-violet-400/60 hover:text-white hover:shadow-[0_0_0_3px_rgba(167,139,250,0.18)] transition-all duration-150 active:scale-95 focus-ring"
+                    >
+                      <ExternalLink size={11} strokeWidth={2.6} aria-hidden="true" />
+                      Open
+                    </Link>
+                  </div>
 
                   {/* Title + preview = also a quick-reply trigger (same
                       behavior as the speech-bubble icon). The full-Forum
-                      navigation lives in the small "Open #channel" link
-                      inside the expanded form below. */}
+                      navigation also lives in the dedicated
+                      ExternalLink button to the left. */}
                   <button
                     type="button"
                     onClick={toggleExpand}
@@ -587,38 +618,31 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       placeholder={`Reply to #${c.channel_name}…`}
                       className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-violet-500/25 text-[12px] text-text placeholder:text-text-light focus:border-violet-400/60 focus:outline-none resize-none min-h-[34px]"
                     />
-                    <div className="flex items-center justify-between gap-2">
-                      <Link
-                        to={channelHref}
-                        className="inline-flex items-center gap-1 text-[10px] text-text-light hover:text-violet-300 transition-colors"
+                    {/* 2026-05-19 — dropped the redundant "Open
+                        #channel" text-link that used to live here.
+                        The new prominent "Open" pill in the row
+                        header (visible in both collapsed AND
+                        expanded states) replaces it. */}
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
                         onClick={() => {
                           setExpandedChannelId(null)
                           setReplyText('')
                         }}
+                        className="px-2 py-1 rounded-md text-[11px] font-medium text-text-light hover:text-text transition-colors focus-ring"
                       >
-                        <ExternalLink size={10} aria-hidden="true" /> Open #{c.channel_name}
-                      </Link>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setExpandedChannelId(null)
-                            setReplyText('')
-                          }}
-                          className="px-2 py-1 rounded-md text-[11px] font-medium text-text-light hover:text-text transition-colors focus-ring"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void submitReply()}
-                          disabled={!replyText.trim() || replyBusy}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-violet-500 text-white text-[11px] font-bold hover:bg-violet-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring"
-                        >
-                          <Send size={11} aria-hidden="true" />
-                          {replyBusy ? 'Sending…' : 'Send'}
-                        </button>
-                      </div>
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void submitReply()}
+                        disabled={!replyText.trim() || replyBusy}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-violet-500 text-white text-[11px] font-bold hover:bg-violet-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring"
+                      >
+                        <Send size={11} aria-hidden="true" />
+                        {replyBusy ? 'Sending…' : 'Send'}
+                      </button>
                     </div>
                     <p className="text-[10px] text-text-light/70">⌘/Ctrl + Enter to send · Esc to cancel</p>
                   </div>
