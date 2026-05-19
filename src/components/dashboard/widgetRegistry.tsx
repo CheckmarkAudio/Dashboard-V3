@@ -43,6 +43,7 @@ import {
   StudioAssignedTasksCard,
   TeamAssignedTasksCard,
 } from '../tasks/AssignedTaskBoards'
+import TeamChecklistWidget from '../checklist/TeamChecklistWidget'
 import AdminTemplatesWidget from '../admin/templates/AdminTemplatesWidget'
 import AdminEditTasksWidget from '../admin/tasks/AdminEditTasksWidget'
 import AdminClockInWidget from '../admin/AdminClockInWidget'
@@ -69,6 +70,8 @@ const memberWidgetComponents: Record<MemberWidgetId, ComponentType> = {
   // alongside the personal team_tasks (MyTasksCard).
   studio_tasks: StudioAssignedTasksCard,
   team_board: TeamAssignedTasksCard,
+  // 2026-05-19 — Team Maintenance Checklist widget.
+  team_checklist: TeamChecklistWidget,
 }
 
 const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {

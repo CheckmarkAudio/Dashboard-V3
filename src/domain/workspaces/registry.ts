@@ -107,6 +107,20 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
   },
+  {
+    // 2026-05-19 — Team Maintenance Checklist. Stacks under My Tasks
+    // in col 1 (rs1, ~348px) so the existing 3-up Tasks-page layout
+    // stays intact and the new widget reads as a side-by-side companion
+    // to MyTasksCard rather than displacing Studio/Team Tasks. Users
+    // can drag it to a different column or hide via the controls.
+    id: 'team_checklist',
+    title: 'Checklist',
+    description: '',
+    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 1, col: 1 }],
+    accessVisibility: 'shared',
+    dataScope: 'team',
+    allowedRoles: ['member', 'admin', 'owner'],
+  },
 ]
 
 // Member-side widget bank — registered but NOT on any member page today.
@@ -565,7 +579,11 @@ function buildDefaultWidgetStateForScope(
 // Notifications-only at rs2. Member overview unchanged at the
 // registry level — version bump still resets any user-customized
 // member layouts that might have dragged bank widgets in.
-export const WORKSPACE_LAYOUT_VERSION = 35
+// v36 (2026-05-19): new `team_checklist` widget on the member_tasks
+// scope (col 1 rs1, under team_tasks). Saved v35 layouts get
+// sanitized so the new widget appears in its default slot for every
+// user; they can then drag/hide it to taste.
+export const WORKSPACE_LAYOUT_VERSION = 36
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
