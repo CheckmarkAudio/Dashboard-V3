@@ -106,6 +106,12 @@ export type MemberWidgetId =
   // alongside team_tasks (MyTasksCard) in the member_tasks scope.
   | 'studio_tasks'
   | 'team_board'
+  // 2026-05-19 — Team Maintenance Checklist on the Tasks page.
+  // Distinct from tasks (one-shot work) — it's a recurring
+  // verification list ("cables organized", "console wiped") that
+  // resets daily / weekly / monthly. Anyone on the team can check;
+  // admins curate the list.
+  | 'team_checklist'
   // NOTE: `assigned_tasks` was retired in PR #11 — its content folded
   // into `team_tasks` (MyTasksCard). Keeping the id out of the union
   // so saved layouts referencing it get sanitized cleanly via the

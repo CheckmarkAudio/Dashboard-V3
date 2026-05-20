@@ -7,6 +7,7 @@ import {
   Check,
   CheckCircle2,
   CheckSquare,
+  ClipboardList,
   Clock,
   Loader2,
   Shield,
@@ -23,6 +24,7 @@ import { fetchKPIDefinitions, fetchKPIEntries, kpiKeys } from '../../lib/queries
 import { useToast } from '../Toast'
 import CreateBookingModal from '../CreateBookingModal'
 import MultiTaskCreateModal from '../tasks/requests/MultiTaskCreateModal'
+import AdminManageChecklistModal from '../admin/checklist/AdminManageChecklistModal'
 import NotificationsPanel from '../notifications/NotificationsPanel'
 import MemberAvatar from '../members/MemberAvatar'
 import type { TeamMember } from '../../types'
@@ -68,7 +70,15 @@ const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring:
 // inside AdminTaskCreateModal; Task-Group / template-based assignment
 // will be folded into the Task modal's "Add from template" flow in
 // PR #42, replacing the standalone AssignGroupModal tile.
-type AssignFlow = 'session' | 'task' | null
+//
+// 2026-05-19 — added a 3rd 'checklist' tile that opens
+// AdminManageChecklistModal (manage the team maintenance checklist
+// items rendered by `<TeamChecklistWidget>` on /daily). Per user
+// direction "this widget's tasks to be addable through the admin's
+// assign page" — the inline +Add form on the widget itself stays as
+// a quick-add convenience, but admins now have a roomier surface
+// here that also handles rename + cadence-change + archive.
+type AssignFlow = 'session' | 'task' | 'checklist' | null
 
 export function AdminAssignWidget() {
   const queryClient = useQueryClient()
@@ -86,13 +96,12 @@ export function AdminAssignWidget() {
 
   return (
     <div className="flex flex-col h-full justify-center">
-      {/* Two primary CTAs — always visible, no internal scroll.
-          PR #47: compacted to a twin-button row matching the Edit
-          widget's pattern so the two widgets read as a visually
-          consistent pair in col 2 (Assign on top of Edit) at the
-          same rowSpan 0.5 height. Hint text dropped — Members /
-          Studio toggle is discoverable once the modal opens. */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Three primary CTAs — always visible, no internal scroll.
+          2026-05-19 — bumped from 2 → 3 columns (added +Checklist).
+          Tile chrome unchanged so the 3-tile row stays visually
+          consistent with the previous 2-tile pair; gap tightens
+          automatically via grid-cols-3. */}
+      <div className="grid grid-cols-3 gap-2">
         <AssignTile
           icon={CheckSquare}
           label="+Task"
@@ -103,13 +112,22 @@ export function AdminAssignWidget() {
           label="+Booking"
           onClick={() => setFlow('session')}
         />
+        <AssignTile
+          icon={ClipboardList}
+          label="+Checklist"
+          onClick={() => setFlow('checklist')}
+        />
       </div>
 
       {/* Flow modals — Session uses the existing booking flow; Task
-          opens the new row-by-row MultiTaskCreateModal (PR #42) with
-          a Members/Studio toggle + Add-from-template sub-flow. */}
+          opens the row-by-row MultiTaskCreateModal (PR #42) with a
+          Members/Studio toggle + Add-from-template sub-flow;
+          Checklist opens the admin Manage Checklist modal (added
+          2026-05-19) which lets admins add/rename/recadence/archive
+          maintenance items. */}
       {flow === 'session' && <CreateBookingModal onClose={handleClose} />}
       {flow === 'task' && <MultiTaskCreateModal onClose={handleClose} />}
+      {flow === 'checklist' && <AdminManageChecklistModal onClose={handleClose} />}
     </div>
   )
 }
