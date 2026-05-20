@@ -63,7 +63,11 @@ import {
 const ROW_HEIGHT_PX = 340
 const ROW_GAP_PX = 16
 const PAGE_GAP_PX = 16
-const EDGE_AUTO_ADVANCE_MS = 600
+// 2026-05-20 — dropped from 600 → 450ms per user feedback on
+// cross-page drag difficulty. Tight enough to feel responsive when
+// the user lands on the edge intentionally, slow enough that a
+// glancing pass doesn't trigger a phantom page advance.
+const EDGE_AUTO_ADVANCE_MS = 450
 
 function widgetHeight(rowSpan: WidgetRowSpan = 1): number {
   const base = rowSpan * ROW_HEIGHT_PX
@@ -188,9 +192,15 @@ function DragGhost({
   )
 }
 
-// Edge auto-advance droppable. Only mounts during drag (saves DOM noise
-// otherwise). When the dragged widget hovers this zone for 600ms, the
-// carousel pages in that direction.
+// Edge auto-advance droppable. Only mounts during drag (saves DOM
+// noise otherwise). When the dragged widget hovers this zone for
+// EDGE_AUTO_ADVANCE_MS, the carousel pages in that direction.
+//
+// 2026-05-20 — bumped width 64 → 112px + added a persistent (low
+// alpha) tint and a chevron icon hint so the hot zone is visible the
+// moment a drag starts, not only on hover. User feedback: "I am
+// having trouble moving around widgets on the next page" — root
+// cause was the zone being too narrow + invisible until landed on.
 function EdgeSensor({
   side,
   height,
@@ -206,19 +216,40 @@ function EdgeSensor({
     position: 'absolute',
     top: 0,
     [side]: 0,
-    width: '64px',
+    width: '112px',
     height: `${height}px`,
     pointerEvents: 'auto',
     zIndex: 5,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: side === 'left' ? 'flex-start' : 'flex-end',
+    paddingLeft: side === 'left' ? '12px' : 0,
+    paddingRight: side === 'right' ? '12px' : 0,
+    // Always-visible low-alpha tint during drag so the user sees the
+    // hot zone exists. Brightens + saturates on hover to confirm the
+    // landing.
     background: isOver
       ? 'linear-gradient(' +
         (side === 'left' ? '90deg' : '270deg') +
-        ', rgba(214,170,55,0.18), transparent)'
-      : 'transparent',
-    transition: 'background 120ms ease-out',
+        ', rgba(214,170,55,0.32), transparent)'
+      : 'linear-gradient(' +
+        (side === 'left' ? '90deg' : '270deg') +
+        ', rgba(214,170,55,0.08), transparent)',
+    transition: 'background 140ms ease-out',
   }
   if (!active) return null
-  return <div ref={setNodeRef} style={style} aria-hidden />
+  const Icon = side === 'left' ? ChevronLeft : ChevronRight
+  return (
+    <div ref={setNodeRef} style={style} aria-hidden>
+      <Icon
+        size={28}
+        strokeWidth={2.5}
+        className={`text-gold transition-all duration-150 ${
+          isOver ? 'opacity-100 scale-110' : 'opacity-60'
+        }`}
+      />
+    </div>
+  )
 }
 
 interface WorkspacePanelProps {
