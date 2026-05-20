@@ -89,11 +89,17 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     allowedRoles: ['member', 'admin', 'owner'],
   },
   // ─── Tasks page (`/daily`) widgets ──────────────────────────────
+  // 2026-05-19 — swapped Studio Tasks ↔ Team Tasks col positions per
+  // user direction "switch location of studio tasks with team tasks".
+  // Team Tasks now lives at col 2 (alongside the personal queue),
+  // Studio Tasks at col 3. The carousel order becomes:
+  //   My Tasks · Checklist · Team Tasks · Studio Tasks
+  // (Checklist is col=1 order=1, lands as the 2nd widget naturally.)
   {
     id: 'studio_tasks',
     title: 'Studio Tasks',
     description: '',
-    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 2, col: 2 }],
+    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 2, col: 3 }],
     accessVisibility: 'shared',
     dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -102,21 +108,31 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     id: 'team_board',
     title: 'Team Tasks',
     description: '',
-    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 2, col: 3 }],
+    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 2, col: 2 }],
     accessVisibility: 'shared',
     dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
   },
   {
-    // 2026-05-19 — Team Maintenance Checklist. Stacks under My Tasks
-    // in col 1 (rs1, ~348px) so the existing 3-up Tasks-page layout
-    // stays intact and the new widget reads as a side-by-side companion
-    // to MyTasksCard rather than displacing Studio/Team Tasks. Users
-    // can drag it to a different column or hide via the controls.
+    // 2026-05-19 — Team Maintenance Checklist. Per user direction
+    // "lets add it to the task carosal, default lets put it as the
+    // second widget on the page, also expandable like the other
+    // widgets." Placed at col=1 (same as team_tasks) — since
+    // `sortWidgets` orders by (col, order), and registration order
+    // here gives it order=1 in col 1 (team_tasks is already col 1
+    // order 0), the carousel renders as:
+    //   page 1 (desktop, pageSize=3):  My Tasks · Checklist · Studio Tasks
+    //   page 2 (desktop):              Team Tasks
+    // rs=2 matches the rest of the Tasks-page widgets so all four
+    // sit at the same ~696px baseline + benefit from the same
+    // inline 2x expand chevron via DashboardWidgetFrame (no extra
+    // wiring needed — the carousel's expandedId state already
+    // covers any registered workspace widget). Users can drag/hide
+    // via the Workspace Controls panel.
     id: 'team_checklist',
     title: 'Checklist',
     description: '',
-    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 1, col: 1 }],
+    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 2, col: 1 }],
     accessVisibility: 'shared',
     dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -580,9 +596,12 @@ function buildDefaultWidgetStateForScope(
 // registry level — version bump still resets any user-customized
 // member layouts that might have dragged bank widgets in.
 // v36 (2026-05-19): new `team_checklist` widget on the member_tasks
-// scope (col 1 rs1, under team_tasks). Saved v35 layouts get
-// sanitized so the new widget appears in its default slot for every
-// user; they can then drag/hide it to taste.
+// scope (col=1 rs=2, lands as 2nd in carousel naturally). Plus
+// Studio Tasks ↔ Team Tasks swapped: Team Tasks moves col 3 → col 2,
+// Studio Tasks moves col 2 → col 3. New /daily carousel order:
+//   My Tasks · Checklist · Team Tasks · Studio Tasks
+// Saved v35 layouts get sanitized so the new widget + new ordering
+// apply for every user; they can drag/hide via the controls.
 export const WORKSPACE_LAYOUT_VERSION = 36
 
 // Default layouts per scope. Each scope picks its widgets from the
