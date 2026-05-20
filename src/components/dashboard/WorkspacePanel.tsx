@@ -18,6 +18,7 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -69,6 +70,33 @@ const PAGE_GAP_PX = 16
 // the user lands on the edge intentionally, slow enough that a
 // glancing pass doesn't trigger a phantom page advance.
 const EDGE_AUTO_ADVANCE_MS = 450
+
+/**
+ * 2026-05-20 — Custom collision detection.
+ *
+ * The widened EdgeSensor (112px) introduced in this PR overlaps the
+ * outer columns of the carousel viewport. With plain closestCorners,
+ * when the user dragged a widget over a target widget that happened
+ * to sit near the edge, the EdgeSensor's corner was often closer to
+ * the cursor than the target widget's corner — so the edge "won"
+ * collision detection, `over.id` ended up as `edge-right`/`edge-left`,
+ * and the drop didn't land on the intended widget. User feedback:
+ * "its still not setting in where I dragged it".
+ *
+ * Fix: run closestCorners against EVERYTHING-EXCEPT-edges first; if
+ * we got a widget hit, use that. Only fall back to the full set
+ * (including edges) when no widget collision exists — covers the
+ * legitimate "drop on edge to send-to-end" path the rest of
+ * handleDragEnd already understands.
+ */
+const widgetPreferredCollisionDetection: CollisionDetection = (args) => {
+  const nonEdge = args.droppableContainers.filter(
+    (c) => c.id !== 'edge-left' && c.id !== 'edge-right',
+  )
+  const widgetHits = closestCorners({ ...args, droppableContainers: nonEdge })
+  if (widgetHits.length > 0) return widgetHits
+  return closestCorners(args)
+}
 
 function widgetHeight(rowSpan: WidgetRowSpan = 1): number {
   const base = rowSpan * ROW_HEIGHT_PX
@@ -572,19 +600,19 @@ export default function WorkspacePanel({
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        // 2026-05-20 — widget-preferred collision detection (see
+        // helper docstring up top). Plain closestCorners had the
+        // widened EdgeSensor stealing collisions from real widget
+        // targets near the edge; this ensures actual drop targets
+        // win whenever the cursor is over one.
+        collisionDetection={widgetPreferredCollisionDetection}
         // 2026-05-20 — `MeasuringStrategy.Always` re-measures droppable
         // rects on every drag tick instead of caching them at drag
         // start. The default cache strategy left dnd-kit thinking the
         // OLD-page widgets were still in their starting positions
         // after the carousel CSS-translated to a new page, so a drop
         // on a target widget on the new page silently missed the
-        // collision check and the widget snapped back. User reported:
-        // "my mouse is able to move it smoothly to the other carosel
-        // page, but when I hover over the spot I want to put it, it
-        // is not dropping into place." Now droppable positions stay
-        // in sync with the visible layout — drop-on-widget works
-        // cross-page as expected.
+        // collision check and the widget snapped back.
         measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
