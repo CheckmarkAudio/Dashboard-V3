@@ -33,6 +33,28 @@ const CADENCE_LABEL: Record<MaintenanceCadence, string> = {
 const CADENCE_ORDER: readonly MaintenanceCadence[] = ['daily', 'weekly', 'monthly'] as const
 
 export default function AdminManageChecklistModal({ onClose }: { onClose: () => void }) {
+  return (
+    <FloatingDetailModal
+      title="Checklist"
+      eyebrow="Maintenance items — visible to the whole team"
+      onClose={onClose}
+      maxWidth={620}
+    >
+      <TeamMaintenanceManager />
+    </FloatingDetailModal>
+  )
+}
+
+/**
+ * 2026-05-20 — extracted from AdminManageChecklistModal's body so the
+ * exact same manager UI can render inline in the Assign page's
+ * left-rail "Checklist" tab. Both surfaces share state via the
+ * `maintenanceKeys.list()` React Query cache + the realtime
+ * subscription on `<TeamChecklistWidget>` (any open client gets
+ * invalidated on writes, so an admin editing here and a member
+ * checking on /daily stay in sync live).
+ */
+export function TeamMaintenanceManager() {
   const { toast } = useToast()
   const itemsQuery = useQuery({
     queryKey: maintenanceKeys.list(),
@@ -51,65 +73,58 @@ export default function AdminManageChecklistModal({ onClose }: { onClose: () => 
   }, [items])
 
   return (
-    <FloatingDetailModal
-      title="Checklist"
-      eyebrow="Maintenance items — visible to the whole team"
-      onClose={onClose}
-      maxWidth={620}
-    >
-      <div className="flex flex-col gap-4">
-        {/* Inline +Add form, pinned to the top so admins can capture
-            an item without scrolling past the existing list. */}
-        <AddItemSection onAdded={(item) => toast(`Added "${item.title}".`, 'success')} />
+    <div className="flex flex-col gap-4">
+      {/* Inline +Add form, pinned to the top so admins can capture
+          an item without scrolling past the existing list. */}
+      <AddItemSection onAdded={(item) => toast(`Added "${item.title}".`, 'success')} />
 
-        {/* Existing items — grouped by cadence, with inline rename +
-            cadence-pill + archive. */}
-        {itemsQuery.isLoading ? (
-          <div className="py-10 flex items-center justify-center">
-            <Loader2 size={18} className="animate-spin text-text-muted" />
+      {/* Existing items — grouped by cadence, with inline rename +
+          cadence-pill + archive. */}
+      {itemsQuery.isLoading ? (
+        <div className="py-10 flex items-center justify-center">
+          <Loader2 size={18} className="animate-spin text-text-muted" />
+        </div>
+      ) : itemsQuery.error ? (
+        <div className="flex items-center gap-2 text-[13px] text-amber-300 py-4">
+          <AlertCircle size={16} />
+          <span>{(itemsQuery.error as Error).message}</span>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="py-10 flex flex-col items-center text-center">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-surface-alt ring-1 ring-border mb-2">
+            <Inbox size={18} className="text-text-light" aria-hidden="true" />
           </div>
-        ) : itemsQuery.error ? (
-          <div className="flex items-center gap-2 text-[13px] text-amber-300 py-4">
-            <AlertCircle size={16} />
-            <span>{(itemsQuery.error as Error).message}</span>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="py-10 flex flex-col items-center text-center">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-surface-alt ring-1 ring-border mb-2">
-              <Inbox size={18} className="text-text-light" aria-hidden="true" />
-            </div>
-            <p className="text-[14px] font-medium text-text">No checklist items yet</p>
-            <p className="text-[12px] text-text-light mt-0.5 max-w-[34ch]">
-              Add maintenance checks above — e.g. "Cables organized", "Console wiped down".
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-border overflow-hidden">
-            {CADENCE_ORDER.map((cadence) => {
-              const bucket = grouped.get(cadence) ?? []
-              if (bucket.length === 0) return null
-              return (
-                <section key={cadence} className="border-b border-border last:border-b-0">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-surface-alt/40">
-                    <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-gold/70">
-                      {CADENCE_LABEL[cadence]}
-                    </h3>
-                    <span className="tabular-nums text-[10px] font-bold text-text-light/70 px-1.5 py-0.5 rounded-full bg-surface ring-1 ring-border">
-                      {bucket.length}
-                    </span>
-                  </div>
-                  <div className="divide-y divide-theme">
-                    {bucket.map((item) => (
-                      <EditableRow key={item.id} item={item} />
-                    ))}
-                  </div>
-                </section>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </FloatingDetailModal>
+          <p className="text-[14px] font-medium text-text">No checklist items yet</p>
+          <p className="text-[12px] text-text-light mt-0.5 max-w-[34ch]">
+            Add maintenance checks above — e.g. "Cables organized", "Console wiped down".
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border overflow-hidden">
+          {CADENCE_ORDER.map((cadence) => {
+            const bucket = grouped.get(cadence) ?? []
+            if (bucket.length === 0) return null
+            return (
+              <section key={cadence} className="border-b border-border last:border-b-0">
+                <div className="flex items-center gap-2 px-3 py-2 bg-surface-alt/40">
+                  <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-gold/70">
+                    {CADENCE_LABEL[cadence]}
+                  </h3>
+                  <span className="tabular-nums text-[10px] font-bold text-text-light/70 px-1.5 py-0.5 rounded-full bg-surface ring-1 ring-border">
+                    {bucket.length}
+                  </span>
+                </div>
+                <div className="divide-y divide-theme">
+                  {bucket.map((item) => (
+                    <EditableRow key={item.id} item={item} />
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
