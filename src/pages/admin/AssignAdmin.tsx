@@ -46,6 +46,7 @@ import type {
 import MultiTaskCreateModal from '../../components/tasks/requests/MultiTaskCreateModal'
 import TemplateLibrary from './TemplateLibrary'
 import StudioTasksPane from './StudioTasksPane'
+import { TeamMaintenanceManager } from '../../components/admin/checklist/AdminManageChecklistModal'
 import { supabase } from '../../lib/supabase'
 import type { TeamMember } from '../../types'
 import type { AssignedTask } from '../../types/assignments'
@@ -150,17 +151,26 @@ export default function AssignAdmin() {
   // `#templates`, `#studio`, or `#<memberId>`.
   const TEMPLATES_HASH = 'templates'
   const STUDIO_HASH = 'studio'
+  // 2026-05-20 — Checklist tab added to the left rail. Manages the
+  // team maintenance checklist items rendered by TeamChecklistWidget
+  // on /daily.
+  const CHECKLIST_HASH = 'checklist'
   const initialHash =
     typeof window !== 'undefined' ? window.location.hash.slice(1) : ''
-  const [view, setView] = useState<'member' | 'templates' | 'studio'>(
+  const [view, setView] = useState<'member' | 'templates' | 'studio' | 'checklist'>(
     initialHash === TEMPLATES_HASH
       ? 'templates'
       : initialHash === STUDIO_HASH
         ? 'studio'
-        : 'member',
+        : initialHash === CHECKLIST_HASH
+          ? 'checklist'
+          : 'member',
   )
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(
-    initialHash && initialHash !== TEMPLATES_HASH && initialHash !== STUDIO_HASH
+    initialHash &&
+    initialHash !== TEMPLATES_HASH &&
+    initialHash !== STUDIO_HASH &&
+    initialHash !== CHECKLIST_HASH
       ? initialHash
       : null,
   )
@@ -181,9 +191,11 @@ export default function AssignAdmin() {
         ? `#${TEMPLATES_HASH}`
         : view === 'studio'
           ? `#${STUDIO_HASH}`
-          : selectedMemberId
-            ? `#${selectedMemberId}`
-            : ''
+          : view === 'checklist'
+            ? `#${CHECKLIST_HASH}`
+            : selectedMemberId
+              ? `#${selectedMemberId}`
+              : ''
     if (desired && window.location.hash !== desired) {
       history.replaceState(null, '', desired)
     }
@@ -581,6 +593,47 @@ export default function AssignAdmin() {
             </button>
           </div>
 
+          {/* Checklist tab — 2026-05-20 — manages the team maintenance
+              checklist items rendered by TeamChecklistWidget on /daily.
+              Same TeamMaintenanceManager surface as the +Checklist
+              tile modal on the admin Hub Assign widget; both share
+              cache + realtime, so edits propagate live. */}
+          <div className="mt-4 pt-3 border-t border-border/60">
+            <button
+              type="button"
+              onClick={() => setView('checklist')}
+              aria-current={view === 'checklist' ? 'true' : undefined}
+              className={`w-full flex items-center gap-2 px-2 py-2 rounded-xl transition-all text-left ${
+                view === 'checklist'
+                  ? 'bg-gold/12 ring-1 ring-gold/30'
+                  : 'hover:bg-surface-hover'
+              }`}
+            >
+              <ClipboardList
+                size={14}
+                className={view === 'checklist' ? 'text-gold' : 'text-gold/70'}
+                aria-hidden="true"
+              />
+              <div className="flex-1 min-w-0">
+                <p
+                  className={`text-[13px] ${
+                    view === 'checklist' ? 'font-bold text-text' : 'font-semibold text-text'
+                  }`}
+                >
+                  Checklist
+                </p>
+                <p className="text-[10px] text-text-light">
+                  {view === 'checklist' ? 'Open' : 'Maintenance items'}
+                </p>
+              </div>
+              <ChevronRight
+                size={12}
+                className={`shrink-0 ${view === 'checklist' ? 'text-gold' : 'text-text-light'}`}
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+
           {/* Templates tab — clicking swaps the main pane to the
               embedded TemplateLibrary instead of routing away. The
               standalone page at `/admin/template-library` still
@@ -655,6 +708,22 @@ export default function AssignAdmin() {
             <TemplateLibrary embedded />
           ) : view === 'studio' ? (
             <StudioTasksPane />
+          ) : view === 'checklist' ? (
+            // 2026-05-20 — Checklist tab. Same TeamMaintenanceManager
+            // the admin Hub Assign widget's +Checklist tile opens in a
+            // modal; rendered inline here so admins can curate items
+            // from this surface without leaving the page. Member-side
+            // <TeamChecklistWidget> on /daily picks up edits live via
+            // the shared cache key + realtime subscription.
+            <div>
+              <header className="mb-4">
+                <h2 className="text-lg font-bold text-text">Checklist</h2>
+                <p className="text-[12px] text-text-muted mt-0.5">
+                  Maintenance items — visible to the whole team on the Tasks page.
+                </p>
+              </header>
+              <TeamMaintenanceManager />
+            </div>
           ) : (
           <>
           {/* Top action bar.
