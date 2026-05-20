@@ -198,7 +198,7 @@ BEGIN
 
   SELECT id INTO v_member
     FROM public.team_members
-   WHERE auth_user_id = v_user AND team_id = v_team
+   WHERE id = v_user AND team_id = v_team
    LIMIT 1;
   IF v_member IS NULL THEN
     RAISE EXCEPTION 'caller not a team member' USING ERRCODE = '42501';
@@ -275,7 +275,7 @@ BEGIN
 
   SELECT id INTO v_member
     FROM public.team_members
-   WHERE auth_user_id = v_user AND team_id = v_team
+   WHERE id = v_user AND team_id = v_team
    LIMIT 1;
 
   INSERT INTO public.team_maintenance_items (
