@@ -1,10 +1,10 @@
 // ============================================================================
 // upload-to-dropbox — Supabase Edge Function
 //
-// 2026-05-20 — REBUILT for chunked uploads up to 350GB.
+// 2026-05-20 — REBUILT for chunked uploads up to 10GB.
 //
-// Per user direction: support the same single-file ceiling Dropbox.com
-// itself supports (350GB web / 2TB desktop). The previous single-shot
+// Per user direction: support large file uploads (10GB ceiling — see
+// MAX_FINALIZE_BYTES below). The previous single-shot
 // `/2/files/upload` path was hard-capped at 150MB (Dropbox's endpoint
 // limit) and would have OOMed our edge function on bigger files anyway.
 // The new flow uses Dropbox's `upload_session/*` API: the BROWSER
@@ -267,6 +267,14 @@ interface FinalizeBody {
   content_type?: string | null
 }
 
+// 2026-05-20 — server-side defense-in-depth cap. The client gate in
+// `AddMedia.tsx` already prevents files > 10GB from starting an
+// upload session, but a malicious caller could skip that and craft a
+// finalize request claiming any size. Reject finalize calls above
+// this number so the `media_submissions.size_bytes` column stays
+// trustworthy.
+const MAX_FINALIZE_BYTES = 10 * 1024 * 1024 * 1024
+
 /**
  * action='finalize' — browser has finished appending all chunks to
  * the Dropbox upload session. Edge function commits the session,
@@ -286,6 +294,12 @@ async function handleFinalize(req: Request, ctx: CallerContext): Promise<Respons
   }
   if (body.total_bytes <= 0) {
     return jsonResponse({ ok: false, error: "total_bytes must be > 0" }, 400)
+  }
+  if (body.total_bytes > MAX_FINALIZE_BYTES) {
+    return jsonResponse(
+      { ok: false, error: `total_bytes ${body.total_bytes} exceeds 10GB cap` },
+      413,
+    )
   }
 
   const appKey = Deno.env.get("DROPBOX_APP_KEY")

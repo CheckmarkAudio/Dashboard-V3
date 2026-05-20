@@ -35,14 +35,15 @@ import { uploadFileToDropbox, UploadCancelledError } from '../lib/dropboxUpload'
 const PARENT_FOLDER_LINK_KEY = 'VITE_MEDIA_PARENT_FOLDER_LINK'
 const PARENT_FOLDER_LINK = (import.meta.env[PARENT_FOLDER_LINK_KEY] as string | undefined) ?? null
 
-// 2026-05-20 — bumped to 350GB matching Dropbox.com's web-upload
-// ceiling. Achieved via chunked upload sessions (uploadFileToDropbox)
-// — the browser streams 32MB chunks directly to Dropbox content
-// endpoints using a short-lived access token. No data passes through
-// our edge function, so neither edge memory nor Vercel payload limits
-// apply. See src/lib/dropboxUpload.ts for the protocol.
-const MAX_FILE_BYTES = 350 * 1024 * 1024 * 1024
-const MAX_FILE_LABEL = '350GB'
+// 2026-05-20 — 10GB cap. Matches Dropbox's mobile-app ceiling, which
+// is a sensible upper bound for browser-based uploads (matches the
+// memory + interruption tolerance of a real-world web session).
+// Achieved via chunked upload sessions — the browser streams 32MB
+// chunks directly to Dropbox content endpoints using a short-lived
+// access token. No data passes through our edge function. For files
+// bigger than 10GB, the right answer is Dropbox desktop sync.
+const MAX_FILE_BYTES = 10 * 1024 * 1024 * 1024
+const MAX_FILE_LABEL = '10GB'
 
 interface MediaSubmissionRow {
   id: string
