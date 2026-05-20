@@ -11,12 +11,14 @@ import { ChevronLeft, ChevronRight, GripVertical, RotateCcw } from 'lucide-react
 import {
   DndContext,
   DragOverlay,
+  MeasuringStrategy,
   PointerSensor,
   KeyboardSensor,
   closestCorners,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -63,7 +65,38 @@ import {
 const ROW_HEIGHT_PX = 340
 const ROW_GAP_PX = 16
 const PAGE_GAP_PX = 16
-const EDGE_AUTO_ADVANCE_MS = 600
+// 2026-05-20 — dropped from 600 → 450ms per user feedback on
+// cross-page drag difficulty. Tight enough to feel responsive when
+// the user lands on the edge intentionally, slow enough that a
+// glancing pass doesn't trigger a phantom page advance.
+const EDGE_AUTO_ADVANCE_MS = 450
+
+/**
+ * 2026-05-20 — Custom collision detection.
+ *
+ * The widened EdgeSensor (112px) introduced in this PR overlaps the
+ * outer columns of the carousel viewport. With plain closestCorners,
+ * when the user dragged a widget over a target widget that happened
+ * to sit near the edge, the EdgeSensor's corner was often closer to
+ * the cursor than the target widget's corner — so the edge "won"
+ * collision detection, `over.id` ended up as `edge-right`/`edge-left`,
+ * and the drop didn't land on the intended widget. User feedback:
+ * "its still not setting in where I dragged it".
+ *
+ * Fix: run closestCorners against EVERYTHING-EXCEPT-edges first; if
+ * we got a widget hit, use that. Only fall back to the full set
+ * (including edges) when no widget collision exists — covers the
+ * legitimate "drop on edge to send-to-end" path the rest of
+ * handleDragEnd already understands.
+ */
+const widgetPreferredCollisionDetection: CollisionDetection = (args) => {
+  const nonEdge = args.droppableContainers.filter(
+    (c) => c.id !== 'edge-left' && c.id !== 'edge-right',
+  )
+  const widgetHits = closestCorners({ ...args, droppableContainers: nonEdge })
+  if (widgetHits.length > 0) return widgetHits
+  return closestCorners(args)
+}
 
 function widgetHeight(rowSpan: WidgetRowSpan = 1): number {
   const base = rowSpan * ROW_HEIGHT_PX
@@ -188,9 +221,15 @@ function DragGhost({
   )
 }
 
-// Edge auto-advance droppable. Only mounts during drag (saves DOM noise
-// otherwise). When the dragged widget hovers this zone for 600ms, the
-// carousel pages in that direction.
+// Edge auto-advance droppable. Only mounts during drag (saves DOM
+// noise otherwise). When the dragged widget hovers this zone for
+// EDGE_AUTO_ADVANCE_MS, the carousel pages in that direction.
+//
+// 2026-05-20 — bumped width 64 → 112px + added a persistent (low
+// alpha) tint and a chevron icon hint so the hot zone is visible the
+// moment a drag starts, not only on hover. User feedback: "I am
+// having trouble moving around widgets on the next page" — root
+// cause was the zone being too narrow + invisible until landed on.
 function EdgeSensor({
   side,
   height,
@@ -206,19 +245,40 @@ function EdgeSensor({
     position: 'absolute',
     top: 0,
     [side]: 0,
-    width: '64px',
+    width: '112px',
     height: `${height}px`,
     pointerEvents: 'auto',
     zIndex: 5,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: side === 'left' ? 'flex-start' : 'flex-end',
+    paddingLeft: side === 'left' ? '12px' : 0,
+    paddingRight: side === 'right' ? '12px' : 0,
+    // Always-visible low-alpha tint during drag so the user sees the
+    // hot zone exists. Brightens + saturates on hover to confirm the
+    // landing.
     background: isOver
       ? 'linear-gradient(' +
         (side === 'left' ? '90deg' : '270deg') +
-        ', rgba(214,170,55,0.18), transparent)'
-      : 'transparent',
-    transition: 'background 120ms ease-out',
+        ', rgba(214,170,55,0.32), transparent)'
+      : 'linear-gradient(' +
+        (side === 'left' ? '90deg' : '270deg') +
+        ', rgba(214,170,55,0.08), transparent)',
+    transition: 'background 140ms ease-out',
   }
   if (!active) return null
-  return <div ref={setNodeRef} style={style} aria-hidden />
+  const Icon = side === 'left' ? ChevronLeft : ChevronRight
+  return (
+    <div ref={setNodeRef} style={style} aria-hidden>
+      <Icon
+        size={28}
+        strokeWidth={2.5}
+        className={`text-gold transition-all duration-150 ${
+          isOver ? 'opacity-100 scale-110' : 'opacity-60'
+        }`}
+      />
+    </div>
+  )
 }
 
 interface WorkspacePanelProps {
@@ -419,20 +479,39 @@ export default function WorkspacePanel({
     }
   }
 
-  // onDragEnd is the single commit point. Three outcomes:
-  //   - drop on another widget → swap order (cross-page works because
-  //     the dragged widget stays in DOM regardless of which page is
-  //     visible; cursor coords pick the target).
-  //   - drop on edge sensor / no target → no-op, widget snaps back.
-  //   - drop on self → no-op.
+  // onDragEnd is the single commit point. Four outcomes:
+  //   - drop on another widget → swap order
+  //   - drop on edge sensor (2026-05-20) → swap with the widget at
+  //     the matching end of the carousel so the user lands on the
+  //     new page they auto-paged to. Previously this was a no-op +
+  //     widget snapped back, which is what the user hit as "can't
+  //     move widgets between carousel pages."
+  //   - drop on self / no target → no-op.
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null)
     clearEdgeTimer()
     const { active, over } = event
     if (!over || active.id === over.id) return
-    if (over.id === 'edge-left' || over.id === 'edge-right') return
 
     const aId = active.id as WorkspaceWidgetId
+
+    // Drop-on-edge handling. Pick the widget at the relevant END of
+    // the visible-widgets array as the swap target. Combined with
+    // the auto-page advance during drag, this gives the user a
+    // simple model: "hold widget at right edge → page advances →
+    // release → widget moves to the end of the carousel." (Same
+    // mirror semantics for left edge → moves to the start.)
+    if (over.id === 'edge-left' || over.id === 'edge-right') {
+      if (visibleWidgets.length < 2) return
+      const targetWidget =
+        over.id === 'edge-right'
+          ? visibleWidgets[visibleWidgets.length - 1]
+          : visibleWidgets[0]
+      if (!targetWidget || targetWidget.id === aId) return
+      swapWidgets(aId, targetWidget.id as WorkspaceWidgetId)
+      return
+    }
+
     const bId = over.id as WorkspaceWidgetId
     const aWidget = visibleWidgets.find((w) => w.id === aId)
     const bWidget = visibleWidgets.find((w) => w.id === bId)
@@ -521,7 +600,20 @@ export default function WorkspacePanel({
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        // 2026-05-20 — widget-preferred collision detection (see
+        // helper docstring up top). Plain closestCorners had the
+        // widened EdgeSensor stealing collisions from real widget
+        // targets near the edge; this ensures actual drop targets
+        // win whenever the cursor is over one.
+        collisionDetection={widgetPreferredCollisionDetection}
+        // 2026-05-20 — `MeasuringStrategy.Always` re-measures droppable
+        // rects on every drag tick instead of caching them at drag
+        // start. The default cache strategy left dnd-kit thinking the
+        // OLD-page widgets were still in their starting positions
+        // after the carousel CSS-translated to a new page, so a drop
+        // on a target widget on the new page silently missed the
+        // collision check and the widget snapped back.
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
