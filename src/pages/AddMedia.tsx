@@ -26,8 +26,8 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
-import { extractEdgeFunctionError } from '../lib/edgeFunctionError'
 import { Badge, PageHeader } from '../components/ui'
+import { uploadFileToDropbox, UploadCancelledError } from '../lib/dropboxUpload'
 
 // 2026-05-14 pivoted from Drive → Dropbox after Google killed
 // service-account quotas on personal accounts. The env var name is
@@ -35,10 +35,15 @@ import { Badge, PageHeader } from '../components/ui'
 const PARENT_FOLDER_LINK_KEY = 'VITE_MEDIA_PARENT_FOLDER_LINK'
 const PARENT_FOLDER_LINK = (import.meta.env[PARENT_FOLDER_LINK_KEY] as string | undefined) ?? null
 
-// 2026-05-20 — bumped 50MB → 150MB to match Dropbox's single-shot
-// upload endpoint limit. See edge function for rationale.
-const MAX_FILE_BYTES = 150 * 1024 * 1024
-const MAX_FILE_LABEL = '150MB'
+// 2026-05-20 — 10GB cap. Matches Dropbox's mobile-app ceiling, which
+// is a sensible upper bound for browser-based uploads (matches the
+// memory + interruption tolerance of a real-world web session).
+// Achieved via chunked upload sessions — the browser streams 32MB
+// chunks directly to Dropbox content endpoints using a short-lived
+// access token. No data passes through our edge function. For files
+// bigger than 10GB, the right answer is Dropbox desktop sync.
+const MAX_FILE_BYTES = 10 * 1024 * 1024 * 1024
+const MAX_FILE_LABEL = '10GB'
 
 interface MediaSubmissionRow {
   id: string
@@ -57,6 +62,10 @@ interface PendingUpload {
   file: File
   status: 'queued' | 'uploading' | 'done' | 'error'
   error?: string
+  /** Bytes uploaded so far (only meaningful while status='uploading' or 'done'). */
+  progressBytes?: number
+  /** Abort controller for cancelling an in-flight upload. */
+  controller?: AbortController
 }
 
 export default function AddMedia() {
@@ -118,19 +127,21 @@ export default function AddMedia() {
     [],
   )
 
-  // Process the queue serially — one file at a time avoids piling up
-  // memory in the edge function and keeps the UI's progress feedback
-  // honest.
+  // Process the queue serially — one file at a time keeps the UI
+  // progress bar focused on a single number and prevents the user's
+  // upstream bandwidth from being split across simultaneous uploads.
   //
-  // ⚠️ Bug fix 2026-05-14: previously this used a `cancelled` flag in
-  // an effect that re-ran every time `pending` changed. The
+  // ⚠️ Bug fix 2026-05-14 (kept): previously this used a `cancelled`
+  // flag in an effect that re-ran every time `pending` changed. The
   // setPending(...uploading...) call inside the effect mutated
   // `pending`, retriggering the effect, which fired the cleanup and
   // flipped `cancelled = true` BEFORE the response landed. Net result:
-  // the row stayed at "Uploading…" forever even after the request
-  // completed. Now we gate via a ref so each in-flight upload owns its
-  // own state lifetime, independent of how many times the effect re-
-  // renders.
+  // the row stayed at "Uploading…" forever. Now gated via a ref so
+  // each in-flight upload owns its own state lifetime.
+  //
+  // 2026-05-20 — Rewritten to use uploadFileToDropbox (chunked
+  // sessions, direct browser→Dropbox). The old multipart-form-POST-
+  // through-edge-function path is gone — see src/lib/dropboxUpload.ts.
   const inFlightRef = useRef(false)
   useEffect(() => {
     if (inFlightRef.current) return
@@ -138,56 +149,56 @@ export default function AddMedia() {
     if (!next) return
 
     inFlightRef.current = true
+    const controller = new AbortController()
+
     const run = async () => {
       setPending((prev) =>
-        prev.map((p) => (p.id === next.id ? { ...p, status: 'uploading' } : p)),
+        prev.map((p) =>
+          p.id === next.id ? { ...p, status: 'uploading', progressBytes: 0, controller } : p,
+        ),
       )
 
-      const form = new FormData()
-      form.append('file', next.file, next.file.name)
-
       try {
-        const { data, error } = await supabase.functions.invoke<{
-          ok: boolean
-          submission?: MediaSubmissionRow
-          error?: string
-          warning?: string
-        }>('upload-to-dropbox', {
-          body: form,
+        const submission = await uploadFileToDropbox(next.file, {
+          signal: controller.signal,
+          onProgress: (bytes) => {
+            setPending((prev) =>
+              prev.map((p) =>
+                p.id === next.id ? { ...p, progressBytes: bytes } : p,
+              ),
+            )
+          },
         })
 
-        if (error || !data?.ok) {
-          const msg = data?.error ?? (await extractEdgeFunctionError(error, 'Upload failed'))
-          setPending((prev) =>
-            prev.map((p) =>
-              p.id === next.id ? { ...p, status: 'error', error: msg } : p,
-            ),
-          )
-          return
-        }
-
         setPending((prev) =>
-          prev.map((p) => (p.id === next.id ? { ...p, status: 'done' } : p)),
+          prev.map((p) =>
+            p.id === next.id
+              ? { ...p, status: 'done', progressBytes: next.file.size, controller: undefined }
+              : p,
+          ),
         )
         // Fold the new submission into the history cache so the row
         // appears instantly without waiting for refetch.
-        if (data.submission) {
-          queryClient.setQueryData<MediaSubmissionRow[]>(historyKey, (prev) => {
-            const existing = prev ?? []
-            return [data.submission!, ...existing]
-          })
-        } else {
-          // History insert failed server-side but file landed in Drive —
-          // refetch to make sure we eventually see it.
-          void queryClient.invalidateQueries({ queryKey: historyKey })
-        }
+        queryClient.setQueryData<MediaSubmissionRow[]>(historyKey, (prev) => {
+          const existing = prev ?? []
+          return [submission as MediaSubmissionRow, ...existing]
+        })
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Upload failed'
-        setPending((prev) =>
-          prev.map((p) =>
-            p.id === next.id ? { ...p, status: 'error', error: msg } : p,
-          ),
-        )
+        // User-cancelled uploads vanish from the queue; everything
+        // else surfaces as an error row the user can retry by re-
+        // dropping the file.
+        if (err instanceof UploadCancelledError) {
+          setPending((prev) => prev.filter((p) => p.id !== next.id))
+        } else {
+          const msg = err instanceof Error ? err.message : 'Upload failed'
+          setPending((prev) =>
+            prev.map((p) =>
+              p.id === next.id
+                ? { ...p, status: 'error', error: msg, controller: undefined }
+                : p,
+            ),
+          )
+        }
       } finally {
         inFlightRef.current = false
       }
@@ -198,7 +209,11 @@ export default function AddMedia() {
 
   const clearDone = () => setPending((prev) => prev.filter((p) => p.status !== 'done'))
   const dismiss = (id: string) =>
-    setPending((prev) => prev.filter((p) => p.id !== id))
+    setPending((prev) => {
+      const row = prev.find((p) => p.id === id)
+      row?.controller?.abort()
+      return prev.filter((p) => p.id !== id)
+    })
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
@@ -293,42 +308,79 @@ export default function AddMedia() {
             )}
           </div>
           <ul className="divide-y divide-theme">
-            {pending.map((p) => (
-              <li key={p.id} className="px-4 py-2.5 flex items-center gap-2.5">
-                <span className="shrink-0 w-7 h-7 rounded-full bg-surface ring-1 ring-border flex items-center justify-center">
-                  {p.status === 'uploading' ? (
-                    <Loader2 size={13} className="animate-spin text-gold" aria-hidden="true" />
-                  ) : p.status === 'done' ? (
-                    <CheckCircle2 size={13} className="text-emerald-300" aria-hidden="true" />
-                  ) : p.status === 'error' ? (
-                    <AlertCircle size={13} className="text-rose-300" aria-hidden="true" />
-                  ) : (
-                    <FileUp size={13} className="text-text-light" aria-hidden="true" />
+            {pending.map((p) => {
+              const pct =
+                p.status === 'uploading' && p.progressBytes !== undefined && p.file.size > 0
+                  ? Math.min(100, Math.round((p.progressBytes / p.file.size) * 100))
+                  : p.status === 'done'
+                    ? 100
+                    : 0
+              const uploadedBytes = p.progressBytes ?? 0
+              return (
+                <li key={p.id} className="px-4 py-2.5 flex items-center gap-2.5">
+                  <span className="shrink-0 w-7 h-7 rounded-full bg-surface ring-1 ring-border flex items-center justify-center">
+                    {p.status === 'uploading' ? (
+                      <Loader2 size={13} className="animate-spin text-gold" aria-hidden="true" />
+                    ) : p.status === 'done' ? (
+                      <CheckCircle2 size={13} className="text-emerald-300" aria-hidden="true" />
+                    ) : p.status === 'error' ? (
+                      <AlertCircle size={13} className="text-rose-300" aria-hidden="true" />
+                    ) : (
+                      <FileUp size={13} className="text-text-light" aria-hidden="true" />
+                    )}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-text truncate">
+                      {p.file.name}
+                    </p>
+                    <p className="text-[11px] text-text-light truncate mt-0.5">
+                      {p.status === 'queued' && `Queued · ${formatBytes(p.file.size)}`}
+                      {p.status === 'uploading' && (
+                        <>
+                          Uploading · {formatBytes(uploadedBytes)} / {formatBytes(p.file.size)}
+                          {' · '}
+                          {pct}%
+                        </>
+                      )}
+                      {p.status === 'done' && `Uploaded · ${formatBytes(p.file.size)}`}
+                      {p.status === 'error' && (p.error ?? 'Upload failed')}
+                    </p>
+                    {/* Progress bar — only meaningful for active +
+                        completed uploads; queued shows nothing, error
+                        leaves the row at whatever it reached. */}
+                    {(p.status === 'uploading' || p.status === 'done') && (
+                      <div
+                        className="mt-1.5 h-1 w-full rounded-full bg-surface-alt overflow-hidden"
+                        role="progressbar"
+                        aria-valuenow={pct}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      >
+                        <div
+                          className={`h-full transition-all duration-200 ease-out ${
+                            p.status === 'done' ? 'bg-emerald-500' : 'bg-gold'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {/* During upload, X cancels via AbortController.
+                      After done/error, X just dismisses the row. */}
+                  {(p.status === 'done' || p.status === 'error' || p.status === 'uploading') && (
+                    <button
+                      type="button"
+                      onClick={() => dismiss(p.id)}
+                      aria-label={p.status === 'uploading' ? `Cancel ${p.file.name}` : `Dismiss ${p.file.name}`}
+                      title={p.status === 'uploading' ? 'Cancel upload' : 'Dismiss'}
+                      className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-text-light hover:text-text hover:bg-surface-hover transition-colors focus-ring"
+                    >
+                      <X size={13} />
+                    </button>
                   )}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-text truncate">
-                    {p.file.name}
-                  </p>
-                  <p className="text-[11px] text-text-light truncate mt-0.5">
-                    {p.status === 'queued' && `Queued · ${formatBytes(p.file.size)}`}
-                    {p.status === 'uploading' && `Uploading · ${formatBytes(p.file.size)}`}
-                    {p.status === 'done' && `Uploaded · ${formatBytes(p.file.size)}`}
-                    {p.status === 'error' && (p.error ?? 'Upload failed')}
-                  </p>
-                </div>
-                {(p.status === 'done' || p.status === 'error') && (
-                  <button
-                    type="button"
-                    onClick={() => dismiss(p.id)}
-                    aria-label={`Dismiss ${p.file.name}`}
-                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-text-light hover:text-text hover:bg-surface-hover transition-colors focus-ring"
-                  >
-                    <X size={13} />
-                  </button>
-                )}
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
