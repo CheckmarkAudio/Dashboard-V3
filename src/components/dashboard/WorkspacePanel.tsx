@@ -450,20 +450,39 @@ export default function WorkspacePanel({
     }
   }
 
-  // onDragEnd is the single commit point. Three outcomes:
-  //   - drop on another widget → swap order (cross-page works because
-  //     the dragged widget stays in DOM regardless of which page is
-  //     visible; cursor coords pick the target).
-  //   - drop on edge sensor / no target → no-op, widget snaps back.
-  //   - drop on self → no-op.
+  // onDragEnd is the single commit point. Four outcomes:
+  //   - drop on another widget → swap order
+  //   - drop on edge sensor (2026-05-20) → swap with the widget at
+  //     the matching end of the carousel so the user lands on the
+  //     new page they auto-paged to. Previously this was a no-op +
+  //     widget snapped back, which is what the user hit as "can't
+  //     move widgets between carousel pages."
+  //   - drop on self / no target → no-op.
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null)
     clearEdgeTimer()
     const { active, over } = event
     if (!over || active.id === over.id) return
-    if (over.id === 'edge-left' || over.id === 'edge-right') return
 
     const aId = active.id as WorkspaceWidgetId
+
+    // Drop-on-edge handling. Pick the widget at the relevant END of
+    // the visible-widgets array as the swap target. Combined with
+    // the auto-page advance during drag, this gives the user a
+    // simple model: "hold widget at right edge → page advances →
+    // release → widget moves to the end of the carousel." (Same
+    // mirror semantics for left edge → moves to the start.)
+    if (over.id === 'edge-left' || over.id === 'edge-right') {
+      if (visibleWidgets.length < 2) return
+      const targetWidget =
+        over.id === 'edge-right'
+          ? visibleWidgets[visibleWidgets.length - 1]
+          : visibleWidgets[0]
+      if (!targetWidget || targetWidget.id === aId) return
+      swapWidgets(aId, targetWidget.id as WorkspaceWidgetId)
+      return
+    }
+
     const bId = over.id as WorkspaceWidgetId
     const aWidget = visibleWidgets.find((w) => w.id === aId)
     const bWidget = visibleWidgets.find((w) => w.id === bId)
