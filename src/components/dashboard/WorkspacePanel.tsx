@@ -11,6 +11,7 @@ import { ChevronLeft, ChevronRight, GripVertical, RotateCcw } from 'lucide-react
 import {
   DndContext,
   DragOverlay,
+  MeasuringStrategy,
   PointerSensor,
   KeyboardSensor,
   closestCorners,
@@ -572,6 +573,19 @@ export default function WorkspacePanel({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
+        // 2026-05-20 — `MeasuringStrategy.Always` re-measures droppable
+        // rects on every drag tick instead of caching them at drag
+        // start. The default cache strategy left dnd-kit thinking the
+        // OLD-page widgets were still in their starting positions
+        // after the carousel CSS-translated to a new page, so a drop
+        // on a target widget on the new page silently missed the
+        // collision check and the widget snapped back. User reported:
+        // "my mouse is able to move it smoothly to the other carosel
+        // page, but when I hover over the spot I want to put it, it
+        // is not dropping into place." Now droppable positions stay
+        // in sync with the visible layout — drop-on-widget works
+        // cross-page as expected.
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
