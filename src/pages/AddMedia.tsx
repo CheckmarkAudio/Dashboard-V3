@@ -35,8 +35,10 @@ import { Badge, PageHeader } from '../components/ui'
 const PARENT_FOLDER_LINK_KEY = 'VITE_MEDIA_PARENT_FOLDER_LINK'
 const PARENT_FOLDER_LINK = (import.meta.env[PARENT_FOLDER_LINK_KEY] as string | undefined) ?? null
 
-const MAX_FILE_BYTES = 50 * 1024 * 1024
-const MAX_FILE_LABEL = '50MB'
+// 2026-05-20 — bumped 50MB → 150MB to match Dropbox's single-shot
+// upload endpoint limit. See edge function for rationale.
+const MAX_FILE_BYTES = 150 * 1024 * 1024
+const MAX_FILE_LABEL = '150MB'
 
 interface MediaSubmissionRow {
   id: string

@@ -40,9 +40,15 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 }
 
-// 50MB cap. Dropbox single-shot upload supports up to 150MB; for V1 we
-// cap at 50 to match the Drive flow we just retired. Easy to bump.
-const MAX_FILE_BYTES = 50 * 1024 * 1024
+// 2026-05-20 — bumped 50MB → 150MB to match Dropbox's single-shot
+// `/2/files/upload` endpoint hard limit. Going higher would require
+// implementing the chunked `upload_session/start|append|finish`
+// pattern (separate work). At 150MB the edge function buffers the
+// whole file in memory (~256MB Deno Deploy budget — comfortably
+// fits) and the browser holds the file in FormData during transit.
+// Files never touch the repo or Vercel; only metadata lands in
+// `media_submissions` after upload.
+const MAX_FILE_BYTES = 150 * 1024 * 1024
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
