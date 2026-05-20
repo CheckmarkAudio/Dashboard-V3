@@ -1,28 +1,36 @@
 // ============================================================================
 // upload-to-dropbox — Supabase Edge Function
 //
-// Receives a single file from a logged-in team member and uploads it to a
-// per-member subfolder inside the Dropbox App folder. Records the upload
-// in `media_submissions` so the member (and admins) can browse history.
+// 2026-05-20 — REBUILT for chunked uploads up to 350GB.
 //
-// Why Dropbox instead of Google Drive: Google deprecated service-account
-// uploads to personal Drive accounts in late 2024 ("Service Accounts do
-// not have storage quota"). The two replacements (Shared Drives, OAuth
-// domain-wide delegation) both require Google Workspace, which the user
-// doesn't have. Dropbox has none of this restriction.
+// Per user direction: support the same single-file ceiling Dropbox.com
+// itself supports (350GB web / 2TB desktop). The previous single-shot
+// `/2/files/upload` path was hard-capped at 150MB (Dropbox's endpoint
+// limit) and would have OOMed our edge function on bigger files anyway.
+// The new flow uses Dropbox's `upload_session/*` API: the BROWSER
+// uploads chunks directly to Dropbox using a short-lived access token,
+// so multi-GB files never pass through our edge function.
 //
-// AUTH MODEL
-//   Caller-side: verify_jwt: true. Each upload is on behalf of the
-//   logged-in member; their JWT is verified against Supabase auth.
+// AUTH MODEL (two-stage, both JWT-verified)
+//   1. action='token'    → mint a short-lived Dropbox access token
+//                          (4hr expiry) + return to caller. The browser
+//                          uses it for the chunked upload directly
+//                          against Dropbox's content endpoints.
+//   2. action='finalize' → caller passes the session_id + total bytes
+//                          + filename + content_type. Edge function
+//                          (a) computes the secure member-scoped path
+//                          (browser can't tamper), (b) calls Dropbox
+//                          upload_session/finish to commit, (c)
+//                          creates the share link, (d) inserts the
+//                          media_submissions row, (e) returns the row.
 //
-//   Dropbox-side: OAuth refresh-token flow. We hold the App Key + Secret
-//   + Refresh Token in Supabase secrets. On each request we POST the
-//   refresh token to the Dropbox token endpoint to get a short-lived
-//   access token (4 hours), then use that token for upload + share-link
-//   creation. Refresh tokens don't expire unless the owner revokes the
-//   app, so this Just Works forever after setup.
+// Security trade-off: the access token briefly lives in the browser
+// (4hr max). Worst case if leaked: the holder can write to our team's
+// Dropbox App Folder for the remainder of the token's life. Refresh
+// token + app secret stay server-side. App Folder mode scopes writes
+// to our sandbox only — they can't touch personal files.
 //
-// ENV
+// ENV (unchanged)
 //   SUPABASE_URL                        (always present)
 //   SUPABASE_SERVICE_ROLE_KEY           (always present)
 //   SUPABASE_ANON_KEY                   (always present)
@@ -40,16 +48,6 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 }
 
-// 2026-05-20 — bumped 50MB → 150MB to match Dropbox's single-shot
-// `/2/files/upload` endpoint hard limit. Going higher would require
-// implementing the chunked `upload_session/start|append|finish`
-// pattern (separate work). At 150MB the edge function buffers the
-// whole file in memory (~256MB Deno Deploy budget — comfortably
-// fits) and the browser holds the file in FormData during transit.
-// Files never touch the repo or Vercel; only metadata lands in
-// `media_submissions` after upload.
-const MAX_FILE_BYTES = 150 * 1024 * 1024
-
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -57,7 +55,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-// ─── Dropbox OAuth + helpers ────────────────────────────────────
+// ─── Dropbox OAuth ────────────────────────────────────────────────
 
 interface RefreshedToken {
   access_token: string
@@ -68,7 +66,7 @@ async function dropboxAccessToken(
   appKey: string,
   appSecret: string,
   refreshToken: string,
-): Promise<string> {
+): Promise<RefreshedToken> {
   const res = await fetch("https://api.dropboxapi.com/oauth2/token", {
     method: "POST",
     headers: {
@@ -84,53 +82,55 @@ async function dropboxAccessToken(
     const txt = await res.text()
     throw new Error(`Dropbox token refresh failed (${res.status}): ${txt}`)
   }
-  const data = (await res.json()) as RefreshedToken
-  return data.access_token
+  return (await res.json()) as RefreshedToken
 }
 
-interface UploadResult {
+// ─── Dropbox upload-session commit + share link ──────────────────
+
+interface FinishedFile {
   path_lower: string
   id: string
   size: number
 }
 
-async function dropboxUpload(
+async function dropboxFinishSession(
   accessToken: string,
-  path: string,
-  bytes: Uint8Array,
-): Promise<UploadResult> {
-  const res = await fetch("https://content.dropboxapi.com/2/files/upload", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/octet-stream",
-      "Dropbox-API-Arg": JSON.stringify({
-        path,
-        mode: "add",
-        autorename: true, // never collide if two uploads pick the same name
-        mute: true,
-      }),
+  sessionId: string,
+  totalBytes: number,
+  targetPath: string,
+): Promise<FinishedFile> {
+  const res = await fetch(
+    "https://content.dropboxapi.com/2/files/upload_session/finish",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/octet-stream",
+        "Dropbox-API-Arg": JSON.stringify({
+          cursor: { session_id: sessionId, offset: totalBytes },
+          commit: {
+            path: targetPath,
+            mode: "add",
+            autorename: true,
+            mute: true,
+          },
+        }),
+      },
+      // No body — all data was already appended; finish just commits.
+      body: new Uint8Array(0),
     },
-    body: bytes,
-  })
+  )
   if (!res.ok) {
     const txt = await res.text()
-    throw new Error(`Dropbox upload failed (${res.status}): ${txt}`)
+    throw new Error(`Dropbox session finish failed (${res.status}): ${txt}`)
   }
-  return (await res.json()) as UploadResult
+  return (await res.json()) as FinishedFile
 }
 
-/**
- * Get a public-ish view link for the uploaded file. Dropbox requires
- * either creating a shared link (returns the URL) or fetching the
- * existing one if it already exists. We try create first; on 409
- * "shared_link_already_exists" we fetch the existing one.
- */
 async function dropboxGetOrCreateShareLink(
   accessToken: string,
   pathOrId: string,
 ): Promise<string | null> {
-  // Try create.
   const createRes = await fetch(
     "https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings",
     {
@@ -141,9 +141,7 @@ async function dropboxGetOrCreateShareLink(
       },
       body: JSON.stringify({
         path: pathOrId,
-        settings: {
-          requested_visibility: "public",
-        },
+        settings: { requested_visibility: "public" },
       }),
     },
   )
@@ -151,7 +149,6 @@ async function dropboxGetOrCreateShareLink(
     const data = await createRes.json()
     return (data.url as string | undefined) ?? null
   }
-
   // 409 — link already exists. Fetch it.
   if (createRes.status === 409) {
     const listRes = await fetch(
@@ -171,147 +168,234 @@ async function dropboxGetOrCreateShareLink(
       return link ?? null
     }
   }
-
-  // Anything else — best-effort, return null. Upload itself succeeded.
   return null
 }
 
-// ─── Main handler ───────────────────────────────────────────────
+// ─── Shared: caller authentication ───────────────────────────────
 
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS })
-  if (req.method !== "POST") return jsonResponse({ ok: false, error: "Method not allowed" }, 405)
+interface CallerContext {
+  callerId: string
+  displayName: string
+  admin: SupabaseClient
+}
 
+async function authenticateCaller(req: Request): Promise<
+  | { ok: true; ctx: CallerContext }
+  | { ok: false; response: Response }
+> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")
-  const appKey = Deno.env.get("DROPBOX_APP_KEY")
-  const appSecret = Deno.env.get("DROPBOX_APP_SECRET")
-  const refreshToken = Deno.env.get("DROPBOX_REFRESH_TOKEN")
-  if (!supabaseUrl || !serviceRoleKey || !anonKey || !appKey || !appSecret || !refreshToken) {
-    return jsonResponse({ ok: false, error: "Edge Function misconfigured (missing env)" }, 500)
+  if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+    return {
+      ok: false,
+      response: jsonResponse({ ok: false, error: "Edge Function misconfigured (missing env)" }, 500),
+    }
   }
-
   const authHeader = req.headers.get("Authorization") ?? ""
   if (!authHeader.startsWith("Bearer ")) {
-    return jsonResponse({ ok: false, error: "Missing Authorization header" }, 401)
+    return {
+      ok: false,
+      response: jsonResponse({ ok: false, error: "Missing Authorization header" }, 401),
+    }
   }
-
   const caller: SupabaseClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false, autoRefreshToken: false },
   })
   const { data: callerData, error: callerErr } = await caller.auth.getUser()
   if (callerErr || !callerData.user) {
-    return jsonResponse({ ok: false, error: "Not authenticated" }, 401)
+    return {
+      ok: false,
+      response: jsonResponse({ ok: false, error: "Not authenticated" }, 401),
+    }
   }
-  const callerId = callerData.user.id
-
   const admin: SupabaseClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
-
   const { data: profile, error: profileErr } = await admin
     .from("team_members")
     .select("id, display_name")
-    .eq("id", callerId)
+    .eq("id", callerData.user.id)
     .maybeSingle()
   if (profileErr || !profile) {
-    return jsonResponse({ ok: false, error: "Team member profile not found" }, 404)
+    return {
+      ok: false,
+      response: jsonResponse({ ok: false, error: "Team member profile not found" }, 404),
+    }
   }
-  const displayName = (profile.display_name ?? "Member").trim()
+  return {
+    ok: true,
+    ctx: {
+      callerId: callerData.user.id,
+      displayName: (profile.display_name ?? "Member").trim(),
+      admin,
+    },
+  }
+}
 
-  // Parse multipart body.
-  let form: FormData
+// ─── Action handlers ─────────────────────────────────────────────
+
+/**
+ * action='token' — mint a short-lived Dropbox access token + return
+ * to the caller. Browser uses it for the chunked upload (start +
+ * append_v2 calls) against content.dropboxapi.com directly.
+ */
+async function handleToken(): Promise<Response> {
+  const appKey = Deno.env.get("DROPBOX_APP_KEY")
+  const appSecret = Deno.env.get("DROPBOX_APP_SECRET")
+  const refreshToken = Deno.env.get("DROPBOX_REFRESH_TOKEN")
+  if (!appKey || !appSecret || !refreshToken) {
+    return jsonResponse({ ok: false, error: "Dropbox credentials not configured" }, 500)
+  }
   try {
-    form = await req.formData()
+    const token = await dropboxAccessToken(appKey, appSecret, refreshToken)
+    return jsonResponse({
+      ok: true,
+      access_token: token.access_token,
+      expires_in: token.expires_in,
+    })
   } catch (err) {
-    return jsonResponse({ ok: false, error: `Could not read upload: ${(err as Error).message}` }, 400)
+    return jsonResponse({ ok: false, error: (err as Error).message }, 502)
   }
-  const file = form.get("file")
-  if (!(file instanceof File)) {
-    return jsonResponse({ ok: false, error: "No file in upload" }, 400)
+}
+
+interface FinalizeBody {
+  session_id: string
+  total_bytes: number
+  original_filename: string
+  content_type?: string | null
+}
+
+/**
+ * action='finalize' — browser has finished appending all chunks to
+ * the Dropbox upload session. Edge function commits the session,
+ * creates the share link, and inserts the media_submissions row. The
+ * Dropbox target path is built HERE (not by the client) so a
+ * tampered client can't redirect uploads to another member's folder.
+ */
+async function handleFinalize(req: Request, ctx: CallerContext): Promise<Response> {
+  let body: FinalizeBody
+  try {
+    body = await req.json() as FinalizeBody
+  } catch {
+    return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400)
   }
-  if (file.size === 0) {
-    return jsonResponse({ ok: false, error: "File is empty" }, 400)
+  if (!body.session_id || !body.original_filename || typeof body.total_bytes !== "number") {
+    return jsonResponse({ ok: false, error: "Missing required fields" }, 400)
   }
-  if (file.size > MAX_FILE_BYTES) {
-    return jsonResponse(
-      { ok: false, error: `File too large (${Math.round(file.size / 1024 / 1024)}MB). Cap is ${MAX_FILE_BYTES / 1024 / 1024}MB.` },
-      413,
-    )
+  if (body.total_bytes <= 0) {
+    return jsonResponse({ ok: false, error: "total_bytes must be > 0" }, 400)
   }
 
-  // Mint a Dropbox access token.
+  const appKey = Deno.env.get("DROPBOX_APP_KEY")
+  const appSecret = Deno.env.get("DROPBOX_APP_SECRET")
+  const refreshToken = Deno.env.get("DROPBOX_REFRESH_TOKEN")
+  if (!appKey || !appSecret || !refreshToken) {
+    return jsonResponse({ ok: false, error: "Dropbox credentials not configured" }, 500)
+  }
+
+  // Fresh server-side token for the finish call. We don't trust the
+  // token the browser used for chunks — the commit goes through our
+  // own credentials.
   let accessToken: string
   try {
-    accessToken = await dropboxAccessToken(appKey, appSecret, refreshToken)
+    const token = await dropboxAccessToken(appKey, appSecret, refreshToken)
+    accessToken = token.access_token
   } catch (err) {
     return jsonResponse({ ok: false, error: (err as Error).message }, 502)
   }
 
-  // Build the Dropbox path. App-folder mode means everything is rooted
-  // at the app's sandbox folder automatically; we just give a path
-  // relative to that root. Per-member subfolder + timestamped filename.
+  // Compute the canonical, member-scoped Dropbox path. Browser
+  // supplies only the filename — the folder + timestamp prefix are
+  // ours.
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
-  const slug = displayName
+  const slug = ctx.displayName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-  const safeOriginal = file.name.replace(/[\/\\]/g, "_")
+  const safeOriginal = body.original_filename.replace(/[\/\\]/g, "_")
   const storedFilename = `${stamp}_${slug}_${safeOriginal}`
-  const dropboxPath = `/${displayName}/${storedFilename}`
+  const dropboxPath = `/${ctx.displayName}/${storedFilename}`
 
-  // Upload.
-  const bytes = new Uint8Array(await file.arrayBuffer())
-  let uploadResult: UploadResult
+  // Commit the upload session.
+  let finished: FinishedFile
   try {
-    uploadResult = await dropboxUpload(accessToken, dropboxPath, bytes)
+    finished = await dropboxFinishSession(accessToken, body.session_id, body.total_bytes, dropboxPath)
   } catch (err) {
     return jsonResponse({ ok: false, error: (err as Error).message }, 502)
   }
 
-  // Best-effort share link. Failures here don't block — the file is
-  // already uploaded; we just won't have a click-through link in the
-  // history table.
+  // Best-effort share link.
   let shareUrl: string | null = null
   try {
-    shareUrl = await dropboxGetOrCreateShareLink(accessToken, uploadResult.path_lower)
-  } catch (_) {
+    shareUrl = await dropboxGetOrCreateShareLink(accessToken, finished.path_lower)
+  } catch {
     shareUrl = null
   }
 
-  // Record the submission. Same `media_submissions` table the Drive
-  // flow used — `drive_file_id` column reused for the Dropbox file ID,
-  // `drive_view_url` reused for the share URL. The schema is vendor-
-  // neutral despite the column names; renaming the columns is a
-  // separate cleanup task.
-  const { data: row, error: insertErr } = await admin
+  // Insert the metadata row. Column names are `drive_*` for legacy
+  // reasons (we used to upload to Google Drive) but they hold the
+  // Dropbox values now. Schema is vendor-neutral.
+  const { data: row, error: insertErr } = await ctx.admin
     .from("media_submissions")
     .insert({
-      member_id: callerId,
-      drive_file_id: uploadResult.id,
+      member_id: ctx.callerId,
+      drive_file_id: finished.id,
       drive_view_url: shareUrl,
-      original_filename: file.name,
+      original_filename: body.original_filename,
       stored_filename: storedFilename,
-      size_bytes: file.size,
-      content_type: file.type || null,
+      size_bytes: finished.size,
+      content_type: body.content_type ?? null,
     })
     .select()
     .single()
 
   if (insertErr) {
-    return jsonResponse(
-      {
-        ok: true,
-        submission: null,
-        warning: `Uploaded to Dropbox, but history insert failed: ${insertErr.message}`,
-        dropbox_file_id: uploadResult.id,
-        dropbox_view_url: shareUrl,
-      },
-      200,
-    )
+    return jsonResponse({
+      ok: true,
+      submission: null,
+      warning: `Uploaded to Dropbox, but history insert failed: ${insertErr.message}`,
+      dropbox_file_id: finished.id,
+      dropbox_view_url: shareUrl,
+    })
+  }
+  return jsonResponse({ ok: true, submission: row })
+}
+
+// ─── Main handler ────────────────────────────────────────────────
+
+interface ActionBody {
+  action?: string
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS })
+  if (req.method !== "POST") return jsonResponse({ ok: false, error: "Method not allowed" }, 405)
+
+  // All actions require an authenticated team member. Mint admin
+  // client + look up display name once for use by every handler.
+  const auth = await authenticateCaller(req)
+  if (!auth.ok) return auth.response
+
+  // For action routing we need to peek at the body. clone() so the
+  // finalize handler can re-read it.
+  let actionBody: ActionBody
+  try {
+    actionBody = await req.clone().json() as ActionBody
+  } catch {
+    return jsonResponse({ ok: false, error: "Body must be JSON with {action: 'token'|'finalize'}" }, 400)
   }
 
-  return jsonResponse({ ok: true, submission: row })
+  switch (actionBody.action) {
+    case "token":
+      return await handleToken()
+    case "finalize":
+      return await handleFinalize(req, auth.ctx)
+    default:
+      return jsonResponse(
+        { ok: false, error: `Unknown action: ${actionBody.action ?? "(missing)"}` },
+        400,
+      )
+  }
 })
