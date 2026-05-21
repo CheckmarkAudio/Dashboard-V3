@@ -125,18 +125,51 @@ export const FORUM_VIDEO_MIME = ['video/mp4', 'video/webm', 'video/quicktime']
 // 2026-05-20 — audio MIME allow-list. mpeg covers .mp3, mp4 covers
 // AAC/M4A, wav covers PCM, ogg covers Vorbis/Opus, webm covers Opus
 // in WebM. Browsers natively play this set without polyfills.
+//
+// 2026-05-20 (rev) — added 'audio/mp3', 'audio/aac', 'audio/flac',
+// 'audio/x-m4a' for legacy / cross-platform MIME variants browsers
+// can report. Without these, a Windows-reported `audio/mp3` (the
+// non-standard but common label) gets rejected even though it's
+// the same file. The bucket allow-list (in
+// 20260520195000_forum_media_audio_aliases.sql) is synced.
 export const FORUM_AUDIO_MIME = [
   'audio/mpeg',
+  'audio/mp3',         // legacy Windows label for .mp3
   'audio/mp4',
+  'audio/x-m4a',       // some browsers report .m4a this way
+  'audio/aac',
   'audio/wav',
   'audio/x-wav',
   'audio/ogg',
   'audio/webm',
+  'audio/flac',
+  'audio/x-flac',
 ]
+
+/**
+ * 2026-05-20 — `accept` attribute used by the audio file input. The
+ * MIME-only list (FORUM_AUDIO_MIME) was greying out users' MP3 files
+ * on macOS because the OS's MIME database doesn't always tag .mp3
+ * as `audio/mpeg`. The wildcard `audio/*` plus explicit extensions
+ * is the universally-recognized recipe — browsers/OS will surface
+ * any audio file the user has.
+ *
+ * Same pattern for image/video so the picker stays consistent.
+ */
+export const FORUM_AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm'
+export const FORUM_IMAGE_ACCEPT = 'image/*,.jpg,.jpeg,.png,.webp,.gif'
+export const FORUM_VIDEO_ACCEPT = 'video/*,.mp4,.webm,.mov,.m4v'
 
 export function classifyMime(mime: string): AttachmentKind | null {
   if (FORUM_IMAGE_MIME.includes(mime)) return 'image'
   if (FORUM_VIDEO_MIME.includes(mime)) return 'video'
   if (FORUM_AUDIO_MIME.includes(mime)) return 'audio'
+  // 2026-05-20 — fall back to broad type-family check so a browser
+  // reporting an unusual but valid audio MIME (e.g. `audio/midi`)
+  // still classifies correctly. Server-side bucket allow-list is
+  // the real gate; this just routes to the right renderer.
+  if (mime.startsWith('image/')) return 'image'
+  if (mime.startsWith('video/')) return 'video'
+  if (mime.startsWith('audio/')) return 'audio'
   return null
 }

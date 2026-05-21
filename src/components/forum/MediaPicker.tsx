@@ -5,10 +5,13 @@ import { useToast } from '../Toast'
 import {
   buildForumMediaPath,
   detectLinkEmbed,
+  FORUM_AUDIO_ACCEPT,
   FORUM_AUDIO_MIME,
+  FORUM_IMAGE_ACCEPT,
   FORUM_IMAGE_MIME,
   FORUM_MAX_BYTES,
   FORUM_MEDIA_BUCKET,
+  FORUM_VIDEO_ACCEPT,
   FORUM_VIDEO_MIME,
   type ChatAttachment,
 } from '../../lib/forum/attachments'
@@ -66,17 +69,30 @@ export default function MediaPicker({
 
   const upload = useCallback(
     async (file: File, kind: 'image' | 'video' | 'audio') => {
+      // 2026-05-20 — accept anything whose MIME starts with the
+      // matching family prefix (image/*, video/*, audio/*) OR is in
+      // the explicit allow-list. Some browsers (especially older
+      // Windows) report .mp3 as `audio/mp3` instead of `audio/mpeg`;
+      // some don't report a type at all. The explicit allow-list
+      // catches the named variants; the prefix check is the safety
+      // net so we don't reject files the user is clearly trying to
+      // attach. Server-side bucket allow-list still applies as the
+      // real gate.
       const allowedMime =
         kind === 'image' ? FORUM_IMAGE_MIME :
         kind === 'video' ? FORUM_VIDEO_MIME :
         FORUM_AUDIO_MIME
-      if (!allowedMime.includes(file.type)) {
+      const familyPrefix = `${kind}/`
+      const matches =
+        allowedMime.includes(file.type) ||
+        (file.type !== '' && file.type.startsWith(familyPrefix))
+      if (!matches) {
         toast(
           kind === 'image'
-            ? 'Use a JPEG, PNG, WEBP, or GIF.'
+            ? 'That doesn\'t look like an image. Try a JPEG, PNG, WEBP, or GIF.'
             : kind === 'video'
-              ? 'Use an MP4, WEBM, or MOV.'
-              : 'Use an MP3, WAV, M4A, OGG, or WEBM audio file.',
+              ? 'That doesn\'t look like a video. Try MP4, WEBM, or MOV.'
+              : 'That doesn\'t look like an audio file. Try MP3, WAV, M4A, AAC, OGG, or FLAC.',
           'error',
         )
         return
@@ -301,10 +317,15 @@ export default function MediaPicker({
         )}
 
         {/* Hidden file inputs — driven by the popover options. */}
+        {/* 2026-05-20 — `accept` uses the wildcard + extensions
+            recipe (FORUM_*_ACCEPT constants) instead of the MIME-
+            only join. macOS Finder was greying out users' MP3s
+            because its MIME database doesn't always tag .mp3 as
+            `audio/mpeg`; the wildcard fixes that universally. */}
         <input
           ref={imageInputRef}
           type="file"
-          accept={FORUM_IMAGE_MIME.join(',')}
+          accept={FORUM_IMAGE_ACCEPT}
           onChange={onImageChange}
           className="sr-only"
           tabIndex={-1}
@@ -313,7 +334,7 @@ export default function MediaPicker({
         <input
           ref={videoInputRef}
           type="file"
-          accept={FORUM_VIDEO_MIME.join(',')}
+          accept={FORUM_VIDEO_ACCEPT}
           onChange={onVideoChange}
           className="sr-only"
           tabIndex={-1}
@@ -322,7 +343,7 @@ export default function MediaPicker({
         <input
           ref={audioInputRef}
           type="file"
-          accept={FORUM_AUDIO_MIME.join(',')}
+          accept={FORUM_AUDIO_ACCEPT}
           onChange={onAudioChange}
           className="sr-only"
           tabIndex={-1}
