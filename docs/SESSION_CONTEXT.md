@@ -718,6 +718,34 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-20 Session wrap — forum overhaul + media uploads + drag-page fix
+
+**What landed this session** (PRs #206, #208–#220, plus a hotfix outside any PR):
+
+- **Forum is feature-complete for this round**: linkified URLs in messages (`<LinkifiedText>` + new `src/lib/forum/linkify.ts`), audio/photo/video uploads (with the macOS-Finder-greys-out-MP3s wildcard-accept fix — `FORUM_*_ACCEPT` constants), Instagram-style OG link previews (`unfurl-link` edge function with SSRF guard + 8s timeout + 1.5MB cap, `chat_link_previews` cache table 7-day TTL), admin-only "+ New" channel creation in the sidebar (`CreateChannelDialog`), edit/delete your own messages (`chat_messages.edited_at` column + new RLS policies for UPDATE/DELETE), realtime sub catches UPDATE + DELETE so changes propagate live across clients.
+- **Media uploads** went 50MB → 150MB single-shot → **10GB chunked sessions**. Architecture rewrite: edge function `upload-to-dropbox` reshaped to two actions (`action:'token'` returns short-lived Dropbox access token, `action:'finalize'` commits the session + creates share link + inserts `media_submissions` row). New `src/lib/dropboxUpload.ts` client uploader uses `upload_session/start` + `append_v2` in 32MB chunks (Dropbox-required 4MB multiple), with 2 retries per chunk + AbortController cancellation. File bytes never pass through the edge function.
+- **Workspace drag-across-pages** — the big iteration. Four-pass fix to user complaint "can't move widgets between carousel pages": widened EdgeSensors with chevron telegraph hints, `drop-on-edge` now swaps with last visible widget (was no-op + snap-back), `MeasuringStrategy.Always` re-measures droppable rects every frame (was cached at drag-start, stale after carousel translated), custom `widgetPreferredCollisionDetection` prefers SortableWidget over EdgeSensor near edges. Combined: drag widget → hold near right edge → carousel pages over → drop on target → lands cleanly.
+- **Tasks page**: new Checklist widget (`team_maintenance_items` + `team_maintenance_completions` tables; period-bucket model `YYYY-MM-DD` / `YYYY-Www` / `YYYY-MM` computed per-fetch so no cron needed). Admin curates items, anyone on team can check/uncheck within current period. Recurring tasks now follow Apple-Reminders model — `spawn_recurring_task_instances` learned to SKIP a template when an active child exists; trigger `bump_recurrence_template_on_complete` bumps the cadence baseline on each completion so daily → next tomorrow, weekly → +7d from completion, monthly → +1mo. New `formatOverdueLabel()` shows "Yesterday" / "N days ago" / past date with rose dot when incomplete + past due. Studio ↔ Team Tasks swapped col positions in the registry.
+- **QoL fixes**: ProtectedRoute waits for profile before evaluating capability check (refresh stays put on admin pages), ErrorBoundary auto-reloads on stale-chunk failures after deploy (30s loop guard), session-scoped widget expansion memory (`useSessionExpand` hook backed by sessionStorage, namespaced per (scope, userId), cleared on logout).
+
+**What's open / queued**:
+- **PR #203** (Flywheel events Phase 1) — `flywheel_events` append-only table + `emit_flywheel_event` RPC + 5 emit hooks across the app. Still open, user deferred earlier. Foundation for any real KPI work.
+- **Google Calendar Phase 2A** — user needs to reconnect Google in Settings → Database (token was expired/revoked), then click "Push pending bookings" to verify the recovery path actually works.
+- **Sessions polish #2 redo** — user rejected the original preview (PR #207, scratched) which restructured `/sessions` with full Bookings/Calendar/Clients left-rail. The underlying need (Calendar view on Booking page) still stands; on the table is a lighter pattern like a "View calendar" toggle inside Bookings instead of a page restructure. Wait for user to confirm direction before building.
+- **Bookings revamp angle TBD** — user explicitly disliked the previous layout; needs a fresh design conversation.
+
+**Patterns to keep in mind for next session**:
+- **Chunked Dropbox uploads architecture** (token+finalize edge function + browser-driven upload_session) is reusable for any future big-file flow.
+- **`unfurl-link` edge function** is a template for any "fetch arbitrary URL server-side with SSRF guard + timeout + body cap" need (RSS feeds, oEmbed previews, etc).
+- **DnD-kit + CSS-translated carousels**: REMEMBER `MeasuringStrategy.Always` + custom collision detection prioritizing real targets over auxiliary sensors. This combo took 4 iterations to land; future widget carousels should start with both.
+- **macOS Finder MIME-DB** greys files out unless `accept` uses `family/*,.ext,.ext2` recipe. Switch all new file inputs to this pattern from the start (FORUM_AUDIO_ACCEPT etc).
+- **Soft-delete vs hard-delete on chat messages**: went hard-delete (Discord-style) per implicit preference. If we ever want an audit trail / "(deleted)" placeholder pattern (Slack-style), revisit `chat_messages_owner_or_admin_delete` policy + UI render.
+- **MCP-applied hotfixes** for prod-blocking bugs (auth_user_id naming, Richard's email typo, etc) — keep doing this AND capture in a follow-up migration so fresh deploys don't regress.
+
+**Parallel-session note**: caught the edge function rewriting itself mid-session (a parallel agent was on the same branch). Worked out in this case but be aware of branch name collisions in `claude/*` namespace.
+
+**Hotfix outside any PR (2026-05-19/20)**: Richard's auth.users.email had `richard.checkmark@gmail.com` (no 'b') but team_members profile + admin UI showed `richardb.checkmark@gmail.com`; updated auth row + reset password to `Checkmark2026!` via direct SQL via MCP. Lesson: when admin creates a member, double-check the email matches what they'll actually type.
+
 ### 2026-05-17 Task widget tweaks (3-pack) — reorder + Priority filter + admin reassign
 
 - **`CLAUDE:`** per user direction: "Tasks tweaks: (1) make tasks re-arrangable under 'my tasks' widget, have it remember how you rearranged it for future sessions. (2) add 'priority' task tab under 'Studio tasks', 'my tasks' & Team Tasks where priority tasks will be filtered into there. (3) make Users changeable to already created tasks on admin side."
