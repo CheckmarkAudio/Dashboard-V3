@@ -13,7 +13,7 @@ import CreateChannelDialog from '../components/forum/CreateChannelDialog'
 import { chatColorTokens, resolveChatColorKey } from '../lib/forum/chatColor'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
-import { Send, Hash, Plus, Users } from 'lucide-react'
+import { Check, Edit2, Hash, MoreHorizontal, Plus, Send, Trash2, Users } from 'lucide-react'
 import type { TeamMember } from '../types'
 
 type Channel = { id: string; name: string; slug: string; description: string }
@@ -26,6 +26,9 @@ type Message = {
   content: string
   created_at: string
   attachments?: ChatAttachment[] | null
+  // 2026-05-20 — Set by the edit RPC; drives the "(edited)" badge
+  // on the bubble. NULL = never edited.
+  edited_at?: string | null
 }
 
 export default function Content() {
@@ -89,7 +92,7 @@ export default function Content() {
     if (!activeChannel) return
     const { data } = await supabase
       .from('chat_messages')
-      .select('id, channel_id, sender_name, sender_id, sender_initial, content, created_at, attachments')
+      .select('id, channel_id, sender_name, sender_id, sender_initial, content, created_at, attachments, edited_at')
       .eq('channel_id', activeChannel.id)
       .order('created_at', { ascending: true })
     if (data) setMessages(data as Message[])
@@ -97,7 +100,9 @@ export default function Content() {
 
   useEffect(() => { loadMessages() }, [loadMessages])
 
-  // Realtime subscription
+  // Realtime subscription — 2026-05-20 extended to UPDATE + DELETE
+  // so edits/deletes from other clients flow back through the same
+  // channel. INSERT is the original send-message path.
   useEffect(() => {
     if (!activeChannel) return
     const sub = supabase
@@ -107,6 +112,23 @@ export default function Content() {
         { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `channel_id=eq.${activeChannel.id}` },
         (payload) => {
           setMessages((prev) => [...prev, payload.new as Message])
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `channel_id=eq.${activeChannel.id}` },
+        (payload) => {
+          const updated = payload.new as Message
+          setMessages((prev) => prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)))
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'chat_messages', filter: `channel_id=eq.${activeChannel.id}` },
+        (payload) => {
+          const oldId = (payload.old as { id?: string }).id
+          if (!oldId) return
+          setMessages((prev) => prev.filter((m) => m.id !== oldId))
         },
       )
       .subscribe()
@@ -268,6 +290,8 @@ export default function Content() {
                   member={member}
                   isMe={isMe}
                   time={formatTime(msg.created_at)}
+                  canEdit={isMe}
+                  canDelete={isMe || isAdmin}
                 />
               )
             })}
@@ -358,11 +382,18 @@ function ChatBubble({
   member,
   isMe,
   time,
+  canEdit,
+  canDelete,
 }: {
   message: Message
   member: TeamMember | undefined
   isMe: boolean
   time: string
+  /** Sender themselves — owns the Edit affordance. */
+  canEdit: boolean
+  /** Sender OR admin — owns the Delete affordance. RLS enforces
+   *  the actual write. */
+  canDelete: boolean
 }) {
   // Per-member chat color. Override comes from the member's own
   // preferences when we have the row; falls back to a deterministic
@@ -376,8 +407,74 @@ function ChatBubble({
   const tokens = chatColorTokens(colorKey)
   const attachments = Array.isArray(message.attachments) ? message.attachments : []
 
+  // 2026-05-20 — edit + delete state, scoped per-bubble. Realtime
+  // sub on chat_messages picks up the UPDATE/DELETE and rebroadcasts
+  // to every connected client; we just write to Supabase + let the
+  // sub fold the change back. Optimistic local update isn't worth
+  // the bookkeeping for a chat that re-renders on every sub event.
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(message.content)
+  const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close the … menu on outside click / Escape.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
+
+  // Auto-clear delete confirm if the user walks away.
+  useEffect(() => {
+    if (!confirmDelete) return
+    const t = window.setTimeout(() => setConfirmDelete(false), 4000)
+    return () => window.clearTimeout(t)
+  }, [confirmDelete])
+
+  const saveEdit = async () => {
+    const trimmed = draft.trim()
+    if (!trimmed || trimmed === message.content) {
+      setEditing(false)
+      setDraft(message.content)
+      return
+    }
+    setSaving(true)
+    const { error } = await supabase
+      .from('chat_messages')
+      .update({ content: trimmed, edited_at: new Date().toISOString() })
+      .eq('id', message.id)
+    setSaving(false)
+    if (error) {
+      // Realtime sub will re-show the original if we never updated.
+      return
+    }
+    setEditing(false)
+  }
+
+  const deleteMessage = async () => {
+    // RLS allows: sender deletes own OR admin deletes any.
+    await supabase.from('chat_messages').delete().eq('id', message.id)
+    // Realtime sub removes the row from every client.
+  }
+
+  const showActions = !editing && (canEdit || canDelete)
+
   return (
-    <div className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div className={`group/msg flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
       <span className={`shrink-0 inline-flex rounded-full ring-2 ${tokens.ring}`}>
         <MemberAvatar
           member={member ?? null}
@@ -391,29 +488,157 @@ function ChatBubble({
             {isMe ? 'You' : message.sender_name}
           </span>
           <span className="text-[10px] text-text-light">{time}</span>
+          {message.edited_at && (
+            <span className="text-[10px] text-text-light/70 italic" title={`Edited ${new Date(message.edited_at).toLocaleString()}`}>
+              (edited)
+            </span>
+          )}
         </div>
-        {message.content && (
-          <div
-            className={`mt-0.5 px-3 py-2 rounded-2xl text-[14px] leading-relaxed break-words whitespace-pre-wrap ${
-              isMe
-                ? 'bg-gold/15 text-text border border-gold/25 rounded-br-sm'
-                : 'bg-surface-alt text-text-muted border border-border rounded-bl-sm'
-            }`}
-          >
-            {/* 2026-05-20 — Replaced inert `{message.content}` with
-                <LinkifiedText> so pasted URLs render as clickable
-                anchors. Preserves whitespace + newlines via the
-                outer `whitespace-pre-wrap`. */}
-            <LinkifiedText text={message.content} />
+
+        {/* Bubble body OR inline editor */}
+        {editing ? (
+          <div className="mt-0.5 w-full">
+            <textarea
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault()
+                  void saveEdit()
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setEditing(false)
+                  setDraft(message.content)
+                }
+              }}
+              rows={Math.max(2, Math.min(8, draft.split('\n').length))}
+              className="w-full min-w-[280px] px-3 py-2 rounded-2xl text-[14px] leading-relaxed bg-surface-alt border border-gold/40 text-text focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30 resize-none"
+            />
+            <div className="flex items-center gap-2 mt-1 text-[10px] text-text-light/70">
+              <span>⌘/Ctrl + Enter to save · Esc to cancel</span>
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => { setEditing(false); setDraft(message.content) }}
+                  className="inline-flex items-center px-2 py-1 rounded-md text-text-muted hover:text-text"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveEdit()}
+                  disabled={saving || !draft.trim()}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-gold text-black font-bold hover:bg-gold-muted disabled:opacity-50 transition-colors focus-ring"
+                >
+                  <Check size={10} strokeWidth={3} aria-hidden="true" />
+                  Save
+                </button>
+              </div>
+            </div>
           </div>
-        )}
-        {attachments.length > 0 && (
-          <AttachmentDisplay attachments={attachments} ownBubble={isMe} />
+        ) : (
+          <>
+            {message.content && (
+              <div className={`relative mt-0.5 ${isMe ? '' : ''}`}>
+                <div
+                  className={`px-3 py-2 rounded-2xl text-[14px] leading-relaxed break-words whitespace-pre-wrap ${
+                    isMe
+                      ? 'bg-gold/15 text-text border border-gold/25 rounded-br-sm'
+                      : 'bg-surface-alt text-text-muted border border-border rounded-bl-sm'
+                  }`}
+                >
+                  <LinkifiedText text={message.content} />
+                </div>
+              </div>
+            )}
+            {attachments.length > 0 && (
+              <AttachmentDisplay attachments={attachments} ownBubble={isMe} />
+            )}
+
+            {/* 2026-05-20 — Per-bubble actions. Hover-revealed …
+                menu opens a small panel with Edit (own only) +
+                Delete (own + admin). Delete uses a two-tap inline
+                confirm so misclicks don't nuke a message. The
+                whole strip is hidden when no action is available. */}
+            {showActions && (
+              <div
+                ref={menuRef}
+                className={`relative mt-1 flex items-center gap-1 ${isMe ? 'self-end' : 'self-start'}`}
+              >
+                {confirmDelete ? (
+                  <span className="inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => { setConfirmDelete(false); void deleteMessage() }}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-rose-500/80 hover:brightness-110"
+                    >
+                      <Trash2 size={10} strokeWidth={2.5} aria-hidden="true" />
+                      Delete?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-text-light hover:text-text"
+                    >
+                      Keep
+                    </button>
+                  </span>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setMenuOpen((v) => !v)}
+                      aria-label="Message actions"
+                      aria-expanded={menuOpen}
+                      aria-haspopup="menu"
+                      className="opacity-0 group-hover/msg:opacity-100 focus-visible:opacity-100 inline-flex items-center justify-center w-5 h-5 rounded-md text-text-light hover:text-text hover:bg-surface-hover transition-all focus-ring"
+                    >
+                      <MoreHorizontal size={12} aria-hidden="true" />
+                    </button>
+                    {menuOpen && (
+                      <div
+                        role="menu"
+                        className={`absolute z-30 top-full mt-1 min-w-[140px] bg-surface border border-border rounded-xl shadow-xl py-1 animate-fade-in ${
+                          isMe ? 'right-0' : 'left-0'
+                        }`}
+                      >
+                        {canEdit && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => { setMenuOpen(false); setEditing(true); setDraft(message.content) }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text hover:bg-surface-hover transition-colors text-left"
+                          >
+                            <Edit2 size={11} aria-hidden="true" />
+                            Edit
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => { setMenuOpen(false); setConfirmDelete(true) }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-rose-300 hover:bg-rose-500/10 transition-colors text-left"
+                          >
+                            <Trash2 size={11} aria-hidden="true" />
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
   )
 }
+
 
 /**
  * Member sidebar row with presence dot. Click jumps to their
