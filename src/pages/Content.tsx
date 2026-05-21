@@ -8,6 +8,7 @@ import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import MemberAvatar from '../components/members/MemberAvatar'
 import MediaPicker from '../components/forum/MediaPicker'
 import AttachmentDisplay from '../components/forum/AttachmentDisplay'
+import LinkifiedText from '../components/forum/LinkifiedText'
 import { chatColorTokens, resolveChatColorKey } from '../lib/forum/chatColor'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
@@ -352,7 +353,11 @@ function ChatBubble({
                 : 'bg-surface-alt text-text-muted border border-border rounded-bl-sm'
             }`}
           >
-            {message.content}
+            {/* 2026-05-20 — Replaced inert `{message.content}` with
+                <LinkifiedText> so pasted URLs render as clickable
+                anchors. Preserves whitespace + newlines via the
+                outer `whitespace-pre-wrap`. */}
+            <LinkifiedText text={message.content} />
           </div>
         )}
         {attachments.length > 0 && (
