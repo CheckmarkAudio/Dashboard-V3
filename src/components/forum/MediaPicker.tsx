@@ -1,16 +1,21 @@
 import { useCallback, useRef, useState } from 'react'
-import { Image as ImageIcon, Link2, Loader2, Plus, Video, X } from 'lucide-react'
+import { Image as ImageIcon, Link2, Loader2, Music, Plus, Video, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../Toast'
 import {
   buildForumMediaPath,
   detectLinkEmbed,
+  FORUM_AUDIO_ACCEPT,
+  FORUM_AUDIO_MIME,
+  FORUM_IMAGE_ACCEPT,
   FORUM_IMAGE_MIME,
   FORUM_MAX_BYTES,
   FORUM_MEDIA_BUCKET,
+  FORUM_VIDEO_ACCEPT,
   FORUM_VIDEO_MIME,
   type ChatAttachment,
 } from '../../lib/forum/attachments'
+import { unfurlLink } from '../../lib/forum/unfurl'
 
 /**
  * Media picker for the forum message input.
@@ -48,11 +53,13 @@ export default function MediaPicker({
 }: MediaPickerProps) {
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
-  const [uploading, setUploading] = useState<'image' | 'video' | null>(null)
+  const [uploading, setUploading] = useState<'image' | 'video' | 'audio' | null>(null)
+  const [unfurlingLink, setUnfurlingLink] = useState<string | null>(null)
   const [linkInput, setLinkInput] = useState('')
   const [linkOpen, setLinkOpen] = useState(false)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
+  const audioInputRef = useRef<HTMLInputElement>(null)
 
   const closePopover = useCallback(() => {
     setOpen(false)
@@ -61,13 +68,31 @@ export default function MediaPicker({
   }, [])
 
   const upload = useCallback(
-    async (file: File, kind: 'image' | 'video') => {
-      const allowedMime = kind === 'image' ? FORUM_IMAGE_MIME : FORUM_VIDEO_MIME
-      if (!allowedMime.includes(file.type)) {
+    async (file: File, kind: 'image' | 'video' | 'audio') => {
+      // 2026-05-20 — accept anything whose MIME starts with the
+      // matching family prefix (image/*, video/*, audio/*) OR is in
+      // the explicit allow-list. Some browsers (especially older
+      // Windows) report .mp3 as `audio/mp3` instead of `audio/mpeg`;
+      // some don't report a type at all. The explicit allow-list
+      // catches the named variants; the prefix check is the safety
+      // net so we don't reject files the user is clearly trying to
+      // attach. Server-side bucket allow-list still applies as the
+      // real gate.
+      const allowedMime =
+        kind === 'image' ? FORUM_IMAGE_MIME :
+        kind === 'video' ? FORUM_VIDEO_MIME :
+        FORUM_AUDIO_MIME
+      const familyPrefix = `${kind}/`
+      const matches =
+        allowedMime.includes(file.type) ||
+        (file.type !== '' && file.type.startsWith(familyPrefix))
+      if (!matches) {
         toast(
           kind === 'image'
-            ? 'Use a JPEG, PNG, WEBP, or GIF.'
-            : 'Use an MP4, WEBM, or MOV.',
+            ? 'That doesn\'t look like an image. Try a JPEG, PNG, WEBP, or GIF.'
+            : kind === 'video'
+              ? 'That doesn\'t look like a video. Try MP4, WEBM, or MOV.'
+              : 'That doesn\'t look like an audio file. Try MP3, WAV, M4A, AAC, OGG, or FLAC.',
           'error',
         )
         return
@@ -76,7 +101,9 @@ export default function MediaPicker({
         toast(
           kind === 'video'
             ? 'Video is larger than 50 MB. Try compressing it, or paste a Loom/YouTube link instead.'
-            : 'File is larger than 50 MB.',
+            : kind === 'audio'
+              ? 'Audio is larger than 50 MB. Try a shorter clip or lower bitrate.'
+              : 'File is larger than 50 MB.',
           'error',
         )
         return
@@ -84,7 +111,7 @@ export default function MediaPicker({
       setUploading(kind)
       try {
         const path = buildForumMediaPath({
-          kind: kind === 'image' ? 'images' : 'videos',
+          kind: kind === 'image' ? 'images' : kind === 'video' ? 'videos' : 'audio',
           channelId,
           userId,
           filename: file.name,
@@ -127,8 +154,13 @@ export default function MediaPicker({
     e.target.value = ''
     if (file) void upload(file, 'video')
   }
+  const onAudioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file) void upload(file, 'audio')
+  }
 
-  const submitLink = () => {
+  const submitLink = async () => {
     const trimmed = linkInput.trim()
     if (!trimmed) return
     let normalized = trimmed
@@ -142,22 +174,41 @@ export default function MediaPicker({
       return
     }
     const detect = detectLinkEmbed(normalized)
+    // 2026-05-20 — kick off unfurl in parallel with the add so the
+    // attachment lands instantly in pending, and we patch in the
+    // preview metadata once it arrives. UX feels snappy; preview
+    // card appears within a beat if the target site has OG tags.
+    closePopover()
+    if (detect) {
+      // Known embed (YouTube/Vimeo/Loom) — iframe handles preview
+      // visually; no need to call unfurl.
+      onAdd({ kind: 'link', url: normalized, embed: detect.embed })
+      return
+    }
+    setUnfurlingLink(normalized)
+    const preview = await unfurlLink(normalized)
+    setUnfurlingLink(null)
     onAdd({
       kind: 'link',
       url: normalized,
-      embed: detect?.embed,
+      ...(preview ? { preview, name: preview.title ?? undefined } : {}),
     })
-    closePopover()
   }
 
   return (
     <div className="space-y-2">
       {/* Pending attachments strip — chips with remove buttons. */}
-      {pending.length > 0 && (
+      {(pending.length > 0 || unfurlingLink) && (
         <div className="flex items-center gap-2 flex-wrap">
           {pending.map((a, idx) => (
             <PendingChip key={`${a.kind}-${idx}-${a.url}`} attachment={a} onRemove={() => onRemove(idx)} />
           ))}
+          {unfurlingLink && (
+            <span className="inline-flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-full bg-gold/10 border border-gold/30 text-gold text-[11px]">
+              <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+              <span>Fetching preview…</span>
+            </span>
+          )}
         </div>
       )}
 
@@ -243,11 +294,21 @@ export default function MediaPicker({
                   disabled={uploading !== null}
                   onClick={() => videoInputRef.current?.click()}
                 />
+                {/* 2026-05-20 — audio attachments (MP3 / WAV / etc).
+                    Renders as an inline <audio controls> in the
+                    message bubble via AttachmentDisplay. */}
+                <PickerOption
+                  icon={<Music size={14} aria-hidden="true" />}
+                  label="Audio"
+                  hint="MP3 · WAV · M4A · OGG (max 50 MB)"
+                  disabled={uploading !== null}
+                  onClick={() => audioInputRef.current?.click()}
+                />
                 <div className="my-1 border-t border-border/60" />
                 <PickerOption
                   icon={<Link2 size={14} aria-hidden="true" />}
                   label="Link"
-                  hint="YouTube, Vimeo, Loom embed"
+                  hint="Any URL — YouTube, Vimeo, Loom auto-embed"
                   onClick={() => setLinkOpen(true)}
                 />
               </>
@@ -256,10 +317,15 @@ export default function MediaPicker({
         )}
 
         {/* Hidden file inputs — driven by the popover options. */}
+        {/* 2026-05-20 — `accept` uses the wildcard + extensions
+            recipe (FORUM_*_ACCEPT constants) instead of the MIME-
+            only join. macOS Finder was greying out users' MP3s
+            because its MIME database doesn't always tag .mp3 as
+            `audio/mpeg`; the wildcard fixes that universally. */}
         <input
           ref={imageInputRef}
           type="file"
-          accept={FORUM_IMAGE_MIME.join(',')}
+          accept={FORUM_IMAGE_ACCEPT}
           onChange={onImageChange}
           className="sr-only"
           tabIndex={-1}
@@ -268,8 +334,17 @@ export default function MediaPicker({
         <input
           ref={videoInputRef}
           type="file"
-          accept={FORUM_VIDEO_MIME.join(',')}
+          accept={FORUM_VIDEO_ACCEPT}
           onChange={onVideoChange}
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept={FORUM_AUDIO_ACCEPT}
+          onChange={onAudioChange}
           className="sr-only"
           tabIndex={-1}
           aria-hidden="true"
@@ -321,6 +396,7 @@ function PendingChip({
   const Icon =
     attachment.kind === 'image' ? ImageIcon :
     attachment.kind === 'video' ? Video :
+    attachment.kind === 'audio' ? Music :
     Link2
   const label =
     attachment.kind === 'link'
