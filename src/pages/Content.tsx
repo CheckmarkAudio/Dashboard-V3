@@ -9,10 +9,11 @@ import MemberAvatar from '../components/members/MemberAvatar'
 import MediaPicker from '../components/forum/MediaPicker'
 import AttachmentDisplay from '../components/forum/AttachmentDisplay'
 import LinkifiedText from '../components/forum/LinkifiedText'
+import CreateChannelDialog from '../components/forum/CreateChannelDialog'
 import { chatColorTokens, resolveChatColorKey } from '../lib/forum/chatColor'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
-import { Send, Hash, Users } from 'lucide-react'
+import { Send, Hash, Plus, Users } from 'lucide-react'
 import type { TeamMember } from '../types'
 
 type Channel = { id: string; name: string; slug: string; description: string }
@@ -29,10 +30,16 @@ type Message = {
 
 export default function Content() {
   useDocumentTitle('Forum - Checkmark Workspace')
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
   const { isOnline } = usePresence()
   const [channels, setChannels] = useState<Channel[]>([])
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null)
+  // 2026-05-20 — Admin-only "create channel" dialog. Opens from
+  // the small +New button next to the Channels sidebar header.
+  // RLS (admins_can_insert_channels) gates the actual INSERT, so
+  // hiding the trigger for non-admins is a UX nicety, not a
+  // security boundary.
+  const [showCreateChannel, setShowCreateChannel] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([])
@@ -58,15 +65,21 @@ export default function Content() {
     return a.display_name.localeCompare(b.display_name)
   })
 
-  // Load channels
+  // Load channels — extracted so the create-channel callback can
+  // refresh the list without a full reload.
+  const loadChannels = useCallback(async (): Promise<Channel[]> => {
+    const { data } = await supabase.from('chat_channels').select('*').order('created_at')
+    const list = data ?? []
+    setChannels(list)
+    return list
+  }, [])
+
   useEffect(() => {
-    supabase.from('chat_channels').select('*').order('created_at').then(({ data }) => {
-      if (data && data.length > 0) {
-        setChannels(data)
-        setActiveChannel(data[0])
-      }
+    void loadChannels().then((list) => {
+      if (list.length > 0 && !activeChannel) setActiveChannel(list[0]!)
       setLoading(false)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Load messages for active channel — explicit columns now since
@@ -173,7 +186,23 @@ export default function Content() {
         <div className="w-[220px] border-r border-border flex flex-col shrink-0">
           {/* Channels */}
           <div className="px-3 pt-4 pb-2">
-            <p className="text-[10px] font-semibold text-text-light uppercase tracking-wider mb-2">Channels</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-semibold text-text-light uppercase tracking-wider">Channels</p>
+              {/* 2026-05-20 — Admin-only "+ New" trigger. Hidden
+                  for members; RLS gates the actual INSERT, so this
+                  is UX nicety, not a security boundary. */}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreateChannel(true)}
+                  aria-label="Create a new channel"
+                  title="Create a new channel"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded-md text-text-light hover:text-gold hover:bg-gold/10 transition-colors focus-ring"
+                >
+                  <Plus size={12} strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              )}
+            </div>
             <div className="space-y-0.5">
               {channels.map((ch) => (
                 <button
@@ -290,6 +319,24 @@ export default function Content() {
           )}
         </div>
       </div>
+
+      {/* 2026-05-20 — Admin "create channel" dialog. Rendered at the
+          page level so it can portal over the sidebar without
+          layout-flow side effects. */}
+      {showCreateChannel && (
+        <CreateChannelDialog
+          existing={channels.map((c) => ({ id: c.id, name: c.name, slug: c.slug }))}
+          onClose={() => setShowCreateChannel(false)}
+          onCreated={(created) => {
+            // Refresh list from server (single source of truth) so
+            // sort order matches what other tabs will see on reload.
+            void loadChannels().then((list) => {
+              const fresh = list.find((c) => c.id === created.id)
+              if (fresh) setActiveChannel(fresh)
+            })
+          }}
+        />
+      )}
     </div>
   )
 }
