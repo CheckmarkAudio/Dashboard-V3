@@ -14,6 +14,8 @@ import { chatColorTokens, resolveChatColorKey } from '../lib/forum/chatColor'
 import { detectLinkEmbed } from '../lib/forum/attachments'
 import { extractUrls } from '../lib/forum/linkify'
 import { unfurlLink } from '../lib/forum/unfurl'
+import { inferForumKind, uploadForumFile } from '../lib/forum/upload'
+import { useToast } from '../components/Toast'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
 import { AlertCircle, Check, Clock, Edit2, Hash, MoreHorizontal, Plus, Send, Trash2, Users } from 'lucide-react'
@@ -60,6 +62,14 @@ export default function Content() {
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([])
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  // 2026-05-21 (PR B — drag-anywhere) — dragOver counter, NOT a
+  // boolean. `dragenter` and `dragleave` fire for EVERY child node
+  // the cursor crosses (so dragging across a child element fires
+  // leave→enter pairs that would otherwise flicker the overlay
+  // off/on). Counting `enter` minus `leave` gives us a stable
+  // "is anything still being dragged over us" signal.
+  const [dragDepth, setDragDepth] = useState(0)
+  const { toast } = useToast()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Team members for the sidebar. Shares cache with other pages via
@@ -315,6 +325,109 @@ export default function Content() {
     })()
   }
 
+  // 2026-05-21 (PR B) — Shared upload handler for drag-anywhere +
+  // Cmd+V paste-image. Filters files by family (image/video/audio
+  // only), runs uploads in parallel, appends each successful one
+  // to pendingAttachments as it lands so a fast image shows up
+  // before a slow video. Failures toast individually so one bad
+  // file doesn't kill the whole batch.
+  const uploadFiles = useCallback(
+    async (files: File[]) => {
+      if (!activeChannel || !profile?.id) return
+      const accepted: File[] = []
+      const skipped: string[] = []
+      for (const f of files) {
+        if (inferForumKind(f) === null) {
+          skipped.push(f.name)
+        } else {
+          accepted.push(f)
+        }
+      }
+      if (skipped.length > 0) {
+        toast(
+          skipped.length === 1
+            ? `${skipped[0]} isn't an image, video, or audio file.`
+            : `${skipped.length} files weren't image / video / audio.`,
+          'error',
+        )
+      }
+      if (accepted.length === 0) return
+      await Promise.all(
+        accepted.map(async (file) => {
+          try {
+            const attachment = await uploadForumFile({
+              file,
+              channelId: activeChannel.id,
+              userId: profile.id,
+            })
+            setPendingAttachments((prev) => [...prev, attachment])
+          } catch (err) {
+            toast(err instanceof Error ? err.message : 'Upload failed', 'error')
+          }
+        }),
+      )
+    },
+    [activeChannel, profile?.id, toast],
+  )
+
+  // Drag-anywhere → dropzone overlay handlers. Only kick in when
+  // the dragged thing is actually files (skip text drags etc).
+  const dragHasFiles = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer?.types ?? []).includes('Files')
+  const onDragEnter = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return
+    e.preventDefault()
+    setDragDepth((d) => d + 1)
+  }
+  const onDragLeave = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return
+    e.preventDefault()
+    setDragDepth((d) => Math.max(0, d - 1))
+  }
+  const onDragOver = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return
+    e.preventDefault()
+    // Tell the browser this is a copy operation so the cursor flips
+    // to the "+" cue.
+    e.dataTransfer.dropEffect = 'copy'
+  }
+  const onDrop = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return
+    e.preventDefault()
+    setDragDepth(0)
+    const files = Array.from(e.dataTransfer?.files ?? [])
+    if (files.length > 0) void uploadFiles(files)
+  }
+
+  // Cmd+V paste-image — attach a doc-level listener so paste works
+  // anywhere on the page, not just inside the textarea (Discord
+  // behavior: Cmd+V a screenshot from clipboard anywhere on the
+  // chat → it just attaches).
+  useEffect(() => {
+    if (!activeChannel || !profile?.id) return
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      const files: File[] = []
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i]
+        if (it && it.kind === 'file') {
+          const f = it.getAsFile()
+          if (f) files.push(f)
+        }
+      }
+      if (files.length > 0) {
+        // Don't preventDefault — let the textarea still receive the
+        // text portion of the clipboard if any (e.g. when you copy
+        // a screenshot from Slack, the clipboard contains both an
+        // image AND the URL).
+        void uploadFiles(files)
+      }
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [activeChannel, profile?.id, uploadFiles])
+
   const formatTime = (ts: string) => {
     try {
       return new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
@@ -396,8 +509,35 @@ export default function Content() {
           </div>
         </div>
 
-        {/* Main chat area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* Main chat area — drag-anywhere dropzone listeners live
+            on this container so anywhere from header to composer
+            accepts a file drop. */}
+        <div
+          className="flex-1 flex flex-col min-w-0 relative"
+          onDragEnter={onDragEnter}
+          onDragLeave={onDragLeave}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+        >
+          {/* 2026-05-21 (PR B) — dropzone overlay. Only mounts
+              while a file drag is in progress; doesn't block any
+              clicks otherwise. Translucent gold tint matches the
+              site's drag-active language (gold ring on widget
+              drop targets). */}
+          {dragDepth > 0 && (
+            <div className="absolute inset-2 z-40 pointer-events-none flex items-center justify-center rounded-2xl border-2 border-dashed border-gold/70 bg-gold/10 backdrop-blur-sm animate-fade-in">
+              <div className="text-center px-6 py-4 rounded-2xl bg-surface/90 border border-gold/40 shadow-xl pointer-events-none">
+                <Plus size={28} className="text-gold mx-auto mb-2" aria-hidden="true" />
+                <p className="text-[14px] font-bold text-text">
+                  Drop to upload {activeChannel ? `to #${activeChannel.name}` : ''}
+                </p>
+                <p className="text-[11px] text-text-light mt-0.5">
+                  Images, videos, and audio files
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Channel header */}
           <div className="px-5 py-3 border-b border-border flex items-center justify-between shrink-0">
             <div>
