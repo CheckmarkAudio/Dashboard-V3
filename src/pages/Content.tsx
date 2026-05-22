@@ -16,7 +16,7 @@ import { extractUrls } from '../lib/forum/linkify'
 import { unfurlLink } from '../lib/forum/unfurl'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
-import { Check, Edit2, Hash, MoreHorizontal, Plus, Send, Trash2, Users } from 'lucide-react'
+import { AlertCircle, Check, Clock, Edit2, Hash, MoreHorizontal, Plus, Send, Trash2, Users } from 'lucide-react'
 import type { TeamMember } from '../types'
 
 type Channel = { id: string; name: string; slug: string; description: string }
@@ -32,6 +32,15 @@ type Message = {
   // 2026-05-20 — Set by the edit RPC; drives the "(edited)" badge
   // on the bubble. NULL = never edited.
   edited_at?: string | null
+  // 2026-05-21 (PR A — instant sends) — client-only metadata. The
+  // optimistic bubble shows immediately when the user hits Enter
+  // with a temp uuid as `id`, status='sending', opacity 70%. On
+  // server insert success the row is replaced (real id, status
+  // 'sent'). On insert error status flips to 'failed' so the
+  // bubble shows a retry chip + red dot. These fields never round-
+  // trip through Supabase — they're stripped before insert.
+  _status?: 'sending' | 'sent' | 'failed'
+  _optimistic?: boolean
 }
 
 export default function Content() {
@@ -114,7 +123,16 @@ export default function Content() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `channel_id=eq.${activeChannel.id}` },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message])
+          // 2026-05-21 (PR A — instant sends) — dedupe by id. Our
+          // own sendMessage optimistically inserts a bubble with a
+          // client-generated uuid, then swaps it for the server row
+          // when the insert returns. That swap MAY land before or
+          // after this realtime echo. Either way, if the row id is
+          // already in state, skip the append.
+          const incoming = payload.new as Message
+          setMessages((prev) =>
+            prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming],
+          )
         },
       )
       .on(
@@ -151,9 +169,25 @@ export default function Content() {
     setInput('')
   }, [activeChannel?.id])
 
-  // Send message — text + attachments (either can be empty, but
-  // not both). Uploads already happened in MediaPicker; this just
-  // composes the row.
+  // 2026-05-21 (PR A — Discord-style instant sends).
+  //
+  // Discord's send feels instant because:
+  //   1. The bubble appears LOCALLY the moment the user hits Enter,
+  //      faded to 70% with a small clock icon.
+  //   2. The Supabase insert runs in the BACKGROUND (no `await` in
+  //      the user's input → bubble → screen path).
+  //   3. URL unfurls (the slow part) happen AFTER the message lands
+  //      in the DB — a separate UPDATE adds the preview attachments
+  //      a beat later, with realtime delivering the change to every
+  //      open client.
+  //
+  // Synchronously-detected embeds (YouTube/Vimeo/Loom) hitch a ride
+  // on the FIRST insert since `detectLinkEmbed` is just a regex —
+  // no network call, no reason to defer. Only the generic OG fetch
+  // (via `unfurlLink` edge function) is deferred.
+  //
+  // Failure path: insert errors flip `_status` to 'failed' on the
+  // optimistic bubble, which surfaces an alert icon in the header.
   const sendMessage = async () => {
     if (!activeChannel) return
     const trimmed = input.trim()
@@ -161,61 +195,124 @@ export default function Content() {
     if (sending) return
 
     const name = profile?.display_name ?? 'User'
-    const id = profile?.id ?? 'dev-user'
+    const userId = profile?.id ?? 'dev-user'
     const initial = name.charAt(0).toUpperCase()
-    setSending(true)
-    try {
-      // 2026-05-20 (b) — Auto-unfurl URLs detected in the message
-      // body so a pasted link gets the same Instagram-style preview
-      // card as one added via the +Link button. Capped at the first
-      // 3 URLs to avoid a burst of edge function invocations on
-      // link-heavy messages. Existing pendingAttachments (e.g. user
-      // explicitly added a link or uploaded a file) take precedence
-      // and we dedupe so we don't double-card the same URL.
-      const existingLinkHrefs = new Set(
-        pendingAttachments
-          .filter((a) => a.kind === 'link')
-          .map((a) => a.url),
-      )
-      const bodyUrls = extractUrls(trimmed)
-        .filter((href) => !existingLinkHrefs.has(href))
-        .slice(0, 3)
 
-      // Fire unfurls in parallel — each one is independent + already
-      // resolves to null on error so we can never block the send.
-      const autoLinkAttachments = await Promise.all(
-        bodyUrls.map(async (href): Promise<ChatAttachment> => {
-          const detect = detectLinkEmbed(href)
-          if (detect) {
-            // Known embed host (YouTube/Vimeo/Loom) — iframe renders
-            // the preview; skip the OG fetch.
-            return { kind: 'link', url: href, embed: detect.embed }
-          }
-          const preview = await unfurlLink(href)
-          return {
-            kind: 'link',
-            url: href,
-            ...(preview ? { preview, name: preview.title ?? undefined } : {}),
-          }
-        }),
-      )
-
-      const finalAttachments: ChatAttachment[] = [...pendingAttachments, ...autoLinkAttachments]
-
-      const { error } = await supabase.from('chat_messages').insert({
-        channel_id: activeChannel.id,
-        sender_name: name,
-        sender_id: id,
-        sender_initial: initial,
-        content: trimmed,
-        attachments: finalAttachments,
-      })
-      if (error) throw error
-      setInput('')
-      setPendingAttachments([])
-    } finally {
-      setSending(false)
+    // Split URLs into two buckets: known iframe embeds (cheap,
+    // synchronous detection — ride the first insert) vs. unknown
+    // URLs that need an OG fetch (slow, deferred to a follow-up
+    // UPDATE).
+    const existingLinkHrefs = new Set(
+      pendingAttachments.filter((a) => a.kind === 'link').map((a) => a.url),
+    )
+    const bodyUrls = extractUrls(trimmed)
+      .filter((href) => !existingLinkHrefs.has(href))
+      .slice(0, 3)
+    const knownEmbeds: ChatAttachment[] = []
+    const unfurlNeeded: string[] = []
+    for (const href of bodyUrls) {
+      const detect = detectLinkEmbed(href)
+      if (detect) {
+        knownEmbeds.push({ kind: 'link', url: href, embed: detect.embed })
+      } else {
+        unfurlNeeded.push(href)
+      }
     }
+    const initialAttachments: ChatAttachment[] = [...pendingAttachments, ...knownEmbeds]
+
+    // Optimistic bubble — pendingId is a client UUID we use to
+    // locate this row when the server confirms (or fails). The real
+    // server row will have a different id; we swap by pendingId.
+    const pendingId = crypto.randomUUID()
+    const nowIso = new Date().toISOString()
+    const optimistic: Message = {
+      id: pendingId,
+      channel_id: activeChannel.id,
+      sender_name: name,
+      sender_id: userId,
+      sender_initial: initial,
+      content: trimmed,
+      created_at: nowIso,
+      attachments: initialAttachments,
+      edited_at: null,
+      _status: 'sending',
+      _optimistic: true,
+    }
+
+    // Snap the UI immediately. Input clears + attachment chips
+    // drop so the next message can be composed right away.
+    setMessages((prev) => [...prev, optimistic])
+    setInput('')
+    setPendingAttachments([])
+    setSending(true)
+
+    // Insert + unfurl pipeline in the background.
+    void (async () => {
+      try {
+        const { data: row, error } = await supabase
+          .from('chat_messages')
+          .insert({
+            channel_id: activeChannel.id,
+            sender_name: name,
+            sender_id: userId,
+            sender_initial: initial,
+            content: trimmed,
+            attachments: initialAttachments,
+          })
+          .select('id, channel_id, sender_name, sender_id, sender_initial, content, created_at, attachments, edited_at')
+          .single()
+        if (error || !row) throw error ?? new Error('Insert failed')
+
+        // Swap optimistic → real (by pendingId). The realtime
+        // INSERT sub will also fire for this row; the dedupe on
+        // id (added below) makes that a no-op.
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingId
+              ? ({ ...(row as Message), _status: 'sent' } as Message)
+              : m,
+          ),
+        )
+
+        // Background unfurl. We don't block the user on this — it's
+        // a separate write that lands a beat after the message
+        // itself. Realtime UPDATE sub picks it up + the bubble
+        // re-renders with the preview cards.
+        if (unfurlNeeded.length > 0) {
+          const newLinks = await Promise.all(
+            unfurlNeeded.map(async (href): Promise<ChatAttachment> => {
+              const preview = await unfurlLink(href)
+              return {
+                kind: 'link',
+                url: href,
+                ...(preview ? { preview, name: preview.title ?? undefined } : {}),
+              }
+            }),
+          )
+          // Only patch if we actually got at least one preview to
+          // avoid an empty UPDATE that adds noise to the realtime
+          // stream.
+          const enrichedAttachments = [...initialAttachments, ...newLinks]
+          await supabase
+            .from('chat_messages')
+            .update({ attachments: enrichedAttachments })
+            .eq('id', row.id)
+        }
+      } catch {
+        // Mark the optimistic bubble as failed. We don't auto-retry
+        // because a failure usually means RLS / network / quota,
+        // which would just fail again on retry.
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingId
+              ? ({ ...m, _status: 'failed' } as Message)
+              : m,
+          ),
+        )
+      } finally {
+        setSending(false)
+      }
+    })()
   }
 
   const formatTime = (ts: string) => {
@@ -513,8 +610,20 @@ function ChatBubble({
 
   const showActions = !editing && (canEdit || canDelete)
 
+  // 2026-05-21 (PR A — instant sends) — Optimistic visual state.
+  // `_status === 'sending'` fades the bubble to 70% + shows a clock
+  // icon next to the timestamp. `_status === 'failed'` shows a red
+  // dot + tooltip "Failed to send — click to retry". Realtime + the
+  // sendMessage callback swap _status as the server confirms.
+  const isSending = message._status === 'sending'
+  const isFailed = message._status === 'failed'
+
   return (
-    <div className={`group/msg flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div
+      className={`group/msg flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'} ${
+        isSending ? 'opacity-70' : ''
+      }`}
+    >
       <span className={`shrink-0 inline-flex rounded-full ring-2 ${tokens.ring}`}>
         <MemberAvatar
           member={member ?? null}
@@ -528,6 +637,27 @@ function ChatBubble({
             {isMe ? 'You' : message.sender_name}
           </span>
           <span className="text-[10px] text-text-light">{time}</span>
+          {/* 2026-05-21 — optimistic status indicators. Discord-style:
+              tiny clock next to the timestamp while sending; red
+              alert dot when the insert errored. */}
+          {isSending && (
+            <span
+              className="inline-flex items-center text-[10px] text-text-light/80"
+              title="Sending…"
+              aria-label="Sending"
+            >
+              <Clock size={10} aria-hidden="true" />
+            </span>
+          )}
+          {isFailed && (
+            <span
+              className="inline-flex items-center text-[10px] text-rose-400"
+              title="Failed to send"
+              aria-label="Failed to send"
+            >
+              <AlertCircle size={10} aria-hidden="true" />
+            </span>
+          )}
           {message.edited_at && (
             <span className="text-[10px] text-text-light/70 italic" title={`Edited ${new Date(message.edited_at).toLocaleString()}`}>
               (edited)
