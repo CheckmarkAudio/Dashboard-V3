@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase'
 import { useToast } from '../Toast'
 import {
   buildForumMediaPath,
-  detectLinkEmbed,
   FORUM_AUDIO_ACCEPT,
   FORUM_AUDIO_MIME,
   FORUM_IMAGE_ACCEPT,
@@ -15,7 +14,9 @@ import {
   FORUM_VIDEO_MIME,
   type ChatAttachment,
 } from '../../lib/forum/attachments'
-import { unfurlLink } from '../../lib/forum/unfurl'
+// 2026-05-20 (b) — `detectLinkEmbed` + `unfurlLink` imports removed
+// alongside the +Link picker option. Both are still imported by
+// Content.tsx for the auto-unfurl-on-send path.
 
 /**
  * Media picker for the forum message input.
@@ -54,17 +55,15 @@ export default function MediaPicker({
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [uploading, setUploading] = useState<'image' | 'video' | 'audio' | null>(null)
-  const [unfurlingLink, setUnfurlingLink] = useState<string | null>(null)
-  const [linkInput, setLinkInput] = useState('')
-  const [linkOpen, setLinkOpen] = useState(false)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
 
+  // 2026-05-20 (b) — closePopover used to also reset link state.
+  // Link picker was removed entirely; pasted URLs in the message
+  // body now auto-unfurl via sendMessage. See Content.tsx.
   const closePopover = useCallback(() => {
     setOpen(false)
-    setLinkOpen(false)
-    setLinkInput('')
   }, [])
 
   const upload = useCallback(
@@ -160,55 +159,23 @@ export default function MediaPicker({
     if (file) void upload(file, 'audio')
   }
 
-  const submitLink = async () => {
-    const trimmed = linkInput.trim()
-    if (!trimmed) return
-    let normalized = trimmed
-    if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`
-    try {
-      // Validate it parses; throw → toast.
-      // eslint-disable-next-line no-new
-      new URL(normalized)
-    } catch {
-      toast('That doesn\'t look like a valid URL.', 'error')
-      return
-    }
-    const detect = detectLinkEmbed(normalized)
-    // 2026-05-20 — kick off unfurl in parallel with the add so the
-    // attachment lands instantly in pending, and we patch in the
-    // preview metadata once it arrives. UX feels snappy; preview
-    // card appears within a beat if the target site has OG tags.
-    closePopover()
-    if (detect) {
-      // Known embed (YouTube/Vimeo/Loom) — iframe handles preview
-      // visually; no need to call unfurl.
-      onAdd({ kind: 'link', url: normalized, embed: detect.embed })
-      return
-    }
-    setUnfurlingLink(normalized)
-    const preview = await unfurlLink(normalized)
-    setUnfurlingLink(null)
-    onAdd({
-      kind: 'link',
-      url: normalized,
-      ...(preview ? { preview, name: preview.title ?? undefined } : {}),
-    })
-  }
+  // 2026-05-20 (b) — `submitLink` removed. The +Link picker option
+  // was redundant with auto-unfurl on send (Content.tsx → sendMessage
+  // → extractUrls + unfurlLink for every URL in the message body).
+  // Per user: "we should be able to just paste in the link into
+  // forum and it show the link and a visual preview... lets remove
+  // the link button but have the paste link in chat bring us the
+  // preview". Single path = less surface area + nothing to be
+  // half-broken.
 
   return (
     <div className="space-y-2">
       {/* Pending attachments strip — chips with remove buttons. */}
-      {(pending.length > 0 || unfurlingLink) && (
+      {pending.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           {pending.map((a, idx) => (
             <PendingChip key={`${a.kind}-${idx}-${a.url}`} attachment={a} onRemove={() => onRemove(idx)} />
           ))}
-          {unfurlingLink && (
-            <span className="inline-flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-full bg-gold/10 border border-gold/30 text-gold text-[11px]">
-              <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-              <span>Fetching preview…</span>
-            </span>
-          )}
         </div>
       )}
 
@@ -218,13 +185,12 @@ export default function MediaPicker({
           onClick={() => {
             if (disabled) return
             setOpen((v) => !v)
-            setLinkOpen(false)
           }}
           disabled={disabled}
           aria-label="Add media"
           aria-expanded={open}
           aria-haspopup="menu"
-          title="Attach an image, video, or link"
+          title="Attach an image, video, or audio file"
           className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-xl border border-border bg-surface-alt text-text-muted hover:text-gold hover:border-gold/40 transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {uploading ? (
@@ -241,78 +207,34 @@ export default function MediaPicker({
             aria-label="Media kind"
             className="absolute bottom-full left-0 mb-2 z-30 bg-surface border border-border rounded-xl shadow-xl py-1 min-w-[180px] animate-fade-in"
           >
-            {linkOpen ? (
-              <div className="p-2 space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-light px-1">
-                  Paste link
-                </p>
-                <input
-                  type="url"
-                  autoFocus
-                  value={linkInput}
-                  onChange={(e) => setLinkInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      submitLink()
-                    }
-                  }}
-                  placeholder="https://loom.com/share/…"
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-surface-alt text-sm text-text placeholder:text-text-light focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30"
-                />
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setLinkOpen(false); setLinkInput('') }}
-                    className="text-[11px] text-text-muted hover:text-text"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={submitLink}
-                    disabled={!linkInput.trim()}
-                    className="px-3 py-1 rounded-lg bg-gold text-black text-[11px] font-bold hover:bg-gold-muted disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <PickerOption
-                  icon={<ImageIcon size={14} aria-hidden="true" />}
-                  label="Image"
-                  hint="JPEG · PNG · WEBP · GIF"
-                  disabled={uploading !== null}
-                  onClick={() => imageInputRef.current?.click()}
-                />
-                <PickerOption
-                  icon={<Video size={14} aria-hidden="true" />}
-                  label="Video"
-                  hint="MP4 · WEBM · MOV (max 50 MB)"
-                  disabled={uploading !== null}
-                  onClick={() => videoInputRef.current?.click()}
-                />
-                {/* 2026-05-20 — audio attachments (MP3 / WAV / etc).
-                    Renders as an inline <audio controls> in the
-                    message bubble via AttachmentDisplay. */}
-                <PickerOption
-                  icon={<Music size={14} aria-hidden="true" />}
-                  label="Audio"
-                  hint="MP3 · WAV · M4A · OGG (max 50 MB)"
-                  disabled={uploading !== null}
-                  onClick={() => audioInputRef.current?.click()}
-                />
-                <div className="my-1 border-t border-border/60" />
-                <PickerOption
-                  icon={<Link2 size={14} aria-hidden="true" />}
-                  label="Link"
-                  hint="Any URL — YouTube, Vimeo, Loom auto-embed"
-                  onClick={() => setLinkOpen(true)}
-                />
-              </>
-            )}
+            <PickerOption
+              icon={<ImageIcon size={14} aria-hidden="true" />}
+              label="Image"
+              hint="JPEG · PNG · WEBP · GIF"
+              disabled={uploading !== null}
+              onClick={() => imageInputRef.current?.click()}
+            />
+            <PickerOption
+              icon={<Video size={14} aria-hidden="true" />}
+              label="Video"
+              hint="MP4 · WEBM · MOV (max 50 MB)"
+              disabled={uploading !== null}
+              onClick={() => videoInputRef.current?.click()}
+            />
+            {/* 2026-05-20 — audio attachments (MP3 / WAV / etc).
+                Renders as an inline <audio controls> in the
+                message bubble via AttachmentDisplay. */}
+            <PickerOption
+              icon={<Music size={14} aria-hidden="true" />}
+              label="Audio"
+              hint="MP3 · WAV · M4A · OGG (max 50 MB)"
+              disabled={uploading !== null}
+              onClick={() => audioInputRef.current?.click()}
+            />
+            {/* 2026-05-20 (b) — Link picker removed. Pasted URLs in
+                the message body auto-unfurl on send (see Content.tsx
+                → sendMessage → extractUrls). Single path = nothing
+                to be half-broken. */}
           </div>
         )}
 
