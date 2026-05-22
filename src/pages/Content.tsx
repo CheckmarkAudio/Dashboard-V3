@@ -11,6 +11,9 @@ import AttachmentDisplay from '../components/forum/AttachmentDisplay'
 import LinkifiedText from '../components/forum/LinkifiedText'
 import CreateChannelDialog from '../components/forum/CreateChannelDialog'
 import { chatColorTokens, resolveChatColorKey } from '../lib/forum/chatColor'
+import { detectLinkEmbed } from '../lib/forum/attachments'
+import { extractUrls } from '../lib/forum/linkify'
+import { unfurlLink } from '../lib/forum/unfurl'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
 import { Check, Edit2, Hash, MoreHorizontal, Plus, Send, Trash2, Users } from 'lucide-react'
@@ -162,13 +165,50 @@ export default function Content() {
     const initial = name.charAt(0).toUpperCase()
     setSending(true)
     try {
+      // 2026-05-20 (b) — Auto-unfurl URLs detected in the message
+      // body so a pasted link gets the same Instagram-style preview
+      // card as one added via the +Link button. Capped at the first
+      // 3 URLs to avoid a burst of edge function invocations on
+      // link-heavy messages. Existing pendingAttachments (e.g. user
+      // explicitly added a link or uploaded a file) take precedence
+      // and we dedupe so we don't double-card the same URL.
+      const existingLinkHrefs = new Set(
+        pendingAttachments
+          .filter((a) => a.kind === 'link')
+          .map((a) => a.url),
+      )
+      const bodyUrls = extractUrls(trimmed)
+        .filter((href) => !existingLinkHrefs.has(href))
+        .slice(0, 3)
+
+      // Fire unfurls in parallel — each one is independent + already
+      // resolves to null on error so we can never block the send.
+      const autoLinkAttachments = await Promise.all(
+        bodyUrls.map(async (href): Promise<ChatAttachment> => {
+          const detect = detectLinkEmbed(href)
+          if (detect) {
+            // Known embed host (YouTube/Vimeo/Loom) — iframe renders
+            // the preview; skip the OG fetch.
+            return { kind: 'link', url: href, embed: detect.embed }
+          }
+          const preview = await unfurlLink(href)
+          return {
+            kind: 'link',
+            url: href,
+            ...(preview ? { preview, name: preview.title ?? undefined } : {}),
+          }
+        }),
+      )
+
+      const finalAttachments: ChatAttachment[] = [...pendingAttachments, ...autoLinkAttachments]
+
       const { error } = await supabase.from('chat_messages').insert({
         channel_id: activeChannel.id,
         sender_name: name,
         sender_id: id,
         sender_initial: initial,
         content: trimmed,
-        attachments: pendingAttachments,
+        attachments: finalAttachments,
       })
       if (error) throw error
       setInput('')

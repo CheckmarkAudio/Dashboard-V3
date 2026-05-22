@@ -48,6 +48,32 @@ const TRAILING_PUNCT_RE = /[.,!?:;\)\]\}>"']+$/
  * input returns a single text segment of length 0 so the caller
  * can map without a null check.
  */
+/**
+ * 2026-05-20 (b) — Extract just the URLs from a message body, in
+ * order of appearance, deduped. Used by `sendMessage()` in
+ * Content.tsx to auto-unfurl every URL the user pasted into the
+ * textarea (not just the ones added via the +Link button).
+ *
+ * Returns synthesized `https://` hrefs for bare `www.` matches so
+ * the unfurl edge function gets a well-formed URL to fetch.
+ */
+export function extractUrls(input: string): string[] {
+  if (!input) return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const m of input.matchAll(URL_RE)) {
+    let raw = m[0]
+    const trailing = raw.match(TRAILING_PUNCT_RE)
+    if (trailing) raw = raw.slice(0, raw.length - trailing[0].length)
+    if (!raw) continue
+    const href = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+    if (seen.has(href)) continue
+    seen.add(href)
+    out.push(href)
+  }
+  return out
+}
+
 export function linkifySegments(input: string): Segment[] {
   if (!input) return [{ type: 'text', value: '' }]
 
