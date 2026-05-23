@@ -24,6 +24,7 @@ import {
 import { AdminSectionNavItem, type AdminSection } from '../../components/admin/AdminSectionNavItem'
 import ClockDataSection from '../../components/admin/ClockDataSection'
 import MemberActivitySection from '../../components/admin/MemberActivitySection'
+import WorkScheduler from '../../components/admin/WorkScheduler'
 import {
   loadActiveTemplates,
   loadDefaultTemplateIdsForPosition,
@@ -35,7 +36,7 @@ import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
   Save, ChevronRight, ChevronLeft,
   MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
-  Activity, Link2,
+  Activity, Link2, CalendarRange,
 } from 'lucide-react'
 // `Activity` icon kept as the lucide glyph for the new left-rail
 // "Activity" section (mirrors the user's mental model — Roster /
@@ -47,12 +48,16 @@ import type { BadgeVariant } from '../../components/ui'
 // Settings page pattern (left section nav + right pane). Roster is the
 // existing TeamManager content; Clock Data is a placeholder section
 // that PR #59 (Clock In/Out v2) will populate with shift data.
-type MembersSectionKey = 'roster' | 'clock-data' | 'activity'
+type MembersSectionKey = 'roster' | 'scheduler' | 'clock-data' | 'activity'
 
 const MEMBERS_SECTIONS: AdminSection<MembersSectionKey>[] = [
-  { key: 'roster',     icon: Users,    title: 'Roster',     subtitle: 'Active and inactive team members' },
-  { key: 'clock-data', icon: Clock,    title: 'Clock Data', subtitle: 'Shifts and reflections' },
-  { key: 'activity',   icon: Activity, title: 'Activity',   subtitle: 'Sessions, tasks, and shifts per member' },
+  { key: 'roster',     icon: Users,         title: 'Roster',         subtitle: 'Active and inactive team members' },
+  // 2026-05-23 — Work Scheduler. Admin manages recurring weekly hours
+  // (default Tue–Sat per studio operating window) + one-off blocks,
+  // and reviews member-proposed schedule requests.
+  { key: 'scheduler',  icon: CalendarRange, title: 'Work Scheduler', subtitle: 'Recurring + one-off hours, request review' },
+  { key: 'clock-data', icon: Clock,         title: 'Clock Data',     subtitle: 'Shifts and reflections' },
+  { key: 'activity',   icon: Activity,      title: 'Activity',       subtitle: 'Sessions, tasks, and shifts per member' },
 ]
 
 const POSITIONS: { value: string; label: string; badge: BadgeVariant }[] = [
@@ -945,6 +950,12 @@ export default function TeamManager() {
         </>
       )}
       </>)}
+
+      {/* 2026-05-23 — Work Scheduler section. Admin adds recurring
+          weekly hours + one-off blocks per member, reviews member-
+          proposed pending requests. Defaults form's weekday picker
+          to studio's Tue–Sat work week. */}
+      {activeSection === 'scheduler' && <WorkScheduler members={members} adminId={profile?.id ?? ''} />}
 
       {activeSection === 'clock-data' && <ClockDataSection members={members} />}
 
