@@ -88,6 +88,22 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     dataScope: 'self',
     allowedRoles: ['member', 'admin', 'owner'],
   },
+  {
+    // 2026-05-23 — Member Work Scheduler PR 3. Registered as a member
+    // bank widget (no default placement) so it appears in the
+    // Workspace Controls drawer; users add it to their Overview when
+    // they want it visible. Keeping it off the default Overview grid
+    // avoids forcing the existing 3-column layout to re-shuffle for
+    // every user. Once we hear "great, this should be on by default,"
+    // flip the placement to `member_overview`.
+    id: 'my_schedule',
+    title: 'My Schedule',
+    description: 'Your weekly hours — toggle to see the team. Request schedule blocks from here.',
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 1, col: 2 }],
+    accessVisibility: 'personal',
+    dataScope: 'self',
+    allowedRoles: ['member', 'admin', 'owner'],
+  },
   // ─── Tasks page (`/daily`) widgets ──────────────────────────────
   // 2026-05-19 — swapped Studio Tasks ↔ Team Tasks col positions per
   // user direction "switch location of studio tasks with team tasks".
@@ -602,7 +618,11 @@ function buildDefaultWidgetStateForScope(
 //   My Tasks · Checklist · Team Tasks · Studio Tasks
 // Saved v35 layouts get sanitized so the new widget + new ordering
 // apply for every user; they can drag/hide via the controls.
-export const WORKSPACE_LAYOUT_VERSION = 36
+// 2026-05-23 (v37) — Member Work Scheduler PR 3 adds `my_schedule`
+// to member_overview as a new widget. Bumping the version drops
+// every saved member overview layout so the new widget appears for
+// every user; they can drag/hide via Workspace Controls.
+export const WORKSPACE_LAYOUT_VERSION = 37
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

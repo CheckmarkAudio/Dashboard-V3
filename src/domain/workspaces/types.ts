@@ -112,6 +112,13 @@ export type MemberWidgetId =
   // resets daily / weekly / monthly. Anyone on the team can check;
   // admins curate the list.
   | 'team_checklist'
+  // 2026-05-23 — Member Work Scheduler PR 3. Personal weekly
+  // schedule on Overview with a toggle to flip to the whole team's
+  // schedule. Members can also propose a schedule block from here
+  // ("Request schedule block" button → pending row in
+  // team_schedule_blocks → admin approves from Members → Work
+  // Scheduler).
+  | 'my_schedule'
   // NOTE: `assigned_tasks` was retired in PR #11 — its content folded
   // into `team_tasks` (MyTasksCard). Keeping the id out of the union
   // so saved layouts referencing it get sanitized cleanly via the
