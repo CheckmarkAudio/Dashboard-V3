@@ -96,17 +96,38 @@ function AttachmentItem({
   }
 
   // Link — three rendering paths:
-  //   1. Known embed host (YouTube / Vimeo / Loom) → iframe player.
+  //   1. Known embed host → iframe player.
+  //        - YouTube / Vimeo / Loom → 16:9 video aspect
+  //        - Spotify → 152px tall horizontal bar (track) / 352px (album)
+  //        - SoundCloud → 166px tall horizontal bar
+  //        - Bandcamp → 350px square art-forward player
   //   2. Has OG/Twitter preview metadata → Instagram-style rich card
   //      with hero image + title + description (2026-05-20 add).
   //   3. Otherwise → compact icon + URL card.
   const detect = detectLinkEmbed(attachment.url)
   if (detect) {
+    // 2026-05-23 (PR C) — per-provider sizing. Music players have
+    // fixed heights (not 16:9), so a one-size-fits-all aspect-video
+    // wrapper would either stretch them weird or leave dead space.
+    const sizing =
+      detect.embed === 'spotify'
+        ? (attachment.url.includes('/track/') || attachment.url.includes('/episode/')
+            ? 'h-[152px] max-w-[480px] w-full'
+            : 'h-[352px] max-w-[480px] w-full')
+        : detect.embed === 'soundcloud'
+          ? (attachment.url.includes('/sets/')
+              ? 'h-[300px] max-w-[480px] w-full'
+              : 'h-[166px] max-w-[480px] w-full')
+          : detect.embed === 'bandcamp'
+            ? 'w-[350px] h-[350px]'
+            : 'max-w-[480px] w-full aspect-video' // youtube / vimeo / loom
     return (
-      <div className="max-w-[480px] aspect-video rounded-lg overflow-hidden border border-border/60 bg-black">
+      <div
+        className={`${sizing} rounded-lg overflow-hidden border border-border/60 bg-black`}
+      >
         <iframe
           src={detect.iframeUrl}
-          title={attachment.name ?? `${detect.embed} video`}
+          title={attachment.name ?? `${detect.embed} embed`}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
           referrerPolicy="strict-origin-when-cross-origin"
