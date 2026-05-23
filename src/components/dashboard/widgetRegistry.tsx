@@ -44,6 +44,7 @@ import {
   TeamAssignedTasksCard,
 } from '../tasks/AssignedTaskBoards'
 import TeamChecklistWidget from '../checklist/TeamChecklistWidget'
+import MyScheduleWidget from './MyScheduleWidget'
 import AdminTemplatesWidget from '../admin/templates/AdminTemplatesWidget'
 import AdminEditTasksWidget from '../admin/tasks/AdminEditTasksWidget'
 import AdminClockInWidget from '../admin/AdminClockInWidget'
@@ -72,6 +73,9 @@ const memberWidgetComponents: Record<MemberWidgetId, ComponentType> = {
   team_board: TeamAssignedTasksCard,
   // 2026-05-19 — Team Maintenance Checklist widget.
   team_checklist: TeamChecklistWidget,
+  // 2026-05-23 — Member Work Scheduler PR 3. Personal weekly hours
+  // snapshot on Overview with a Mine/Team toggle + Request modal.
+  my_schedule: MyScheduleWidget,
 }
 
 const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
