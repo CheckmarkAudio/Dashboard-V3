@@ -400,3 +400,23 @@ export interface ExpandedSchedule {
   status: ScheduleBlockStatus
   note: string | null
 }
+
+// ─── Studio hours of operation ─────────────────────────────────────
+// One row per weekday in `studio_hours_of_operation` (migration
+// 20260524120000). Drives the gold/8% in-hours band on /calendar
+// (Apple-Calendar-style frame). Independent from per-member work
+// schedules.
+
+export interface StudioHours {
+  id: string
+  weekday: Weekday
+  /** Wall-clock open time "HH:MM:SS" in studio TZ. */
+  open_time: string
+  close_time: string
+  /** false = closed that day. Open/close times are kept so toggling
+   *  active back on doesn't force the admin to re-enter the times. */
+  active: boolean
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}

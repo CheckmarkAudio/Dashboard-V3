@@ -15,8 +15,9 @@ import {
   type GoogleCalendarConnectionStatus,
 } from '../../lib/googleCalendar'
 import {
-  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid,
+  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid, Clock,
 } from 'lucide-react'
+import StudioHoursPanel from '../../components/admin/StudioHoursPanel'
 
 /**
  * Settings section nav model. Each section renders its own right-pane
@@ -29,6 +30,7 @@ type SectionKey =
   | 'theme'
   | 'branding'
   | 'quick-keys'
+  | 'studio-hours'
   | 'organization'
   | 'notifications'
   | 'database'
@@ -41,6 +43,9 @@ const SECTIONS: Section[] = [
   { key: 'theme',          icon: Sun,         title: 'Theme',          subtitle: 'Colors and appearance' },
   { key: 'branding',       icon: ImageIcon,   title: 'Branding',       subtitle: 'Logos and header' },
   { key: 'quick-keys',     icon: Keyboard,    title: 'Quick Keys',     subtitle: 'Keyboard shortcuts' },
+  // 2026-05-23 — Studio hours of operation editor. Drives the gold
+  // band on /calendar (when the studio is open for business).
+  { key: 'studio-hours',   icon: Clock,       title: 'Studio Hours',   subtitle: 'When the studio is open' },
   { key: 'organization',   icon: Globe,       title: 'Organization',   subtitle: 'Name and branding' },
   { key: 'notifications',  icon: Bell,        title: 'Notifications',  subtitle: 'Alerts and preferences' },
   { key: 'database',       icon: Database,    title: 'Database',       subtitle: 'Connection and admin' },
@@ -434,6 +439,11 @@ export default function AdminSettings() {
               </button>
             </div>
           )}
+
+          {/* 2026-05-23 — Studio Hours editor. Drives the gold/8%
+              in-hours band on /calendar. Edits flow live to the
+              calendar via the useStudioHours realtime sub. */}
+          {activeSection === 'studio-hours' && <StudioHoursPanel adminId={profile?.id ?? ''} />}
 
           {activeSection === 'organization' && (
             <div className="space-y-5">
