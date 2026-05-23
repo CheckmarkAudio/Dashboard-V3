@@ -116,7 +116,7 @@ export default function MyScheduleWidget() {
       {/* Header: title row + mode toggle + Request button */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <CalendarRange size={14} className="text-teal-300 shrink-0" aria-hidden="true" />
+          <CalendarRange size={14} className="text-purple-300 shrink-0" aria-hidden="true" />
           <span className="text-[11px] text-text-light truncate">{headerLabel}</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -269,7 +269,7 @@ function ScheduleChip({
         'flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px]',
         isPending
           ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
-          : 'border-teal-500/30 bg-teal-500/10 text-teal-100',
+          : 'border-purple-500/25 bg-purple-500/10 text-purple-100',
       ].join(' ')}
     >
       <ClockIcon size={10} className="opacity-70 shrink-0" aria-hidden="true" />
