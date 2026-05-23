@@ -139,7 +139,7 @@ export default function ProfileWeeklySchedule({ memberId }: ProfileWeeklySchedul
                   return (
                     <div
                       key={b.id}
-                      className="flex items-center gap-2 px-3 py-2 rounded-md border border-teal-500/25 bg-teal-500/5"
+                      className="flex items-center gap-2 px-3 py-2 rounded-md border border-purple-500/25 bg-purple-500/10"
                     >
                       <span className="text-[12px] font-semibold text-text">
                         {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
