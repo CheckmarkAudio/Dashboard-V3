@@ -48,6 +48,7 @@ import MyScheduleWidget from './MyScheduleWidget'
 import AdminTemplatesWidget from '../admin/templates/AdminTemplatesWidget'
 import AdminEditTasksWidget from '../admin/tasks/AdminEditTasksWidget'
 import AdminClockInWidget from '../admin/AdminClockInWidget'
+import AdminEmployeeScheduleWidget from '../admin/AdminEmployeeScheduleWidget'
 
 // ═════════════════════════════════════════════════════════════════════
 // Component maps — ONE per side.
@@ -110,6 +111,9 @@ const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
   // separate id keeps the disjoint MemberWidgetId / AdminWidgetId
   // invariant intact.
   admin_today_calendar: TodayCalendarWidget,
+  // 2026-05-23 — Member Work Scheduler PR 6. Anchors col 2 of the
+  // Hub between Approvals (col 1) and Notifications (col 3).
+  admin_employee_schedule: AdminEmployeeScheduleWidget,
   team_focus: TeamFocusWidget,
   approval_queue: ApprovalQueueWidget,
   admin_schedule: AdminScheduleWidget,

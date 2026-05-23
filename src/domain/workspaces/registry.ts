@@ -261,12 +261,33 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     // Lean 7 (PR #78) — admin Hub mirror of the member-side
     // today_calendar. Same CalendarDayCard component; separate id
     // because the disjoint MemberWidgetId / AdminWidgetId invariant
-    // is enforced at the type level. Centered in col 2 at rs2 so it
-    // anchors the Hub between Task Requests (col 1) and Notifications
-    // (col 3).
+    // is enforced at the type level.
+    //
+    // 2026-05-23 (PR 6 of scheduler) — placement on admin_overview
+    // DROPPED to free col 2 for the new admin_employee_schedule
+    // widget per user direction ("Widget Order: Approvals, Employee
+    // Schedule, Notifications"). Kept registered with NO placement
+    // so saved layouts sanitize away cleanly via the LAYOUT_VERSION
+    // bump and admins can re-add via Workspace Controls if they
+    // miss the day-detail view on the Hub.
     id: 'admin_today_calendar',
     title: 'Today',
     description: "Today's bookings at a glance.",
+    defaultPlacements: [],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
+    // 2026-05-23 — Member Work Scheduler PR 6. Anchors col 2 of the
+    // Hub between Approvals (col 1) and Notifications (col 3) per
+    // user-locked order: "Widget Order: Approvals, Employee Schedule,
+    // Notifications." rs=2 matches the columns either side so the
+    // three read as a flush triptych. Edit button inside the widget
+    // body deep-links to /admin/team → Work Scheduler.
+    id: 'admin_employee_schedule',
+    title: 'Employee Schedule',
+    description: "Who's working this week. Click Edit to manage.",
     defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 2, col: 2 }],
     accessVisibility: 'admin',
     dataScope: 'team',
@@ -622,7 +643,13 @@ function buildDefaultWidgetStateForScope(
 // to member_overview as a new widget. Bumping the version drops
 // every saved member overview layout so the new widget appears for
 // every user; they can drag/hide via Workspace Controls.
-export const WORKSPACE_LAYOUT_VERSION = 37
+// 2026-05-23 (v38) — Member Work Scheduler PR 6: admin Hub gets
+// `admin_employee_schedule` at col 2 (rs2); `admin_today_calendar`
+// loses its admin_overview placement and moves to the bank. Bumping
+// the version drops saved admin_overview layouts so the new widget
+// appears for every admin and the Today widget cleanly sanitizes
+// away (admins can re-add it via Workspace Controls if missed).
+export const WORKSPACE_LAYOUT_VERSION = 38
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
