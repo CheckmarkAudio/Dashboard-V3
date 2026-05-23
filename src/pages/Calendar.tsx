@@ -344,15 +344,14 @@ export default function Calendar() {
   }, [teamMembers])
 
   // 2026-05-23 — per-member filter pills at the top of the page.
-  // Empty set = show all members (the default — preserves existing
-  // behavior). Otherwise narrows the schedule overlay to just the
-  // selected members. Bookings stay unfiltered: booking blocks have
-  // their own assignment dimension (client + studio) which the
-  // member-pill filter doesn't speak to. Per user: "I LOVE the
-  // schedule filter on calendar. Lets make a filter toggle for each
-  // member to see everyones hours separately."
-  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
-  const memberFilterActive = selectedMemberIds.size > 0
+  // Single-select model: null = show all members (the default —
+  // preserves existing behavior), one id = show only that member's
+  // hours. Bookings stay unfiltered: they belong to clients, not
+  // staff. Clicking the active member's pill toggles back to All.
+  // User direction: "lets make the filter a toggle instead of
+  // selecting multiple at once for the calendar filter."
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
+  const memberFilterActive = selectedMemberId !== null
 
   // Sort active members alphabetically for the pill row. Inactive
   // members are dropped — they shouldn't show as filter targets.
@@ -364,21 +363,18 @@ export default function Calendar() {
     [teamMembers],
   )
 
-  function toggleMemberFilter(memberId: string) {
-    setSelectedMemberIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(memberId)) next.delete(memberId)
-      else next.add(memberId)
-      return next
-    })
+  function selectMember(memberId: string) {
+    // Click the active member's pill → toggle back to All. Click any
+    // other member → switch to just that one.
+    setSelectedMemberId((prev) => (prev === memberId ? null : memberId))
   }
 
   // Apply the member filter before bucketing by date so the cell-
   // render math works against the already-narrowed set.
   const filteredScheduleExpanded = useMemo(() => {
     if (!memberFilterActive) return scheduleExpanded
-    return scheduleExpanded.filter((s) => selectedMemberIds.has(s.member_id))
-  }, [scheduleExpanded, selectedMemberIds, memberFilterActive])
+    return scheduleExpanded.filter((s) => s.member_id === selectedMemberId)
+  }, [scheduleExpanded, selectedMemberId, memberFilterActive])
 
   // Bucket schedule entries by local date string (YYYY-MM-DD) so the
   // week-grid render can pull each day's list inline without re-
@@ -613,7 +609,7 @@ export default function Calendar() {
           </span>
           <button
             type="button"
-            onClick={() => setSelectedMemberIds(new Set())}
+            onClick={() => setSelectedMemberId(null)}
             aria-pressed={!memberFilterActive}
             title="Show every member's schedule"
             className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold border transition-colors ${
@@ -626,14 +622,14 @@ export default function Calendar() {
             <span className="opacity-70">{memberPillRow.length}</span>
           </button>
           {memberPillRow.map((m) => {
-            const isOn = selectedMemberIds.has(m.id)
+            const isOn = selectedMemberId === m.id
             return (
               <button
                 key={m.id}
                 type="button"
-                onClick={() => toggleMemberFilter(m.id)}
+                onClick={() => selectMember(m.id)}
                 aria-pressed={isOn}
-                title={isOn ? `Hide ${m.display_name}` : `Only show ${m.display_name}`}
+                title={isOn ? `Back to all members` : `Show only ${m.display_name}`}
                 className={`inline-flex items-center gap-1.5 h-7 pl-0.5 pr-2.5 rounded-full text-[11px] font-semibold border transition-all ${
                   isOn
                     ? 'bg-purple-700/15 text-purple-100 border-purple-500/40 ring-1 ring-purple-500/20'
