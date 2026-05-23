@@ -1,22 +1,19 @@
 import { useCallback, useRef, useState } from 'react'
 import { Image as ImageIcon, Link2, Loader2, Music, Plus, Video, X } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
 import { useToast } from '../Toast'
 import {
-  buildForumMediaPath,
   FORUM_AUDIO_ACCEPT,
-  FORUM_AUDIO_MIME,
   FORUM_IMAGE_ACCEPT,
-  FORUM_IMAGE_MIME,
-  FORUM_MAX_BYTES,
-  FORUM_MEDIA_BUCKET,
   FORUM_VIDEO_ACCEPT,
-  FORUM_VIDEO_MIME,
   type ChatAttachment,
 } from '../../lib/forum/attachments'
+import { uploadForumFile } from '../../lib/forum/upload'
 // 2026-05-20 (b) — `detectLinkEmbed` + `unfurlLink` imports removed
 // alongside the +Link picker option. Both are still imported by
 // Content.tsx for the auto-unfurl-on-send path.
+// 2026-05-21 (PR B) — upload helper extracted to ../../lib/forum/upload
+// so drag-anywhere + paste handlers in Content.tsx share the same
+// MIME-check + size-check + Supabase Storage code path.
 
 /**
  * Media picker for the forum message input.
@@ -66,76 +63,26 @@ export default function MediaPicker({
     setOpen(false)
   }, [])
 
-  const upload = useCallback(
-    async (file: File, kind: 'image' | 'video' | 'audio') => {
-      // 2026-05-20 — accept anything whose MIME starts with the
-      // matching family prefix (image/*, video/*, audio/*) OR is in
-      // the explicit allow-list. Some browsers (especially older
-      // Windows) report .mp3 as `audio/mp3` instead of `audio/mpeg`;
-      // some don't report a type at all. The explicit allow-list
-      // catches the named variants; the prefix check is the safety
-      // net so we don't reject files the user is clearly trying to
-      // attach. Server-side bucket allow-list still applies as the
-      // real gate.
-      const allowedMime =
-        kind === 'image' ? FORUM_IMAGE_MIME :
-        kind === 'video' ? FORUM_VIDEO_MIME :
-        FORUM_AUDIO_MIME
-      const familyPrefix = `${kind}/`
-      const matches =
-        allowedMime.includes(file.type) ||
-        (file.type !== '' && file.type.startsWith(familyPrefix))
-      if (!matches) {
-        toast(
-          kind === 'image'
-            ? 'That doesn\'t look like an image. Try a JPEG, PNG, WEBP, or GIF.'
-            : kind === 'video'
-              ? 'That doesn\'t look like a video. Try MP4, WEBM, or MOV.'
-              : 'That doesn\'t look like an audio file. Try MP3, WAV, M4A, AAC, OGG, or FLAC.',
-          'error',
-        )
-        return
-      }
-      if (file.size > FORUM_MAX_BYTES) {
-        toast(
-          kind === 'video'
-            ? 'Video is larger than 50 MB. Try compressing it, or paste a Loom/YouTube link instead.'
-            : kind === 'audio'
-              ? 'Audio is larger than 50 MB. Try a shorter clip or lower bitrate.'
-              : 'File is larger than 50 MB.',
-          'error',
-        )
-        return
-      }
+  // 2026-05-21 (PR B) — runs N files through the shared upload util
+  // in parallel. Each successful upload appends to pendingAttachments
+  // independently via onAdd, so a fast image lands before a slow
+  // video — feels snappy for mixed selections.
+  const uploadMany = useCallback(
+    async (files: File[], kind: 'image' | 'video' | 'audio') => {
+      if (files.length === 0) return
       setUploading(kind)
       try {
-        const path = buildForumMediaPath({
-          kind: kind === 'image' ? 'images' : kind === 'video' ? 'videos' : 'audio',
-          channelId,
-          userId,
-          filename: file.name,
-        })
-        const { error: uploadErr } = await supabase.storage
-          .from(FORUM_MEDIA_BUCKET)
-          .upload(path, file, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: file.type,
-          })
-        if (uploadErr) throw uploadErr
-        const { data: urlData } = supabase.storage
-          .from(FORUM_MEDIA_BUCKET)
-          .getPublicUrl(path)
-        onAdd({
-          kind,
-          url: urlData.publicUrl,
-          name: file.name,
-          mime: file.type,
-          size: file.size,
-        })
+        await Promise.all(
+          files.map(async (file) => {
+            try {
+              const attachment = await uploadForumFile({ file, kind, channelId, userId })
+              onAdd(attachment)
+            } catch (err) {
+              toast(err instanceof Error ? err.message : 'Upload failed', 'error')
+            }
+          }),
+        )
         closePopover()
-      } catch (err) {
-        toast(err instanceof Error ? err.message : 'Upload failed', 'error')
       } finally {
         setUploading(null)
       }
@@ -144,19 +91,19 @@ export default function MediaPicker({
   )
 
   const onImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const files = Array.from(e.target.files ?? [])
     e.target.value = '' // reset so picking the same file twice fires onChange
-    if (file) void upload(file, 'image')
+    if (files.length > 0) void uploadMany(files, 'image')
   }
   const onVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const files = Array.from(e.target.files ?? [])
     e.target.value = ''
-    if (file) void upload(file, 'video')
+    if (files.length > 0) void uploadMany(files, 'video')
   }
   const onAudioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const files = Array.from(e.target.files ?? [])
     e.target.value = ''
-    if (file) void upload(file, 'audio')
+    if (files.length > 0) void uploadMany(files, 'audio')
   }
 
   // 2026-05-20 (b) — `submitLink` removed. The +Link picker option
@@ -243,10 +190,14 @@ export default function MediaPicker({
             recipe (FORUM_*_ACCEPT constants) instead of the MIME-
             only join. macOS Finder was greying out users' MP3s
             because its MIME database doesn't always tag .mp3 as
-            `audio/mpeg`; the wildcard fixes that universally. */}
+            `audio/mpeg`; the wildcard fixes that universally.
+            2026-05-21 — `multiple` so one pick = N files in
+            parallel uploads. Matches Discord's "drop a folder of
+            screenshots" flow. */}
         <input
           ref={imageInputRef}
           type="file"
+          multiple
           accept={FORUM_IMAGE_ACCEPT}
           onChange={onImageChange}
           className="sr-only"
@@ -256,6 +207,7 @@ export default function MediaPicker({
         <input
           ref={videoInputRef}
           type="file"
+          multiple
           accept={FORUM_VIDEO_ACCEPT}
           onChange={onVideoChange}
           className="sr-only"
@@ -265,6 +217,7 @@ export default function MediaPicker({
         <input
           ref={audioInputRef}
           type="file"
+          multiple
           accept={FORUM_AUDIO_ACCEPT}
           onChange={onAudioChange}
           className="sr-only"
@@ -326,17 +279,34 @@ function PendingChip({
         ? `${attachment.url.slice(0, 28)}…`
         : attachment.url
       : attachment.name ?? attachment.kind
-  return (
-    <span className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-full bg-surface-alt border border-border text-text text-[11px]">
-      {attachment.kind === 'image' ? (
+  // 2026-05-21 (PR B) — Image attachments render as a square thumb
+  // tile (Discord-style) so the user actually sees what they're
+  // sending, not a generic filename chip. Non-image kinds keep the
+  // pill chip form.
+  if (attachment.kind === 'image') {
+    return (
+      <span className="group/chip relative inline-block">
         <img
           src={attachment.url}
           alt=""
-          className="w-5 h-5 rounded-full object-cover"
+          className="w-16 h-16 rounded-lg object-cover ring-1 ring-border"
         />
-      ) : (
-        <Icon size={12} className="text-text-muted" aria-hidden="true" />
-      )}
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove image"
+          title={attachment.name ?? attachment.url}
+          className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface text-text-muted hover:text-rose-300 ring-1 ring-border shadow opacity-0 group-hover/chip:opacity-100 focus-visible:opacity-100 transition-opacity focus-ring"
+        >
+          <X size={11} aria-hidden="true" />
+        </button>
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-full bg-surface-alt border border-border text-text text-[11px]">
+      <Icon size={12} className="text-text-muted" aria-hidden="true" />
       <span className="truncate max-w-[180px]" title={attachment.name ?? attachment.url}>
         {label}
       </span>
