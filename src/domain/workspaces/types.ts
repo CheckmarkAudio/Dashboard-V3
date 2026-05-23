@@ -167,6 +167,13 @@ export type AdminWidgetId =
   // CalendarDayCard component as the member widget; separate id so
   // the disjoint MemberWidgetId / AdminWidgetId invariant holds.
   | 'admin_today_calendar'
+  // 2026-05-23 — Member Work Scheduler PR 6. Admin Hub widget that
+  // surfaces the week's scheduled employees as a 7-day digest with
+  // an "Edit schedule" button that opens Members → Work Scheduler.
+  // Per user direction this slots at the FRONT of the Hub carousel
+  // (Hub order: Approvals · Employee Schedule · Notifications) so
+  // admins glance at staffing alongside the approval queue.
+  | 'admin_employee_schedule'
   // Admin-side widget bank — registered but not on the page yet.
   | 'team_focus'
   | 'approval_queue'
