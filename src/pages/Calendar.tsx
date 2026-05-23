@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import CreateBookingModal from '../components/CreateBookingModal'
 import CalendarDayCard from '../components/calendar/CalendarDayCard'
@@ -9,7 +10,9 @@ import { useToast } from '../components/Toast'
 import { loadWeekEvents } from '../lib/calendar'
 import { addDays, startOfWeek } from '../lib/time'
 import { localDateKey } from '../lib/dates'
-import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2 } from 'lucide-react'
+import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
+import { useTeamSchedule } from '../lib/schedule/useTeamSchedule'
+import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2, CalendarRange, EyeOff } from 'lucide-react'
 
 /**
  * Calendar-friendly booking row. Flattened from the real `sessions`
@@ -284,6 +287,62 @@ export default function Calendar() {
     return map
   }, [bookings])
 
+  // ─── Scheduler overlay (PR 2 of scheduler series) ────────────────
+  // Fetches every team member's recurring + one-off (approved) blocks
+  // for the visible week and renders them as translucent sage/teal
+  // panels behind the booking blocks. Pure read-only layer — clicks
+  // pass through to the booking blocks / +Book affordance underneath.
+  // Per user: schedule color should "look different than bookings and
+  // more translucent" so the warm-gold booking blocks stay the eye's
+  // primary focus.
+  const scheduleRange = useMemo(() => {
+    // WEEK[0] is Monday of the viewed week; reuse the same date keys
+    // the week-grid renders so block placement stays in sync.
+    const from = WEEK[0]?.key ?? localDateKey()
+    const to = WEEK[6]?.key ?? from
+    return { from, to }
+  }, [WEEK])
+
+  // includePending=false — pending member proposals don't render on
+  // the team-wide calendar; they wait for admin approval. Approved
+  // blocks and recurring rules flow through normally.
+  const { expanded: scheduleExpanded } = useTeamSchedule({
+    range: scheduleRange,
+    includePending: false,
+  })
+
+  // Member name map for tooltips. Cached at the page level — every
+  // booking / schedule block reuses one cache entry.
+  const { data: teamMembers = [] } = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+    staleTime: 60_000,
+  })
+  const memberNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    teamMembers.forEach((m) => map.set(m.id, m.display_name || 'Member'))
+    return map
+  }, [teamMembers])
+
+  // Bucket schedule entries by local date string (YYYY-MM-DD) so the
+  // week-grid render can pull each day's list inline without re-
+  // scanning the full array per cell.
+  const schedulesByDate = useMemo(() => {
+    const map: Record<string, typeof scheduleExpanded> = {}
+    for (const s of scheduleExpanded) {
+      const dayKey = localDateKey(new Date(s.starts_at))
+      const group = map[dayKey] ?? []
+      group.push(s)
+      map[dayKey] = group
+    }
+    return map
+  }, [scheduleExpanded])
+
+  // Visibility toggle. Defaults ON so admins/members immediately see
+  // who's scheduled when. Off-state hides the layer entirely (zero
+  // DOM cost beyond the fetch).
+  const [showSchedule, setShowSchedule] = useState(true)
+
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
       {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime(''); void refetch() }} prefillDate={bookingPrefillDate} prefillTime={bookingPrefillTime} />}
@@ -391,6 +450,28 @@ export default function Calendar() {
           )}
         </div>
         <div className="flex items-center gap-2 text-text-muted">
+          {/* 2026-05-23 — Schedule layer toggle. Defaults to ON so the
+              sage/teal staffing layer is visible immediately; click
+              hides it for an unobstructed booking-only view. Counts
+              suffix reflects what's about to render so the toggle
+              tells the truth about what flipping it on will reveal. */}
+          <button
+            type="button"
+            onClick={() => setShowSchedule((v) => !v)}
+            aria-pressed={showSchedule}
+            title={showSchedule ? 'Hide team schedule layer' : 'Show team schedule layer'}
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors border ${
+              showSchedule
+                ? 'bg-purple-700/15 text-purple-200 border-purple-500/25 hover:bg-purple-700/20'
+                : 'bg-surface-alt text-text-muted border-border hover:text-text'
+            }`}
+          >
+            {showSchedule ? <CalendarRange size={12} aria-hidden="true" /> : <EyeOff size={12} aria-hidden="true" />}
+            <span>Schedule</span>
+            {scheduleExpanded.length > 0 && (
+              <span className="opacity-70">{scheduleExpanded.length}</span>
+            )}
+          </button>
           <button onClick={() => { if (weekOffset > -1) setWeekOffset(weekOffset - 1) }} className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset <= -1 ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronLeft size={16} /></button>
           <button onClick={() => setWeekOffset(0)} className="text-xs font-semibold text-gold hover:underline">{weekLabel}</button>
           <button onClick={() => { if (weekOffset < 3) setWeekOffset(weekOffset + 1) }} className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset >= 3 ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronRight size={16} /></button>
@@ -465,6 +546,75 @@ export default function Calendar() {
                     })}
                   </div>
                 ))}
+
+                {/* 2026-05-23 — Schedule overlay (PR 2). Translucent
+                    sage/teal blocks for each (member × day) scheduled
+                    window. Uses the same lane positioning as bookings
+                    so multiple staffed members on the same day fan
+                    out side-by-side. z-0 + pointer-events-none so it
+                    sits below booking blocks (z-30) AND below the
+                    +Book hover affordance (z-10) — clicks pass
+                    straight through. Hidden when the Schedule toggle
+                    is off. Out-of-grid hours (before 7am / after 7pm)
+                    get clipped via overflow on the wrapper. */}
+                {showSchedule && WEEK.map((wd, dayIndex) => {
+                  const daySchedules = schedulesByDate[wd.key] ?? []
+                  if (daySchedules.length === 0) return null
+                  // Convert each ExpandedSchedule to the {startTime, endTime}
+                  // shape assignBookingLanes expects (HH:MM strings in
+                  // local time).
+                  const asEvents = daySchedules.map((s) => {
+                    const start = new Date(s.starts_at)
+                    const end = new Date(s.ends_at)
+                    return {
+                      key: s.key,
+                      memberId: s.member_id,
+                      note: s.note,
+                      source: s.source,
+                      startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
+                      endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
+                    }
+                  })
+                  const laned = assignBookingLanes(asEvents)
+                  return laned.map(({ booking: ev, lane, groupSize }) => {
+                    const startMin = timeToMinutes(ev.startTime)
+                    const endMin = timeToMinutes(ev.endTime)
+                    const gridStart = 7 * 60
+                    const gridEnd = 20 * 60 // 7am to 8pm visible (HOURS goes 7–19, last row ends at 20)
+                    // Clip to visible grid so an overnight rule
+                    // doesn't paint outside the time grid.
+                    const visStart = Math.max(startMin, gridStart)
+                    const visEnd = Math.min(endMin, gridEnd)
+                    if (visEnd <= visStart) return null
+                    const topPx = ((visStart - gridStart) / 60) * 48
+                    const heightPx = ((visEnd - visStart) / 60) * 48
+                    const colWidth = `((100% - 36px) / 7)`
+                    const colLeft = `(36px + ${colWidth} * ${dayIndex})`
+                    const laneWidth = `(${colWidth} / ${groupSize})`
+                    const laneLeft = `(${colLeft} + ${laneWidth} * ${lane})`
+                    const memberName = memberNameById.get(ev.memberId) ?? 'Member'
+                    return (
+                      <div
+                        key={ev.key}
+                        aria-hidden="true"
+                        title={`${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`}
+                        className="absolute pointer-events-none rounded-md border bg-purple-700/10 border-purple-500/20 overflow-hidden z-0"
+                        style={{
+                          top: topPx + 1,
+                          height: Math.max(heightPx - 2, 16),
+                          left: `calc(${laneLeft} + 1px)`,
+                          width: `calc(${laneWidth} - 2px)`,
+                        }}
+                      >
+                        {heightPx > 22 && (
+                          <p className="text-[8px] text-purple-200/80 px-1 truncate leading-tight pt-0.5">
+                            {memberName}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })
+                })}
 
                 {/* Booking blocks — positioned within each day column
                     via overlap-aware lane math (PR E). Bookings that
