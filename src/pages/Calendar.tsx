@@ -462,7 +462,7 @@ export default function Calendar() {
             title={showSchedule ? 'Hide team schedule layer' : 'Show team schedule layer'}
             className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors border ${
               showSchedule
-                ? 'bg-teal-500/15 text-teal-200 border-teal-500/30 hover:bg-teal-500/20'
+                ? 'bg-purple-500/15 text-purple-200 border-purple-500/30 hover:bg-purple-500/20'
                 : 'bg-surface-alt text-text-muted border-border hover:text-text'
             }`}
           >
@@ -598,7 +598,7 @@ export default function Calendar() {
                         key={ev.key}
                         aria-hidden="true"
                         title={`${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`}
-                        className="absolute pointer-events-none rounded-md border bg-teal-500/15 border-teal-500/30 overflow-hidden z-0"
+                        className="absolute pointer-events-none rounded-md border bg-purple-500/15 border-purple-500/25 overflow-hidden z-0"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 16),
@@ -607,7 +607,7 @@ export default function Calendar() {
                         }}
                       >
                         {heightPx > 22 && (
-                          <p className="text-[8px] text-teal-200/80 px-1 truncate leading-tight pt-0.5">
+                          <p className="text-[8px] text-purple-200/80 px-1 truncate leading-tight pt-0.5">
                             {memberName}
                           </p>
                         )}
