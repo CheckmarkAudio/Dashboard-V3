@@ -861,17 +861,17 @@ function SortableAssignedTaskRow({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id })
-  // 2026-05-23 — drag UX polish (per user request):
-  //   - Row lifts on hover (translate-y + soft shadow)
-  //   - cursor-grab tells the user it's draggable BEFORE they press
-  //   - On press-and-drag, dnd-kit's PointerSensor (5px activation
-  //     threshold, configured in MyTasksCard sensors) triggers the
-  //     drag — at which point we apply a heavier lift (scale + shadow)
-  //     and switch to grabbing cursor.
-  // The explicit GripVertical handle is gone — listeners attach to
-  // the whole row container instead, since the 5px threshold means
-  // taps on the checkbox / Edit / Delete affordances inside the row
-  // don't accidentally initiate a drag.
+  // 2026-05-23 (rev) — drag listeners now attach to a DEDICATED handle
+  // button on the right of each row (passed down via `dragHandleProps`)
+  // instead of the whole row container. Earlier whole-row-draggable
+  // pattern was causing accidental drags + click conflicts with the
+  // body's modal-open onClick. The 5px PointerSensor threshold helped
+  // but didn't eliminate the friction.
+  //
+  // The wrapper div keeps the hover-lift visual (CSS-only — no drag
+  // intent) and the active-drag scale/shadow (driven by useSortable's
+  // isDragging, independent of where the listeners live). Cursor on
+  // the wrapper stays default; only the handle button gets cursor-grab.
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -889,9 +889,7 @@ function SortableAssignedTaskRow({
         </div>
       )}
       <div
-        {...attributes}
-        {...listeners}
-        className={`rounded-md transition-all duration-150 ease-out cursor-grab active:cursor-grabbing ${
+        className={`rounded-md transition-all duration-150 ease-out ${
           isDragging
             ? 'scale-[1.02] shadow-2xl ring-1 ring-gold/30 bg-surface'
             : 'hover:-translate-y-[1px] hover:shadow-md'
@@ -908,6 +906,22 @@ function SortableAssignedTaskRow({
           onRequestDelete={onRequestDelete}
           rowRef={rowRef}
           memberMap={memberMap}
+          dragHandle={
+            <button
+              type="button"
+              {...attributes}
+              {...listeners}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Drag to reorder ${task.title}`}
+              title="Drag to reorder"
+              className="shrink-0 inline-flex flex-col items-center justify-center gap-[3px] w-5 h-6 rounded text-text-light/50 hover:text-text-muted hover:bg-surface-hover cursor-grab active:cursor-grabbing transition-colors focus-ring"
+            >
+              {/* Two stacked horizontal lines — classic reorder handle.
+                  Per user: "two lines to visually show it". */}
+              <span className="block w-3 h-[1.5px] rounded-full bg-current" aria-hidden="true" />
+              <span className="block w-3 h-[1.5px] rounded-full bg-current" aria-hidden="true" />
+            </button>
+          }
         />
       </div>
     </div>
@@ -925,6 +939,7 @@ function AssignedTaskRow({
   onRequestDelete,
   rowRef,
   memberMap,
+  dragHandle,
 }: {
   task: AssignedTask
   highlighted: boolean
@@ -946,6 +961,12 @@ function AssignedTaskRow({
   onRequestDelete?: (task: AssignedTask) => void
   rowRef: (node: HTMLDivElement | null) => void
   memberMap: Map<string, TeamMember>
+  // 2026-05-23 — dedicated drag handle injected by the Sortable
+  // wrapper. Rendered on the far right of the row so the row body
+  // stays a clean click target for the modal-open flow. Only the
+  // SortableAssignedTaskRow provides this; PendingAssignedTaskRow
+  // and the pending list omit it (those rows aren't reorderable).
+  dragHandle?: React.ReactNode
 }) {
   const done = task.is_completed
   // Checkbox shows the pending-but-not-submitted state distinctly so
@@ -1173,12 +1194,12 @@ function AssignedTaskRow({
       </div>
 
       {/* Right column — due date + hover-revealed action buttons
-          (Edit + Delete). Action buttons only show when the row is
-          NOT in a pending state (pendingMeta rows already have their
-          own cancel-X affordance, doubling the controls would be
-          confusing). Both fire the parent handler, which routes to
-          TaskDetailModal in compose mode — modal already handles
-          member-request vs admin-direct dispatch. */}
+          (Edit + Delete) + (sortable rows only) drag handle.
+          Layout left→right: [Edit Delete (hover)] [Due date] [Grip].
+          Drag handle is always visible (per user — discoverability
+          over cleanliness) and is the ONLY surface bound to drag
+          listeners, so clicking the row body always opens the modal
+          cleanly without accidental drags. */}
       <div className="shrink-0 flex items-center gap-1 mt-[2px]">
         {!pendingMeta && (onRequestEdit || onRequestDelete) && (
           <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-0.5">
@@ -1220,6 +1241,7 @@ function AssignedTaskRow({
         >
           {dueLabel ?? '—'}
         </span>
+        {dragHandle}
       </div>
     </div>
   )
