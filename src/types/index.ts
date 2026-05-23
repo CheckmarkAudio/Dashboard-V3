@@ -317,3 +317,73 @@ export interface WeeklyAdminReview {
   team_id?: string
   created_at: string
 }
+
+// ─── Work Scheduler (PR 1) ──────────────────────────────────────────
+// Two-table model matching supabase/migrations/20260523120000.
+// Recurring weekly rules + one-off blocks. Member-proposed blocks
+// arrive with status='pending' and an admin approves/denies from
+// Members → Work Scheduler.
+
+/**
+ * 0 = Sunday, 1 = Monday, …, 6 = Saturday. Matches Postgres
+ * EXTRACT(DOW) + JS Date.getDay() so date math is portable.
+ * Studio default work week is Tue (2) – Sat (6).
+ */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
+
+/** Studio's default work-week weekdays (Tue → Sat). */
+export const STUDIO_WORK_WEEK: readonly Weekday[] = [2, 3, 4, 5, 6] as const
+
+export interface ScheduleRecurring {
+  id: string
+  member_id: string
+  weekday: Weekday
+  /** Wall-clock time "HH:MM:SS" in studio timezone. */
+  start_time: string
+  end_time: string
+  /** Inclusive YYYY-MM-DD window; nulls = no bound. */
+  effective_from: string | null
+  effective_until: string | null
+  active: boolean
+  note: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ScheduleBlockStatus = 'pending' | 'approved' | 'denied'
+
+export interface ScheduleBlock {
+  id: string
+  member_id: string
+  /** ISO timestamptz. */
+  starts_at: string
+  ends_at: string
+  status: ScheduleBlockStatus
+  note: string | null
+  requested_by: string | null
+  approved_by: string | null
+  reviewed_at: string | null
+  reviewer_note: string | null
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Flattened schedule entry for rendering on calendar grids /
+ * widgets. Recurring rules get expanded into one ExpandedSchedule
+ * per (rule, day in range) — `source` discriminates so callers
+ * route edits to the right table.
+ */
+export interface ExpandedSchedule {
+  /** Stable React key per (source, source_id, date). */
+  key: string
+  member_id: string
+  /** ISO timestamptz in browser local; render with toLocaleTimeString. */
+  starts_at: string
+  ends_at: string
+  source: 'recurring' | 'block'
+  source_id: string
+  status: ScheduleBlockStatus
+  note: string | null
+}
