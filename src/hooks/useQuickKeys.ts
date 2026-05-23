@@ -17,22 +17,36 @@ export type QuickKeyAction = {
   defaultKey: string
 }
 
+// 2026-05-23 — quick keys renumbered to digits + added Media. Per
+// user direction: "add media into quick keys and make the standard
+// for quick keys to be ordered by number starting with overview = 1."
+// Order matches the top-nav so the digit on the keyboard maps 1:1
+// to the tab's position you see across the top of the app.
+//
+// Numbering wraps after 9: position 10 = `0` (the conventional
+// "tenth" key), position 11 = `-` (the next key over). Anyone can
+// rebind in Settings → Quick Keys if they prefer letters.
 export const QUICK_KEY_ACTIONS: QuickKeyAction[] = [
-  { id: 'overview',     label: 'Open Overview tab',      path: '/',                defaultKey: 'a' },
-  { id: 'tasks',        label: 'Open Tasks tab',         path: '/daily',           defaultKey: 's' },
-  { id: 'calendar',     label: 'Open Calendar tab',      path: '/calendar',        defaultKey: 'd' },
-  { id: 'booking',      label: 'Open Booking Agent tab', path: '/sessions',        defaultKey: 'f' },
-  { id: 'forum',        label: 'Open Forum tab',         path: '/content',         defaultKey: 'j' },
-  { id: 'team-hub',     label: 'Open Team Hub tab',      path: '/admin',           defaultKey: 'k' },
-  { id: 'assign-tasks', label: 'Open Assign Tasks tab',  path: '/admin/templates', defaultKey: 'l' },
-  { id: 'members',      label: 'Open Members tab',       path: '/admin/my-team',   defaultKey: ';' },
-  { id: 'analytics',    label: 'Open Analytics tab',     path: '/admin/health',    defaultKey: "'" },
-  { id: 'settings',     label: 'Open Settings tab',      path: '/admin/settings',  defaultKey: ',' },
+  { id: 'overview',     label: 'Open Overview tab',      path: '/',                defaultKey: '1' },
+  { id: 'tasks',        label: 'Open Tasks tab',         path: '/daily',           defaultKey: '2' },
+  { id: 'calendar',     label: 'Open Calendar tab',      path: '/calendar',        defaultKey: '3' },
+  { id: 'booking',      label: 'Open Booking Agent tab', path: '/sessions',        defaultKey: '4' },
+  { id: 'forum',        label: 'Open Forum tab',         path: '/content',         defaultKey: '5' },
+  { id: 'media',        label: 'Open Media tab',         path: '/add-media',       defaultKey: '6' },
+  { id: 'team-hub',     label: 'Open Team Hub tab',      path: '/admin',           defaultKey: '7' },
+  { id: 'assign-tasks', label: 'Open Assign Tasks tab',  path: '/admin/templates', defaultKey: '8' },
+  { id: 'members',      label: 'Open Members tab',       path: '/admin/my-team',   defaultKey: '9' },
+  { id: 'analytics',    label: 'Open Analytics tab',     path: '/admin/health',    defaultKey: '0' },
+  { id: 'settings',     label: 'Open Settings tab',      path: '/admin/settings',  defaultKey: '-' },
 ]
 
 export type QuickKeyBindings = Record<string, string>
 
-const STORAGE_KEY = 'checkmark.quickKeys.v1'
+// 2026-05-23 — bumped v1 → v2 so saved bindings (the old A/S/D/F/J/K/L
+// home-row set + missing Media) reset to the new number defaults for
+// every user. Anyone who customized their bindings will lose them
+// once but can re-set via Settings → Quick Keys.
+const STORAGE_KEY = 'checkmark.quickKeys.v2'
 
 function makeDefaults(): QuickKeyBindings {
   const out: QuickKeyBindings = {}
