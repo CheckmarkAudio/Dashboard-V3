@@ -388,6 +388,26 @@
 :root[data-theme='light'] .text-fuchsia-300 { color: #a21caf; } /* fuchsia-700 */
 :root[data-theme='light'] .text-fuchsia-400 { color: #a21caf; }
 
+/* Purple — 2026-05-23 — Member Work Scheduler layer (PR 228/229/230).
+   Schedule blocks render with `bg-purple-700/10` + light purple text
+   in dark mode, which vanishes in light mode (light purple text on
+   light bg = no contrast). Per user: "you cannot see the font at all,
+   we will need the font to be black in light mode... light mode
+   however it probably should be less translucent, maybe that one you
+   can do 15% purple."
+
+   Fix: force schedule-block text to near-black in light mode and bump
+   the fill opacity 10% → 15% so the layer reads as a defined surface
+   instead of disappearing. Border opacity stays /20 — already visible
+   enough against the bright bg. */
+:root[data-theme='light'] .text-purple-100,
+:root[data-theme='light'] .text-purple-200,
+:root[data-theme='light'] .text-purple-200\/80 { color: #1e1b4b; } /* near-black, indigo-950 */
+:root[data-theme='light'] .text-purple-300     { color: #581c87; } /* purple-900 — icon glyphs */
+:root[data-theme='light'] .bg-purple-700\/10   { background-color: rgb(126 34 206 / 0.15); }
+:root[data-theme='light'] .bg-purple-700\/15   { background-color: rgb(126 34 206 / 0.20); }
+:root[data-theme='light'] .bg-purple-700\/20   { background-color: rgb(126 34 206 / 0.25); }
+
 /* Light-mode revamp 2026-05-04 — close the contrast gaps that the
    rev17 overrides missed: opacity-modified accent classes, missing
    shade tiers (-100/-500/-600), and the new orange family.
