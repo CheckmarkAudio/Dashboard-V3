@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
   Loader2,
   StickyNote,
+  Users,
   X,
 } from 'lucide-react'
 import { loadWeekEvents } from '../../lib/calendar'
 import { addDays, startOfWeek } from '../../lib/time'
 import { localDateKey } from '../../lib/dates'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTeamSchedule } from '../../lib/schedule/useTeamSchedule'
+import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import BookingDetailModal, { type BookingDetail } from './BookingDetailModal'
 import CreateBookingModal from '../CreateBookingModal'
 
@@ -336,6 +340,47 @@ export default function CalendarDayCard({
       .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
   }, [bookings, selectedDate])
 
+  // ─── Schedule shifts for the selected day (PR 5) ─────────────────
+  // Pull every approved schedule entry (recurring + one-off) for just
+  // this day across the whole team. Renders as compact purple chip
+  // rows above the booking list so admins/members see "who's on shift
+  // today" alongside "what's booked today" without leaving the widget.
+  // Member-side surfaces (Overview's today_calendar widget) get the
+  // same data — useful context even for members who aren't admins.
+  const scheduleRange = useMemo(
+    () => ({ from: selectedDate, to: selectedDate }),
+    [selectedDate],
+  )
+  const { expanded: scheduleExpanded } = useTeamSchedule({
+    range: scheduleRange,
+    includePending: false,
+  })
+
+  // Member name lookup for the shift chips. Cached at the page level —
+  // reuses the same react-query cache key as Calendar/Profile so the
+  // first fetch warms all surfaces.
+  const { data: scheduleMembers = [] } = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+    staleTime: 60_000,
+  })
+  const scheduleMemberNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    scheduleMembers.forEach((m) => map.set(m.id, m.display_name || 'Member'))
+    return map
+  }, [scheduleMembers])
+
+  // Sort shifts by start time, alphabetize ties by member name so the
+  // list stays stable.
+  const selectedShifts = useMemo(() => {
+    return [...scheduleExpanded].sort((a, b) => {
+      if (a.starts_at !== b.starts_at) return a.starts_at < b.starts_at ? -1 : 1
+      const an = scheduleMemberNameById.get(a.member_id) ?? ''
+      const bn = scheduleMemberNameById.get(b.member_id) ?? ''
+      return an.localeCompare(bn)
+    })
+  }, [scheduleExpanded, scheduleMemberNameById])
+
   const today = todayKey()
   const isToday = selectedDate === today
   const selectedDateObj = new Date(`${selectedDate}T12:00:00`)
@@ -431,12 +476,49 @@ export default function CalendarDayCard({
             <AlertCircle size={14} className="shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
-        ) : selectedBookings.length === 0 ? (
+        ) : selectedBookings.length === 0 && selectedShifts.length === 0 ? (
           <p className="text-[12px] text-text-light italic py-6 text-center">
-            No bookings this day
+            Nothing scheduled this day
           </p>
         ) : (
           <div className="space-y-0">
+            {/* 2026-05-23 — Scheduled shifts row (PR 5). Sits above the
+                booking list so "who's working today" reads first. Each
+                shift is a compact purple chip (Users icon — visually
+                distinct from the gold booking rows underneath). Only
+                renders when there's at least one shift on this day. */}
+            {selectedShifts.length > 0 && (
+              <div className="py-2 mb-1 border-b border-border-strong">
+                <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+                  <Users size={11} className="text-purple-300" aria-hidden="true" />
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-text-muted">
+                    On shift today
+                  </span>
+                  <span className="text-[10px] text-text-light ml-auto">
+                    {selectedShifts.length}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedShifts.map((s) => {
+                    const starts = new Date(s.starts_at)
+                    const ends = new Date(s.ends_at)
+                    const memberName = scheduleMemberNameById.get(s.member_id) ?? 'Member'
+                    const time = `${starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}–${ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                    return (
+                      <span
+                        key={s.key}
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-purple-500/20 bg-purple-700/10 text-[11px] text-purple-100"
+                        title={s.note ? `${memberName} · ${time} · ${s.note}` : `${memberName} · ${time}`}
+                      >
+                        <span className="font-semibold truncate max-w-[110px]">{memberName}</span>
+                        <span className="opacity-70">{time}</span>
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {selectedBookings.map((b) => {
               const bNotes = bookingNotes[b.id] ?? []
               const isOpen = expandedNotes.has(b.id)
