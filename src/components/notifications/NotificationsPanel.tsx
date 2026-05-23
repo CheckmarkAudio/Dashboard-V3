@@ -555,12 +555,18 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         #{c.channel_name}
                       </p>
                     </div>
-                    {hasMessage ? (
-                      <p className={`text-[12px] truncate mt-0.5 ${unread ? 'text-text' : 'text-text-light'}`}>
-                        <span className="font-medium">{c.latest_sender}:</span>{' '}
-                        <span className={unread ? 'text-text' : 'text-text-muted'}>{c.latest_content}</span>
-                      </p>
-                    ) : (
+                    {/* 2026-05-23 — collapsed row no longer shows the
+                        message preview text. Per user: at-a-glance
+                        should only carry the channel #, the inline
+                        icons (Reply + Open) on the left, and the
+                        timestamp on the right. The full most-recent
+                        message is revealed below in the expanded
+                        quick-reply panel so admins still get the
+                        context they need when actually responding —
+                        just not in the always-on collapsed view.
+                        Empty-state still shows so admins see which
+                        channels haven't gotten any traffic. */}
+                    {!hasMessage && (
                       <p className="text-[12px] text-text-light italic mt-0.5">No messages yet</p>
                     )}
                   </button>
@@ -594,11 +600,32 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                     dropdown opening so the expansion feels consistent. */}
                 {isExpanded && (
                   <div
-                    className="px-3 pb-3 pt-1 space-y-1.5"
+                    className="px-3 pb-3 pt-1 space-y-2"
                     style={{
                       animation: 'fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1)',
                     }}
                   >
+                    {/* 2026-05-23 — full most-recent message surfaces
+                        here when the row is expanded for quick-reply.
+                        Per user: "expand the forum notification for
+                        quick respond... to the full most recent
+                        message... so you can quick respond knowing
+                        the full message you are responding to." Soft
+                        violet-tinted quote box with the sender name +
+                        full body. line-clamp-4 caps egregious walls
+                        of text at ~4 lines so the widget can't blow
+                        out vertically; full content always available
+                        via the Open pill if they need more. */}
+                    {hasMessage && c.latest_content && (
+                      <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.06] px-2.5 py-2 text-[12px]">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-violet-300/80 mb-1">
+                          {c.latest_sender}
+                        </p>
+                        <p className="text-text whitespace-pre-wrap break-words line-clamp-4 leading-snug">
+                          {c.latest_content}
+                        </p>
+                      </div>
+                    )}
                     <textarea
                       autoFocus
                       rows={1}
