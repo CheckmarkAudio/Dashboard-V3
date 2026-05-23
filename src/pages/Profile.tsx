@@ -23,6 +23,7 @@ import MemberAvatar from '../components/members/MemberAvatar'
 import ProfileEditor from '../components/members/ProfileEditor'
 import LiveStatus from '../components/members/LiveStatus'
 import StatsSidebar from '../components/members/StatsSidebar'
+import ProfileWeeklySchedule from '../components/members/ProfileWeeklySchedule'
 import { Badge, Button } from '../components/ui'
 import type { MemberSocials, TeamMember } from '../types'
 import { APP_ROUTES } from '../app/routes'
@@ -243,6 +244,13 @@ export default function Profile() {
 
                 {/* Socials */}
                 <SocialsBlock socials={member.socials} />
+
+                {/* 2026-05-23 — Weekly Schedule (PR 4 of scheduler).
+                    Read-only display of this member's recurring weekly
+                    hours + upcoming approved one-off exceptions.
+                    Admin edits from Members → Work Scheduler; member
+                    proposes from Overview → My Schedule widget. */}
+                <ProfileWeeklySchedule memberId={member.id} />
 
                 {/* Self-serve change-password (Lean 3) — own profile only */}
                 {isOwnProfile && <ChangePasswordPanel />}
