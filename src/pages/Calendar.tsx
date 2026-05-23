@@ -6,6 +6,7 @@ import CalendarDayCard from '../components/calendar/CalendarDayCard'
 import BookingDetailModal, { type BookingDetail } from '../components/calendar/BookingDetailModal'
 import DeleteBookingDialog from '../components/calendar/DeleteBookingDialog'
 import ScheduleRequestModal, { type ScheduleRequestModalProps } from '../components/schedule/ScheduleRequestModal'
+import MemberAvatar from '../components/members/MemberAvatar'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
 import { loadWeekEvents } from '../lib/calendar'
@@ -342,19 +343,52 @@ export default function Calendar() {
     return map
   }, [teamMembers])
 
+  // 2026-05-23 — per-member filter pills at the top of the page.
+  // Single-select model: null = show all members (the default —
+  // preserves existing behavior), one id = show only that member's
+  // hours. Bookings stay unfiltered: they belong to clients, not
+  // staff. Clicking the active member's pill toggles back to All.
+  // User direction: "lets make the filter a toggle instead of
+  // selecting multiple at once for the calendar filter."
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
+  const memberFilterActive = selectedMemberId !== null
+
+  // Sort active members alphabetically for the pill row. Inactive
+  // members are dropped — they shouldn't show as filter targets.
+  const memberPillRow = useMemo(
+    () =>
+      [...teamMembers]
+        .filter((m) => m.display_name && m.status !== 'inactive')
+        .sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    [teamMembers],
+  )
+
+  function selectMember(memberId: string) {
+    // Click the active member's pill → toggle back to All. Click any
+    // other member → switch to just that one.
+    setSelectedMemberId((prev) => (prev === memberId ? null : memberId))
+  }
+
+  // Apply the member filter before bucketing by date so the cell-
+  // render math works against the already-narrowed set.
+  const filteredScheduleExpanded = useMemo(() => {
+    if (!memberFilterActive) return scheduleExpanded
+    return scheduleExpanded.filter((s) => s.member_id === selectedMemberId)
+  }, [scheduleExpanded, selectedMemberId, memberFilterActive])
+
   // Bucket schedule entries by local date string (YYYY-MM-DD) so the
   // week-grid render can pull each day's list inline without re-
   // scanning the full array per cell.
   const schedulesByDate = useMemo(() => {
     const map: Record<string, typeof scheduleExpanded> = {}
-    for (const s of scheduleExpanded) {
+    for (const s of filteredScheduleExpanded) {
       const dayKey = localDateKey(new Date(s.starts_at))
       const group = map[dayKey] ?? []
       group.push(s)
       map[dayKey] = group
     }
     return map
-  }, [scheduleExpanded])
+  }, [filteredScheduleExpanded])
 
   // Visibility toggle. Defaults ON so admins/members immediately see
   // who's scheduled when. Off-state hides the layer entirely (zero
@@ -532,8 +566,8 @@ export default function Calendar() {
           >
             {showSchedule ? <CalendarRange size={12} aria-hidden="true" /> : <EyeOff size={12} aria-hidden="true" />}
             <span>Schedule</span>
-            {scheduleExpanded.length > 0 && (
-              <span className="opacity-70">{scheduleExpanded.length}</span>
+            {filteredScheduleExpanded.length > 0 && (
+              <span className="opacity-70">{filteredScheduleExpanded.length}</span>
             )}
           </button>
           {/* 2026-05-23 — "+ Request schedule" entry point. Members
@@ -558,6 +592,59 @@ export default function Calendar() {
           <span className="text-xs text-text-light ml-1">{weekStart} – {weekEnd}</span>
         </div>
       </div>
+
+      {/* 2026-05-23 — Per-member schedule filter row. Multi-select
+          avatar pills, one per active team member. Empty selection =
+          show everyone (default). Selecting one+ narrows the schedule
+          overlay to only those members' hours. Bookings stay
+          unfiltered — they belong to clients, not staff.
+          Per user: "I LOVE the schedule filter on calendar. Lets make
+          a filter toggle for each member to see everyones hours
+          separately." Only renders when there's >1 member; with
+          exactly 1 staffer the filter is moot. */}
+      {memberPillRow.length > 1 && showSchedule && (
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-text-muted mr-1">
+            Show
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedMemberId(null)}
+            aria-pressed={!memberFilterActive}
+            title="Show every member's schedule"
+            className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold border transition-colors ${
+              !memberFilterActive
+                ? 'bg-purple-700/15 text-purple-100 border-purple-500/30'
+                : 'bg-surface-alt text-text-muted border-border hover:text-text'
+            }`}
+          >
+            All
+            <span className="opacity-70">{memberPillRow.length}</span>
+          </button>
+          {memberPillRow.map((m) => {
+            const isOn = selectedMemberId === m.id
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => selectMember(m.id)}
+                aria-pressed={isOn}
+                title={isOn ? `Back to all members` : `Show only ${m.display_name}`}
+                className={`inline-flex items-center gap-1.5 h-7 pl-0.5 pr-2.5 rounded-full text-[11px] font-semibold border transition-all ${
+                  isOn
+                    ? 'bg-purple-700/15 text-purple-100 border-purple-500/40 ring-1 ring-purple-500/20'
+                    : memberFilterActive
+                      ? 'bg-surface-alt/60 text-text-light border-border/60 opacity-60 hover:opacity-100 hover:text-text'
+                      : 'bg-surface-alt text-text-muted border-border hover:text-text'
+                }`}
+              >
+                <MemberAvatar member={m} size="xs" />
+                <span className="truncate max-w-[120px]">{m.display_name}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* 2-column layout — matched height. Left column is the shared
           CalendarDayCard (PR #22) so Overview renders the identical
