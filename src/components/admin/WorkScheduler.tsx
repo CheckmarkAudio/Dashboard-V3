@@ -6,11 +6,13 @@ import { Select, Button, Input } from '../ui'
 import { useTeamSchedule } from '../../lib/schedule/useTeamSchedule'
 import {
   approveBlock,
+  approveRecurring,
   createBlockAsAdmin,
   createRecurring,
   deleteBlock,
   deleteRecurring,
   denyBlock,
+  denyRecurring,
 } from '../../lib/schedule/mutations'
 import {
   endOfWeek,
@@ -73,7 +75,7 @@ export default function WorkScheduler({ members, adminId }: WorkSchedulerProps) 
     [weekAnchor],
   )
 
-  const { recurring, blocks, pendingBlocks, loading, error, refresh } = useTeamSchedule({
+  const { recurring, blocks, pendingBlocks, pendingRecurring, recurringDeletionRequests, loading, error, refresh } = useTeamSchedule({
     range,
     memberId,
     includePending: true,
@@ -87,14 +89,19 @@ export default function WorkScheduler({ members, adminId }: WorkSchedulerProps) 
   // PR 1 that's good enough; if a request reaches >1wk out we'll
   // widen the fetch later.
   const filteredRecurring = useMemo(() => {
-    return [...recurring].sort((a, b) => {
-      if (a.member_id !== b.member_id) {
-        const an = memberById.get(a.member_id)?.display_name ?? ''
-        const bn = memberById.get(b.member_id)?.display_name ?? ''
-        return an.localeCompare(bn)
-      }
-      return a.weekday - b.weekday || a.start_time.localeCompare(b.start_time)
-    })
+    // Approved rules only — pending member proposals live in the
+    // Pending Requests panel above with approve/deny actions, denied
+    // ones are audit-only.
+    return recurring
+      .filter((r) => r.status === 'approved')
+      .sort((a, b) => {
+        if (a.member_id !== b.member_id) {
+          const an = memberById.get(a.member_id)?.display_name ?? ''
+          const bn = memberById.get(b.member_id)?.display_name ?? ''
+          return an.localeCompare(bn)
+        }
+        return a.weekday - b.weekday || a.start_time.localeCompare(b.start_time)
+      })
   }, [recurring, memberById])
 
   const oneOffBlocks = useMemo(() => {
@@ -184,10 +191,18 @@ export default function WorkScheduler({ members, adminId }: WorkSchedulerProps) 
         </div>
       )}
 
-      {/* ── Pending requests panel (only when something to review) ── */}
-      {pendingBlocks.length > 0 && (
+      {/* ── Pending requests panel (only when something to review) ──
+          2026-05-23 — expanded to cover three request types:
+            1. Pending one-off block proposals
+            2. Pending recurring weekly proposals (new)
+            3. Member-requested removal of an approved recurring rule (new)
+          Each row gets its own approve/deny treatment so admins
+          handle them all in one place. */}
+      {(pendingBlocks.length + pendingRecurring.length + recurringDeletionRequests.length) > 0 && (
         <PendingRequestsPanel
           blocks={pendingBlocks}
+          recurringProposals={pendingRecurring}
+          deletionRequests={recurringDeletionRequests}
           memberById={memberById}
           adminId={adminId}
           onChange={refresh}
@@ -222,11 +237,15 @@ export default function WorkScheduler({ members, adminId }: WorkSchedulerProps) 
 
 function PendingRequestsPanel({
   blocks,
+  recurringProposals,
+  deletionRequests,
   memberById,
   adminId,
   onChange,
 }: {
   blocks: import('../../types').ScheduleBlock[]
+  recurringProposals: import('../../types').ScheduleRecurring[]
+  deletionRequests: import('../../types').ScheduleRecurring[]
   memberById: Map<string, TeamMember>
   adminId: string
   onChange: () => Promise<void>
@@ -234,7 +253,7 @@ function PendingRequestsPanel({
   const { toast } = useToast()
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  async function handleApprove(id: string) {
+  async function handleApproveBlock(id: string) {
     setBusyId(id)
     try {
       await approveBlock(id, adminId)
@@ -247,7 +266,7 @@ function PendingRequestsPanel({
     }
   }
 
-  async function handleDeny(id: string) {
+  async function handleDenyBlock(id: string) {
     setBusyId(id)
     try {
       await denyBlock(id, adminId)
@@ -260,27 +279,102 @@ function PendingRequestsPanel({
     }
   }
 
+  async function handleApproveRecurring(id: string) {
+    setBusyId(id)
+    try {
+      await approveRecurring(id, adminId)
+      toast('Recurring proposal approved', 'success')
+      await onChange()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to approve', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function handleDenyRecurring(id: string) {
+    setBusyId(id)
+    try {
+      await denyRecurring(id, adminId)
+      toast('Recurring proposal denied', 'success')
+      await onChange()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to deny', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // Admin confirms a member's removal request → just DELETE the rule.
+  async function handleConfirmDeletion(id: string) {
+    if (!confirm('Remove this approved recurring rule from the member\'s schedule?')) return
+    setBusyId(id)
+    try {
+      await deleteRecurring(id)
+      toast('Rule removed', 'success')
+      await onChange()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to remove', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // Admin rejects the member's removal request — keeps the rule live
+  // by clearing the pending_deletion flag. Uses the SECURITY DEFINER
+  // RPC path so the same single call site works whether caller is
+  // admin or member (admin would otherwise need an UPDATE directly).
+  async function handleRejectDeletion(id: string) {
+    setBusyId(id)
+    try {
+      // Admin uses direct UPDATE here (RLS allows it).
+      const { error } = await import('../../lib/supabase').then(({ supabase }) =>
+        supabase
+          .from('team_schedule_recurring')
+          .update({
+            pending_deletion: false,
+            approved_by: adminId,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq('id', id),
+      )
+      if (error) throw error
+      toast('Removal request rejected — rule stays live', 'success')
+      await onChange()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to reject', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const totalCount = blocks.length + recurringProposals.length + deletionRequests.length
+
   return (
     <section className="border border-amber-500/30 bg-amber-500/5 rounded-xl p-4">
       <div className="flex items-center gap-2 mb-3">
         <Inbox size={16} className="text-amber-300" aria-hidden="true" />
         <h3 className="text-sm font-bold text-text">
-          Pending requests ({blocks.length})
+          Pending requests ({totalCount})
         </h3>
       </div>
       <div className="space-y-2">
+        {/* Single-block proposals — same shape as before. */}
         {blocks.map((b) => {
           const member = memberById.get(b.member_id)
           const starts = new Date(b.starts_at)
           const ends = new Date(b.ends_at)
           return (
             <div
-              key={b.id}
+              key={`block-${b.id}`}
               className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface border border-border"
             >
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-semibold text-text truncate">
                   {member?.display_name ?? b.member_id}
+                  <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-amber-300/80">
+                    Single block
+                  </span>
                 </div>
                 <div className="text-[11px] text-text-muted">
                   {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
@@ -291,23 +385,85 @@ function PendingRequestsPanel({
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeny(b.id)}
-                  disabled={busyId === b.id}
-                  aria-label="Deny request"
-                >
+                <Button variant="ghost" size="sm" onClick={() => handleDenyBlock(b.id)} disabled={busyId === b.id} aria-label="Deny request">
                   <XIcon size={14} className="text-rose-300" />
                 </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => handleApprove(b.id)}
-                  disabled={busyId === b.id}
-                >
+                <Button variant="primary" size="sm" onClick={() => handleApproveBlock(b.id)} disabled={busyId === b.id}>
                   {busyId === b.id ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                   <span className="ml-1">Approve</span>
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Recurring weekly proposals — one DB row per requested weekday.
+            The same weekly batch shows as N adjacent rows in the queue;
+            admin approves each individually (intentional — they may
+            approve Mon–Wed but not the weekend). */}
+        {recurringProposals.map((r) => {
+          const member = memberById.get(r.member_id)
+          return (
+            <div
+              key={`recurring-${r.id}`}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface border border-border"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-text truncate">
+                  {member?.display_name ?? r.member_id}
+                  <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-purple-300/80">
+                    Recurring · {weekdayLabel(r.weekday, 'long')}
+                  </span>
+                </div>
+                <div className="text-[11px] text-text-muted">
+                  Every {weekdayLabel(r.weekday, 'long')} · {formatTimeRange(r.start_time, r.end_time)}
+                  {r.note ? ` · ${r.note}` : ''}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="sm" onClick={() => handleDenyRecurring(r.id)} disabled={busyId === r.id} aria-label="Deny request">
+                  <XIcon size={14} className="text-rose-300" />
+                </Button>
+                <Button variant="primary" size="sm" onClick={() => handleApproveRecurring(r.id)} disabled={busyId === r.id}>
+                  {busyId === r.id ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  <span className="ml-1">Approve</span>
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Member-requested removals — approve = DELETE the rule, deny
+            = clear the pending_deletion flag (rule stays live). Rose
+            tint signals "destructive on confirm" so admin reads
+            carefully. */}
+        {deletionRequests.map((r) => {
+          const member = memberById.get(r.member_id)
+          return (
+            <div
+              key={`deletion-${r.id}`}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg bg-rose-500/[0.04] border border-rose-500/20"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-text truncate">
+                  {member?.display_name ?? r.member_id}
+                  <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-rose-300">
+                    Remove rule · {weekdayLabel(r.weekday, 'long')}
+                  </span>
+                </div>
+                <div className="text-[11px] text-text-muted">
+                  Member asked to remove · {weekdayLabel(r.weekday, 'long')} {formatTimeRange(r.start_time, r.end_time)}
+                  {r.reviewer_note ? ` · "${r.reviewer_note}"` : ''}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="sm" onClick={() => handleRejectDeletion(r.id)} disabled={busyId === r.id} aria-label="Keep the rule">
+                  <XIcon size={14} className="text-text-muted" />
+                  <span className="ml-1 text-text-muted">Keep</span>
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => handleConfirmDeletion(r.id)} disabled={busyId === r.id}>
+                  {busyId === r.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  <span className="ml-1">Remove</span>
                 </Button>
               </div>
             </div>

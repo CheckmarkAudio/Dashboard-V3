@@ -5,27 +5,32 @@ import {
   Loader2,
   Plus,
   Clock as ClockIcon,
-  Send,
+  Trash2,
+  Undo2,
   X,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../Toast'
-import { Button, Input } from '../ui'
 import {
   endOfWeek,
+  formatTimeRange,
   startOfWeek,
   toLocalDateString,
+  weekdayLabel,
 } from '../../lib/schedule/expand'
 import { useTeamSchedule } from '../../lib/schedule/useTeamSchedule'
 import {
-  requestScheduleBlock,
+  requestRecurringDeletion,
+  withdrawRecurringDeletionRequest,
+  withdrawRecurringRequest,
   withdrawScheduleRequest,
 } from '../../lib/schedule/mutations'
 import {
   fetchTeamMembers,
   teamMemberKeys,
 } from '../../lib/queries/teamMembers'
-import type { ExpandedSchedule } from '../../types'
+import ScheduleRequestModal from '../schedule/ScheduleRequestModal'
+import type { ExpandedSchedule, ScheduleRecurring } from '../../types'
 
 /**
  * Personal weekly schedule with a toggle to see the whole team's
@@ -64,11 +69,23 @@ export default function MyScheduleWidget() {
   // includePending=true ONLY for my-mode (so the member sees their
   // own pending requests inline). Team-mode hides pending — those
   // belong to other people's eyes only until approved.
-  const { expanded, pendingBlocks, loading, refresh } = useTeamSchedule({
+  const { expanded, recurring, pendingBlocks, pendingRecurring, recurringDeletionRequests, loading, refresh } = useTeamSchedule({
     range,
     memberId: mode === 'mine' && myId ? myId : undefined,
     includePending: mode === 'mine',
   })
+
+  // My own approved recurring rules — surfaced in a "My weekly hours"
+  // strip beneath the 7-day list so the member sees their canonical
+  // schedule + can request removal of any rule with an X button. We
+  // only show this in Mine mode (team-mode swap doesn't need the
+  // edit affordances).
+  const myApprovedRecurring = useMemo(() => {
+    if (mode !== 'mine' || !myId) return [] as ScheduleRecurring[]
+    return recurring
+      .filter((r) => r.member_id === myId && r.status === 'approved' && r.active)
+      .sort((a, b) => a.weekday - b.weekday || a.start_time.localeCompare(b.start_time))
+  }, [recurring, mode, myId])
 
   // Member names for team-mode rows. Cached; same key as the rest of
   // the app.
@@ -170,35 +187,144 @@ export default function MyScheduleWidget() {
                 entries={d.entries}
                 mode={mode}
                 memberNameById={memberNameById}
-                onWithdraw={async (id) => {
+                onWithdrawBlock={async (id) => {
                   await withdrawScheduleRequest(id)
+                  await refresh()
+                }}
+                onWithdrawRecurring={async (id) => {
+                  await withdrawRecurringRequest(id)
                   await refresh()
                 }}
               />
             ))}
           </div>
         )}
+
+        {/* My approved recurring rules — only in Mine mode. Lets the
+            member request removal of an approved rule (admin confirms)
+            and undo a pending-deletion before admin acts. Mirrors the
+            admin Work Scheduler's recurring table at member scale. */}
+        {mode === 'mine' && myApprovedRecurring.length > 0 && (
+          <MyRecurringStrip
+            rules={myApprovedRecurring}
+            onChange={refresh}
+          />
+        )}
       </div>
 
       {/* Pending-summary footer (only when in my-mode and there's
           something in flight). Quick recap so the member knows they
           have a proposal waiting. */}
-      {mode === 'mine' && pendingBlocks.length > 0 && (
+      {mode === 'mine' && (pendingBlocks.length + pendingRecurring.length + recurringDeletionRequests.filter((r) => r.member_id === myId).length) > 0 && (
         <div className="mt-2 pt-2 border-t border-border text-[10px] text-text-muted">
-          {pendingBlocks.length} pending {pendingBlocks.length === 1 ? 'request' : 'requests'} awaiting admin review
+          {pendingBlocks.length + pendingRecurring.length + recurringDeletionRequests.filter((r) => r.member_id === myId).length} pending {(pendingBlocks.length + pendingRecurring.length + recurringDeletionRequests.filter((r) => r.member_id === myId).length) === 1 ? 'request' : 'requests'} awaiting admin review
         </div>
       )}
 
       {showModal && myId && (
-        <RequestModal
+        <ScheduleRequestModal
           memberId={myId}
           onClose={() => setShowModal(false)}
-          onCreated={async () => {
+          onSubmitted={async () => {
             setShowModal(false)
             await refresh()
           }}
         />
       )}
+    </div>
+  )
+}
+
+// ─── My approved recurring rules ───────────────────────────────────
+// Compact horizontal list rendered under the 7-day stack in Mine mode.
+// Each rule shows weekday + time + an action button: X to request
+// removal (clean approved rule) or Undo to cancel a pending-deletion
+// request before admin acts.
+function MyRecurringStrip({
+  rules,
+  onChange,
+}: {
+  rules: ScheduleRecurring[]
+  onChange: () => Promise<void>
+}) {
+  const { toast } = useToast()
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  async function handleDeleteRequest(id: string) {
+    if (!confirm('Ask admin to remove this rule from your schedule?')) return
+    setBusyId(id)
+    try {
+      await requestRecurringDeletion(id, null)
+      toast('Removal request sent — admin will review', 'success')
+      await onChange()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to request removal', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function handleUndo(id: string) {
+    setBusyId(id)
+    try {
+      await withdrawRecurringDeletionRequest(id)
+      toast('Removal request withdrawn', 'success')
+      await onChange()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to withdraw', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border">
+      <p className="text-[10px] uppercase tracking-wider font-semibold text-text-muted px-2 mb-1.5">
+        My weekly hours
+      </p>
+      <div className="flex flex-wrap gap-1 px-1">
+        {rules.map((r) => {
+          const pendingDelete = r.pending_deletion
+          return (
+            <div
+              key={r.id}
+              className={[
+                'inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px]',
+                pendingDelete
+                  ? 'border-rose-500/30 bg-rose-500/10 text-rose-100'
+                  : 'border-purple-500/20 bg-purple-700/10 text-purple-100',
+              ].join(' ')}
+              title={pendingDelete ? 'Removal pending admin review' : undefined}
+            >
+              <span className="font-semibold">{weekdayLabel(r.weekday)}</span>
+              <span className="opacity-70">{formatTimeRange(r.start_time, r.end_time)}</span>
+              {pendingDelete ? (
+                <button
+                  type="button"
+                  onClick={() => handleUndo(r.id)}
+                  disabled={busyId === r.id}
+                  aria-label="Undo removal request"
+                  title="Undo removal request"
+                  className="text-rose-200/80 hover:text-rose-100 transition-colors disabled:opacity-50"
+                >
+                  {busyId === r.id ? <Loader2 size={10} className="animate-spin" /> : <Undo2 size={10} />}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteRequest(r.id)}
+                  disabled={busyId === r.id}
+                  aria-label="Request to remove this rule"
+                  title="Request to remove"
+                  className="text-purple-200/70 hover:text-rose-200 transition-colors disabled:opacity-50"
+                >
+                  {busyId === r.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -210,13 +336,15 @@ function DayRow({
   entries,
   mode,
   memberNameById,
-  onWithdraw,
+  onWithdrawBlock,
+  onWithdrawRecurring,
 }: {
   date: Date
   entries: ExpandedSchedule[]
   mode: Mode
   memberNameById: Map<string, string>
-  onWithdraw: (id: string) => Promise<void>
+  onWithdrawBlock: (id: string) => Promise<void>
+  onWithdrawRecurring: (id: string) => Promise<void>
 }) {
   const dayName = date.toLocaleDateString([], { weekday: 'short' })
   const dayNum = date.toLocaleDateString([], { day: 'numeric' })
@@ -239,7 +367,8 @@ function DayRow({
               entry={e}
               mode={mode}
               memberName={memberNameById.get(e.member_id) ?? 'Member'}
-              onWithdraw={onWithdraw}
+              onWithdrawBlock={onWithdrawBlock}
+              onWithdrawRecurring={onWithdrawRecurring}
             />
           ))
         )}
@@ -252,12 +381,14 @@ function ScheduleChip({
   entry,
   mode,
   memberName,
-  onWithdraw,
+  onWithdrawBlock,
+  onWithdrawRecurring,
 }: {
   entry: ExpandedSchedule
   mode: Mode
   memberName: string
-  onWithdraw: (id: string) => Promise<void>
+  onWithdrawBlock: (id: string) => Promise<void>
+  onWithdrawRecurring: (id: string) => Promise<void>
 }) {
   const starts = new Date(entry.starts_at)
   const ends = new Date(entry.ends_at)
@@ -279,126 +410,29 @@ function ScheduleChip({
       )}
       {isPending && (
         <span className="ml-auto inline-flex items-center gap-1 pl-1">
-          <span className="text-[9px] uppercase tracking-wider opacity-80">Pending</span>
-          {entry.source === 'block' && (
-            <button
-              type="button"
-              onClick={() => onWithdraw(entry.source_id)}
-              aria-label="Withdraw request"
-              title="Withdraw this request"
-              className="text-amber-200/80 hover:text-rose-200 transition-colors"
-            >
-              <X size={10} aria-hidden="true" />
-            </button>
-          )}
+          <span className="text-[9px] uppercase tracking-wider opacity-80">
+            {entry.source === 'recurring' ? 'Pending weekly' : 'Pending'}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              entry.source === 'block'
+                ? onWithdrawBlock(entry.source_id)
+                : onWithdrawRecurring(entry.source_id)
+            }
+            aria-label="Withdraw request"
+            title="Withdraw this request"
+            className="text-amber-200/80 hover:text-rose-200 transition-colors"
+          >
+            <X size={10} aria-hidden="true" />
+          </button>
         </span>
       )}
     </div>
   )
 }
 
-// ─── Request modal ─────────────────────────────────────────────────
-
-function RequestModal({
-  memberId,
-  onClose,
-  onCreated,
-}: {
-  memberId: string
-  onClose: () => void
-  onCreated: () => Promise<void>
-}) {
-  const { toast } = useToast()
-  const today = useMemo(() => toLocalDateString(new Date()), [])
-  const [date, setDate] = useState(today)
-  const [startTime, setStartTime] = useState('10:00')
-  const [endTime, setEndTime] = useState('18:00')
-  const [note, setNote] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (endTime <= startTime) {
-      toast('End time must be after start time', 'error')
-      return
-    }
-    setSubmitting(true)
-    try {
-      // Local wall-clock → ISO timestamptz (browser TZ matches studio
-      // for the team in practice).
-      const starts = new Date(`${date}T${startTime}:00`)
-      const ends = new Date(`${date}T${endTime}:00`)
-      await requestScheduleBlock({
-        member_id: memberId,
-        starts_at: starts.toISOString(),
-        ends_at: ends.toISOString(),
-        note: note.trim() || null,
-      })
-      toast('Schedule request sent — admin will review', 'success')
-      await onCreated()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to send request', 'error')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Request schedule block">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <form
-        onSubmit={handleSubmit}
-        className="relative w-full max-w-md bg-surface rounded-2xl border border-border shadow-2xl p-5 space-y-4 animate-fade-in"
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-base font-bold text-text">Request schedule block</h2>
-            <p className="text-[11px] text-text-muted mt-0.5">
-              Admin will review + approve. Withdraw anytime before they do.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="text-text-muted hover:text-text"
-          >
-            <X size={16} aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3">
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} min={today} />
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Start</label>
-            <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">End</label>
-            <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Reason (optional)</label>
-          <Input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. Cover for Sara, extra mixing time"
-          />
-        </div>
-
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <Button variant="ghost" size="sm" type="button" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" size="sm" type="submit" disabled={submitting}>
-            {submitting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Send size={12} className="mr-1" />}
-            Send request
-          </Button>
-        </div>
-      </form>
-    </div>
-  )
-}
+// In-file RequestModal removed 2026-05-23 — replaced by the shared
+// ScheduleRequestModal under src/components/schedule which adds the
+// "Recurring weekly" tab and is reused by the Calendar page entry
+// points (header pill + right-click cell context menu).
