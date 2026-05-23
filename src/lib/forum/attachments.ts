@@ -7,7 +7,16 @@
 // 20260520190000_forum_media_audio_support.sql also adds the audio
 // MIME types to the storage bucket's allowed list.
 export type AttachmentKind = 'image' | 'video' | 'audio' | 'link'
-export type LinkEmbedKind = 'youtube' | 'vimeo' | 'loom'
+// 2026-05-23 (PR C) — added spotify · soundcloud · bandcamp so the
+// most-shared music streaming links render as inline playable
+// embeds (the studio's bread + butter), not just preview cards.
+export type LinkEmbedKind =
+  | 'youtube'
+  | 'vimeo'
+  | 'loom'
+  | 'spotify'
+  | 'soundcloud'
+  | 'bandcamp'
 
 export interface BaseAttachment {
   kind: AttachmentKind
@@ -111,6 +120,72 @@ export function detectLinkEmbed(rawUrl: string): {
     const m = url.pathname.match(/\/share\/([^/]+)/)
     if (m?.[1]) {
       return { embed: 'loom', iframeUrl: `https://www.loom.com/embed/${m[1]}` }
+    }
+  }
+
+  // 2026-05-23 (PR C) — Music streaming embed providers below. Each
+  // exposes an unauthenticated public iframe URL pattern; no API key
+  // or oEmbed round-trip needed (regex-detect at send time, ride the
+  // first insert as a known embed).
+
+  // Spotify — open.spotify.com/track|album|playlist|episode|show/<id>
+  // The /embed/<kind>/<id> path is Spotify's official iframe player.
+  if (host === 'open.spotify.com') {
+    const parts = url.pathname.split('/').filter(Boolean)
+    // First segment can be a locale prefix (e.g. /intl-de/track/<id>);
+    // skip any non-known kind to find the real one.
+    const kindIdx = parts.findIndex((p) =>
+      ['track', 'album', 'playlist', 'episode', 'show', 'artist'].includes(p),
+    )
+    const kind = kindIdx >= 0 ? parts[kindIdx] : undefined
+    const id = kindIdx >= 0 ? parts[kindIdx + 1] : undefined
+    if (kind && id) {
+      return {
+        embed: 'spotify',
+        iframeUrl: `https://open.spotify.com/embed/${kind}/${id}`,
+      }
+    }
+  }
+
+  // SoundCloud — needs the canonical track URL passed back to its
+  // widget endpoint. Works for both /user/track and /user/sets/set
+  // URLs since the widget figures out which player to render.
+  if (host === 'soundcloud.com' || host === 'm.soundcloud.com') {
+    const trackUrl = `https://soundcloud.com${url.pathname}`
+    if (url.pathname.length > 1) {
+      const widgetUrl =
+        'https://w.soundcloud.com/player/?' +
+        new URLSearchParams({
+          url: trackUrl,
+          color: '#c9a84c',  // gold tint matches our brand
+          auto_play: 'false',
+          hide_related: 'true',
+          show_comments: 'false',
+          show_user: 'true',
+          show_reposts: 'false',
+          show_teaser: 'false',
+          visual: 'false',
+        }).toString()
+      return { embed: 'soundcloud', iframeUrl: widgetUrl }
+    }
+  }
+
+  // Bandcamp — every artist has a custom subdomain (e.g.
+  // `myband.bandcamp.com`), and the embed URL needs the numeric
+  // album/track id, which Bandcamp doesn't expose in the share URL.
+  // Their EmbeddedPlayer/v=2/tralbum_url=<...> shape accepts the
+  // public URL directly + Bandcamp resolves on their side.
+  if (host.endsWith('.bandcamp.com') || host === 'bandcamp.com') {
+    const isAlbumOrTrack = /\/(album|track)\//.test(url.pathname)
+    if (isAlbumOrTrack) {
+      const widgetUrl =
+        'https://bandcamp.com/EmbeddedPlayer/' +
+        // The size + layout hint for the iframe player (large album
+        // art version reads well in a chat bubble).
+        'size=large/bgcol=181a1f/linkcol=c9a84c/tracklist=false/transparent=true/' +
+        // Tell Bandcamp which page to resolve to a player.
+        `tralbum_url=${encodeURIComponent(rawUrl)}`
+      return { embed: 'bandcamp', iframeUrl: widgetUrl }
     }
   }
 
