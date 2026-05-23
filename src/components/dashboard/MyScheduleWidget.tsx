@@ -269,7 +269,7 @@ function ScheduleChip({
         'flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px]',
         isPending
           ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
-          : 'border-purple-500/25 bg-purple-500/10 text-purple-100',
+          : 'border-purple-500/20 bg-purple-700/10 text-purple-100',
       ].join(' ')}
     >
       <ClockIcon size={10} className="opacity-70 shrink-0" aria-hidden="true" />
