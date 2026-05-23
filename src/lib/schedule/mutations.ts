@@ -39,11 +39,129 @@ export async function createRecurring(
       note: input.note ?? null,
       created_by: createdBy,
       active: true,
+      status: 'approved',
     })
     .select()
     .single()
   if (error) throw error
   return data as ScheduleRecurring
+}
+
+/**
+ * Member-side counterpart to createRecurring. Inserts a `pending`
+ * recurring rule for the member to be reviewed by admin. RLS enforces
+ * member_id = auth.uid() AND status = 'pending' AND
+ * requested_by = auth.uid().
+ */
+export async function requestRecurring(input: {
+  member_id: string
+  weekday: Weekday
+  start_time: string
+  end_time: string
+  effective_from?: string | null
+  effective_until?: string | null
+  note?: string | null
+}): Promise<ScheduleRecurring> {
+  const { data, error } = await supabase
+    .from('team_schedule_recurring')
+    .insert({
+      member_id: input.member_id,
+      weekday: input.weekday,
+      start_time: normalizeTime(input.start_time),
+      end_time: normalizeTime(input.end_time),
+      effective_from: input.effective_from ?? null,
+      effective_until: input.effective_until ?? null,
+      note: input.note ?? null,
+      created_by: input.member_id,
+      requested_by: input.member_id,
+      active: true,
+      status: 'pending',
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data as ScheduleRecurring
+}
+
+/** Admin approves a pending recurring proposal. */
+export async function approveRecurring(
+  id: string,
+  adminId: string,
+  reviewerNote?: string | null,
+): Promise<ScheduleRecurring> {
+  const { data, error } = await supabase
+    .from('team_schedule_recurring')
+    .update({
+      status: 'approved',
+      approved_by: adminId,
+      reviewed_at: new Date().toISOString(),
+      reviewer_note: reviewerNote ?? null,
+    })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as ScheduleRecurring
+}
+
+/** Admin denies a pending recurring proposal. */
+export async function denyRecurring(
+  id: string,
+  adminId: string,
+  reviewerNote?: string | null,
+): Promise<ScheduleRecurring> {
+  const { data, error } = await supabase
+    .from('team_schedule_recurring')
+    .update({
+      status: 'denied',
+      approved_by: adminId,
+      reviewed_at: new Date().toISOString(),
+      reviewer_note: reviewerNote ?? null,
+    })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as ScheduleRecurring
+}
+
+/**
+ * Member asks admin to remove an APPROVED recurring rule. Goes through
+ * the SECURITY DEFINER RPC since members don't have UPDATE on the
+ * recurring table (the policy would let them touch all columns).
+ */
+export async function requestRecurringDeletion(
+  ruleId: string,
+  note?: string | null,
+): Promise<ScheduleRecurring> {
+  const { data, error } = await supabase.rpc('request_recurring_deletion', {
+    p_rule_id: ruleId,
+    p_note: note ?? null,
+  })
+  if (error) throw error
+  return data as ScheduleRecurring
+}
+
+/** Member changes their mind about a pending-removal before admin acts. */
+export async function withdrawRecurringDeletionRequest(
+  ruleId: string,
+): Promise<ScheduleRecurring> {
+  const { data, error } = await supabase.rpc('withdraw_recurring_deletion_request', {
+    p_rule_id: ruleId,
+  })
+  if (error) throw error
+  return data as ScheduleRecurring
+}
+
+/** Member withdraws their PENDING recurring proposal before admin reviews.
+ *  Pending recurring rows can be DELETEd by the owner under the member
+ *  withdraw RLS policy. */
+export async function withdrawRecurringRequest(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('team_schedule_recurring')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
 }
 
 export async function updateRecurring(

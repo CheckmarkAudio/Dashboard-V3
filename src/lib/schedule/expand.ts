@@ -98,9 +98,14 @@ export function expandSchedule({
   const out: ExpandedSchedule[] = []
   const days = eachDay(range)
 
-  // Recurring rules → one entry per (rule, applicable day).
+  // Recurring rules → one entry per (rule, applicable day). Denied
+  // rules are filtered out entirely. Pending recurring is passed
+  // through so the member's own widget can render them with a pending
+  // badge (the calling hook is the one that gates includePending for
+  // team-wide vs personal views).
   for (const rule of recurring) {
     if (!rule.active) continue
+    if (rule.status === 'denied') continue
     for (const day of days) {
       if (!ruleAppliesOn(rule, day)) continue
       const starts = combineDateTime(day, rule.start_time)
@@ -113,7 +118,7 @@ export function expandSchedule({
         ends_at: ends.toISOString(),
         source: 'recurring',
         source_id: rule.id,
-        status: 'approved',
+        status: rule.status,
         note: rule.note,
       })
     }

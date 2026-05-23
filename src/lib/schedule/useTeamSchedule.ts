@@ -33,6 +33,12 @@ export interface UseTeamScheduleResult {
   expanded: ExpandedSchedule[]
   /** All pending blocks in range (handy for admin's review queue). */
   pendingBlocks: ScheduleBlock[]
+  /** Pending member-proposed recurring rules (status='pending'). */
+  pendingRecurring: ScheduleRecurring[]
+  /** Approved recurring rules a member has asked admin to remove
+   *  (pending_deletion=true). Rendered with a "pending removal" badge
+   *  and surfaced in the admin Pending Requests panel for action. */
+  recurringDeletionRequests: ScheduleRecurring[]
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
@@ -122,13 +128,36 @@ export function useTeamSchedule({
     const blocksForExpand = includePending
       ? blocks
       : blocks.filter((b) => b.status === 'approved')
-    return expandSchedule({ recurring, blocks: blocksForExpand, range })
+    // Same gate for recurring: team-wide views hide pending recurring;
+    // member's own widget + admin's review panel pass includePending=true.
+    const recurringForExpand = includePending
+      ? recurring
+      : recurring.filter((r) => r.status === 'approved')
+    return expandSchedule({ recurring: recurringForExpand, blocks: blocksForExpand, range })
   }, [recurring, blocks, range, includePending])
 
   const pendingBlocks = useMemo(
     () => blocks.filter((b) => b.status === 'pending'),
     [blocks],
   )
+  const pendingRecurring = useMemo(
+    () => recurring.filter((r) => r.status === 'pending'),
+    [recurring],
+  )
+  const recurringDeletionRequests = useMemo(
+    () => recurring.filter((r) => r.pending_deletion),
+    [recurring],
+  )
 
-  return { recurring, blocks, expanded, pendingBlocks, loading, error, refresh: fetchAll }
+  return {
+    recurring,
+    blocks,
+    expanded,
+    pendingBlocks,
+    pendingRecurring,
+    recurringDeletionRequests,
+    loading,
+    error,
+    refresh: fetchAll,
+  }
 }

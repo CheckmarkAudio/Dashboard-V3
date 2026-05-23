@@ -5,6 +5,7 @@ import CreateBookingModal from '../components/CreateBookingModal'
 import CalendarDayCard from '../components/calendar/CalendarDayCard'
 import BookingDetailModal, { type BookingDetail } from '../components/calendar/BookingDetailModal'
 import DeleteBookingDialog from '../components/calendar/DeleteBookingDialog'
+import ScheduleRequestModal, { type ScheduleRequestModalProps } from '../components/schedule/ScheduleRequestModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
 import { loadWeekEvents } from '../lib/calendar'
@@ -243,16 +244,33 @@ export default function Calendar() {
   // clicked. Closes on Escape, outside click, or after picking an
   // action.
   const [contextMenu, setContextMenu] = useState<{ booking: CalendarBooking; x: number; y: number } | null>(null)
-  const { isAdmin } = useAuth()
+  // 2026-05-23 — empty-cell right-click context menu (separate state
+  // from the booking context menu since the actions differ). Carries
+  // the cell's day-key + start time so "Request schedule here" can
+  // pre-fill the modal. Same outside-click/Escape close behavior.
+  const [cellMenu, setCellMenu] = useState<{ dateKey: string; startTime: string; x: number; y: number } | null>(null)
+  // Schedule-request modal state. `prefill` is set when entry came
+  // from the right-click cell menu so the Block tab arrives with
+  // the picked day + start hour already populated.
+  const [scheduleRequest, setScheduleRequest] = useState<ScheduleRequestModalProps['prefill'] | true | null>(null)
+  const { isAdmin, profile } = useAuth()
   const { toast } = useToast()
 
   // Close the context menu on outside click / Escape so it doesn't
-  // linger after the user moves on.
+  // linger after the user moves on. Same handler covers BOTH the
+  // booking context menu (admin actions) AND the empty-cell context
+  // menu (request schedule here).
   useEffect(() => {
-    if (!contextMenu) return
-    const onPointer = () => setContextMenu(null)
+    if (!contextMenu && !cellMenu) return
+    const onPointer = () => {
+      setContextMenu(null)
+      setCellMenu(null)
+    }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setContextMenu(null)
+      if (e.key === 'Escape') {
+        setContextMenu(null)
+        setCellMenu(null)
+      }
     }
     window.addEventListener('pointerdown', onPointer)
     window.addEventListener('keydown', onKey)
@@ -260,7 +278,7 @@ export default function Calendar() {
       window.removeEventListener('pointerdown', onPointer)
       window.removeEventListener('keydown', onKey)
     }
-  }, [contextMenu])
+  }, [contextMenu, cellMenu])
 
   // Build the prompt label for the delete dialog from a CalendarBooking.
   // Used by both the right-click menu and the modal's Delete pill.
@@ -437,6 +455,52 @@ export default function Calendar() {
           </button>
         </div>
       )}
+
+      {/* 2026-05-23 — Empty-cell right-click menu. Renders only when
+          a user right-clicks an empty cell (booking blocks intercept
+          their own context menu above). Single action: open the
+          Request modal with the cell's day + start hour pre-filled. */}
+      {cellMenu && profile?.id && (
+        <div
+          role="menu"
+          aria-label="Empty cell actions"
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ top: cellMenu.y, left: cellMenu.x }}
+          className="fixed z-50 min-w-[220px] bg-surface border border-border rounded-xl shadow-xl py-1 animate-fade-in"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const prefill = {
+                mode: 'block' as const,
+                date: cellMenu.dateKey,
+                startTime: cellMenu.startTime,
+              }
+              setCellMenu(null)
+              setScheduleRequest(prefill)
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-text hover:bg-surface-hover transition-colors"
+          >
+            <Plus size={12} className="text-purple-300" aria-hidden="true" />
+            Request schedule here
+          </button>
+        </div>
+      )}
+
+      {/* Schedule-request modal. Driven by `scheduleRequest`:
+            true       → open with no prefill (header pill flow)
+            {prefill}  → open with day/time prefilled (cell menu flow)
+            null       → closed */}
+      {scheduleRequest && profile?.id && (
+        <ScheduleRequestModal
+          memberId={profile.id}
+          prefill={scheduleRequest === true ? undefined : scheduleRequest}
+          onClose={() => setScheduleRequest(null)}
+          onSubmitted={() => setScheduleRequest(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -472,6 +536,22 @@ export default function Calendar() {
               <span className="opacity-70">{scheduleExpanded.length}</span>
             )}
           </button>
+          {/* 2026-05-23 — "+ Request schedule" entry point. Members
+              propose recurring weekly hours or single blocks here;
+              admin reviews from Members → Work Scheduler. Admins can
+              also use this button to draft a request on their own
+              behalf — same flow, no special-casing. */}
+          {profile?.id && (
+            <button
+              type="button"
+              onClick={() => setScheduleRequest(true)}
+              title="Request a schedule block or weekly hours"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border border-border bg-surface-alt text-text-muted hover:text-gold hover:border-gold/40 transition-colors"
+            >
+              <Plus size={11} aria-hidden="true" />
+              <span>Request schedule</span>
+            </button>
+          )}
           <button onClick={() => { if (weekOffset > -1) setWeekOffset(weekOffset - 1) }} className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset <= -1 ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronLeft size={16} /></button>
           <button onClick={() => setWeekOffset(0)} className="text-xs font-semibold text-gold hover:underline">{weekLabel}</button>
           <button onClick={() => { if (weekOffset < 3) setWeekOffset(weekOffset + 1) }} className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset >= 3 ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronRight size={16} /></button>
@@ -530,7 +610,29 @@ export default function Calendar() {
                     {WEEK.map((wd, di) => {
                       const isSel = wd.key === selectedDate
                       return (
-                        <div key={di} className={`border-l border-border group/cell relative ${isSel ? 'bg-gold/[0.03]' : ''}`}>
+                        <div
+                          key={di}
+                          className={`border-l border-border group/cell relative ${isSel ? 'bg-gold/[0.03]' : ''}`}
+                          // 2026-05-23 — right-click an empty cell to
+                          // open the "Request schedule here" menu,
+                          // which pre-fills the cell's day + start
+                          // time into the modal. Bookings keep their
+                          // own onContextMenu (admin actions); since
+                          // booking blocks live at z-30 and intercept
+                          // pointer events, this only fires on truly
+                          // empty cells.
+                          onContextMenu={(e) => {
+                            if (!profile?.id) return
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setCellMenu({
+                              dateKey: wd.key,
+                              startTime: `${hour.toString().padStart(2, '0')}:00`,
+                              x: e.clientX,
+                              y: e.clientY,
+                            })
+                          }}
+                        >
                           {/* +Book hover affordance — sits at z-10 so it's
                               below booking blocks (z-30). When a cell is
                               already booked, the booking block intercepts

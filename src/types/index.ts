@@ -349,6 +349,19 @@ export interface ScheduleRecurring {
   created_by: string | null
   created_at: string
   updated_at: string
+  // 2026-05-23 — member-request fields (migration 20260524000000).
+  // Existing admin-created rules default to status='approved' so the
+  // rest of the codebase keeps working without changes.
+  status: ScheduleBlockStatus
+  requested_by: string | null
+  approved_by: string | null
+  reviewed_at: string | null
+  reviewer_note: string | null
+  /** True while a member has asked admin to remove this approved rule.
+   *  The rule still renders while this flag is set (still in effect
+   *  until admin confirms via DELETE). Admin rejects by clearing back
+   *  to false. */
+  pending_deletion: boolean
 }
 
 export type ScheduleBlockStatus = 'pending' | 'approved' | 'denied'
