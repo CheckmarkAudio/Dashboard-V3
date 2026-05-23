@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -6,7 +6,6 @@ import {
   Check,
   CheckCircle2,
   Edit2,
-  GripVertical,
   Hourglass,
   Inbox,
   Loader2,
@@ -153,8 +152,17 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   // id to this set (visual state only, no RPC). Submit Completed
   // button commits all queued ids in parallel.
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set())
-  // PR #25 — click task body (not checkbox) opens this detail modal
+  // PR #25 — click task body (not checkbox) opens this detail modal.
+  // 2026-05-23 — `detailInitial` pre-selects which composer opens
+  // inside the modal (Edit / Delete) so a row-level shortcut button
+  // drops the user straight into the right form. null = open in
+  // read-only summary mode (existing behavior for body clicks).
   const [detailTask, setDetailTask] = useState<AssignedTask | null>(null)
+  const [detailInitial, setDetailInitial] = useState<null | 'edit' | 'delete'>(null)
+  const openDetail = useCallback((task: AssignedTask, initial: null | 'edit' | 'delete' = null) => {
+    setDetailInitial(initial)
+    setDetailTask(task)
+  }, [])
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   // Outgoing task_requests — covers the user's pending New Task
@@ -610,7 +618,9 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
                       highlighted={highlightedId === task.id}
                       isPending={pendingIds.has(task.id)}
                       onToggle={(nextTask) => togglePending(nextTask.id)}
-                      onOpenDetail={(nextTask) => setDetailTask(nextTask)}
+                      onOpenDetail={(nextTask) => openDetail(nextTask)}
+                      onRequestEdit={(nextTask) => openDetail(nextTask, 'edit')}
+                      onRequestDelete={(nextTask) => openDetail(nextTask, 'delete')}
                       rowRef={(node) => {
                         if (node) rowRefs.current.set(task.id, node)
                         else rowRefs.current.delete(task.id)
@@ -646,7 +656,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
                     isPending={pendingIds.has(task.id)}
                     pendingMeta={pendingByTask.get(task.id) ?? null}
                     onToggle={(nextTask) => togglePending(nextTask.id)}
-                    onOpenDetail={(nextTask) => setDetailTask(nextTask)}
+                    onOpenDetail={(nextTask) => openDetail(nextTask)}
                     rowRef={(node) => {
                       if (node) rowRefs.current.set(task.id, node)
                       else rowRefs.current.delete(task.id)
@@ -681,7 +691,14 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
       <div className="flex flex-col h-full min-h-0">{body}</div>
       {requestModalOpen && <TaskRequestModal onClose={() => setRequestModalOpen(false)} />}
       {detailTask && (
-        <TaskDetailModal task={detailTask} onClose={() => setDetailTask(null)} />
+        <TaskDetailModal
+          task={detailTask}
+          initialCompose={detailInitial}
+          onClose={() => {
+            setDetailTask(null)
+            setDetailInitial(null)
+          }}
+        />
       )}
     </>
   )
@@ -826,6 +843,8 @@ function SortableAssignedTaskRow({
   isPending,
   onToggle,
   onOpenDetail,
+  onRequestEdit,
+  onRequestDelete,
   rowRef,
   memberMap,
 }: {
@@ -835,16 +854,30 @@ function SortableAssignedTaskRow({
   isPending: boolean
   onToggle: (task: AssignedTask) => void
   onOpenDetail: (task: AssignedTask) => void
+  onRequestEdit: (task: AssignedTask) => void
+  onRequestDelete: (task: AssignedTask) => void
   rowRef: (node: HTMLDivElement | null) => void
   memberMap: Map<string, TeamMember>
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id })
+  // 2026-05-23 — drag UX polish (per user request):
+  //   - Row lifts on hover (translate-y + soft shadow)
+  //   - cursor-grab tells the user it's draggable BEFORE they press
+  //   - On press-and-drag, dnd-kit's PointerSensor (5px activation
+  //     threshold, configured in MyTasksCard sensors) triggers the
+  //     drag — at which point we apply a heavier lift (scale + shadow)
+  //     and switch to grabbing cursor.
+  // The explicit GripVertical handle is gone — listeners attach to
+  // the whole row container instead, since the 5px threshold means
+  // taps on the checkbox / Edit / Delete affordances inside the row
+  // don't accidentally initiate a drag.
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.45 : 1,
+    opacity: isDragging ? 0.65 : 1,
     position: 'relative',
+    zIndex: isDragging ? 10 : undefined,
   }
   return (
     <div ref={setNodeRef} style={style} className="group/sortable">
@@ -855,28 +888,28 @@ function SortableAssignedTaskRow({
           <div className="flex-1 h-px bg-border" aria-hidden="true" />
         </div>
       )}
-      {/* Grip handle — pinned to the left edge, visible on hover.
-          Keyboard-accessible via aria-roledescription so screen-readers
-          announce "sortable" when focused. */}
-      <button
-        type="button"
-        aria-label={`Drag to reorder ${task.title}`}
+      <div
         {...attributes}
         {...listeners}
-        className="absolute left-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-4 h-6 rounded text-text-light/40 opacity-0 group-hover/sortable:opacity-100 focus-visible:opacity-100 hover:text-text-muted cursor-grab active:cursor-grabbing transition-opacity"
+        className={`rounded-md transition-all duration-150 ease-out cursor-grab active:cursor-grabbing ${
+          isDragging
+            ? 'scale-[1.02] shadow-2xl ring-1 ring-gold/30 bg-surface'
+            : 'hover:-translate-y-[1px] hover:shadow-md'
+        }`}
       >
-        <GripVertical size={12} aria-hidden="true" />
-      </button>
-      <AssignedTaskRow
-        task={task}
-        highlighted={highlighted}
-        isPending={isPending}
-        pendingMeta={null}
-        onToggle={onToggle}
-        onOpenDetail={onOpenDetail}
-        rowRef={rowRef}
-        memberMap={memberMap}
-      />
+        <AssignedTaskRow
+          task={task}
+          highlighted={highlighted}
+          isPending={isPending}
+          pendingMeta={null}
+          onToggle={onToggle}
+          onOpenDetail={onOpenDetail}
+          onRequestEdit={onRequestEdit}
+          onRequestDelete={onRequestDelete}
+          rowRef={rowRef}
+          memberMap={memberMap}
+        />
+      </div>
     </div>
   )
 }
@@ -888,6 +921,8 @@ function AssignedTaskRow({
   pendingMeta,
   onToggle,
   onOpenDetail,
+  onRequestEdit,
+  onRequestDelete,
   rowRef,
   memberMap,
 }: {
@@ -901,6 +936,14 @@ function AssignedTaskRow({
   pendingMeta: PendingMeta | null
   onToggle: (task: AssignedTask) => void
   onOpenDetail: (task: AssignedTask) => void
+  // 2026-05-23 — hover-revealed inline Edit + Delete affordances.
+  // Both pre-route through MyTasksCard's parent handler (which opens
+  // TaskDetailModal in compose mode), so members get the existing
+  // request-flow and admins get direct edit/delete — same logic the
+  // modal has had since PR #97, just surfaced at the row level so
+  // you don't have to open the modal first.
+  onRequestEdit?: (task: AssignedTask) => void
+  onRequestDelete?: (task: AssignedTask) => void
   rowRef: (node: HTMLDivElement | null) => void
   memberMap: Map<string, TeamMember>
 }) {
@@ -1129,17 +1172,55 @@ function AssignedTaskRow({
         )}
       </div>
 
-      {/* Due date — right column of the grid, vertically top-aligned
-          with the title. Em-dash-style empty state keeps rows aligned
-          when there's no date set. */}
-      <span
-        className={`shrink-0 text-[12px] tabular-nums whitespace-nowrap mt-[2px] ${
-          dueLabel ? 'text-text-light' : 'text-text-light/30'
-        }`}
-        title={dueLabel ? `Due ${dueLabel}` : 'No due date'}
-      >
-        {dueLabel ?? '—'}
-      </span>
+      {/* Right column — due date + hover-revealed action buttons
+          (Edit + Delete). Action buttons only show when the row is
+          NOT in a pending state (pendingMeta rows already have their
+          own cancel-X affordance, doubling the controls would be
+          confusing). Both fire the parent handler, which routes to
+          TaskDetailModal in compose mode — modal already handles
+          member-request vs admin-direct dispatch. */}
+      <div className="shrink-0 flex items-center gap-1 mt-[2px]">
+        {!pendingMeta && (onRequestEdit || onRequestDelete) && (
+          <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-0.5">
+            {onRequestEdit && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onRequestEdit(task)
+                }}
+                aria-label="Edit task"
+                title="Edit"
+                className="inline-flex items-center justify-center w-6 h-6 rounded text-text-light hover:text-gold hover:bg-gold/10 transition-colors focus-ring"
+              >
+                <Edit2 size={12} aria-hidden="true" />
+              </button>
+            )}
+            {onRequestDelete && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onRequestDelete(task)
+                }}
+                aria-label="Delete task"
+                title="Delete"
+                className="inline-flex items-center justify-center w-6 h-6 rounded text-text-light hover:text-rose-300 hover:bg-rose-500/10 transition-colors focus-ring"
+              >
+                <Trash2 size={12} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
+        <span
+          className={`text-[12px] tabular-nums whitespace-nowrap ${
+            dueLabel ? 'text-text-light' : 'text-text-light/30'
+          }`}
+          title={dueLabel ? `Due ${dueLabel}` : 'No due date'}
+        >
+          {dueLabel ?? '—'}
+        </span>
+      </div>
     </div>
   )
 }

@@ -61,9 +61,15 @@ type Compose = null | 'transfer' | 'delete' | 'edit'
 export default function TaskDetailModal({
   task,
   onClose,
+  initialCompose = null,
 }: {
   task: AssignedTask
   onClose: () => void
+  // 2026-05-23 — when set, opens the modal with that composer pre-
+  // expanded. Lets MyTasksCard's row-level Edit/Delete buttons drop
+  // the user straight into the right form instead of forcing them
+  // to scroll the modal looking for the action.
+  initialCompose?: null | 'edit' | 'delete' | 'transfer'
 }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -89,7 +95,13 @@ export default function TaskDetailModal({
   // ─── Composer state — single state machine for all flows ────────
   // Only one composer can be open at a time; opening one auto-closes
   // the others so the footer never tries to render two side by side.
-  const [compose, setCompose] = useState<Compose>(null)
+  // 2026-05-23 — seed from `initialCompose` so a row-level shortcut
+  // (Edit/Delete buttons in MyTasksCard) opens straight into the
+  // right form. `done` tasks can't be edited; coerce to null so the
+  // modal doesn't render an edit form that would no-op on submit.
+  const [compose, setCompose] = useState<Compose>(
+    initialCompose === 'edit' && task.is_completed ? null : initialCompose,
+  )
   const [transferTargetId, setTransferTargetId] = useState('')
   const [transferReason, setTransferReason] = useState('')
   const [deleteReason, setDeleteReason] = useState('')
