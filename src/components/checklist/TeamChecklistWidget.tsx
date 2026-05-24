@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertCircle, Check, Inbox, Loader2, Plus, Repeat, Trash2, X,
+  AlertCircle, Check, Edit2, Inbox, Loader2, Plus, Repeat, Trash2, X,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
@@ -30,6 +30,7 @@ import { useToast } from '../Toast'
 import {
   adminArchiveMaintenanceItem,
   adminCreateMaintenanceItem,
+  adminUpdateMaintenanceItem,
   fetchMaintenanceList,
   maintenanceKeys,
   toggleMaintenanceCheck,
@@ -257,6 +258,11 @@ function ChecklistRow({
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [confirmArchive, setConfirmArchive] = useState(false)
+  // 2026-05-23 — inline edit (admin-only). Pencil click swaps the
+  // title into an editable input; Enter or Save commits, Esc cancels.
+  // Same flow as the daily task list's row-level Edit.
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(item.title)
   const archiveMutation = useMutation({
     mutationFn: () => adminArchiveMaintenanceItem(item.id),
     onSuccess: () => {
@@ -265,9 +271,41 @@ function ChecklistRow({
     },
     onError: (err) => toast(err instanceof Error ? err.message : 'Archive failed', 'error'),
   })
+  const editMutation = useMutation({
+    mutationFn: () => adminUpdateMaintenanceItem(item.id, { title: editTitle.trim() }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: maintenanceKeys.list() })
+      toast('Item updated.', 'success')
+      setEditing(false)
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Update failed', 'error'),
+  })
+
+  function startEdit() {
+    setEditTitle(item.title)
+    setEditing(true)
+  }
+
+  function cancelEdit() {
+    setEditTitle(item.title)
+    setEditing(false)
+  }
+
+  function submitEdit() {
+    const t = editTitle.trim()
+    if (!t) {
+      toast('Title can\'t be empty', 'error')
+      return
+    }
+    if (t === item.title) {
+      setEditing(false)
+      return
+    }
+    editMutation.mutate()
+  }
 
   return (
-    <div className="group/maintrow grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-3 py-2 hover:bg-surface-hover transition-colors">
+    <div className="group/maintrow grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-3 py-2 rounded-md hover:bg-surface-hover hover:-translate-y-[1px] hover:shadow-sm transition-all duration-150 ease-out">
       {/* Checkbox — flips check state via the toggle RPC. Optimistic
           flip in the parent's mutation keeps it feeling instant. */}
       <button
@@ -286,30 +324,81 @@ function ChecklistRow({
 
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p
-            className={`text-[14px] leading-snug truncate ${
-              checked ? 'line-through text-text-light' : 'text-text'
-            }`}
-          >
-            {item.title}
-          </p>
+          {editing ? (
+            <input
+              type="text"
+              autoFocus
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  submitEdit()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  cancelEdit()
+                }
+              }}
+              onBlur={() => {
+                // Treat blur as cancel UNLESS the Save button is the
+                // next focus target — handled by Save's onMouseDown
+                // firing before blur completes. Simple heuristic that
+                // avoids racing against the mutation.
+                if (!editMutation.isPending) cancelEdit()
+              }}
+              className="flex-1 min-w-0 text-[14px] leading-snug bg-surface-alt border border-gold/40 rounded px-1.5 py-0.5 outline-none focus:border-gold"
+              aria-label="Edit item title"
+            />
+          ) : (
+            <p
+              className={`text-[14px] leading-snug truncate ${
+                checked ? 'line-through text-text-light' : 'text-text'
+              }`}
+            >
+              {item.title}
+            </p>
+          )}
         </div>
         {/* Sub-meta: who verified + when. Falls back to description
             (when present + unchecked) so admins can encode a quick
             "what good looks like" hint. */}
-        {checked ? (
+        {!editing && (checked ? (
           <p className="text-[10px] text-text-light mt-0.5">
             by {item.checked_by_name ?? 'a teammate'} · {relativeTimeShort(item.checked_at)}
           </p>
         ) : item.description ? (
           <p className="text-[10px] text-text-light/80 mt-0.5 truncate">{item.description}</p>
-        ) : null}
+        ) : null)}
       </div>
 
-      {/* Right column: admin-only archive (with two-tap confirm). */}
+      {/* Right column: admin-only Edit (pencil) + Archive (trash).
+          Both hover-revealed at rest, persistent while editing/
+          confirming so the action target stays clickable. Edit lives
+          BEFORE Archive so the row reads left→right as the safer
+          action first, destructive action second. */}
       {isAdmin && (
-        <div className="shrink-0 flex items-center">
-          {confirmArchive ? (
+        <div className="shrink-0 flex items-center gap-0.5">
+          {editing ? (
+            <span className="inline-flex items-center gap-1">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={submitEdit}
+                disabled={editMutation.isPending}
+                className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-gold hover:brightness-110"
+              >
+                {editMutation.isPending ? '…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={cancelEdit}
+                className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-text-light hover:text-text"
+              >
+                Cancel
+              </button>
+            </span>
+          ) : confirmArchive ? (
             <span className="inline-flex items-center gap-1">
               <button
                 type="button"
@@ -317,7 +406,7 @@ function ChecklistRow({
                 disabled={archiveMutation.isPending}
                 className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-rose-500/80 hover:brightness-110"
               >
-                {archiveMutation.isPending ? '…' : 'Archive?'}
+                {archiveMutation.isPending ? '…' : 'Delete?'}
               </button>
               <button
                 type="button"
@@ -328,15 +417,26 @@ function ChecklistRow({
               </button>
             </span>
           ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmArchive(true)}
-              title="Archive item"
-              aria-label="Archive item"
-              className="inline-flex items-center justify-center w-5 h-5 rounded text-text-light/40 opacity-0 group-hover/maintrow:opacity-100 hover:text-rose-300 hover:bg-rose-500/10 transition-all"
-            >
-              <Trash2 size={12} aria-hidden="true" />
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={startEdit}
+                title="Edit item"
+                aria-label="Edit item"
+                className="inline-flex items-center justify-center w-6 h-6 rounded text-text-light/50 opacity-0 group-hover/maintrow:opacity-100 hover:text-gold hover:bg-gold/10 transition-all"
+              >
+                <Edit2 size={12} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmArchive(true)}
+                title="Delete item"
+                aria-label="Delete item"
+                className="inline-flex items-center justify-center w-6 h-6 rounded text-text-light/50 opacity-0 group-hover/maintrow:opacity-100 hover:text-rose-300 hover:bg-rose-500/10 transition-all"
+              >
+                <Trash2 size={12} aria-hidden="true" />
+              </button>
+            </>
           )}
         </div>
       )}
