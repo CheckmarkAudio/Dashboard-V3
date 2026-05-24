@@ -18,10 +18,19 @@ import { inferForumKind, uploadForumFile } from '../lib/forum/upload'
 import { useToast } from '../components/Toast'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
-import { AlertCircle, Check, Clock, Edit2, Hash, MoreHorizontal, Plus, Send, Trash2, Users } from 'lucide-react'
+import { AlertCircle, Check, Clock, Edit2, Hash, MoreHorizontal, Pin, PinOff, Plus, Send, Trash2, Users } from 'lucide-react'
 import type { TeamMember } from '../types'
 
-type Channel = { id: string; name: string; slug: string; description: string }
+type Channel = {
+  id: string
+  name: string
+  slug: string
+  description: string
+  // 2026-05-24 — admin-set pin timestamp. Null = unpinned (sorts
+  // normally by created_at). Pinned channels float to the top of
+  // the sidebar regardless of section.
+  pinned_at: string | null
+}
 type Message = {
   id: string
   channel_id: string
@@ -57,6 +66,15 @@ export default function Content() {
   // hiding the trigger for non-admins is a UX nicety, not a
   // security boundary.
   const [showCreateChannel, setShowCreateChannel] = useState(false)
+  // 2026-05-24 — admin right-click context menu on channel rows.
+  // Tracks the targeted channel + screen coords so the menu floats
+  // wherever the user right-clicked. Closes on Escape / outside
+  // click. Non-admin right-clicks fall through to the native menu.
+  const [channelMenu, setChannelMenu] = useState<{ channel: Channel; x: number; y: number } | null>(null)
+  // Inline rename state — when set to a channel id, that row's name
+  // swaps into an editable input. Enter commits, Esc cancels.
+  const [renamingChannelId, setRenamingChannelId] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([])
@@ -92,8 +110,16 @@ export default function Content() {
 
   // Load channels — extracted so the create-channel callback can
   // refresh the list without a full reload.
+  // 2026-05-24 — sort pinned channels first (by pinned_at DESC so
+  // the most-recently-pinned sits on top), then unpinned (by
+  // created_at ASC for stable order). Postgres handles NULL FIRST/LAST
+  // explicitly so we control both halves of the sort cleanly.
   const loadChannels = useCallback(async (): Promise<Channel[]> => {
-    const { data } = await supabase.from('chat_channels').select('*').order('created_at')
+    const { data } = await supabase
+      .from('chat_channels')
+      .select('*')
+      .order('pinned_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: true })
     const list = data ?? []
     setChannels(list)
     return list
@@ -106,6 +132,75 @@ export default function Content() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 2026-05-24 — close the admin channel context menu on outside
+  // click / Escape. Mirrors the calendar booking context-menu pattern.
+  useEffect(() => {
+    if (!channelMenu) return
+    const onPointer = () => setChannelMenu(null)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setChannelMenu(null)
+    }
+    window.addEventListener('pointerdown', onPointer)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', onPointer)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [channelMenu])
+
+  // 2026-05-24 — admin pin/unpin + rename mutations. Both write to
+  // chat_channels under the admin-only UPDATE RLS policy. Optimistic
+  // local-state update; realtime sub on chat_channels keeps every
+  // other open client in sync.
+  const togglePinChannel = useCallback(async (channel: Channel) => {
+    const nextPinnedAt = channel.pinned_at ? null : new Date().toISOString()
+    const { error } = await supabase
+      .from('chat_channels')
+      .update({ pinned_at: nextPinnedAt })
+      .eq('id', channel.id)
+    if (error) {
+      console.error('[Content] pin update failed', error)
+      return
+    }
+    void loadChannels().then(setChannels)
+  }, [loadChannels])
+
+  const startRenameChannel = useCallback((channel: Channel) => {
+    setRenamingChannelId(channel.id)
+    setRenameDraft(channel.name)
+  }, [])
+
+  const cancelRename = useCallback(() => {
+    setRenamingChannelId(null)
+    setRenameDraft('')
+  }, [])
+
+  const commitRename = useCallback(async () => {
+    if (!renamingChannelId) return
+    const next = renameDraft.trim()
+    const current = channels.find((c) => c.id === renamingChannelId)
+    if (!current || !next || next === current.name) {
+      cancelRename()
+      return
+    }
+    const { error } = await supabase
+      .from('chat_channels')
+      .update({ name: next })
+      .eq('id', renamingChannelId)
+    if (error) {
+      console.error('[Content] rename failed', error)
+      cancelRename()
+      return
+    }
+    cancelRename()
+    void loadChannels().then((list) => {
+      setChannels(list)
+      // Keep activeChannel synced to the renamed row.
+      const renamed = list.find((c) => c.id === renamingChannelId)
+      if (renamed && activeChannel?.id === renamingChannelId) setActiveChannel(renamed)
+    })
+  }, [renameDraft, renamingChannelId, channels, loadChannels, cancelRename, activeChannel])
 
   // Load messages for active channel — explicit columns now since
   // we added `attachments` jsonb (selecting * is brittle when the
@@ -449,6 +544,56 @@ export default function Content() {
     <div className="max-w-6xl mx-auto animate-fade-in flex flex-col">
       <h1 className="text-[28px] font-extrabold tracking-tight text-text mb-3">Forum</h1>
 
+      {/* 2026-05-24 — Admin channel context menu (right-click on a
+          channel row in the sidebar). Two actions: Pin/Unpin + Rename.
+          Floats at the click coords, closes on outside-click or Esc
+          (handled by the useEffect above). */}
+      {channelMenu && isAdmin && (
+        <div
+          role="menu"
+          aria-label={`Actions for #${channelMenu.channel.name}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ top: channelMenu.y, left: channelMenu.x }}
+          className="fixed z-50 min-w-[180px] bg-surface border border-border rounded-xl shadow-xl py-1 animate-fade-in"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const ch = channelMenu.channel
+              setChannelMenu(null)
+              void togglePinChannel(ch)
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-text hover:bg-surface-hover transition-colors"
+          >
+            {channelMenu.channel.pinned_at ? (
+              <>
+                <PinOff size={12} className="text-text-muted" aria-hidden="true" />
+                Unpin from top
+              </>
+            ) : (
+              <>
+                <Pin size={12} className="text-gold" aria-hidden="true" />
+                Pin to top
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const ch = channelMenu.channel
+              setChannelMenu(null)
+              startRenameChannel(ch)
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-text hover:bg-surface-hover transition-colors"
+          >
+            <Edit2 size={12} className="text-text-muted" aria-hidden="true" />
+            Rename channel
+          </button>
+        </div>
+      )}
+
       {/* Lean 8 — chat fills the available height (was a hard
           h-[500px] before). Min-height keeps it usable on tiny
           screens. The Troubleshooting form moved to a global corner
@@ -476,18 +621,71 @@ export default function Content() {
               )}
             </div>
             <div className="space-y-0.5">
-              {channels.map((ch) => (
-                <button
-                  key={ch.id}
-                  onClick={() => setActiveChannel(ch)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all ${
-                    activeChannel?.id === ch.id ? 'bg-gold/10 text-gold' : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
-                  }`}
-                >
-                  <Hash size={13} className={activeChannel?.id === ch.id ? 'text-gold' : 'text-text-light'} />
-                  <span className="text-[13px] font-medium tracking-tight truncate">{ch.name}</span>
-                </button>
-              ))}
+              {channels.map((ch) => {
+                const isPinned = !!ch.pinned_at
+                const isRenaming = renamingChannelId === ch.id
+                if (isRenaming) {
+                  // Inline rename — replaces the row's clickable
+                  // surface with an editable input until commit/cancel.
+                  return (
+                    <div
+                      key={ch.id}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gold/10"
+                    >
+                      <Hash size={13} className="text-gold shrink-0" aria-hidden="true" />
+                      <input
+                        type="text"
+                        autoFocus
+                        value={renameDraft}
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            void commitRename()
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault()
+                            cancelRename()
+                          }
+                        }}
+                        onBlur={() => void commitRename()}
+                        className="flex-1 min-w-0 bg-transparent border-b border-gold/50 outline-none text-[13px] font-medium text-text"
+                        aria-label="Rename channel"
+                      />
+                    </div>
+                  )
+                }
+                return (
+                  <button
+                    key={ch.id}
+                    onClick={() => setActiveChannel(ch)}
+                    // 2026-05-24 — admin right-click → action menu
+                    // (Pin/Unpin + Rename). Non-admins get the native
+                    // browser menu so right-click isn't hijacked.
+                    onContextMenu={(e) => {
+                      if (!isAdmin) return
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setChannelMenu({ channel: ch, x: e.clientX, y: e.clientY })
+                    }}
+                    title={isAdmin ? 'Right-click for admin actions' : undefined}
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all ${
+                      activeChannel?.id === ch.id ? 'bg-gold/10 text-gold' : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
+                    }`}
+                  >
+                    {isPinned ? (
+                      <Pin
+                        size={11}
+                        strokeWidth={2.5}
+                        className={`shrink-0 ${activeChannel?.id === ch.id ? 'text-gold' : 'text-gold/70'}`}
+                        aria-label="Pinned"
+                      />
+                    ) : (
+                      <Hash size={13} className={`shrink-0 ${activeChannel?.id === ch.id ? 'text-gold' : 'text-text-light'}`} aria-hidden="true" />
+                    )}
+                    <span className="text-[13px] font-medium tracking-tight truncate">{ch.name}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
