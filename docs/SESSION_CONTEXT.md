@@ -718,6 +718,90 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 
 ## Recent + next
 
+### 2026-05-24 Session wrap — Scheduler series + Task Tweaks + Studio Hours + Checklist revamp + drag-overlay fix
+
+**`CLAUDE:`** Massive session — ~17 PRs landed across four big arcs.
+
+**Member Work Scheduler (6-PR series + tweaks)** — PRs #227–#232, #234
+- Schema: `team_schedule_recurring` (weekly rules + admin-only writes initially) + `team_schedule_blocks` (one-off + member-proposed pending blocks) + later migration `20260524000000_team_schedule_member_requests` extending recurring with same status/audit columns + RPCs `request_recurring_deletion` / `withdraw_recurring_deletion_request` so members can ask admin to remove approved rules.
+- Lib: `src/lib/schedule/` — pure `expand.ts` (recurring + blocks → flat list for a date range), `useTeamSchedule` hook with realtime sub, mutations covering admin direct-CRUD + member request/withdraw + admin approve/deny.
+- UI surfaces (all live):
+  - **Members → Work Scheduler** (admin): Pending Requests panel (block + recurring proposals + deletion requests) · Recurring weekly hours table · One-off blocks list. Tue–Sat default.
+  - **Calendar overlay**: per-day open-hours gold band (8% opacity, from `studio_hours_of_operation` — see Studio Hours below) + member schedule chips on top at purple-700/10 + per-member filter pill row (single-select toggle). Light-mode CSS overrides make purple chips legible (`text-purple-100/200/200-80` → near-black; `bg-purple-700/10` → /15 fill).
+  - **Overview**: `<MyScheduleWidget />` (col 2 rs 1) — Mine/Team toggle, 7-day stacked list, Request button opens shared `<ScheduleRequestModal />` with two tabs (Single block / Recurring weekly), withdraw inline-X on pending entries.
+  - **Profile**: read-only weekly schedule section (recurring table Mon→Sun + upcoming approved exceptions next 14 days).
+  - **CalendarDayCard**: "On shift today" chip strip above the booking list (renders on both `/calendar` left rail and Overview's today_calendar widget).
+  - **Admin Hub**: `<AdminEmployeeScheduleWidget />` at col 2 rs 2 between Approvals and Notifications. Pending-count badge in header + Edit button → /admin/team.
+- Calendar `/calendar` also got: shared `<ScheduleRequestModal />` accessible via header pill + right-click empty cell context menu (pre-fills day + start hour).
+
+**Studio Hours of Operation** — PR #237
+- `studio_hours_of_operation` table (one row per weekday, open_time / close_time / active, admin-only writes via existing `is_team_admin()` policy). Seeded **Tue–Sat 10:00–20:00**.
+- `useStudioHours()` hook + `updateStudioHour()` admin mutation.
+- Calendar overlay: gold/8% in-hours wash + soft grey dim for off-hours + closed days (Apple-Calendar-style frame). Renders BEFORE the schedule layer so chips nest visibly inside the band.
+- New **Settings → Studio Hours** editor (Clock icon, between Quick Keys and Organization). 7-row table with active toggle + open/close time pickers + per-row Save. Realtime sub keeps `/calendar` in sync.
+
+**Task Tweaks batch** — PRs #233, #238, #241, #243
+- **MyTasks widget (PR #238)** — per-row Edit (pencil) + Delete (trash) hover-revealed in the due-date column. Both open `TaskDetailModal` with `initialCompose='edit'|'delete'` pre-expanding the right composer. Members go through `submitTaskDeleteRequest` / `submit_task_edit_request`; admins direct-apply. No new mutations — surfaces existing modal flows at row level.
+- **MyTasks drag UX** — dedicated drag handle on the right of each row (two stacked horizontal lines via `bg-current` divs). Drag listeners attach ONLY to the handle (no more whole-row drag), cursor flips grab → grabbing, row lifts on hover + scales while dragging.
+- **Drag-overlay fix (PR #243)** — three layered fixes after user reported "displaced row floats away to the left":
+  1. `CSS.Transform.toString` → `CSS.Translate.toString` so the scale component doesn't compose weirdly with sibling layouts
+  2. `transition-all` → `transition-shadow` only on the inner wrapper so layout-shift sibling updates don't get animated
+  3. **Final fix**: `<DragOverlay>` portaled to `document.body` via `createPortal`. The dragged row's visible artefact escapes the `.inset-panel { overflow: hidden }` clip + every parent transform context. The in-place row goes `opacity: 0` to hold its drop-target slot. This is the canonical dnd-kit pattern for sortable lists inside scrollable/clipped parents.
+- **Checklist polish (PR #238 add-on)** — hover lift on rows + admin inline Edit (pencil) alongside the existing trash on `TeamChecklistWidget`.
+- **Notifications widget (PR #233)** — at-a-glance forum rows now hide the message preview text; click to expand shows the full message body in a violet quote box above the reply textarea (line-clamp-4 sanity cap).
+
+**Per-Person Checklist (Anyone / Individual / All Members)** — PR #241
+- Two migrations: `20260525000000_team_maintenance_claim_type` added 'everyone' value + per-member completions; `20260525120000_team_maintenance_assign_to` renamed `'everyone'` → `'all_members'` + added `'individual'` claim_type + `assigned_to` column (with `claim_type='individual'` REQUIRES `assigned_to`).
+- `team_maintenance_toggle()` RPC branches by claim_type:
+  - `anyone` → DELETE existing completion + INSERT caller's (claim-replace)
+  - `individual` → only assignee (or admin) can toggle; row recorded as the assignee
+  - `all_members` → caller toggles only their own row
+- `team_maintenance_list()` returns `completions` JSONB array (all completions for current period) + `assigned_to` + `assigned_to_name`.
+- UI revamp per user feedback ("the icons need to act as indicators not the buttons themselves. we need a check box next to the checklist task per usual"):
+  - **Single checkbox on every row** (no more avatars-as-buttons)
+  - Avatars become **completion indicators** — only members who've checked off appear (as gold-ringed avatar chips with a check badge)
+  - Admin add-form gets **"Assign to:"** segmented control (Anyone · Individual · All Members) + member dropdown for Individual + clarifying note when All Members is selected ("Task will be assigned to each team member for individual submission.")
+  - Mode badges next to title (All / Individual: <name>); Anyone is the default and shows no badge.
+- Defensive client-side normalization maps stale `'everyone'` cache values to `'all_members'`.
+
+**Overview Checklist attention pulse** — PR #242
+- `team_checklist` placed on `member_overview` (col 1 rs 1) alongside My Tasks. LAYOUT_VERSION 38 → 39 so saved layouts re-sanitize and every user picks up the new widget.
+- `src/hooks/useThrottledPulse(key, intervalMinutes, enabled)` — localStorage-backed per-key throttle, returns `pulse: boolean` true for animation duration on mount. `enabled` param lets the caller gate by route etc.
+- CSS `@keyframes pulse-lift` — 1.8s ease-out-expo, peak at 35% (translateY(-4px) + scale(1.008) + soft gold shadow). Total motion is intentionally subtle.
+- Hook fires only when `useLocation().pathname === '/'` so the `/daily` Checklist doesn't pulse.
+
+**Forum tweaks** — PRs #239, #240
+- **Pin channels (admin)**: `chat_channels.pinned_at timestamptz NULL`, sparse partial index. Sidebar sort: pinned first (by `pinned_at` DESC), then unpinned (by `created_at` ASC). Admin right-click on a channel row → "Pin to top" / "Unpin from top". Pinned channels render with a gold Pin icon instead of `#`.
+- **Rename channels (admin)**: same right-click context menu → "Rename channel". Inline editable input — Enter saves, Esc cancels, blur saves. Active channel state syncs to the renamed row.
+- **Media buttons redesign**: dropped the +Media toggle popover entirely. Three **separate lifted-black pills lined in gold** (Image · Video · Audio), each with a leading `+` glyph next to the templates-style gold icon. `bg-surface-alt + ring-1 ring-gold/40`, hover lifts to `bg-gold/15`. Single click fires the file picker — no more click-open / click-again-to-close.
+
+**Quick keys** — PR #236
+- Renumbered to digits in nav order: 1 Overview · 2 Tasks · 3 Calendar · 4 Booking · 5 Forum · **6 Media (new)** · 7 Team Hub · 8 Assign · 9 Members · 0 Analytics · - Settings.
+- Added Media to `QUICK_KEY_ACTIONS` (was missing).
+- Bumped STORAGE_KEY v1 → v2 so every user's bindings reset to the new defaults.
+
+**What's open / queued**:
+- **Google Calendar Phase 2A** — user reconnects Google in Settings → Database (token was expired/revoked earlier) then clicks "Push pending bookings" to verify the recovery path.
+- **Flywheel events Phase 1 (PR #203)** — still open + marked CONFLICTING; needs a rebase before merge. Foundation for any real KPI work.
+- **Sessions polish #2 redo** — user rejected the left-rail Bookings/Calendar/Clients restructure (PR #207, scratched). Underlying need (Calendar view on Booking page) stands — explore a lighter "View calendar" toggle inside Bookings.
+
+**🚧 Codex parallel-session note (IMPORTANT)**:
+- Codex was working on an **AI titling/search feature** in their own worktree at `/Users/bridges/GITHUB/Dashboard-V3/` on branch `codex/ai-titling-search`. Uncommitted edits touch `src/pages/Content.tsx`, `src/components/forum/MediaPicker.tsx`, `src/lib/forum/attachments.ts`, `src/lib/forum/upload.ts`.
+- **Claude must NOT touch that worktree.** All Claude work stays in `.claude/worktrees/*` (e.g. `cranky-perlman-06c325`).
+- When Codex commits + pushes its work, Forum files may conflict with this session's `#233` (notifications) + earlier forum churn. Codex will rebase + reapply on its end.
+
+**Patterns to keep in mind for next session**:
+- **DragOverlay portal pattern** — for ANY sortable inside a scrollable/clipped parent (`.inset-panel`, `overflow-y-auto`, etc.), use `<DragOverlay>` + `createPortal` to `document.body`. Don't try to fix clipping by removing `overflow: hidden` upstream — too many consumers.
+- **CSS.Translate vs CSS.Transform** — always use `CSS.Translate.toString(transform)` for vertical sortable lists. `CSS.Transform` includes the scale component which composes weirdly with sibling rendering.
+- **`transition-all` is a footgun** with dnd-kit — animates EVERY property change, including sibling layout-shift artefacts. Use `transition-[shadow,opacity]` (or whatever you actually want to animate) explicitly.
+- **Schema rename pattern** — when changing an enum-like text value (e.g. 'everyone' → 'all_members'), drop the old CHECK constraint → UPDATE the data → re-add the new CHECK constraint → drop the old function signature with `DROP FUNCTION IF EXISTS old_sig` → recreate with new signature. Plus client-side defensive normalization for any stale cached responses.
+- **Pin-style sort using `pinned_at timestamptz NULL`** is a cleaner pattern than a boolean `is_pinned` — most-recently-pinned naturally sorts first, no separate pin order column needed.
+- **Throttled UI nudges via localStorage** (`useThrottledPulse`) — generic + reusable for any "fire once per X minutes when this surface mounts" pattern (calendar reminders, daily summary banners, etc.).
+- **`useLocation().pathname === '/'`** — when a shared widget needs route-aware behavior, route detection inside the widget keeps the registration system simple. Don't fork the widget into Overview vs Tasks variants when one if-statement does the job.
+- **Studio Hours table is the canonical "studio operating hours" source** — any future feature that needs "is the studio open right now?" should join against this, not hardcode Tue–Sat 10–8.
+
+**Sessions count** — main moved from PR #225 (start) to PR #243 (end), 18 PRs landed today. All scheduler + checklist + task tweaks + forum admin polish + studio hours + quick keys closed out. Production is clean.
+
 ### 2026-05-20 Session wrap — forum overhaul + media uploads + drag-page fix
 
 **What landed this session** (PRs #206, #208–#220, plus a hotfix outside any PR):
