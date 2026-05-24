@@ -259,7 +259,7 @@ export default function TeamChecklistWidget() {
       {/* Admin-only inline "Add item" form pinned below the list.
           Member view shows nothing (the curated-list spirit means
           members verify; they don't add). */}
-      {isAdmin && <AddItemForm />}
+      {isAdmin && <AddItemForm activeMembers={activeMembers} />}
     </div>
   )
 }
@@ -379,53 +379,92 @@ function ChecklistRow({
     editMutation.mutate()
   }
 
-  // ── Anyone-items: existing single-checkbox row + last-claimer
-  // attribution. ── Everyone-items: leading "people" icon + the
-  // avatar strip lives BELOW the title (so long titles + many
-  // members both have room to breathe). The leading checkbox slot
-  // gets a Users icon instead of a clickable square.
-  const isEveryone = item.claim_type === 'everyone'
+  // 2026-05-25 (rev) — checkbox is the action on EVERY row, avatars
+  // are indicators only. Per user: "the icons need to act as
+  // indicators not the buttons themselves. we need a check box next
+  // to the checklist task per usual."
+  const isAllMembers = item.claim_type === 'all_members'
+  const isIndividual = item.claim_type === 'individual'
   const completedIds = useMemo(
     () => new Set(item.completions.map((c) => c.checked_by)),
     [item.completions],
   )
   const everyoneFullyChecked =
-    isEveryone &&
+    isAllMembers &&
     activeMembers.length > 0 &&
     activeMembers.every((m) => completedIds.has(m.id))
+  // Members who've checked this period — surfaces as avatar
+  // indicators below the title. Only used in all_members mode;
+  // sorted by completion order (already sorted server-side).
+  const completedMembers = useMemo(() => {
+    const byId = new Map(activeMembers.map((m) => [m.id, m]))
+    return item.completions
+      .map((c) => ({ completion: c, member: byId.get(c.checked_by) }))
+      .filter((entry): entry is { completion: typeof entry.completion; member: TeamMember } => !!entry.member)
+  }, [item.completions, activeMembers])
+
+  // Checkbox interactivity rules:
+  //   anyone      → anyone can click (claim/release)
+  //   all_members → caller can click (only toggles caller's own)
+  //   individual  → only the assignee (or admin) can click
+  const canCheck =
+    isIndividual
+      ? (item.assigned_to === currentUserId || isAdmin)
+      : true
+  // Display state for the checkbox:
+  //   anyone      → checked when any completion exists
+  //   individual  → checked when the assignee has a completion
+  //   all_members → checked when CALLER has a completion (so each
+  //                 member sees their own progress in the checkbox)
+  const checkboxOn = isIndividual
+    ? !!item.assigned_to && completedIds.has(item.assigned_to)
+    : isAllMembers
+      ? checked // = current user's own completion
+      : item.completions.length > 0
+  // Headline strikethrough — fully done means:
+  //   anyone      → any completion
+  //   individual  → assignee completion
+  //   all_members → every active member completion
+  const fullyDone = isAllMembers ? everyoneFullyChecked : checkboxOn
+  const assignedMember = useMemo(
+    () => (isIndividual && item.assigned_to ? activeMembers.find((m) => m.id === item.assigned_to) : undefined),
+    [isIndividual, item.assigned_to, activeMembers],
+  )
 
   return (
     <div className="group/maintrow grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 px-3 py-2 rounded-md hover:bg-surface-hover hover:-translate-y-[1px] hover:shadow-sm transition-all duration-150 ease-out">
-      {/* Leading slot — anyone: clickable checkbox. everyone: read-
-          only Users icon (each individual avatar in the strip below
-          IS the checkbox for that member). */}
-      {isEveryone ? (
-        <div
-          className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-[5px] flex items-center justify-center ${
-            everyoneFullyChecked
-              ? 'bg-gold/30 ring-1 ring-gold text-gold'
-              : 'text-text-light/60'
-          }`}
-          title="Everyone has to do this"
-          aria-label="Everyone item"
-        >
-          <Users size={11} strokeWidth={2.5} aria-hidden="true" />
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => onToggle(!checked)}
-          aria-pressed={checked}
-          aria-label={checked ? `Uncheck ${item.title}` : `Mark ${item.title} as verified`}
-          className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-[5px] border-[1.5px] flex items-center justify-center transition-colors ${
-            checked
-              ? 'bg-gold/30 border-gold text-gold'
-              : 'checkbox-empty hover:border-gold/50'
-          }`}
-        >
-          {checked && <Check size={11} strokeWidth={3} aria-hidden="true" />}
-        </button>
-      )}
+      {/* Single checkbox on every row. Tooltip + aria-label adapt to
+          the claim mode so the action's effect is always clear. */}
+      <button
+        type="button"
+        onClick={() => {
+          if (!canCheck) return
+          onToggle(!checkboxOn)
+        }}
+        disabled={!canCheck}
+        aria-pressed={checkboxOn}
+        aria-label={
+          checkboxOn
+            ? `Uncheck ${item.title}`
+            : `Mark ${item.title} as ${isAllMembers ? 'done for yourself' : 'verified'}`
+        }
+        title={
+          !canCheck && isIndividual
+            ? `Only ${item.assigned_to_name ?? 'the assignee'} can check this`
+            : isAllMembers
+              ? checkboxOn ? 'Uncheck your completion' : 'Mark as done for yourself'
+              : checkboxOn ? 'Uncheck' : 'Mark as verified'
+        }
+        className={`shrink-0 w-[18px] h-[18px] mt-[2px] rounded-[5px] border-[1.5px] flex items-center justify-center transition-colors ${
+          checkboxOn
+            ? 'bg-gold/30 border-gold text-gold'
+            : canCheck
+              ? 'checkbox-empty hover:border-gold/50'
+              : 'checkbox-empty opacity-40 cursor-not-allowed'
+        }`}
+      >
+        {checkboxOn && <Check size={11} strokeWidth={3} aria-hidden="true" />}
+      </button>
 
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -445,10 +484,6 @@ function ChecklistRow({
                 }
               }}
               onBlur={() => {
-                // Treat blur as cancel UNLESS the Save button is the
-                // next focus target — handled by Save's onMouseDown
-                // firing before blur completes. Simple heuristic that
-                // avoids racing against the mutation.
                 if (!editMutation.isPending) cancelEdit()
               }}
               className="flex-1 min-w-0 text-[14px] leading-snug bg-surface-alt border border-gold/40 rounded px-1.5 py-0.5 outline-none focus:border-gold"
@@ -457,81 +492,75 @@ function ChecklistRow({
           ) : (
             <p
               className={`text-[14px] leading-snug truncate ${
-                (isEveryone ? everyoneFullyChecked : checked) ? 'line-through text-text-light' : 'text-text'
+                fullyDone ? 'line-through text-text-light' : 'text-text'
               }`}
             >
               {item.title}
             </p>
           )}
-          {isEveryone && !editing && (
+          {/* Mode badge — All Members / Individual. Anyone mode shows
+              no badge (it's the default; the lack of a tag is the
+              tell). */}
+          {!editing && isAllMembers && (
             <span
               className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-text-light/80 px-1.5 py-0.5 rounded-full bg-surface-alt ring-1 ring-border"
               title="Each team member checks off their own"
             >
               <Users size={9} aria-hidden="true" />
-              Everyone
+              All
+            </span>
+          )}
+          {!editing && isIndividual && assignedMember && (
+            <span
+              className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-text-light/80 px-1.5 py-0.5 rounded-full bg-surface-alt ring-1 ring-border"
+              title={`Assigned to ${assignedMember.display_name}`}
+            >
+              <User size={9} aria-hidden="true" />
+              {assignedMember.display_name}
             </span>
           )}
         </div>
         {/* Sub-meta:
-              everyone → "X of Y done" + avatar strip beneath
-              anyone   → "by Name · time" attribution OR description */}
+              all_members → "X of Y done" + avatar indicators of
+                            members who've checked (NOT all members
+                            upfront — only those who've completed)
+              individual  → "Assigned to {name}" + check status
+              anyone      → "by Name · time" attribution OR description */}
         {!editing && (
-          isEveryone ? (
+          isAllMembers ? (
             <div className="mt-1 flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-semibold text-text-muted tabular-nums">
                 {item.completions.length} of {activeMembers.length} done
               </span>
-              <div className="flex items-center gap-1 flex-wrap">
-                {activeMembers.map((m) => {
-                  const isMine = m.id === currentUserId
-                  const memberChecked = completedIds.has(m.id)
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (!isMine) return // members only toggle their own
-                        onToggle(!memberChecked)
-                      }}
-                      disabled={!isMine}
-                      aria-pressed={memberChecked}
-                      aria-label={
-                        isMine
-                          ? memberChecked
-                            ? `Uncheck your completion`
-                            : `Mark as done for yourself`
-                          : `${m.display_name} ${memberChecked ? 'has' : 'has not'} checked this`
-                      }
-                      title={
-                        isMine
-                          ? memberChecked
-                            ? 'Uncheck your completion'
-                            : 'Mark as done'
-                          : `${m.display_name} · ${memberChecked ? 'Done' : 'Pending'}`
-                      }
-                      className={`relative inline-flex items-center justify-center rounded-full transition-all ${
-                        isMine ? 'cursor-pointer hover:scale-110' : 'cursor-default'
-                      } ${
-                        memberChecked
-                          ? 'ring-2 ring-gold'
-                          : 'ring-1 ring-border opacity-50 hover:opacity-80'
-                      }`}
+              {completedMembers.length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {completedMembers.map(({ completion, member }) => (
+                    <span
+                      key={completion.checked_by}
+                      className="relative inline-flex items-center rounded-full"
+                      title={`${member.display_name} · checked ${relativeTimeShort(completion.checked_at)}`}
+                      aria-label={`${member.display_name} has checked off`}
                     >
-                      <MemberAvatar member={m} size="xs" />
-                      {memberChecked && (
-                        <span
-                          className="absolute -bottom-0.5 -right-0.5 inline-flex items-center justify-center w-3 h-3 rounded-full bg-gold text-black ring-1 ring-surface"
-                          aria-hidden="true"
-                        >
-                          <Check size={8} strokeWidth={3.5} />
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
+                      <MemberAvatar member={member} size="xs" />
+                      <span
+                        className="absolute -bottom-0.5 -right-0.5 inline-flex items-center justify-center w-3 h-3 rounded-full bg-gold text-black ring-1 ring-surface"
+                        aria-hidden="true"
+                      >
+                        <Check size={8} strokeWidth={3.5} />
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : isIndividual && assignedMember ? (
+            <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-text-light">
+              <MemberAvatar member={assignedMember} size="xs" />
+              <span>
+                {checkboxOn
+                  ? `Done · ${relativeTimeShort(item.completions[0]?.checked_at ?? null)}`
+                  : `Assigned to ${assignedMember.display_name}`}
+              </span>
             </div>
           ) : attribCompletion ? (
             <p className="text-[10px] text-text-light mt-0.5">
@@ -616,30 +645,41 @@ function ChecklistRow({
   )
 }
 
-function AddItemForm() {
+function AddItemForm({ activeMembers }: { activeMembers: TeamMember[] }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [cadence, setCadence] = useState<MaintenanceCadence>('daily')
-  // 2026-05-25 (PR B) — claim_type defaults to 'anyone' (the legacy
-  // behavior — first checker claims for the team). Admin flips to
-  // 'everyone' for items each team member individually owes (e.g.
-  // "Drop your media to Dropbox today").
+  // 2026-05-25 (rev) — Assign-to picker: anyone | individual | all_members.
+  // 'individual' requires a member picker; 'all_members' shows a
+  // clarifying note above the form so admins understand the impact.
   const [claimType, setClaimType] = useState<MaintenanceClaimType>('anyone')
+  const [assignedTo, setAssignedTo] = useState<string>('')
 
   const createMutation = useMutation({
     mutationFn: () =>
-      adminCreateMaintenanceItem({ title: title.trim(), cadence, claim_type: claimType }),
+      adminCreateMaintenanceItem({
+        title: title.trim(),
+        cadence,
+        claim_type: claimType,
+        assigned_to: claimType === 'individual' ? assignedTo : null,
+      }),
     onSuccess: () => {
       setTitle('')
       setClaimType('anyone')
+      setAssignedTo('')
       setOpen(false)
       void queryClient.invalidateQueries({ queryKey: maintenanceKeys.list() })
       toast('Item added.', 'success')
     },
     onError: (err) => toast(err instanceof Error ? err.message : 'Add failed', 'error'),
   })
+
+  const canSubmit =
+    !!title.trim() &&
+    !createMutation.isPending &&
+    (claimType !== 'individual' || !!assignedTo)
 
   if (!open) {
     return (
@@ -663,20 +703,37 @@ function AddItemForm() {
         <p className="text-[11px] font-bold uppercase tracking-wider text-gold">New item</p>
         <button
           type="button"
-          onClick={() => { setOpen(false); setTitle('') }}
+          onClick={() => {
+            setOpen(false)
+            setTitle('')
+            setClaimType('anyone')
+            setAssignedTo('')
+          }}
           className="p-1 rounded text-text-muted hover:text-text"
           aria-label="Cancel"
         >
           <X size={13} />
         </button>
       </div>
+
+      {/* 2026-05-25 (rev) — clarifying note when admin picks
+          "Assign to all". Per user: "when it is selected a little
+          note at the top of the add task box with say Task will be
+          assigned to each team member for individual submission." */}
+      {claimType === 'all_members' && (
+        <div className="text-[11px] text-text-muted bg-surface-alt/60 border border-border rounded-md px-2.5 py-1.5 flex items-start gap-1.5">
+          <Users size={12} className="text-gold shrink-0 mt-[1px]" aria-hidden="true" />
+          <span>Task will be assigned to each team member for individual submission.</span>
+        </div>
+      )}
+
       <input
         type="text"
         autoFocus
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && title.trim()) {
+          if (e.key === 'Enter' && canSubmit) {
             e.preventDefault()
             createMutation.mutate()
           }
@@ -686,9 +743,16 @@ function AddItemForm() {
             setTitle('')
           }
         }}
-        placeholder="e.g. Cables organized"
+        placeholder={
+          claimType === 'all_members'
+            ? 'e.g. Drop your media to Dropbox'
+            : claimType === 'individual'
+              ? 'e.g. Finalize brand audit'
+              : 'e.g. Cables organized'
+        }
         className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[13px] text-text focus:outline-none focus:border-gold/50"
       />
+
       <div className="flex items-center gap-2 flex-wrap">
         {/* Cadence picker — 3-pill segmented control. */}
         <div className="inline-flex gap-1 rounded-lg bg-surface-alt p-1 ring-1 ring-border">
@@ -709,20 +773,28 @@ function AddItemForm() {
             </button>
           ))}
         </div>
-        {/* 2026-05-25 (PR B) — Claim-type picker. Anyone = first to
-            check claims for the team (cables organized). Everyone =
-            each member checks their own avatar (drop your media to
-            dropbox). Icons signal the difference at a glance. */}
+      </div>
+
+      {/* 2026-05-25 (rev) — "Assign to:" picker. Three modes:
+            Anyone      → first checker claims for the team
+            Individual  → one specific assignee (member picker below)
+            All Members → each member checks off their own
+          Per user: "label said portion on the add task pop up as
+          'assign to:' so we can see what we are selecting here." */}
+      <div className="space-y-1.5">
+        <p className="text-[10px] uppercase tracking-wider font-bold text-text-muted">
+          Assign to:
+        </p>
         <div
           className="inline-flex gap-1 rounded-lg bg-surface-alt p-1 ring-1 ring-border"
           role="radiogroup"
-          aria-label="Who does this checklist item?"
+          aria-label="Assign to"
         >
           <button
             type="button"
             onClick={() => setClaimType('anyone')}
             aria-pressed={claimType === 'anyone'}
-            title="One person checks it off for the whole team"
+            title="Anyone on the team can check this off — first to claim wins"
             className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-semibold transition-colors ${
               claimType === 'anyone'
                 ? 'bg-gold/20 text-gold ring-1 ring-gold/40'
@@ -734,24 +806,58 @@ function AddItemForm() {
           </button>
           <button
             type="button"
-            onClick={() => setClaimType('everyone')}
-            aria-pressed={claimType === 'everyone'}
-            title="Every team member must check it off individually"
+            onClick={() => setClaimType('individual')}
+            aria-pressed={claimType === 'individual'}
+            title="Assign to one specific team member"
             className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-semibold transition-colors ${
-              claimType === 'everyone'
+              claimType === 'individual'
+                ? 'bg-gold/20 text-gold ring-1 ring-gold/40'
+                : 'text-text-muted hover:text-text'
+            }`}
+          >
+            <User size={10} aria-hidden="true" />
+            Individual
+          </button>
+          <button
+            type="button"
+            onClick={() => setClaimType('all_members')}
+            aria-pressed={claimType === 'all_members'}
+            title="Assign to every team member — each one checks off their own"
+            className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-semibold transition-colors ${
+              claimType === 'all_members'
                 ? 'bg-gold/20 text-gold ring-1 ring-gold/40'
                 : 'text-text-muted hover:text-text'
             }`}
           >
             <Users size={10} aria-hidden="true" />
-            Everyone
+            All Members
           </button>
         </div>
+
+        {/* Member picker — only when Individual mode is selected. */}
+        {claimType === 'individual' && (
+          <div className="pt-1">
+            <select
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+              aria-label="Assignee"
+              className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[12px] text-text focus:outline-none focus:border-gold/50"
+            >
+              <option value="">Pick a team member…</option>
+              {activeMembers.map((m) => (
+                <option key={m.id} value={m.id}>{m.display_name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end pt-1">
         <button
           type="button"
           onClick={() => createMutation.mutate()}
-          disabled={createMutation.isPending || !title.trim()}
-          className="ml-auto inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-gold text-black text-[12px] font-bold hover:bg-gold-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring"
+          disabled={!canSubmit}
+          className="inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-gold text-black text-[12px] font-bold hover:bg-gold-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring"
         >
           {createMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} strokeWidth={3} />}
           Add
