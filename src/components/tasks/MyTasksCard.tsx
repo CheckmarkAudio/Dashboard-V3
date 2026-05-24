@@ -15,13 +15,16 @@ import {
 } from 'lucide-react'
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
+import { createPortal } from 'react-dom'
 import {
   SortableContext,
   arrayMove,
@@ -422,7 +425,23 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   // out (priority off / source filter / completed eye off) keep
   // their relative position in the saved order so toggling a filter
   // off later reveals them in the same spot the user remembered.
+  // 2026-05-24 — Track the actively-dragged task id so DragOverlay
+  // can render a portal clone outside the SortableContext (and
+  // outside the inset-panel's overflow:hidden), which is what makes
+  // the dragged row never get clipped or composed with sibling
+  // transforms when hovering over other rows.
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
+  const activeDragTask = useMemo(
+    () => activeVisibleTasks.find((t) => t.id === activeDragId) ?? null,
+    [activeVisibleTasks, activeDragId],
+  )
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(String(event.active.id))
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
     const visibleIds = activeVisibleTasks.map((t) => t.id)
@@ -449,6 +468,10 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
       }
     }
     persistOrder(nextOrder)
+  }
+
+  const handleDragCancel = () => {
+    setActiveDragId(null)
   }
 
   // The pending section appears whenever there's anything in it —
@@ -599,7 +622,13 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
                 visibility — doesn't compete with the existing
                 click-to-open-detail behavior). Saved per-user to
                 `team_members.preferences.my_tasks_order`. */}
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
               <SortableContext
                 items={activeVisibleTasks.map((t) => t.id)}
                 strategy={verticalListSortingStrategy}
@@ -630,6 +659,32 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
                   )
                 })}
               </SortableContext>
+
+              {/* 2026-05-24 — DragOverlay portals the dragged row to
+                  document.body so it can't be clipped by the
+                  inset-panel's overflow:hidden or interact with sibling
+                  transforms. The real row inside SortableContext stays
+                  as a faded placeholder showing the prospective drop
+                  position; this overlay is what follows your cursor. */}
+              {createPortal(
+                <DragOverlay dropAnimation={null}>
+                  {activeDragTask ? (
+                    <div className="rounded-md shadow-2xl ring-1 ring-gold/40 bg-surface cursor-grabbing">
+                      <AssignedTaskRow
+                        task={activeDragTask}
+                        highlighted={false}
+                        isPending={false}
+                        pendingMeta={null}
+                        onToggle={() => {}}
+                        onOpenDetail={() => {}}
+                        rowRef={() => {}}
+                        memberMap={memberMap}
+                      />
+                    </div>
+                  ) : null}
+                </DragOverlay>,
+                document.body,
+              )}
             </DndContext>
 
             {/* 2026-05-02 — Pending section.
@@ -875,16 +930,16 @@ function SortableAssignedTaskRow({
   //
   // 2026-05-24 — use CSS.Translate (not CSS.Transform) so the scale
   // component dnd-kit attaches to the transform doesn't compose with
-  // the inner wrapper's `scale-[1.02]` while dragging or weirdly
-  // shrink displaced rows. Without this, displaced rows in vertical
-  // sortable lists can render with scaleX(0) → "the row flies off
-  // to the left as I drag down." Canonical fix per dnd-kit docs.
+  // sibling layouts. Plus while a row is actively being dragged, the
+  // visible follow-cursor render lives in the DragOverlay portal —
+  // the row IN PLACE here becomes a near-invisible placeholder so
+  // the drop zone is still claimed but the visible artefact lives
+  // outside the inset-panel's overflow:hidden.
   const style: CSSProperties = {
     transform: CSS.Translate.toString(transform),
     transition,
-    opacity: isDragging ? 0.65 : 1,
+    opacity: isDragging ? 0 : 1,
     position: 'relative',
-    zIndex: isDragging ? 10 : undefined,
   }
   return (
     <div ref={setNodeRef} style={style} className="group/sortable block w-full">
