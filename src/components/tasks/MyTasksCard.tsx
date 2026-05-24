@@ -872,8 +872,15 @@ function SortableAssignedTaskRow({
   // intent) and the active-drag scale/shadow (driven by useSortable's
   // isDragging, independent of where the listeners live). Cursor on
   // the wrapper stays default; only the handle button gets cursor-grab.
+  //
+  // 2026-05-24 — use CSS.Translate (not CSS.Transform) so the scale
+  // component dnd-kit attaches to the transform doesn't compose with
+  // the inner wrapper's `scale-[1.02]` while dragging or weirdly
+  // shrink displaced rows. Without this, displaced rows in vertical
+  // sortable lists can render with scaleX(0) → "the row flies off
+  // to the left as I drag down." Canonical fix per dnd-kit docs.
   const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.65 : 1,
     position: 'relative',
