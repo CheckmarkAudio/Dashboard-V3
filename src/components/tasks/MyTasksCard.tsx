@@ -887,7 +887,7 @@ function SortableAssignedTaskRow({
     zIndex: isDragging ? 10 : undefined,
   }
   return (
-    <div ref={setNodeRef} style={style} className="group/sortable">
+    <div ref={setNodeRef} style={style} className="group/sortable block w-full">
       {separatorBefore && (
         <div className="mx-2 my-2 flex items-center gap-2">
           <CheckCircle2 size={11} className="text-emerald-400/70" aria-hidden="true" />
@@ -895,11 +895,23 @@ function SortableAssignedTaskRow({
           <div className="flex-1 h-px bg-border" aria-hidden="true" />
         </div>
       )}
+      {/* 2026-05-24 (rev2) — inner wrapper. Earlier version used
+          `transition-all` which animated EVERY property change,
+          including layout shifts driven by sibling drag-displacement —
+          that's what made displaced rows "float away" when the
+          dragged row hovered over them. Now we ONLY transition box-
+          shadow (for the hover lift glow), and we drop the inner
+          `scale-[1.02]` during drag because the outer translate from
+          dnd-kit already lifts the row visually — adding scale on
+          top of that translate composed weirdly with hover state on
+          the row underneath. The gold ring + shadow + bg are enough
+          to read as "I'm grabbing this." Hover lift is also gated
+          OFF while dragging via the isDragging branch. */}
       <div
-        className={`rounded-md transition-all duration-150 ease-out ${
+        className={`rounded-md transition-shadow duration-150 ease-out ${
           isDragging
-            ? 'scale-[1.02] shadow-2xl ring-1 ring-gold/30 bg-surface'
-            : 'hover:-translate-y-[1px] hover:shadow-md'
+            ? 'shadow-2xl ring-1 ring-gold/30 bg-surface'
+            : 'hover:shadow-md'
         }`}
       >
         <AssignedTaskRow
