@@ -14,6 +14,7 @@ import { addDays, startOfWeek } from '../lib/time'
 import { localDateKey } from '../lib/dates'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import { useTeamSchedule } from '../lib/schedule/useTeamSchedule'
+import { useStudioHours } from '../lib/schedule/useStudioHours'
 import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2, CalendarRange, EyeOff } from 'lucide-react'
 
 /**
@@ -395,6 +396,21 @@ export default function Calendar() {
   // DOM cost beyond the fetch).
   const [showSchedule, setShowSchedule] = useState(true)
 
+  // 2026-05-23 — Studio hours of operation overlay (Apple-Calendar-
+  // style frame). Per-weekday rows from studio_hours_of_operation
+  // drive a gold/8% wash for OPEN hours + a soft grey dim for CLOSED
+  // hours (and full-day grey for closed days like Sun/Mon by default).
+  // The member-schedule chips and gold booking blocks then nest
+  // visibly INSIDE the gold band, which reads as "the studio is
+  // open during this window."
+  const { byWeekday: studioHoursByWeekday } = useStudioHours()
+  // Grid math constants — kept in sync with the HOURS render below.
+  // GRID_START_HOUR = first visible hour (7am); GRID_END_HOUR = first
+  // hour OFF the bottom of the grid (20=8pm). 48px per hour row.
+  const GRID_START_HOUR = 7
+  const GRID_END_HOUR = 20
+  const HOUR_PX = 48
+
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
       {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime(''); void refetch() }} prefillDate={bookingPrefillDate} prefillTime={bookingPrefillTime} />}
@@ -735,6 +751,93 @@ export default function Calendar() {
                     })}
                   </div>
                 ))}
+
+                {/* 2026-05-23 — Studio hours-of-operation overlay
+                    (Apple-Calendar-style "open hours" frame). Per
+                    weekday, a soft gold/8% wash paints the OPEN hour
+                    range; closed hours + closed days get a subtle
+                    grey dim so admins see at a glance "this is when
+                    the studio is open." Renders FIRST in source so
+                    later layers (schedule chips z-0 + bookings z-30)
+                    nest visibly on top. pointer-events-none — clicks
+                    pass through to the +Book affordance. */}
+                {WEEK.map((wd, dayIndex) => {
+                  const weekday = new Date(`${wd.key}T12:00:00`).getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6
+                  const studioRow = studioHoursByWeekday[weekday]
+                  const colWidth = `((100% - 36px) / 7)`
+                  const colLeft = `(36px + ${colWidth} * ${dayIndex})`
+                  const isClosedDay = !studioRow || !studioRow.active
+                  const gridHeightPx = (GRID_END_HOUR - GRID_START_HOUR) * HOUR_PX // 13 * 48 = 624
+                  if (isClosedDay) {
+                    // Whole column dim — studio is closed this day.
+                    return (
+                      <div
+                        key={`closed-${wd.key}`}
+                        aria-hidden="true"
+                        className="absolute pointer-events-none z-0 bg-black/[0.04]"
+                        style={{
+                          top: 0,
+                          height: gridHeightPx,
+                          left: `calc(${colLeft})`,
+                          width: `calc(${colWidth})`,
+                        }}
+                      />
+                    )
+                  }
+                  // Open day — clip open band to the visible grid,
+                  // paint the closed sub-bands (above open, below
+                  // close) as dim grey.
+                  const openMin = timeToMinutes(studioRow.open_time)
+                  const closeMin = timeToMinutes(studioRow.close_time)
+                  const gridStartMin = GRID_START_HOUR * 60
+                  const gridEndMin = GRID_END_HOUR * 60
+                  const visOpenMin = Math.max(openMin, gridStartMin)
+                  const visCloseMin = Math.min(closeMin, gridEndMin)
+                  const openTopPx = ((visOpenMin - gridStartMin) / 60) * HOUR_PX
+                  const openHeightPx = Math.max(0, ((visCloseMin - visOpenMin) / 60) * HOUR_PX)
+                  // Off-hours strips (before open + after close, both
+                  // clipped to the visible grid).
+                  const beforeOpenPx = Math.max(0, openTopPx)
+                  const afterClosePx = Math.max(0, gridHeightPx - openTopPx - openHeightPx)
+                  return (
+                    <div key={`studio-${wd.key}`} aria-hidden="true" className="contents">
+                      {beforeOpenPx > 0 && (
+                        <div
+                          className="absolute pointer-events-none z-0 bg-black/[0.04]"
+                          style={{
+                            top: 0,
+                            height: beforeOpenPx,
+                            left: `calc(${colLeft})`,
+                            width: `calc(${colWidth})`,
+                          }}
+                        />
+                      )}
+                      {openHeightPx > 0 && (
+                        <div
+                          className="absolute pointer-events-none z-0 bg-gold/[0.08]"
+                          title={`Studio open ${studioRow.open_time.slice(0, 5)}–${studioRow.close_time.slice(0, 5)}`}
+                          style={{
+                            top: openTopPx,
+                            height: openHeightPx,
+                            left: `calc(${colLeft})`,
+                            width: `calc(${colWidth})`,
+                          }}
+                        />
+                      )}
+                      {afterClosePx > 0 && (
+                        <div
+                          className="absolute pointer-events-none z-0 bg-black/[0.04]"
+                          style={{
+                            top: openTopPx + openHeightPx,
+                            height: afterClosePx,
+                            left: `calc(${colLeft})`,
+                            width: `calc(${colWidth})`,
+                          }}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
 
                 {/* 2026-05-23 — Schedule overlay (PR 2). Translucent
                     sage/teal blocks for each (member × day) scheduled
