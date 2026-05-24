@@ -148,7 +148,16 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     id: 'team_checklist',
     title: 'Checklist',
     description: '',
-    defaultPlacements: [{ scope: 'member_tasks', span: 1, rowSpan: 2, col: 1 }],
+    // 2026-05-25 — also placed on member_overview (col 1, rs=1) so
+    // the per-person checklist sits next to My Tasks on landing.
+    // Per user direction the daily checklist is "super important" +
+    // gets a throttled pulse-and-lift animation when Overview is
+    // opened (max once per 30 min) to draw attention without
+    // becoming spammy.
+    defaultPlacements: [
+      { scope: 'member_overview', span: 1, rowSpan: 1, col: 1 },
+      { scope: 'member_tasks', span: 1, rowSpan: 2, col: 1 },
+    ],
     accessVisibility: 'shared',
     dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
@@ -649,7 +658,12 @@ function buildDefaultWidgetStateForScope(
 // the version drops saved admin_overview layouts so the new widget
 // appears for every admin and the Today widget cleanly sanitizes
 // away (admins can re-add it via Workspace Controls if missed).
-export const WORKSPACE_LAYOUT_VERSION = 38
+// 2026-05-25 (v39) — `team_checklist` now placed on member_overview
+// (col 1, rs=1) alongside My Tasks so the per-person daily checklist
+// is one of the first things you see on landing. Bumping the version
+// drops saved member_overview layouts so every member's Overview
+// gets the new widget without manual re-add.
+export const WORKSPACE_LAYOUT_VERSION = 39
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

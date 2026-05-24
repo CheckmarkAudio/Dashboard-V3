@@ -20,6 +20,7 @@
 //   * Toggle: optimistic flip → RPC → realtime echo invalidates cache
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle, Check, Edit2, Inbox, Loader2, Plus, Repeat, Trash2, User, Users, X,
@@ -40,6 +41,7 @@ import {
 } from '../../lib/queries/teamMaintenance'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import MemberAvatar from '../members/MemberAvatar'
+import { useThrottledPulse } from '../../hooks/useThrottledPulse'
 import type { TeamMember } from '../../types'
 
 const CADENCE_LABEL: Record<MaintenanceCadence, string> = {
@@ -200,8 +202,20 @@ export default function TeamChecklistWidget() {
     }).length
   }, [itemsQuery.data, activeMembers])
 
+  // 2026-05-25 — Gentle attention pulse when the user lands on
+  // Overview. Throttled to once per 30 min via localStorage so
+  // bouncing in and out of the tab doesn't replay the animation.
+  // Per user: "make it not annoying so smooth, and nice." Only
+  // fires when the widget is rendered on the Overview route (`/`);
+  // on /daily where the checklist also lives, no pulse.
+  const location = useLocation()
+  const isOverview = location.pathname === '/'
+  const pulse = useThrottledPulse('overview-checklist', 30, isOverview)
+
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div
+      className={`flex flex-col h-full min-h-0 rounded-2xl ${pulse ? 'pulse-lift' : ''}`}
+    >
       {/* Counter strip — mirrors the SubmitBar's prominence on
           MyTasksCard so the widget hierarchy is consistent. */}
       <div className="shrink-0 mb-2 inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-surface-alt/40 border border-border text-[12px] text-text-muted font-semibold">
