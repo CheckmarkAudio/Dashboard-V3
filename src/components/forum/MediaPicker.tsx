@@ -50,23 +50,16 @@ export default function MediaPicker({
   disabled = false,
 }: MediaPickerProps) {
   const { toast } = useToast()
-  const [open, setOpen] = useState(false)
   const [uploading, setUploading] = useState<'image' | 'video' | 'audio' | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
 
-  // 2026-05-20 (b) — closePopover used to also reset link state.
-  // Link picker was removed entirely; pasted URLs in the message
-  // body now auto-unfurl via sendMessage. See Content.tsx.
-  const closePopover = useCallback(() => {
-    setOpen(false)
-  }, [])
-
   // 2026-05-21 (PR B) — runs N files through the shared upload util
   // in parallel. Each successful upload appends to pendingAttachments
   // independently via onAdd, so a fast image lands before a slow
   // video — feels snappy for mixed selections.
+  // 2026-05-24 — popover removed; nothing to close on completion.
   const uploadMany = useCallback(
     async (files: File[], kind: 'image' | 'video' | 'audio') => {
       if (files.length === 0) return
@@ -82,12 +75,11 @@ export default function MediaPicker({
             }
           }),
         )
-        closePopover()
       } finally {
         setUploading(null)
       }
     },
-    [channelId, userId, onAdd, toast, closePopover],
+    [channelId, userId, onAdd, toast],
   )
 
   const onImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,66 +118,43 @@ export default function MediaPicker({
         </div>
       )}
 
-      <div className="relative inline-block">
-        <button
-          type="button"
-          onClick={() => {
-            if (disabled) return
-            setOpen((v) => !v)
-          }}
-          disabled={disabled}
-          aria-label="Add media"
-          aria-expanded={open}
-          aria-haspopup="menu"
-          title="Attach an image, video, or audio file"
-          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-xl border border-border bg-surface-alt text-text-muted hover:text-gold hover:border-gold/40 transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {uploading ? (
-            <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-          ) : (
-            <Plus size={14} aria-hidden="true" />
-          )}
-          <span className="text-[12px] font-semibold">Media</span>
-        </button>
+      {/* 2026-05-24 — Replaced the +Media toggle popover with three
+          always-visible upload buttons nested in a single black pill
+          lined in gold (per user spec). Each button: leading + glyph,
+          then the templates-style gold-tinted media icon — clicking
+          fires the corresponding hidden file input directly. No
+          toggle to remember to close, single tap to picker. */}
+      <div
+        role="toolbar"
+        aria-label="Attach media"
+        className="inline-flex items-center gap-0.5 p-1 rounded-full bg-black ring-1 ring-gold/40"
+      >
+        <MediaPillButton
+          icon={<ImageIcon size={14} aria-hidden="true" />}
+          label="Add image"
+          uploading={uploading === 'image'}
+          disabled={disabled || uploading !== null}
+          onClick={() => imageInputRef.current?.click()}
+        />
+        <MediaPillButton
+          icon={<Video size={14} aria-hidden="true" />}
+          label="Add video"
+          uploading={uploading === 'video'}
+          disabled={disabled || uploading !== null}
+          onClick={() => videoInputRef.current?.click()}
+        />
+        <MediaPillButton
+          icon={<Music size={14} aria-hidden="true" />}
+          label="Add audio"
+          uploading={uploading === 'audio'}
+          disabled={disabled || uploading !== null}
+          onClick={() => audioInputRef.current?.click()}
+        />
+      </div>
 
-        {open && (
-          <div
-            role="menu"
-            aria-label="Media kind"
-            className="absolute bottom-full left-0 mb-2 z-30 bg-surface border border-border rounded-xl shadow-xl py-1 min-w-[180px] animate-fade-in"
-          >
-            <PickerOption
-              icon={<ImageIcon size={14} aria-hidden="true" />}
-              label="Image"
-              hint="JPEG · PNG · WEBP · GIF"
-              disabled={uploading !== null}
-              onClick={() => imageInputRef.current?.click()}
-            />
-            <PickerOption
-              icon={<Video size={14} aria-hidden="true" />}
-              label="Video"
-              hint="MP4 · WEBM · MOV (max 50 MB)"
-              disabled={uploading !== null}
-              onClick={() => videoInputRef.current?.click()}
-            />
-            {/* 2026-05-20 — audio attachments (MP3 / WAV / etc).
-                Renders as an inline <audio controls> in the
-                message bubble via AttachmentDisplay. */}
-            <PickerOption
-              icon={<Music size={14} aria-hidden="true" />}
-              label="Audio"
-              hint="MP3 · WAV · M4A · OGG (max 50 MB)"
-              disabled={uploading !== null}
-              onClick={() => audioInputRef.current?.click()}
-            />
-            {/* 2026-05-20 (b) — Link picker removed. Pasted URLs in
-                the message body auto-unfurl on send (see Content.tsx
-                → sendMessage → extractUrls). Single path = nothing
-                to be half-broken. */}
-          </div>
-        )}
-
-        {/* Hidden file inputs — driven by the popover options. */}
+      <div className="inline-block">
+        {/* Hidden file inputs — fired programmatically by the
+            MediaPillButtons above. */}
         {/* 2026-05-20 — `accept` uses the wildcard + extensions
             recipe (FORUM_*_ACCEPT constants) instead of the MIME-
             only join. macOS Finder was greying out users' MP3s
@@ -231,32 +200,40 @@ export default function MediaPicker({
 
 // ─── Bits ────────────────────────────────────────────────────────
 
-function PickerOption({
+// 2026-05-24 — Pill-nested media button (per user spec). Layout:
+// [+ icon] inside a pill segment. The wrapping toolbar container
+// supplies the black bg + gold ring; each segment is just a hover
+// surface with the + glyph + media icon in templates-style gold.
+function MediaPillButton({
   icon,
   label,
-  hint,
+  uploading,
+  disabled,
   onClick,
-  disabled = false,
 }: {
   icon: React.ReactNode
   label: string
-  hint: string
+  uploading: boolean
+  disabled: boolean
   onClick: () => void
-  disabled?: boolean
 }) {
   return (
     <button
       type="button"
-      role="menuitem"
       onClick={onClick}
       disabled={disabled}
-      className="w-full flex items-start gap-2.5 px-3 py-2 hover:bg-surface-hover transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
+      aria-label={label}
+      title={label}
+      className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-gold hover:bg-gold/15 active:bg-gold/25 transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      <span className="shrink-0 mt-0.5 text-text-muted">{icon}</span>
-      <span className="flex-1 min-w-0">
-        <span className="block text-[13px] font-semibold text-text">{label}</span>
-        <span className="block text-[10px] text-text-light">{hint}</span>
-      </span>
+      {uploading ? (
+        <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+      ) : (
+        <>
+          <Plus size={12} strokeWidth={2.75} aria-hidden="true" />
+          {icon}
+        </>
+      )}
     </button>
   )
 }
