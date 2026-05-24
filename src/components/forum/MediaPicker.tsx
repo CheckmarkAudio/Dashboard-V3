@@ -118,16 +118,16 @@ export default function MediaPicker({
         </div>
       )}
 
-      {/* 2026-05-24 — Replaced the +Media toggle popover with three
-          always-visible upload buttons nested in a single black pill
-          lined in gold (per user spec). Each button: leading + glyph,
-          then the templates-style gold-tinted media icon — clicking
-          fires the corresponding hidden file input directly. No
-          toggle to remember to close, single tap to picker. */}
+      {/* 2026-05-24 (rev) — Three SEPARATE pills (not nested in one
+          shared container) per user feedback. Each button is its own
+          black-but-not-pitch pill with a gold ring; container is just
+          a flex row for spacing. Container bg is bg-surface-alt
+          (lifted off pure black) so the pills read as elevated
+          chips, not punched-out holes. */}
       <div
         role="toolbar"
         aria-label="Attach media"
-        className="inline-flex items-center gap-0.5 p-1 rounded-full bg-black ring-1 ring-gold/40"
+        className="inline-flex items-center gap-1.5"
       >
         <MediaPillButton
           icon={<ImageIcon size={14} aria-hidden="true" />}
@@ -200,10 +200,11 @@ export default function MediaPicker({
 
 // ─── Bits ────────────────────────────────────────────────────────
 
-// 2026-05-24 — Pill-nested media button (per user spec). Layout:
-// [+ icon] inside a pill segment. The wrapping toolbar container
-// supplies the black bg + gold ring; each segment is just a hover
-// surface with the + glyph + media icon in templates-style gold.
+// 2026-05-24 (rev) — Each media button is its OWN pill (per user
+// feedback "separate the bubbles into each their own and make the
+// bubble a little less dark"). Layout: [+ icon] inside a lifted-
+// black pill lined in gold. bg-surface-alt = a step up from pure
+// black so the pill reads as a chip rather than a hole.
 function MediaPillButton({
   icon,
   label,
@@ -224,7 +225,7 @@ function MediaPillButton({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-gold hover:bg-gold/15 active:bg-gold/25 transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
+      className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-surface-alt ring-1 ring-gold/40 text-gold hover:bg-gold/15 hover:ring-gold/60 active:bg-gold/20 transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {uploading ? (
         <Loader2 size={14} className="animate-spin" aria-hidden="true" />
