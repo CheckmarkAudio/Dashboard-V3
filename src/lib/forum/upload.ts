@@ -22,6 +22,7 @@ import {
   type AttachmentKind,
   type ChatAttachment,
 } from './attachments'
+import { compressImageIfBeneficial } from './compressImage'
 
 export interface UploadForumFileOpts {
   file: File
@@ -52,7 +53,15 @@ export function inferForumKind(file: File): 'image' | 'video' | 'audio' | null {
 export async function uploadForumFile(
   opts: UploadForumFileOpts,
 ): Promise<ChatAttachment> {
-  const { file, channelId, userId } = opts
+  const { channelId, userId } = opts
+  // 2026-05-25 — Compress images client-side BEFORE MIME validation +
+  // size check so a 4 MB phone photo is gated on its compressed size,
+  // not the original. Compression returns the original file unchanged
+  // for GIFs, sub-500KB files, or any decode failure, so non-image
+  // kinds + edge cases flow through untouched.
+  const file = opts.kind === 'image' || opts.kind === undefined
+    ? await compressImageIfBeneficial(opts.file)
+    : opts.file
   const kind: AttachmentKind | null = opts.kind ?? inferForumKind(file)
   if (kind !== 'image' && kind !== 'video' && kind !== 'audio') {
     throw new Error(`Unsupported file type${file.type ? ` (${file.type})` : ''}.`)
