@@ -13,6 +13,11 @@ import {
   markAssignmentNotificationRead,
 } from '../../lib/queries/assignments'
 import { supabase } from '../../lib/supabase'
+import { detectLinkEmbed, type ChatAttachment } from '../../lib/forum/attachments'
+import { extractUrls } from '../../lib/forum/linkify'
+import { unfurlLink } from '../../lib/forum/unfurl'
+import AttachmentDisplay from '../forum/AttachmentDisplay'
+import LinkifiedText from '../forum/LinkifiedText'
 import { useToast } from '../Toast'
 import type { AssignmentNotification } from '../../types/assignments'
 import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
@@ -91,6 +96,12 @@ type ChannelNotification = {
   last_read_at: string | null
 }
 
+type ExpandedChannelMessage = {
+  id: string
+  content: string
+  attachments: ChatAttachment[]
+}
+
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime()
   const now = Date.now()
@@ -121,6 +132,63 @@ async function markAllChannelsRead(): Promise<{ channels_marked: number }> {
   const { data, error } = await supabase.rpc('mark_all_channels_read')
   if (error) throw error
   return data as { channels_marked: number }
+}
+
+function formatEmbedTitle(embed: string): string {
+  const labels: Record<string, string> = {
+    youtube: 'YouTube video',
+    vimeo: 'Vimeo video',
+    loom: 'Loom video',
+    spotify: 'Spotify link',
+    soundcloud: 'SoundCloud link',
+    bandcamp: 'Bandcamp link',
+  }
+  return labels[embed] ?? `${embed.charAt(0).toUpperCase()}${embed.slice(1)} link`
+}
+
+async function buildGeneratedLinkAttachment(url: string): Promise<ChatAttachment> {
+  const detect = detectLinkEmbed(url)
+  const preview = await unfurlLink(url)
+  const generatedTitle =
+    preview?.title ??
+    (detect ? formatEmbedTitle(detect.embed) : undefined)
+
+  return {
+    kind: 'link',
+    url,
+    ...(detect ? { embed: detect.embed } : {}),
+    ...(generatedTitle ? { generated_title: generatedTitle, name: generatedTitle } : {}),
+    ...(preview ? { preview } : {}),
+  }
+}
+
+async function fetchExpandedChannelMessage(messageId: string): Promise<ExpandedChannelMessage | null> {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('id, content, attachments')
+    .eq('id', messageId)
+    .single()
+  if (error) throw error
+  if (!data) return null
+
+  const attachments = Array.isArray(data.attachments)
+    ? (data.attachments as ChatAttachment[])
+    : []
+  const attachmentUrls = new Set(attachments.map((a) => a.url))
+  const missingBodyUrls = extractUrls(data.content ?? '')
+    .filter((href) => !attachmentUrls.has(href))
+    .slice(0, 3)
+
+  const generatedLinks =
+    missingBodyUrls.length > 0
+      ? await Promise.all(missingBodyUrls.map(buildGeneratedLinkAttachment))
+      : []
+
+  return {
+    id: data.id,
+    content: data.content ?? '',
+    attachments: [...attachments, ...generatedLinks],
+  }
 }
 
 interface NotificationsPanelProps {
@@ -211,6 +279,14 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   const channelUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
   const assignments = assignmentsQuery.data ?? []
   const assignmentUnread = assignments.filter((n) => !n.is_read).length
+  const expandedLatestId =
+    channels.find((c) => c.channel_id === expandedChannelId)?.latest_id ?? null
+  const expandedMessageQuery = useQuery({
+    queryKey: ['overview-notification-expanded-message', expandedLatestId],
+    queryFn: () => fetchExpandedChannelMessage(expandedLatestId!),
+    enabled: Boolean(expandedLatestId),
+    staleTime: 60_000,
+  })
 
   // Skin pass 2026-05-06 — "High Priority" filter. Currently aliased
   // to "unread": for channels = `unread_count > 0`, for assignments =
@@ -414,6 +490,12 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             const hasMessage = !!c.latest_id
             const unread = c.unread_count > 0
             const isExpanded = expandedChannelId === c.channel_id
+            const expandedMessage =
+              isExpanded && expandedMessageQuery.data?.id === c.latest_id
+                ? expandedMessageQuery.data
+                : null
+            const expandedContent = expandedMessage?.content ?? c.latest_content ?? ''
+            const expandedAttachments = expandedMessage?.attachments ?? []
 
             const toggleExpand = () => {
               if (isExpanded) {
@@ -616,14 +698,33 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         of text at ~4 lines so the widget can't blow
                         out vertically; full content always available
                         via the Open pill if they need more. */}
-                    {hasMessage && c.latest_content && (
+                    {hasMessage && (
                       <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.06] px-2.5 py-2 text-[12px]">
                         <p className="text-[10px] uppercase tracking-wider font-semibold text-violet-300/80 mb-1">
                           {c.latest_sender}
                         </p>
-                        <p className="text-text whitespace-pre-wrap break-words line-clamp-4 leading-snug">
-                          {c.latest_content}
-                        </p>
+                        {expandedMessageQuery.isLoading && !expandedMessage ? (
+                          <div className="flex items-center gap-1.5 text-[11px] text-text-light py-1">
+                            <Loader2 size={11} className="animate-spin" aria-hidden="true" />
+                            Loading preview…
+                          </div>
+                        ) : (
+                          <>
+                            {expandedContent && (
+                              <div className="text-text whitespace-pre-wrap break-words line-clamp-4 leading-snug">
+                                <LinkifiedText text={expandedContent} />
+                              </div>
+                            )}
+                            {expandedAttachments.length > 0 && (
+                              <div className="mt-2 [&_video]:max-h-[180px] [&_img]:max-h-[180px] [&_iframe]:max-h-[180px]">
+                                <AttachmentDisplay attachments={expandedAttachments} />
+                              </div>
+                            )}
+                            {!expandedContent && expandedAttachments.length === 0 && (
+                              <p className="text-text-light italic">Most recent post has no previewable content.</p>
+                            )}
+                          </>
+                        )}
                       </div>
                     )}
                     <textarea
