@@ -18,6 +18,7 @@ import {
   ExternalLink,
   FileUp,
   FolderOpen,
+  ImageIcon,
   Inbox,
   Loader2,
   UploadCloud,
@@ -55,6 +56,37 @@ interface MediaSubmissionRow {
   size_bytes: number
   content_type: string | null
   created_at: string
+  // 2026-05-26 — joined from team_members so each row shows who
+  // submitted it. Page is now a shared team library (per Bridget's
+  // direction), not a private per-member feed.
+  submitter?: { display_name: string | null } | null
+}
+
+// Image extensions used as a fallback when content_type is null on
+// legacy rows. Matches the set served by Dropbox raw URLs without
+// transcoding.
+const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'heic', 'heif', 'tiff', 'tif', 'bmp']
+
+function isImageRow(row: MediaSubmissionRow): boolean {
+  if (row.content_type?.startsWith('image/')) return true
+  const ext = row.original_filename.split('.').pop()?.toLowerCase() ?? ''
+  return IMAGE_EXTS.includes(ext)
+}
+
+/**
+ * Turn a Dropbox share URL (`?dl=0`) into a hot-linkable form so an
+ * `<img src=...>` can stream pixels straight from Dropbox's CDN. The
+ * same trick the forum-media edge function uses for video/audio.
+ */
+function toRawDropboxUrl(shareUrl: string): string {
+  try {
+    const u = new URL(shareUrl)
+    u.searchParams.delete('dl')
+    u.searchParams.set('raw', '1')
+    return u.toString()
+  } catch {
+    return shareUrl
+  }
 }
 
 interface PendingUpload {
@@ -80,25 +112,38 @@ export default function AddMedia() {
   const memberName = profile?.display_name ?? 'Member'
 
   // ─── Submission history ───────────────────────────────────────
-  const historyKey = useMemo(
-    () => ['media-submissions', memberId ?? '__none__'] as const,
-    [memberId],
-  )
+  // 2026-05-26 — Page is now a shared team library: anyone signed in
+  // sees every submission, with the submitter's name on each row.
+  // RLS (migration 20260526120000) gates this to authenticated team
+  // members only; anonymous JWTs still get nothing.
+  const historyKey = useMemo(() => ['media-submissions', 'team'] as const, [])
   const history = useQuery({
     queryKey: historyKey,
     enabled: Boolean(memberId),
     queryFn: async (): Promise<MediaSubmissionRow[]> => {
       const { data, error } = await supabase
         .from('media_submissions')
-        .select('*')
-        .eq('member_id', memberId!)
+        .select('*, submitter:team_members!media_submissions_member_id_fkey(display_name)')
         .order('created_at', { ascending: false })
-        .limit(100)
+        .limit(200)
       if (error) throw error
       return (data ?? []) as MediaSubmissionRow[]
     },
     staleTime: 30_000,
   })
+
+  // 2026-05-26 — Lightbox for clicked image previews. Single state
+  // is enough — only one image is "zoomed" at a time.
+  const [lightbox, setLightbox] = useState<MediaSubmissionRow | null>(null)
+  // Close on Escape so the modal feels native.
+  useEffect(() => {
+    if (!lightbox) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightbox])
 
   // ─── Upload pipeline ──────────────────────────────────────────
   const enqueueFiles = useCallback(
@@ -385,10 +430,10 @@ export default function AddMedia() {
         </div>
       )}
 
-      {/* ─── Submission history ─────────────────────────────── */}
+      {/* ─── Team submissions ───────────────────────────────── */}
       <section className="rounded-2xl border border-border bg-surface-alt/40 overflow-hidden">
         <header className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="text-[15px] font-bold text-text">Your submission history</h2>
+          <h2 className="text-[15px] font-bold text-text">Team submissions</h2>
           {history.data && history.data.length > 0 && (
             <Badge variant="neutral" size="sm">
               {history.data.length}
@@ -410,36 +455,119 @@ export default function AddMedia() {
             <p className="text-[12px] italic">No submissions yet — drop something above.</p>
           </div>
         ) : (
-          <ul className="divide-y divide-theme max-h-[480px] overflow-y-auto">
-            {history.data!.map((row) => (
-              <li key={row.id} className="px-4 py-2.5 flex items-center gap-2.5">
-                <span className="shrink-0 w-7 h-7 rounded-full bg-violet-500/15 ring-1 ring-violet-500/30 text-violet-300 flex items-center justify-center">
-                  <FileUp size={13} aria-hidden="true" />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-bold text-text truncate" title={row.original_filename}>
-                    {row.original_filename}
-                  </p>
-                  <p className="text-[11px] text-text-light truncate mt-0.5">
-                    {formatBytes(row.size_bytes)} · {formatRelative(row.created_at)}
-                  </p>
-                </div>
-                {row.drive_view_url && (
-                  <a
-                    href={row.drive_view_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gold hover:text-gold/80 transition-colors"
-                  >
-                    Open
-                    <ExternalLink size={10} aria-hidden="true" />
-                  </a>
-                )}
-              </li>
-            ))}
+          <ul className="divide-y divide-theme max-h-[560px] overflow-y-auto">
+            {history.data!.map((row) => {
+              const isImage = isImageRow(row)
+              const rawUrl = row.drive_view_url ? toRawDropboxUrl(row.drive_view_url) : null
+              const submitterName = row.submitter?.display_name?.trim() || 'Unknown'
+              return (
+                <li key={row.id} className="px-4 py-2.5 flex items-center gap-3">
+                  {/* Thumbnail: actual image preview when previewable,
+                      otherwise the legacy purple file-up dot. Image
+                      bytes come directly from Dropbox via raw URL —
+                      no Supabase storage involved. */}
+                  {isImage && rawUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => setLightbox(row)}
+                      className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-surface ring-1 ring-border hover:ring-gold/60 focus-ring transition-all"
+                      aria-label={`Preview ${row.original_filename}`}
+                      title="Preview"
+                    >
+                      <img
+                        src={rawUrl}
+                        alt=""
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // If Dropbox doesn't serve a previewable form,
+                          // fall back to a generic icon glyph so the row
+                          // still reads as an image without breaking.
+                          const img = e.currentTarget
+                          img.style.display = 'none'
+                          const fallback = img.nextElementSibling as HTMLElement | null
+                          if (fallback) fallback.style.display = 'flex'
+                        }}
+                      />
+                      <span
+                        className="hidden w-full h-full items-center justify-center bg-violet-500/15 text-violet-300"
+                        aria-hidden="true"
+                      >
+                        <ImageIcon size={18} />
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="shrink-0 w-12 h-12 rounded-lg bg-violet-500/15 ring-1 ring-violet-500/30 text-violet-300 flex items-center justify-center">
+                      <FileUp size={18} aria-hidden="true" />
+                    </span>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-bold text-text truncate" title={row.original_filename}>
+                      {row.original_filename}
+                    </p>
+                    <p className="text-[11px] text-text-light truncate mt-0.5">
+                      {submitterName} · {formatBytes(row.size_bytes)} · {formatRelative(row.created_at)}
+                    </p>
+                  </div>
+                  {row.drive_view_url && (
+                    <a
+                      href={row.drive_view_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gold hover:text-gold/80 transition-colors"
+                    >
+                      Open
+                      <ExternalLink size={10} aria-hidden="true" />
+                    </a>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
       </section>
+
+      {/* ─── Lightbox overlay ──────────────────────────────────
+         Triggered by clicking an image thumbnail. Image bytes are
+         streamed directly from Dropbox via the raw URL form. Background
+         scrim closes; the image itself doesn't, so the user can pinch-
+         zoom or right-click → save without accidental dismissal. */}
+      {lightbox && lightbox.drive_view_url && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Preview ${lightbox.original_filename}`}
+          onClick={() => setLightbox(null)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
+        >
+          <button
+            type="button"
+            onClick={() => setLightbox(null)}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-surface/80 ring-1 ring-border text-text hover:text-gold transition-colors flex items-center justify-center focus-ring"
+            aria-label="Close preview"
+          >
+            <X size={18} />
+          </button>
+          <figure
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-[92vw] max-h-[88vh] flex flex-col items-center gap-3 cursor-default"
+          >
+            <img
+              src={toRawDropboxUrl(lightbox.drive_view_url)}
+              alt={lightbox.original_filename}
+              className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl"
+            />
+            <figcaption className="text-[12px] text-text-light text-center">
+              <span className="font-semibold text-text">{lightbox.original_filename}</span>
+              <span className="mx-1.5 text-text-muted">·</span>
+              {lightbox.submitter?.display_name?.trim() || 'Unknown'}
+              <span className="mx-1.5 text-text-muted">·</span>
+              {formatBytes(lightbox.size_bytes)}
+            </figcaption>
+          </figure>
+        </div>
+      )}
     </div>
   )
 }
