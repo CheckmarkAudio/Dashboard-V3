@@ -7,7 +7,6 @@ import { generateTempPassword } from '../../lib/auth/tempPassword'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
-import ConfirmModal from '../../components/ConfirmModal'
 import TempPasswordReveal from '../../components/auth/TempPasswordReveal'
 import SetupLinkReveal from '../../components/auth/SetupLinkReveal'
 import {
@@ -36,7 +35,7 @@ import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
   Save, ChevronRight, ChevronLeft,
   MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
-  Activity, Link2, CalendarRange,
+  Activity, Link2, CalendarRange, AlertTriangle, Archive,
 } from 'lucide-react'
 // `Activity` icon kept as the lucide glyph for the new left-rail
 // "Activity" section (mirrors the user's mental model — Roster /
@@ -78,6 +77,22 @@ type MemberForm = {
   // Temp-password modes remain as a fallback for in-person handoff.
   password_mode: 'setup_link' | 'auto' | 'manual'
   manual_password: string
+}
+
+type RemoveMemberActivity = {
+  key: string
+  label: string
+  count: number
+}
+
+type RemoveMemberInspectResult = {
+  ok: boolean
+  error?: string
+  action?: 'inspect' | 'archived' | 'permanently_deleted'
+  activity?: RemoveMemberActivity[]
+  total_activity?: number
+  can_permanently_delete?: boolean
+  auth_warning?: string | null
 }
 
 const EMPTY_MEMBER: MemberForm = {
@@ -133,8 +148,30 @@ export default function TeamManager() {
   const [activeSection, setActiveSection] = useState<MembersSectionKey>('roster')
 
   const [confirmState, setConfirmState] = useState<{
-    open: boolean; memberId: string; memberName: string; loading: boolean
-  }>({ open: false, memberId: '', memberName: '', loading: false })
+    open: boolean
+    memberId: string
+    memberName: string
+    memberEmail: string
+    loading: boolean
+    loadingMessage: string
+    activity: RemoveMemberActivity[]
+    totalActivity: number
+    canPermanentlyDelete: boolean
+    error: string | null
+    permanentConfirm: string
+  }>({
+    open: false,
+    memberId: '',
+    memberName: '',
+    memberEmail: '',
+    loading: false,
+    loadingMessage: '',
+    activity: [],
+    totalActivity: 0,
+    canPermanentlyDelete: false,
+    error: null,
+    permanentConfirm: '',
+  })
 
   useEffect(() => { loadMembers() }, [])
 
@@ -467,18 +504,123 @@ export default function TeamManager() {
     setOpenMenuId(null)
   }
 
-  const requestDelete = (member: TeamMember) => {
-    setOpenMenuId(null)
-    setConfirmState({ open: true, memberId: member.id, memberName: member.display_name, loading: false })
+  const closeRemoveModal = () => {
+    setConfirmState({
+      open: false,
+      memberId: '',
+      memberName: '',
+      memberEmail: '',
+      loading: false,
+      loadingMessage: '',
+      activity: [],
+      totalActivity: 0,
+      canPermanentlyDelete: false,
+      error: null,
+      permanentConfirm: '',
+    })
   }
 
-  const handleDelete = async () => {
-    setConfirmState(s => ({ ...s, loading: true }))
-    const { error } = await supabase.from('team_members').delete().eq('id', confirmState.memberId)
-    if (error) toast('Failed to remove member', 'error')
-    else toast('Member removed')
-    setConfirmState({ open: false, memberId: '', memberName: '', loading: false })
-    loadMembers()
+  const inspectMemberRemoval = async (member: TeamMember) => {
+    const { data, error } = await supabase.functions.invoke<RemoveMemberInspectResult>('admin-remove-member', {
+      body: { member_id: member.id, mode: 'inspect' },
+    })
+    if (error) throw new Error(await extractEdgeFunctionError(error, 'Could not inspect member activity'))
+    if (!data?.ok) throw new Error(data?.error ?? 'Could not inspect member activity')
+    return data
+  }
+
+  const requestDelete = async (member: TeamMember) => {
+    setOpenMenuId(null)
+    setConfirmState({
+      open: true,
+      memberId: member.id,
+      memberName: member.display_name,
+      memberEmail: member.email,
+      loading: true,
+      loadingMessage: 'Checking linked bookings, posts, tasks, and history…',
+      activity: [],
+      totalActivity: 0,
+      canPermanentlyDelete: false,
+      error: null,
+      permanentConfirm: '',
+    })
+    try {
+      const result = await inspectMemberRemoval(member)
+      setConfirmState((s) => ({
+        ...s,
+        loading: false,
+        loadingMessage: '',
+        activity: result.activity ?? [],
+        totalActivity: result.total_activity ?? 0,
+        canPermanentlyDelete: Boolean(result.can_permanently_delete),
+      }))
+    } catch (err) {
+      setConfirmState((s) => ({
+        ...s,
+        loading: false,
+        loadingMessage: '',
+        error: err instanceof Error ? err.message : 'Could not inspect member activity',
+      }))
+    }
+  }
+
+  const invokeMemberRemoval = async (mode: 'archive' | 'permanent_delete') => {
+    setConfirmState(s => ({
+      ...s,
+      loading: true,
+      loadingMessage: mode === 'archive' ? 'Archiving member…' : 'Permanently deleting member…',
+      error: null,
+    }))
+    const { data, error } = await supabase.functions.invoke<RemoveMemberInspectResult>('admin-remove-member', {
+      body: {
+        member_id: confirmState.memberId,
+        mode,
+        ...(mode === 'permanent_delete' ? { confirm: confirmState.permanentConfirm } : {}),
+      },
+    })
+    if (error) throw new Error(await extractEdgeFunctionError(error, 'Member removal failed'))
+    if (!data?.ok) {
+      setConfirmState(s => ({
+        ...s,
+        activity: data?.activity ?? s.activity,
+        totalActivity: data?.total_activity ?? s.totalActivity,
+        canPermanentlyDelete: Boolean(data?.can_permanently_delete),
+      }))
+      throw new Error(data?.error ?? 'Member removal failed')
+    }
+    return data
+  }
+
+  const handleArchiveMember = async () => {
+    try {
+      const result = await invokeMemberRemoval('archive')
+      toast(result.auth_warning ? `Member archived, but login warning: ${result.auth_warning}` : 'Member archived')
+      closeRemoveModal()
+      loadMembers()
+    } catch (err) {
+      setConfirmState(s => ({
+        ...s,
+        loading: false,
+        loadingMessage: '',
+        error: err instanceof Error ? err.message : 'Failed to archive member',
+      }))
+    }
+  }
+
+  const handlePermanentDelete = async () => {
+    try {
+      await invokeMemberRemoval('permanent_delete')
+      toast('Member permanently deleted')
+      closeRemoveModal()
+      loadMembers()
+    } catch (err) {
+      setConfirmState(s => ({
+        ...s,
+        loading: false,
+        loadingMessage: '',
+        error: err instanceof Error ? err.message : 'Failed to permanently delete member',
+      }))
+    }
   }
 
   const toggleStatus = async (member: TeamMember) => {
@@ -1450,16 +1592,157 @@ export default function TeamManager() {
         </div>
       )}
 
-      <ConfirmModal
-        open={confirmState.open}
-        title="Remove Team Member"
-        message={`Are you sure you want to remove ${confirmState.memberName}? This action cannot be undone.`}
-        confirmLabel="Remove"
-        variant="danger"
-        loading={confirmState.loading}
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmState({ open: false, memberId: '', memberName: '', loading: false })}
-      />
+      {confirmState.open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="remove-member-title"
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" role="presentation" onClick={closeRemoveModal} />
+          <div className="relative bg-surface border border-border rounded-2xl shadow-2xl w-full max-w-2xl animate-slide-up">
+            <button
+              type="button"
+              onClick={closeRemoveModal}
+              disabled={confirmState.loading}
+              className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-surface-hover text-text-muted disabled:opacity-50"
+              aria-label="Close"
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+
+            <div className="p-6 space-y-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-red-500/10 text-red-400 shrink-0">
+                  <AlertTriangle size={20} aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <h3 id="remove-member-title" className="text-lg font-semibold text-text">
+                    Remove or archive member
+                  </h3>
+                  <p className="text-sm text-text-muted mt-1">
+                    {confirmState.memberName}
+                    {confirmState.memberEmail ? ` · ${confirmState.memberEmail}` : ''}
+                  </p>
+                </div>
+              </div>
+
+              {confirmState.loading && (
+                <div className="rounded-xl border border-border bg-surface-alt/50 p-4 flex items-center gap-2 text-sm text-text-muted">
+                  <Loader2 size={16} className="animate-spin text-gold" aria-hidden="true" />
+                  {confirmState.loadingMessage || 'Working…'}
+                </div>
+              )}
+
+              {confirmState.error && (
+                <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+                  {confirmState.error}
+                </div>
+              )}
+
+              {!confirmState.loading && !confirmState.error && (
+                <div className="rounded-xl border border-border bg-surface-alt/40 p-4">
+                  <p className="text-sm font-semibold text-text">
+                    {confirmState.canPermanentlyDelete
+                      ? 'No linked activity found'
+                      : `${confirmState.totalActivity} linked record${confirmState.totalActivity === 1 ? '' : 's'} found`}
+                  </p>
+                  <p className="text-xs text-text-light mt-1 leading-relaxed">
+                    {confirmState.canPermanentlyDelete
+                      ? 'This looks like a mistaken or unused account, so permanent delete is available.'
+                      : 'This member has history attached to their account. Archive keeps old bookings, posts, tasks, and reports readable.'}
+                  </p>
+                </div>
+              )}
+
+              {!confirmState.loading && confirmState.activity.length > 0 && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {confirmState.activity.map((item) => (
+                    <div
+                      key={item.key}
+                      className={`rounded-lg border px-3 py-2 ${
+                        item.count > 0
+                          ? 'border-gold/30 bg-gold/10'
+                          : 'border-border bg-surface-alt/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-medium text-text-muted">{item.label}</span>
+                        <span className={`text-sm font-bold tabular-nums ${item.count > 0 ? 'text-gold' : 'text-text-light'}`}>
+                          {item.count}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!confirmState.loading && (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-border bg-surface-alt/40 p-4 flex items-start gap-3">
+                    <Archive size={17} className="text-gold shrink-0 mt-0.5" aria-hidden="true" />
+                    <div>
+                      <p className="text-sm font-semibold text-text">Recommended: archive member</p>
+                      <p className="text-xs text-text-light mt-1 leading-relaxed">
+                        Sets the member inactive, end-dates them today, and disables login when the auth account exists.
+                      </p>
+                    </div>
+                  </div>
+
+                  {confirmState.canPermanentlyDelete && (
+                    <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-4 space-y-2">
+                      <p className="text-sm font-semibold text-red-300">Permanent delete is available</p>
+                      <p className="text-xs text-text-light leading-relaxed">
+                        Only use this for typo or dead-email accounts with no useful history. Type{' '}
+                        <span className="font-mono text-text">PERMANENTLY DELETE</span> to enable it.
+                      </p>
+                      <Input
+                        id="permanent-delete-confirm"
+                        label="Confirmation"
+                        value={confirmState.permanentConfirm}
+                        onChange={(e) =>
+                          setConfirmState((s) => ({ ...s, permanentConfirm: e.target.value }))
+                        }
+                        placeholder="PERMANENTLY DELETE"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-6 pb-6">
+              <button
+                type="button"
+                onClick={closeRemoveModal}
+                disabled={confirmState.loading}
+                className="px-4 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-surface-hover transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleArchiveMember}
+                disabled={confirmState.loading}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold text-black text-sm font-semibold hover:bg-gold-muted transition-colors disabled:opacity-50"
+              >
+                {confirmState.loading && <Loader2 size={14} className="animate-spin" />}
+                Archive member
+              </button>
+              {confirmState.canPermanentlyDelete && (
+                <button
+                  type="button"
+                  onClick={handlePermanentDelete}
+                  disabled={confirmState.loading || confirmState.permanentConfirm !== 'PERMANENTLY DELETE'}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Permanently delete
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
