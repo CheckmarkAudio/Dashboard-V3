@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
@@ -58,6 +59,8 @@ export default function Content() {
   useDocumentTitle('Forum - Checkmark Workspace')
   const { profile, isAdmin } = useAuth()
   const { isOnline } = usePresence()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedChannel = searchParams.get('channel')
   const [channels, setChannels] = useState<Channel[]>([])
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null)
   // 2026-05-20 — Admin-only "create channel" dialog. Opens from
@@ -126,12 +129,38 @@ export default function Content() {
   }, [])
 
   useEffect(() => {
-    void loadChannels().then((list) => {
-      if (list.length > 0 && !activeChannel) setActiveChannel(list[0]!)
+    void loadChannels().then(() => {
       setLoading(false)
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [loadChannels])
+
+  const setChannelParam = useCallback(
+    (channel: Channel, replace = false) => {
+      const next = new URLSearchParams(searchParams)
+      next.set('channel', channel.slug || channel.id)
+      setSearchParams(next, { replace })
+    },
+    [searchParams, setSearchParams],
+  )
+
+  const selectChannel = useCallback(
+    (channel: Channel, replace = false) => {
+      setActiveChannel(channel)
+      setChannelParam(channel, replace)
+    },
+    [setChannelParam],
+  )
+
+  useEffect(() => {
+    if (channels.length === 0) return
+    const requested = requestedChannel?.trim().toLowerCase()
+    const target = requested
+      ? channels.find((ch) => ch.slug.toLowerCase() === requested || ch.id.toLowerCase() === requested)
+      : channels[0]
+    if (!target) return
+    if (activeChannel?.id !== target.id) setActiveChannel(target)
+    if (!requestedChannel) setChannelParam(target, true)
+  }, [activeChannel?.id, channels, requestedChannel, setChannelParam])
 
   // 2026-05-24 — close the admin channel context menu on outside
   // click / Escape. Mirrors the calendar booking context-menu pattern.
@@ -657,7 +686,7 @@ export default function Content() {
                 return (
                   <button
                     key={ch.id}
-                    onClick={() => setActiveChannel(ch)}
+                    onClick={() => selectChannel(ch)}
                     // 2026-05-24 — admin right-click → action menu
                     // (Pin/Unpin + Rename). Non-admins get the native
                     // browser menu so right-click isn't hijacked.
@@ -831,7 +860,7 @@ export default function Content() {
             // sort order matches what other tabs will see on reload.
             void loadChannels().then((list) => {
               const fresh = list.find((c) => c.id === created.id)
-              if (fresh) setActiveChannel(fresh)
+              if (fresh) selectChannel(fresh)
             })
           }}
         />
