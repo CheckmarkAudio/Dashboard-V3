@@ -107,9 +107,17 @@ function toRawDropboxUrl(shareUrl: string): string {
  * supported MIMEs but possible for unusual encodings), so the hook
  * returns null rather than throwing.
  */
+// 2026-05-26 — w128h128 keeps row thumbnails in the ~5 KB range, plenty
+// of detail for a 48px-square cell even on 2× DPI screens. Dropping
+// further to w64h64 (~3 KB) starts looking soft on retina; w128 is the
+// sweet spot for "single-digit KB per row" without visible blur. The
+// lightbox stays on the full raw URL — that's where the user actually
+// wants real resolution.
+const ROW_THUMBNAIL_SIZE = 'w128h128' as const
+
 function useDropboxThumbnail(fileId: string | null | undefined): string | null {
   const { data } = useQuery({
-    queryKey: ['dropbox-thumb', fileId] as const,
+    queryKey: ['dropbox-thumb', fileId, ROW_THUMBNAIL_SIZE] as const,
     enabled: Boolean(fileId),
     staleTime: Infinity,
     gcTime: 1000 * 60 * 30,
@@ -121,7 +129,7 @@ function useDropboxThumbnail(fileId: string | null | undefined): string | null {
         mime?: string
         error?: string
       }>('upload-to-dropbox', {
-        body: { action: 'thumbnail', file_id: fileId },
+        body: { action: 'thumbnail', file_id: fileId, size: ROW_THUMBNAIL_SIZE },
       })
       if (error) throw new Error(error.message)
       if (!data?.ok || !data.b64) return null
