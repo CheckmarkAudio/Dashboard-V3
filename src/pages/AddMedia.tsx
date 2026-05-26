@@ -89,6 +89,56 @@ function toRawDropboxUrl(shareUrl: string): string {
   }
 }
 
+/**
+ * Fetch a properly-sized JPEG thumbnail from Dropbox via our edge
+ * function. Returns a `data:` URL ready to use as `<img src=…>`.
+ *
+ * Why: row thumbnails are 48px squares, but the raw share URL gives
+ * the full original file (the biggest entry in current data is ~14
+ * MB). At 18 rows that's ~36 MB downloaded per page-open just to
+ * downsize in CSS. Dropbox's `files/get_thumbnail_v2` returns a
+ * ~20 KB JPEG at w256h256, so this drops thumbnail bandwidth ~100×.
+ *
+ * staleTime: Infinity — file contents don't change once uploaded.
+ * retry: 1 — single transient retry; row falls back to icon either
+ * way if it stays broken.
+ * The edge function returns `{ ok: false, error: 'not_thumbnailable' }`
+ * at HTTP 200 when Dropbox can't render a preview (rare for the
+ * supported MIMEs but possible for unusual encodings), so the hook
+ * returns null rather than throwing.
+ */
+// 2026-05-26 — w128h128 keeps row thumbnails in the ~5 KB range, plenty
+// of detail for a 48px-square cell even on 2× DPI screens. Dropping
+// further to w64h64 (~3 KB) starts looking soft on retina; w128 is the
+// sweet spot for "single-digit KB per row" without visible blur. The
+// lightbox stays on the full raw URL — that's where the user actually
+// wants real resolution.
+const ROW_THUMBNAIL_SIZE = 'w128h128' as const
+
+function useDropboxThumbnail(fileId: string | null | undefined): string | null {
+  const { data } = useQuery({
+    queryKey: ['dropbox-thumb', fileId, ROW_THUMBNAIL_SIZE] as const,
+    enabled: Boolean(fileId),
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 30,
+    retry: 1,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase.functions.invoke<{
+        ok: boolean
+        b64?: string
+        mime?: string
+        error?: string
+      }>('upload-to-dropbox', {
+        body: { action: 'thumbnail', file_id: fileId, size: ROW_THUMBNAIL_SIZE },
+      })
+      if (error) throw new Error(error.message)
+      if (!data?.ok || !data.b64) return null
+      return `data:${data.mime ?? 'image/jpeg'};base64,${data.b64}`
+    },
+  })
+  return data ?? null
+}
+
 interface PendingUpload {
   id: string
   file: File
@@ -456,99 +506,9 @@ export default function AddMedia() {
           </div>
         ) : (
           <ul className="divide-y divide-theme max-h-[560px] overflow-y-auto">
-            {history.data!.map((row) => {
-              const isImage = isImageRow(row)
-              const rawUrl = row.drive_view_url ? toRawDropboxUrl(row.drive_view_url) : null
-              const submitterName = row.submitter?.display_name?.trim() || 'Unknown'
-              const canPreview = isImage && Boolean(rawUrl)
-              // 2026-05-26 — Image rows are clickable everywhere except
-              // the explicit "Open" link, so the user can flick through
-              // thumbnails without having to aim for a tiny target.
-              // Non-image rows keep the static layout (no preview to
-              // show; the Open button is still the way out to Dropbox).
-              const onRowActivate = canPreview ? () => setLightbox(row) : undefined
-              return (
-                <li
-                  key={row.id}
-                  {...(onRowActivate
-                    ? {
-                        role: 'button',
-                        tabIndex: 0,
-                        onClick: onRowActivate,
-                        onKeyDown: (e: React.KeyboardEvent<HTMLLIElement>) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            onRowActivate()
-                          }
-                        },
-                        'aria-label': `Preview ${row.original_filename}`,
-                      }
-                    : {})}
-                  className={`px-4 py-2.5 flex items-center gap-3 ${
-                    canPreview
-                      ? 'cursor-zoom-in hover:bg-surface-hover/60 focus-ring transition-colors'
-                      : ''
-                  }`}
-                >
-                  {/* Thumbnail: actual image preview when previewable,
-                      otherwise the legacy purple file-up dot. Image
-                      bytes come directly from Dropbox via raw URL —
-                      no Supabase storage involved. */}
-                  {canPreview && rawUrl ? (
-                    <span className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-surface ring-1 ring-border">
-                      <img
-                        src={rawUrl}
-                        alt=""
-                        loading="lazy"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          // If Dropbox doesn't serve a previewable form,
-                          // fall back to a generic icon glyph so the row
-                          // still reads as an image without breaking.
-                          const img = e.currentTarget
-                          img.style.display = 'none'
-                          const fallback = img.nextElementSibling as HTMLElement | null
-                          if (fallback) fallback.style.display = 'flex'
-                        }}
-                      />
-                      <span
-                        className="hidden w-full h-full items-center justify-center bg-violet-500/15 text-violet-300"
-                        aria-hidden="true"
-                      >
-                        <ImageIcon size={18} />
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="shrink-0 w-12 h-12 rounded-lg bg-violet-500/15 ring-1 ring-violet-500/30 text-violet-300 flex items-center justify-center">
-                      <FileUp size={18} aria-hidden="true" />
-                    </span>
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-bold text-text truncate" title={row.original_filename}>
-                      {row.original_filename}
-                    </p>
-                    <p className="text-[11px] text-text-light truncate mt-0.5">
-                      {submitterName} · {formatBytes(row.size_bytes)} · {formatRelative(row.created_at)}
-                    </p>
-                  </div>
-                  {row.drive_view_url && (
-                    <a
-                      href={row.drive_view_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      // Stop propagation so clicking "Open" goes straight
-                      // to Dropbox without also opening the lightbox.
-                      onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gold hover:text-gold/80 transition-colors"
-                    >
-                      Open
-                      <ExternalLink size={10} aria-hidden="true" />
-                    </a>
-                  )}
-                </li>
-              )
-            })}
+            {history.data!.map((row) => (
+              <MediaRow key={row.id} row={row} onPreview={setLightbox} />
+            ))}
           </ul>
         )}
       </section>
@@ -619,4 +579,97 @@ function formatRelative(iso: string): string {
   if (days === 1) return 'Yesterday'
   if (days < 7) return `${days}d ago`
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// ─── Submission row component ─────────────────────────────────
+// Split out so each row can call useDropboxThumbnail. The hook can't
+// be called inside the parent's .map() callback — React only allows
+// hooks at the top level of a component.
+
+interface MediaRowProps {
+  row: MediaSubmissionRow
+  onPreview: (row: MediaSubmissionRow) => void
+}
+
+function MediaRow({ row, onPreview }: MediaRowProps) {
+  const isImage = isImageRow(row)
+  const canPreview = isImage && Boolean(row.drive_view_url)
+  // Always call the hook (rules of hooks); the hook itself skips the
+  // fetch when fileId is null (e.g. on the rare row where the column
+  // is null) or when isImage is false.
+  const thumbnailDataUrl = useDropboxThumbnail(canPreview ? row.drive_file_id : null)
+  const submitterName = row.submitter?.display_name?.trim() || 'Unknown'
+  const onRowActivate = canPreview ? () => onPreview(row) : undefined
+
+  return (
+    <li
+      {...(onRowActivate
+        ? {
+            role: 'button',
+            tabIndex: 0,
+            onClick: onRowActivate,
+            onKeyDown: (e: React.KeyboardEvent<HTMLLIElement>) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onRowActivate()
+              }
+            },
+            'aria-label': `Preview ${row.original_filename}`,
+          }
+        : {})}
+      className={`px-4 py-2.5 flex items-center gap-3 ${
+        canPreview
+          ? 'cursor-zoom-in hover:bg-surface-hover/60 focus-ring transition-colors'
+          : ''
+      }`}
+    >
+      {/* Thumbnail comes from Dropbox's files/get_thumbnail_v2 endpoint
+          via our edge function (~20 KB JPEG, vs. multi-MB if we
+          hot-linked the original). While the hook is loading we show
+          the icon glyph; on permanent failure we keep the icon and
+          never retry. */}
+      {canPreview ? (
+        thumbnailDataUrl ? (
+          <span className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-surface ring-1 ring-border">
+            <img
+              src={thumbnailDataUrl}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </span>
+        ) : (
+          <span className="shrink-0 w-12 h-12 rounded-lg bg-violet-500/15 ring-1 ring-violet-500/30 text-violet-300 flex items-center justify-center">
+            <ImageIcon size={18} aria-hidden="true" />
+          </span>
+        )
+      ) : (
+        <span className="shrink-0 w-12 h-12 rounded-lg bg-violet-500/15 ring-1 ring-violet-500/30 text-violet-300 flex items-center justify-center">
+          <FileUp size={18} aria-hidden="true" />
+        </span>
+      )}
+
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-bold text-text truncate" title={row.original_filename}>
+          {row.original_filename}
+        </p>
+        <p className="text-[11px] text-text-light truncate mt-0.5">
+          {submitterName} · {formatBytes(row.size_bytes)} · {formatRelative(row.created_at)}
+        </p>
+      </div>
+      {row.drive_view_url && (
+        <a
+          href={row.drive_view_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          // Stop propagation so clicking "Open" goes straight to
+          // Dropbox without also opening the lightbox.
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gold hover:text-gold/80 transition-colors"
+        >
+          Open
+          <ExternalLink size={10} aria-hidden="true" />
+        </a>
+      )}
+    </li>
+  )
 }
