@@ -460,20 +460,42 @@ export default function AddMedia() {
               const isImage = isImageRow(row)
               const rawUrl = row.drive_view_url ? toRawDropboxUrl(row.drive_view_url) : null
               const submitterName = row.submitter?.display_name?.trim() || 'Unknown'
+              const canPreview = isImage && Boolean(rawUrl)
+              // 2026-05-26 — Image rows are clickable everywhere except
+              // the explicit "Open" link, so the user can flick through
+              // thumbnails without having to aim for a tiny target.
+              // Non-image rows keep the static layout (no preview to
+              // show; the Open button is still the way out to Dropbox).
+              const onRowActivate = canPreview ? () => setLightbox(row) : undefined
               return (
-                <li key={row.id} className="px-4 py-2.5 flex items-center gap-3">
+                <li
+                  key={row.id}
+                  {...(onRowActivate
+                    ? {
+                        role: 'button',
+                        tabIndex: 0,
+                        onClick: onRowActivate,
+                        onKeyDown: (e: React.KeyboardEvent<HTMLLIElement>) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            onRowActivate()
+                          }
+                        },
+                        'aria-label': `Preview ${row.original_filename}`,
+                      }
+                    : {})}
+                  className={`px-4 py-2.5 flex items-center gap-3 ${
+                    canPreview
+                      ? 'cursor-zoom-in hover:bg-surface-hover/60 focus-ring transition-colors'
+                      : ''
+                  }`}
+                >
                   {/* Thumbnail: actual image preview when previewable,
                       otherwise the legacy purple file-up dot. Image
                       bytes come directly from Dropbox via raw URL —
                       no Supabase storage involved. */}
-                  {isImage && rawUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => setLightbox(row)}
-                      className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-surface ring-1 ring-border hover:ring-gold/60 focus-ring transition-all"
-                      aria-label={`Preview ${row.original_filename}`}
-                      title="Preview"
-                    >
+                  {canPreview && rawUrl ? (
+                    <span className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-surface ring-1 ring-border">
                       <img
                         src={rawUrl}
                         alt=""
@@ -495,7 +517,7 @@ export default function AddMedia() {
                       >
                         <ImageIcon size={18} />
                       </span>
-                    </button>
+                    </span>
                   ) : (
                     <span className="shrink-0 w-12 h-12 rounded-lg bg-violet-500/15 ring-1 ring-violet-500/30 text-violet-300 flex items-center justify-center">
                       <FileUp size={18} aria-hidden="true" />
@@ -515,6 +537,9 @@ export default function AddMedia() {
                       href={row.drive_view_url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      // Stop propagation so clicking "Open" goes straight
+                      // to Dropbox without also opening the lightbox.
+                      onClick={(e) => e.stopPropagation()}
                       className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gold hover:text-gold/80 transition-colors"
                     >
                       Open
