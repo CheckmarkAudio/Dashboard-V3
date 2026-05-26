@@ -85,13 +85,79 @@ export async function uploadFileToDropbox(
   file: File,
   opts: UploadOptions = {},
 ): Promise<UploadedSubmission> {
+  const sessionId = await streamFileToDropboxSession(file, opts)
+
+  // Ask the edge function to commit the session + create the share
+  // link + insert the metadata row.
+  const submission = await finalizeUpload({
+    session_id: sessionId,
+    total_bytes: file.size,
+    original_filename: file.name,
+    content_type: file.type || null,
+  })
+
+  return submission
+}
+
+// 2026-05-26 — Forum chat reuses the chunked-upload + commit flow but
+// finalizes through a different edge action so the file lands in the
+// `/forum/<channel>/<user>/...` Dropbox layout instead of the
+// per-member submission folder, and no `media_submissions` row is
+// inserted.
+export interface ForumDropboxAttachment {
+  kind: 'video' | 'audio'
+  url: string
+  name: string
+  mime: string | null
+  size: number
+}
+
+export interface UploadForumFileToDropboxOpts extends UploadOptions {
+  channelId: string
+  kind: 'video' | 'audio'
+}
+
+export async function uploadForumFileToDropbox(
+  file: File,
+  opts: UploadForumFileToDropboxOpts,
+): Promise<ForumDropboxAttachment> {
+  const sessionId = await streamFileToDropboxSession(file, opts)
+
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean
+    attachment?: ForumDropboxAttachment
+    error?: string
+  }>('upload-to-dropbox', {
+    body: {
+      action: 'finalize-forum',
+      session_id: sessionId,
+      total_bytes: file.size,
+      original_filename: file.name,
+      content_type: file.type || null,
+      channel_id: opts.channelId,
+      kind: opts.kind,
+    },
+  })
+  if (error || !data?.ok || !data.attachment) {
+    throw new Error(data?.error ?? error?.message ?? 'Failed to finalize forum upload')
+  }
+  return data.attachment
+}
+
+/**
+ * Mint a Dropbox token + stream the file's bytes in 32 MB chunks
+ * directly to Dropbox's content endpoints, returning the session id
+ * the caller can pass to whichever finalize action is appropriate
+ * for the destination layout (member folder vs. forum folder).
+ */
+async function streamFileToDropboxSession(
+  file: File,
+  opts: UploadOptions,
+): Promise<string> {
   if (file.size === 0) throw new Error('File is empty.')
 
-  // 1. Mint a short-lived Dropbox access token.
   const token = await mintDropboxToken(opts.signal)
 
-  // 2. Walk the file in 32MB chunks. The first chunk opens the
-  //    session; subsequent chunks append to it.
   let sessionId: string | null = null
   let offset = 0
   const total = file.size
@@ -115,17 +181,7 @@ export async function uploadFileToDropbox(
     // Shouldn't happen — we already checked file.size > 0.
     throw new Error('Upload session never opened.')
   }
-
-  // 3. Ask the edge function to commit the session + create the
-  //    share link + insert the metadata row.
-  const submission = await finalizeUpload({
-    session_id: sessionId,
-    total_bytes: total,
-    original_filename: file.name,
-    content_type: file.type || null,
-  })
-
-  return submission
+  return sessionId
 }
 
 // ─── Edge function calls ────────────────────────────────────────
