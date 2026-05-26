@@ -41,6 +41,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2"
+import { encodeBase64 } from "jsr:@std/encoding/base64"
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -518,6 +519,92 @@ async function handleFinalizeForum(req: Request, ctx: CallerContext): Promise<Re
   })
 }
 
+// ─── action='thumbnail' (Media page row previews) ────────────────
+//
+// 2026-05-26 — The Media page renders ~18 image rows at a 48px square
+// each. Before this action, those <img> tags pulled the FULL Dropbox
+// raw URL — meaning a single page-open downloaded ~36 MB just to
+// downsize to 48×48 in CSS. Now each row fetches a real thumbnail
+// from Dropbox's files/get_thumbnail_v2 endpoint (≈20 KB JPEG per
+// image, ~100× smaller).
+//
+// The thumbnail bytes round-trip through this edge function because
+// the API call needs the Dropbox access token, which never leaves the
+// server. Returning base64-in-JSON instead of binary keeps the client
+// code dead simple — the browser turns the b64 string into a data URL
+// and feeds it directly into <img src=…>. The ~33 % base64 overhead
+// is dwarfed by the bytes saved vs. the original full-size approach.
+
+interface ThumbnailBody {
+  /** Dropbox file id, e.g. "id:abc123". Stored on each row as
+   *  media_submissions.drive_file_id. */
+  file_id: string
+  /** Optional w×h hint. Defaults to 256×256 which fits 4× DPI for a
+   *  48px row thumbnail. */
+  size?: "w64h64" | "w128h128" | "w256h256" | "w480h320" | "w640h480"
+}
+
+async function handleThumbnail(req: Request, _ctx: CallerContext): Promise<Response> {
+  let body: ThumbnailBody
+  try {
+    body = await req.json() as ThumbnailBody
+  } catch {
+    return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400)
+  }
+  if (!body.file_id || typeof body.file_id !== "string" || !body.file_id.startsWith("id:")) {
+    return jsonResponse({ ok: false, error: "Missing or malformed file_id" }, 400)
+  }
+  const size = body.size ?? "w256h256"
+
+  const appKey = Deno.env.get("DROPBOX_APP_KEY")
+  const appSecret = Deno.env.get("DROPBOX_APP_SECRET")
+  const refreshToken = Deno.env.get("DROPBOX_REFRESH_TOKEN")
+  if (!appKey || !appSecret || !refreshToken) {
+    return jsonResponse({ ok: false, error: "Dropbox credentials not configured" }, 500)
+  }
+  let accessToken: string
+  try {
+    const token = await dropboxAccessToken(appKey, appSecret, refreshToken)
+    accessToken = token.access_token
+  } catch (err) {
+    return jsonResponse({ ok: false, error: (err as Error).message }, 502)
+  }
+
+  const dbxRes = await fetch(
+    "https://content.dropboxapi.com/2/files/get_thumbnail_v2",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Dropbox-API-Arg": JSON.stringify({
+          resource: { ".tag": "path", path: body.file_id },
+          format: { ".tag": "jpeg" },
+          size: { ".tag": size },
+          mode: { ".tag": "strict" },
+        }),
+      },
+    },
+  )
+
+  if (!dbxRes.ok) {
+    // 409 = file has no thumbnail (e.g. non-image, video, or anything
+    // outside Dropbox's supported set). Signal that explicitly so the
+    // client can fall back to the file-icon glyph without retrying.
+    if (dbxRes.status === 409) {
+      return jsonResponse({ ok: false, error: "not_thumbnailable", status: 409 }, 200)
+    }
+    const txt = await dbxRes.text()
+    return jsonResponse(
+      { ok: false, error: `Dropbox thumbnail failed (${dbxRes.status}): ${txt}` },
+      502,
+    )
+  }
+
+  const buf = await dbxRes.arrayBuffer()
+  const b64 = encodeBase64(buf)
+  return jsonResponse({ ok: true, b64, mime: "image/jpeg", bytes: buf.byteLength })
+}
+
 // ─── Main handler ────────────────────────────────────────────────
 
 interface ActionBody {
@@ -539,7 +626,7 @@ Deno.serve(async (req: Request) => {
   try {
     actionBody = await req.clone().json() as ActionBody
   } catch {
-    return jsonResponse({ ok: false, error: "Body must be JSON with {action: 'token'|'finalize'|'finalize-forum'}" }, 400)
+    return jsonResponse({ ok: false, error: "Body must be JSON with {action: 'token'|'finalize'|'finalize-forum'|'thumbnail'}" }, 400)
   }
 
   switch (actionBody.action) {
@@ -549,6 +636,8 @@ Deno.serve(async (req: Request) => {
       return await handleFinalize(req, auth.ctx)
     case "finalize-forum":
       return await handleFinalizeForum(req, auth.ctx)
+    case "thumbnail":
+      return await handleThumbnail(req, auth.ctx)
     default:
       return jsonResponse(
         { ok: false, error: `Unknown action: ${actionBody.action ?? "(missing)"}` },
