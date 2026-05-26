@@ -377,6 +377,147 @@ async function handleFinalize(req: Request, ctx: CallerContext): Promise<Respons
   return jsonResponse({ ok: true, submission: row })
 }
 
+// ─── action='finalize-forum' (chat-attachment commit) ────────────
+//
+// 2026-05-26 — Forum chat video + audio uploads route to Dropbox to
+// preserve the Supabase free-tier storage budget. The browser-side
+// chunked-upload flow is identical to the existing AddMedia path; only
+// the finalize step differs:
+//
+//   - Path layout is `/forum/<channel_id>/<user_id>/<stamp>-<file>`
+//     so chat attachments live in their own sandbox under the App
+//     Folder, separate from per-member submission folders.
+//   - No `media_submissions` row is inserted — the file's metadata
+//     lives on `chat_messages.attachments` (jsonb) as a regular
+//     ChatAttachment.
+//   - The returned URL is the hot-linkable raw form so a plain
+//     `<video src=...>` element can stream it.
+
+interface FinalizeForumBody {
+  session_id: string
+  total_bytes: number
+  original_filename: string
+  content_type?: string | null
+  channel_id: string
+  kind: "video" | "audio"
+}
+
+// Forum uploads ride the existing 50 MB chat-attachment cap. We
+// double-gate here (client cap + server cap) so a tampered client
+// can't sneak a multi-GB video through into chat. AddMedia stays on
+// the 10GB cap via the separate `finalize` action above.
+const MAX_FORUM_FINALIZE_BYTES = 50 * 1024 * 1024
+
+/**
+ * Transform a Dropbox share link into a form that browsers can stream
+ * directly from a `<video>` / `<audio>` `src=` attribute. The default
+ * share link (`?dl=0`) returns Dropbox's HTML preview page; appending
+ * `raw=1` tells Dropbox to serve the file bytes inline instead.
+ *
+ * Works for both legacy `/s/` and modern `/scl/fi/` share URLs.
+ */
+function toRawDropboxUrl(shareUrl: string): string {
+  try {
+    const u = new URL(shareUrl)
+    u.searchParams.delete("dl")
+    u.searchParams.set("raw", "1")
+    return u.toString()
+  } catch {
+    // Fallback: if URL parsing fails for any reason, append the query
+    // manually so we still return something playable.
+    return shareUrl.includes("?")
+      ? `${shareUrl.replace(/[?&]dl=\d/g, "")}&raw=1`
+      : `${shareUrl}?raw=1`
+  }
+}
+
+async function handleFinalizeForum(req: Request, ctx: CallerContext): Promise<Response> {
+  let body: FinalizeForumBody
+  try {
+    body = await req.json() as FinalizeForumBody
+  } catch {
+    return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400)
+  }
+  if (
+    !body.session_id ||
+    !body.original_filename ||
+    typeof body.total_bytes !== "number" ||
+    !body.channel_id ||
+    (body.kind !== "video" && body.kind !== "audio")
+  ) {
+    return jsonResponse({ ok: false, error: "Missing required fields" }, 400)
+  }
+  if (body.total_bytes <= 0) {
+    return jsonResponse({ ok: false, error: "total_bytes must be > 0" }, 400)
+  }
+  if (body.total_bytes > MAX_FORUM_FINALIZE_BYTES) {
+    return jsonResponse(
+      { ok: false, error: `total_bytes ${body.total_bytes} exceeds 50MB forum cap` },
+      413,
+    )
+  }
+  // UUID-ish shape check on channel_id — defense in depth against
+  // path traversal via a crafted channel id.
+  if (!/^[a-zA-Z0-9_-]{8,64}$/.test(body.channel_id)) {
+    return jsonResponse({ ok: false, error: "Malformed channel_id" }, 400)
+  }
+
+  const appKey = Deno.env.get("DROPBOX_APP_KEY")
+  const appSecret = Deno.env.get("DROPBOX_APP_SECRET")
+  const refreshToken = Deno.env.get("DROPBOX_REFRESH_TOKEN")
+  if (!appKey || !appSecret || !refreshToken) {
+    return jsonResponse({ ok: false, error: "Dropbox credentials not configured" }, 500)
+  }
+  let accessToken: string
+  try {
+    const token = await dropboxAccessToken(appKey, appSecret, refreshToken)
+    accessToken = token.access_token
+  } catch (err) {
+    return jsonResponse({ ok: false, error: (err as Error).message }, 502)
+  }
+
+  // Browser supplies only the filename; the folder layout is enforced
+  // server-side so a tampered client can't write into another
+  // channel's folder or escape the App Folder sandbox.
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+  const safeOriginal = body.original_filename.replace(/[^\w.-]/g, "_")
+  const dropboxPath = `/forum/${body.channel_id}/${ctx.callerId}/${stamp}-${safeOriginal}`
+
+  let finished: FinishedFile
+  try {
+    finished = await dropboxFinishSession(accessToken, body.session_id, body.total_bytes, dropboxPath)
+  } catch (err) {
+    return jsonResponse({ ok: false, error: (err as Error).message }, 502)
+  }
+
+  // Without a share link the file can't render in chat — treat the
+  // share-link failure as fatal here (unlike AddMedia, which can
+  // fall back to a deep-link in the submissions list).
+  let shareUrl: string | null = null
+  try {
+    shareUrl = await dropboxGetOrCreateShareLink(accessToken, finished.path_lower)
+  } catch {
+    shareUrl = null
+  }
+  if (!shareUrl) {
+    return jsonResponse(
+      { ok: false, error: "Uploaded, but could not create share link" },
+      502,
+    )
+  }
+
+  return jsonResponse({
+    ok: true,
+    attachment: {
+      kind: body.kind,
+      url: toRawDropboxUrl(shareUrl),
+      name: body.original_filename,
+      mime: body.content_type ?? null,
+      size: finished.size,
+    },
+  })
+}
+
 // ─── Main handler ────────────────────────────────────────────────
 
 interface ActionBody {
@@ -398,7 +539,7 @@ Deno.serve(async (req: Request) => {
   try {
     actionBody = await req.clone().json() as ActionBody
   } catch {
-    return jsonResponse({ ok: false, error: "Body must be JSON with {action: 'token'|'finalize'}" }, 400)
+    return jsonResponse({ ok: false, error: "Body must be JSON with {action: 'token'|'finalize'|'finalize-forum'}" }, 400)
   }
 
   switch (actionBody.action) {
@@ -406,6 +547,8 @@ Deno.serve(async (req: Request) => {
       return await handleToken()
     case "finalize":
       return await handleFinalize(req, auth.ctx)
+    case "finalize-forum":
+      return await handleFinalizeForum(req, auth.ctx)
     default:
       return jsonResponse(
         { ok: false, error: `Unknown action: ${actionBody.action ?? "(missing)"}` },

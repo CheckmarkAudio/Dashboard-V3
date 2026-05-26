@@ -23,6 +23,7 @@ import {
   type ChatAttachment,
 } from './attachments'
 import { compressImageIfBeneficial } from './compressImage'
+import { uploadForumFileToDropbox } from '../dropboxUpload'
 
 export interface UploadForumFileOpts {
   file: File
@@ -98,8 +99,27 @@ export async function uploadForumFile(
     )
   }
 
+  // 2026-05-26 — Video + audio land in Dropbox (the studio pays for
+  // ~2 TB there) so the Supabase free-tier 1 GB stays roomy for the
+  // image/thumbnail traffic that benefits from Supabase's CDN. The
+  // returned ChatAttachment shape is identical regardless of backend,
+  // so the bubble renderer in Content.tsx needs no branch.
+  if (kind === 'video' || kind === 'audio') {
+    const att = await uploadForumFileToDropbox(file, {
+      channelId,
+      kind,
+    })
+    return {
+      kind: att.kind,
+      url: att.url,
+      name: att.name,
+      mime: att.mime ?? file.type,
+      size: att.size,
+    }
+  }
+
   const path = buildForumMediaPath({
-    kind: kind === 'image' ? 'images' : kind === 'video' ? 'videos' : 'audio',
+    kind: 'images',
     channelId,
     userId,
     filename: file.name,
