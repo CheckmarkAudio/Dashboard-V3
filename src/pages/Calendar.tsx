@@ -443,6 +443,17 @@ export default function Calendar() {
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const memberFilterActive = selectedMemberId !== null
 
+  // 2026-05-27 — Per Bridget: "can the icons be more greyed out and
+  // when you hover over them they light up to show you the schedule
+  // of the one you are hovering over?"
+  //
+  // Schedule-overlay avatars sit grayscaled + dimmed by default.
+  // Hovering one (or any of its other appearances elsewhere on the
+  // calendar) snaps THAT member's icons to full color and dims
+  // every segment that doesn't contain them — so the hovered
+  // member's full week-schedule visually lights up on demand.
+  const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null)
+
   // Sort active members alphabetically for the pill row. Inactive
   // members are dropped — they shouldn't show as filter targets.
   const memberPillRow = useMemo(
@@ -1101,16 +1112,24 @@ export default function Calendar() {
                     // segments touch as one continuous shape, and
                     // bumping the fill to /35 masks the grid lines
                     // underneath so the wash reads as one block.
+                    // Segment dims when a hover target is active
+                    // and this segment doesn't contain that member.
+                    const segContainsHovered =
+                      hoveredMemberId !== null &&
+                      seg.memberIds.includes(hoveredMemberId)
+                    const segDimmed =
+                      hoveredMemberId !== null && !segContainsHovered
                     return [
                       <div
                         key={`${wd.key}-${seg.key}`}
                         aria-hidden="true"
-                        className="absolute pointer-events-none bg-purple-700/35 overflow-hidden flex flex-col z-0"
+                        className="absolute pointer-events-none bg-purple-700/35 overflow-hidden flex flex-col z-0 transition-opacity"
                         style={{
                           top: topPx,
                           height: Math.max(heightPx, 16),
                           left: `calc(${colLeft} + 1px)`,
                           width: `calc(${colWidth} - 2px)`,
+                          opacity: segDimmed ? 0.25 : 1,
                         }}
                       >
                         {/* Top row — members arriving at this
@@ -1121,11 +1140,25 @@ export default function Calendar() {
                           <div className="flex items-center flex-wrap gap-1 px-1 pt-0.5">
                             {startingMembers.map((m) => {
                               const c = teamMemberColors.get(m.id) ?? memberColor(m.id)
+                              const isHovered = hoveredMemberId === m.id
+                              const dim = hoveredMemberId !== null && !isHovered
                               return (
                                 <span
                                   key={`s-${m.id}`}
-                                  className="shrink-0 rounded-full"
-                                  style={{ boxShadow: `0 0 0 2px ${c.accent}` }}
+                                  title={m.display_name || 'Member'}
+                                  onMouseEnter={() => setHoveredMemberId(m.id)}
+                                  onMouseLeave={() => setHoveredMemberId(null)}
+                                  className="shrink-0 rounded-full pointer-events-auto cursor-pointer transition-all"
+                                  style={{
+                                    boxShadow: `0 0 0 ${isHovered ? 3 : 2}px ${c.accent}`,
+                                    filter: isHovered
+                                      ? 'none'
+                                      : dim
+                                        ? 'grayscale(0.95) opacity(0.55)'
+                                        : 'grayscale(0.55) opacity(0.85)',
+                                    transform: isHovered ? 'scale(1.15)' : 'scale(1)',
+                                    zIndex: isHovered ? 20 : 'auto',
+                                  }}
                                 >
                                   <MemberAvatar member={m} size="xs" />
                                 </span>
@@ -1144,11 +1177,25 @@ export default function Calendar() {
                           <div className="flex items-center flex-wrap gap-1 px-1 pb-0.5">
                             {endingMembers.map((m) => {
                               const c = teamMemberColors.get(m.id) ?? memberColor(m.id)
+                              const isHovered = hoveredMemberId === m.id
+                              const dim = hoveredMemberId !== null && !isHovered
                               return (
                                 <span
                                   key={`e-${m.id}`}
-                                  className="shrink-0 rounded-full opacity-90"
-                                  style={{ boxShadow: `0 0 0 2px ${c.accent}` }}
+                                  title={m.display_name || 'Member'}
+                                  onMouseEnter={() => setHoveredMemberId(m.id)}
+                                  onMouseLeave={() => setHoveredMemberId(null)}
+                                  className="shrink-0 rounded-full pointer-events-auto cursor-pointer transition-all"
+                                  style={{
+                                    boxShadow: `0 0 0 ${isHovered ? 3 : 2}px ${c.accent}`,
+                                    filter: isHovered
+                                      ? 'none'
+                                      : dim
+                                        ? 'grayscale(0.95) opacity(0.55)'
+                                        : 'grayscale(0.55) opacity(0.85)',
+                                    transform: isHovered ? 'scale(1.15)' : 'scale(1)',
+                                    zIndex: isHovered ? 20 : 'auto',
+                                  }}
                                 >
                                   <MemberAvatar member={m} size="xs" />
                                 </span>
