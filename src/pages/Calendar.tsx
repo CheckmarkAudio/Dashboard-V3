@@ -131,6 +131,67 @@ interface BookingLane<T> {
   lane: number
   groupSize: number
 }
+/**
+ * 2026-05-26 (PR C iter 3) — Schedule-overlay segment builder.
+ *
+ * Replaces the per-shift lane assignment for the schedule overlay
+ * layer. Bridget's direction: "NO separate columns make them be
+ * layered." Instead of splitting the day column into N cascaded /
+ * laned strips per overlapping shift, we merge overlapping shifts
+ * into TIME SEGMENTS where each segment is the set of members on
+ * shift during a constant time window.
+ *
+ * Example: Richard 11-3, Checkmark 11-6, Matthan 11-4 →
+ *   segment 11-3: [Richard, Checkmark, Matthan]
+ *   segment 3-4:  [Checkmark, Matthan]
+ *   segment 4-6:  [Checkmark]
+ *
+ * Each segment renders as a SINGLE full-column-width block with all
+ * its members' avatars stacked inside — no horizontal splitting, no
+ * smooshing. The calendar reads as "at 11 AM 3 people are on, at 3
+ * PM it drops to 2, at 4 PM it drops to 1" without lanes.
+ */
+interface ShiftSpan {
+  memberId: string
+  startMin: number
+  endMin: number
+}
+interface ScheduleSegment {
+  key: string
+  startMin: number
+  endMin: number
+  memberIds: string[]
+}
+function buildScheduleSegments(shifts: ShiftSpan[]): ScheduleSegment[] {
+  if (shifts.length === 0) return []
+  // Every shift boundary becomes a candidate transition point. The
+  // distinct sorted points partition the day into segments where the
+  // covering member set is constant.
+  const pointsSet = new Set<number>()
+  for (const s of shifts) {
+    pointsSet.add(s.startMin)
+    pointsSet.add(s.endMin)
+  }
+  const points = [...pointsSet].sort((a, b) => a - b)
+  const segments: ScheduleSegment[] = []
+  for (let i = 0; i < points.length - 1; i++) {
+    const t1 = points[i]
+    const t2 = points[i + 1]
+    if (t1 === undefined || t2 === undefined) continue
+    const memberIds = shifts
+      .filter((s) => s.startMin <= t1 && s.endMin >= t2)
+      .map((s) => s.memberId)
+    if (memberIds.length === 0) continue
+    segments.push({
+      key: `seg-${t1}-${t2}`,
+      startMin: t1,
+      endMin: t2,
+      memberIds,
+    })
+  }
+  return segments
+}
+
 function assignBookingLanes<T extends { startTime: string; endTime: string }>(
   dayBookings: T[],
 ): BookingLane<T>[] {
@@ -944,87 +1005,87 @@ export default function Calendar() {
                 {showSchedule && WEEK.map((wd, dayIndex) => {
                   const daySchedules = schedulesByDate[wd.key] ?? []
                   if (daySchedules.length === 0) return null
-                  // Convert each ExpandedSchedule to the {startTime, endTime}
-                  // shape assignBookingLanes expects (HH:MM strings in
-                  // local time).
-                  const asEvents = daySchedules.map((s) => {
+                  // 2026-05-26 (PR C iter 3) — Merge overlapping shifts
+                  // into time-segments instead of splitting the day
+                  // column into lanes. Each segment is a stretch
+                  // where the set of members on shift is constant; it
+                  // renders as a SINGLE full-column-width block with
+                  // every covering member's avatar stacked inside.
+                  // Bridget's direction: "NO separate columns make
+                  // them be layered."
+                  const shifts: ShiftSpan[] = daySchedules.map((s) => {
                     const start = new Date(s.starts_at)
                     const end = new Date(s.ends_at)
                     return {
-                      key: s.key,
                       memberId: s.member_id,
-                      note: s.note,
-                      source: s.source,
-                      startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
-                      endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
+                      startMin: start.getHours() * 60 + start.getMinutes(),
+                      endMin: end.getHours() * 60 + end.getMinutes(),
                     }
                   })
-                  const laned = assignBookingLanes(asEvents)
-                  return laned.map(({ booking: ev, lane, groupSize }) => {
-                    const startMin = timeToMinutes(ev.startTime)
-                    const endMin = timeToMinutes(ev.endTime)
-                    const gridStart = 7 * 60
-                    const gridEnd = 20 * 60 // 7am to 8pm visible (HOURS goes 7–19, last row ends at 20)
-                    // Clip to visible grid so an overnight rule
-                    // doesn't paint outside the time grid.
-                    const visStart = Math.max(startMin, gridStart)
-                    const visEnd = Math.min(endMin, gridEnd)
+                  const segments = buildScheduleSegments(shifts)
+                  const gridStart = 7 * 60
+                  const gridEnd = 20 * 60
+                  const colWidth = `((100% - 36px) / 7)`
+                  const colLeft = `(36px + ${colWidth} * ${dayIndex})`
+                  return segments.map((seg) => {
+                    const visStart = Math.max(seg.startMin, gridStart)
+                    const visEnd = Math.min(seg.endMin, gridEnd)
                     if (visEnd <= visStart) return null
                     const topPx = ((visStart - gridStart) / 60) * 48
                     const heightPx = ((visEnd - visStart) / 60) * 48
-                    const colWidth = `((100% - 36px) / 7)`
-                    const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                    // 2026-05-26 (PR C v2) — heavier overlap per
-                    // Bridget's "they need to overlap, not be smashed"
-                    // feedback. Each block holds 88 % of the column
-                    // width regardless of how many lanes the group
-                    // has; lanes offset 5–6 % to the right per lane so
-                    // overlapping shifts read as STACKED CARDS — most
-                    // of each card hidden behind the one above it,
-                    // just the leftmost ~5 % peeks out (enough room
-                    // for the avatar dot). Lane 0 is on top.
-                    const widthFactor = groupSize === 1 ? 1 : 0.88
-                    const offsetFactor = groupSize === 1
-                      ? 0
-                      : Math.min(0.06, (1 - widthFactor) / (groupSize - 1))
-                    const laneWidth = `(${colWidth} * ${widthFactor})`
-                    const laneOffset = `(${colWidth} * ${offsetFactor * lane})`
-                    const laneLeft = `(${colLeft} + ${laneOffset})`
-                    const memberName = memberNameById.get(ev.memberId) ?? 'Member'
-                    // 2026-05-26 (PR C) — pair the staff name with
-                    // their avatar so the schedule layer reads as
-                    // team-oriented at a glance.
-                    const member = memberById.get(ev.memberId)
+                    // Resolve covering members for this segment.
+                    // Fall back to placeholder name when the team
+                    // member directory hasn't loaded yet.
+                    const segMembers = seg.memberIds
+                      .map((id) => memberById.get(id))
+                      .filter((m): m is NonNullable<typeof m> => Boolean(m))
+                    const segNames = seg.memberIds
+                      .map((id) => memberNameById.get(id) ?? 'Member')
+                      .join(', ')
+                    const startLabel = `${String(Math.floor(seg.startMin / 60)).padStart(2, '0')}:${String(seg.startMin % 60).padStart(2, '0')}`
+                    const endLabel = `${String(Math.floor(seg.endMin / 60)).padStart(2, '0')}:${String(seg.endMin % 60).padStart(2, '0')}`
+                    // First 4 avatars inline; the rest fold into "+N".
+                    const MAX_INLINE = 4
+                    const inline = segMembers.slice(0, MAX_INLINE)
+                    const overflow = segMembers.length - inline.length
                     return (
                       <div
-                        key={ev.key}
+                        key={`${wd.key}-${seg.key}`}
                         aria-hidden="true"
-                        title={`${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`}
-                        className="absolute pointer-events-none rounded-md border bg-purple-700/15 border-purple-500/30 overflow-hidden"
+                        title={`${segNames} · ${formatTime12(startLabel)}–${formatTime12(endLabel)}`}
+                        className="absolute pointer-events-none rounded-md border bg-purple-700/15 border-purple-500/30 overflow-hidden z-0"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 16),
-                          left: `calc(${laneLeft} + 1px)`,
-                          width: `calc(${laneWidth} - 2px)`,
-                          // Cascade z-stack: lane 0 (first in the
-                          // overlap group) on top, subsequent lanes
-                          // recede. Schedule layer base is z-0; we
-                          // bump each lane up so they stack
-                          // predictably without colliding with the
-                          // booking layer (z-30) or +Book hover (z-10).
-                          zIndex: 5 - lane,
+                          left: `calc(${colLeft} + 1px)`,
+                          width: `calc(${colWidth} - 2px)`,
                         }}
                       >
                         {heightPx > 22 && (
-                          <div className="flex items-center gap-1 px-1 pt-0.5">
-                            {member && heightPx > 36 && (
-                              <span className="shrink-0">
-                                <MemberAvatar member={member} size="xs" />
+                          <div className="flex items-center gap-0.5 px-1 pt-0.5">
+                            {inline.map((m, i) => (
+                              <span
+                                key={m.id}
+                                className="shrink-0 ring-1 ring-purple-900/40 rounded-full"
+                                style={{ marginLeft: i === 0 ? 0 : -6 }}
+                              >
+                                <MemberAvatar member={m} size="xs" />
+                              </span>
+                            ))}
+                            {overflow > 0 && (
+                              <span className="ml-1 text-[9px] font-semibold text-purple-100">
+                                +{overflow}
                               </span>
                             )}
-                            <p className="text-[8px] text-purple-100 font-semibold truncate leading-tight">
-                              {memberName}
-                            </p>
+                            {/* Member count fallback when avatars are
+                                hidden (very short blocks) — shows a
+                                small count chip so the user knows N
+                                people are on without the visual stack. */}
+                            {segMembers.length === 0 && (
+                              <span className="text-[9px] font-semibold text-purple-100">
+                                {seg.memberIds.length} on shift
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
