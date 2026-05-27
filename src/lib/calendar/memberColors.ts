@@ -27,17 +27,21 @@ export interface MemberColor {
   accent: string
 }
 
+// 2026-05-27 — Alpha dialed down from /20 → /15 so when shifts
+// overlap at full column width the colors visibly blend rather than
+// dominate. /15 reads as a clear tint solo + softens to a wash when
+// two or three stack.
 const PALETTE: MemberColor[] = [
-  { bg: 'bg-violet-500/20',  border: 'border-violet-400/40',  text: 'text-violet-100',  accent: 'bg-violet-400'  },
-  { bg: 'bg-emerald-500/20', border: 'border-emerald-400/40', text: 'text-emerald-100', accent: 'bg-emerald-400' },
-  { bg: 'bg-sky-500/20',     border: 'border-sky-400/40',     text: 'text-sky-100',     accent: 'bg-sky-400'     },
-  { bg: 'bg-amber-500/20',   border: 'border-amber-400/40',   text: 'text-amber-100',   accent: 'bg-amber-400'   },
-  { bg: 'bg-rose-500/20',    border: 'border-rose-400/40',    text: 'text-rose-100',    accent: 'bg-rose-400'    },
-  { bg: 'bg-cyan-500/20',    border: 'border-cyan-400/40',    text: 'text-cyan-100',    accent: 'bg-cyan-400'    },
-  { bg: 'bg-fuchsia-500/20', border: 'border-fuchsia-400/40', text: 'text-fuchsia-100', accent: 'bg-fuchsia-400' },
-  { bg: 'bg-lime-500/20',    border: 'border-lime-400/40',    text: 'text-lime-100',    accent: 'bg-lime-400'    },
-  { bg: 'bg-orange-500/20',  border: 'border-orange-400/40',  text: 'text-orange-100',  accent: 'bg-orange-400'  },
-  { bg: 'bg-teal-500/20',    border: 'border-teal-400/40',    text: 'text-teal-100',    accent: 'bg-teal-400'    },
+  { bg: 'bg-violet-500/15',  border: 'border-violet-400/40',  text: 'text-violet-100',  accent: 'bg-violet-400'  },
+  { bg: 'bg-emerald-500/15', border: 'border-emerald-400/40', text: 'text-emerald-100', accent: 'bg-emerald-400' },
+  { bg: 'bg-sky-500/15',     border: 'border-sky-400/40',     text: 'text-sky-100',     accent: 'bg-sky-400'     },
+  { bg: 'bg-amber-500/15',   border: 'border-amber-400/40',   text: 'text-amber-100',   accent: 'bg-amber-400'   },
+  { bg: 'bg-rose-500/15',    border: 'border-rose-400/40',    text: 'text-rose-100',    accent: 'bg-rose-400'    },
+  { bg: 'bg-cyan-500/15',    border: 'border-cyan-400/40',    text: 'text-cyan-100',    accent: 'bg-cyan-400'    },
+  { bg: 'bg-fuchsia-500/15', border: 'border-fuchsia-400/40', text: 'text-fuchsia-100', accent: 'bg-fuchsia-400' },
+  { bg: 'bg-lime-500/15',    border: 'border-lime-400/40',    text: 'text-lime-100',    accent: 'bg-lime-400'    },
+  { bg: 'bg-orange-500/15',  border: 'border-orange-400/40',  text: 'text-orange-100',  accent: 'bg-orange-400'  },
+  { bg: 'bg-teal-500/15',    border: 'border-teal-400/40',    text: 'text-teal-100',    accent: 'bg-teal-400'    },
 ]
 
 /**

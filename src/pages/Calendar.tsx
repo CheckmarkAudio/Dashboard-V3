@@ -946,20 +946,22 @@ export default function Calendar() {
                 {showSchedule && WEEK.map((wd, dayIndex) => {
                   const daySchedules = schedulesByDate[wd.key] ?? []
                   if (daySchedules.length === 0) return null
-                  // 2026-05-27 (PR C iter 6) — Per Bridget: "make us
-                  // all different colors, it doesn't make sense to
-                  // repeat the icons of one person multiple times
-                  // down the calendar since its a full time block
-                  // with no breaks in time."
+                  // 2026-05-27 (PR C iter 7) — Per Bridget: "now lets
+                  // have them overlap low opacity."
                   //
-                  // Each member's shift renders as ONE continuous
-                  // block (start → end, no segment splitting), in
-                  // that member's stable palette color. Their avatar
-                  // appears exactly ONCE per shift at the top. When
-                  // shifts overlap, lane assignment splits them
-                  // side-by-side — but each lane is now its own
-                  // member color, so they're instantly distinguishable
-                  // even when narrow.
+                  // Each shift renders at FULL COLUMN WIDTH (no lane
+                  // splitting). Overlapping shifts stack on top of
+                  // each other — at /15 alpha the colors blend
+                  // visibly where they overlap so you can see "two
+                  // people are on this hour" by the colors mixing.
+                  // Each block still gets ONE avatar at the top.
+                  //
+                  // To prevent avatars from piling at the exact same
+                  // pixel when shifts start together, we still run
+                  // `assignBookingLanes` PURELY to compute a lane
+                  // index per shift, then use that index to stagger
+                  // the avatar position horizontally (24 px per lane)
+                  // — the blocks themselves stay full-column-width.
                   const asEvents = daySchedules.map((s) => {
                     const start = new Date(s.starts_at)
                     const end = new Date(s.ends_at)
@@ -976,7 +978,7 @@ export default function Calendar() {
                   const gridEnd = 20 * 60
                   const colWidth = `((100% - 36px) / 7)`
                   const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                  return laned.map(({ booking: ev, lane, groupSize }) => {
+                  return laned.map(({ booking: ev, lane }) => {
                     const startMin = timeToMinutes(ev.startTime)
                     const endMin = timeToMinutes(ev.endTime)
                     const visStart = Math.max(startMin, gridStart)
@@ -984,14 +986,15 @@ export default function Calendar() {
                     if (visEnd <= visStart) return null
                     const topPx = ((visStart - gridStart) / 60) * 48
                     const heightPx = ((visEnd - visStart) / 60) * 48
-                    const laneWidth = `(${colWidth} / ${groupSize})`
-                    const laneLeft = `(${colLeft} + ${laneWidth} * ${lane})`
                     const member = memberById.get(ev.memberId)
                     const memberName = memberNameById.get(ev.memberId) ?? 'Member'
                     const color = memberColor(ev.memberId)
-                    // First name extracted via the same helper used on
-                    // the filter pills, so labels stay consistent.
                     const first = firstName(memberName)
+                    // Avatar offset: 28 px per lane index so when
+                    // members start at the same time their avatars
+                    // line up side-by-side at the top of the block
+                    // instead of stacking on top of each other.
+                    const avatarOffsetPx = lane * 28
                     return (
                       <div
                         key={ev.key}
@@ -1001,12 +1004,15 @@ export default function Calendar() {
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 16),
-                          left: `calc(${laneLeft} + 1px)`,
-                          width: `calc(${laneWidth} - 2px)`,
+                          left: `calc(${colLeft} + 1px)`,
+                          width: `calc(${colWidth} - 2px)`,
                         }}
                       >
                         {heightPx > 22 && (
-                          <div className="flex items-center gap-1 px-1 pt-0.5">
+                          <div
+                            className="flex items-center gap-1 pt-0.5"
+                            style={{ paddingLeft: 4 + avatarOffsetPx }}
+                          >
                             {member && heightPx > 36 && (
                               <span className="shrink-0">
                                 <MemberAvatar member={member} size="xs" />
