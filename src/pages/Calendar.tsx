@@ -974,8 +974,24 @@ export default function Calendar() {
                     const heightPx = ((visEnd - visStart) / 60) * 48
                     const colWidth = `((100% - 36px) / 7)`
                     const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                    const laneWidth = `(${colWidth} / ${groupSize})`
-                    const laneLeft = `(${colLeft} + ${laneWidth} * ${lane})`
+                    // 2026-05-26 (PR C tweak) — Bridget's feedback: the
+                    // old "split the column into N equal lanes" math
+                    // turned 3+ overlapping shifts into thin smooshed
+                    // strips with truncated names. Switch to a
+                    // CASCADE layout: each block stays mostly column-
+                    // wide (75 %) and overlapping lanes offset 12.5 %
+                    // to the right per lane. Result is a "stacked
+                    // cards" look — each shift's left edge (where the
+                    // avatar + name live) stays visible even when 3+
+                    // members overlap. Lane 0 is on top; later lanes
+                    // recede.
+                    const widthFactor = groupSize === 1 ? 1 : 0.75
+                    const offsetFactor = groupSize === 1
+                      ? 0
+                      : (1 - widthFactor) / (groupSize - 1)
+                    const laneWidth = `(${colWidth} * ${widthFactor})`
+                    const laneOffset = `(${colWidth} * ${offsetFactor * lane})`
+                    const laneLeft = `(${colLeft} + ${laneOffset})`
                     const memberName = memberNameById.get(ev.memberId) ?? 'Member'
                     // 2026-05-26 (PR C) — pair the staff name with
                     // their avatar so the schedule layer reads as
@@ -986,12 +1002,19 @@ export default function Calendar() {
                         key={ev.key}
                         aria-hidden="true"
                         title={`${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`}
-                        className="absolute pointer-events-none rounded-md border bg-purple-700/10 border-purple-500/20 overflow-hidden z-0"
+                        className="absolute pointer-events-none rounded-md border bg-purple-700/15 border-purple-500/30 overflow-hidden"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 16),
                           left: `calc(${laneLeft} + 1px)`,
                           width: `calc(${laneWidth} - 2px)`,
+                          // Cascade z-stack: lane 0 (first in the
+                          // overlap group) on top, subsequent lanes
+                          // recede. Schedule layer base is z-0; we
+                          // bump each lane up so they stack
+                          // predictably without colliding with the
+                          // booking layer (z-30) or +Book hover (z-10).
+                          zIndex: 5 - lane,
                         }}
                       >
                         {heightPx > 22 && (
@@ -1001,7 +1024,7 @@ export default function Calendar() {
                                 <MemberAvatar member={member} size="xs" />
                               </span>
                             )}
-                            <p className="text-[8px] text-purple-200/80 truncate leading-tight">
+                            <p className="text-[8px] text-purple-100 font-semibold truncate leading-tight">
                               {memberName}
                             </p>
                           </div>
