@@ -1151,11 +1151,19 @@ export default function Calendar() {
                                   className="shrink-0 rounded-full pointer-events-auto cursor-pointer transition-all"
                                   style={{
                                     boxShadow: `0 0 0 ${isHovered ? 3 : 2}px ${c.accent}`,
+                                    // 2026-05-27 — Bumped from 0.55 →
+                                    // 1.0 so the idle state is fully
+                                    // monochrome at 60 % opacity. The
+                                    // previous 0.55 was too subtle —
+                                    // avatars still read as fully
+                                    // colored at a glance. Now they
+                                    // sit as obviously-greyed bg
+                                    // until you hover.
                                     filter: isHovered
                                       ? 'none'
                                       : dim
-                                        ? 'grayscale(0.95) opacity(0.55)'
-                                        : 'grayscale(0.55) opacity(0.85)',
+                                        ? 'grayscale(1) opacity(0.35)'
+                                        : 'grayscale(1) opacity(0.6)',
                                     transform: isHovered ? 'scale(1.15)' : 'scale(1)',
                                     zIndex: isHovered ? 20 : 'auto',
                                   }}
@@ -1188,11 +1196,19 @@ export default function Calendar() {
                                   className="shrink-0 rounded-full pointer-events-auto cursor-pointer transition-all"
                                   style={{
                                     boxShadow: `0 0 0 ${isHovered ? 3 : 2}px ${c.accent}`,
+                                    // 2026-05-27 — Bumped from 0.55 →
+                                    // 1.0 so the idle state is fully
+                                    // monochrome at 60 % opacity. The
+                                    // previous 0.55 was too subtle —
+                                    // avatars still read as fully
+                                    // colored at a glance. Now they
+                                    // sit as obviously-greyed bg
+                                    // until you hover.
                                     filter: isHovered
                                       ? 'none'
                                       : dim
-                                        ? 'grayscale(0.95) opacity(0.55)'
-                                        : 'grayscale(0.55) opacity(0.85)',
+                                        ? 'grayscale(1) opacity(0.35)'
+                                        : 'grayscale(1) opacity(0.6)',
                                     transform: isHovered ? 'scale(1.15)' : 'scale(1)',
                                     zIndex: isHovered ? 20 : 'auto',
                                   }}
