@@ -134,6 +134,53 @@ interface BookingLane<T> {
   groupSize: number
 }
 
+/**
+ * 2026-05-27 — Schedule-overlay segment builder.
+ *
+ * Returns segments where a constant set of members is "on" between
+ * two consecutive transition times. Used so:
+ *   1. The colored block per segment fills the full column width
+ *      without lane-splitting + without redundant per-member
+ *      rectangles stacked vertically.
+ *   2. We can compute, for each segment, which members are
+ *      arriving (their shift starts here) vs. leaving (their shift
+ *      ends here) — so a member's avatar shows exactly TWICE per
+ *      shift (start + end) instead of once per overlapping segment
+ *      they pass through.
+ */
+interface ShiftSpan {
+  memberId: string
+  startMin: number
+  endMin: number
+}
+interface ScheduleSegment {
+  key: string
+  startMin: number
+  endMin: number
+  memberIds: string[]
+}
+function buildScheduleSegments(shifts: ShiftSpan[]): ScheduleSegment[] {
+  if (shifts.length === 0) return []
+  const pointsSet = new Set<number>()
+  for (const s of shifts) {
+    pointsSet.add(s.startMin)
+    pointsSet.add(s.endMin)
+  }
+  const points = [...pointsSet].sort((a, b) => a - b)
+  const segments: ScheduleSegment[] = []
+  for (let i = 0; i < points.length - 1; i++) {
+    const t1 = points[i]
+    const t2 = points[i + 1]
+    if (t1 === undefined || t2 === undefined) continue
+    const memberIds = shifts
+      .filter((s) => s.startMin <= t1 && s.endMin >= t2)
+      .map((s) => s.memberId)
+    if (memberIds.length === 0) continue
+    segments.push({ key: `seg-${t1}-${t2}`, startMin: t1, endMin: t2, memberIds })
+  }
+  return segments
+}
+
 function assignBookingLanes<T extends { startTime: string; endTime: string }>(
   dayBookings: T[],
 ): BookingLane<T>[] {
@@ -355,12 +402,6 @@ export default function Calendar() {
     queryFn: fetchTeamMembers,
     staleTime: 60_000,
   })
-  const memberNameById = useMemo(() => {
-    const map = new Map<string, string>()
-    teamMembers.forEach((m) => map.set(m.id, m.display_name || 'Member'))
-    return map
-  }, [teamMembers])
-
   // 2026-05-26 (PR C) — reverse lookup: display_name → full member
   // object. Bookings carry the assignee as a plain string (the join
   // doesn't surface member_id on the booking row), so to drop an
@@ -1004,89 +1045,107 @@ export default function Calendar() {
                   // dropping down in parallel. The rest of the day
                   // column stays clear so booking blocks remain
                   // legible underneath.
-                  // 2026-05-27 — Per Bridget: "can we make that more
-                  // look like brackets instead of steaks? we need to
-                  // make it look good and sleek."
+                  // 2026-05-27 — Per Bridget: "lets go back to this
+                  // [filled segment blocks], but instead of having
+                  // the icons appear multiple times down the line in
+                  // chunks have an icon for each member for their
+                  // start time, and their end time."
                   //
-                  // Replace the straight-line indicator with a proper
-                  // `[` bracket shape: top cap + vertical spine +
-                  // bottom cap, rendered via border-left + border-top
-                  // + border-bottom on a thin div, with rounded
-                  // top-left / bottom-left corners for the sleek
-                  // edge. Avatar at the top of the shift still
-                  // identifies who; the bracket below frames the
-                  // duration with start + end serifs.
-                  const AVATAR_PX = 22
-                  const LANE_STRIDE = 24
-                  const LANE_LEFT_OFFSET = 3
-                  const BRACKET_W = 8
-                  const BRACKET_BORDER = 2
-                  return laned.flatMap(({ booking: ev, lane }) => {
-                    const startMin = timeToMinutes(ev.startTime)
-                    const endMin = timeToMinutes(ev.endTime)
-                    const visStart = Math.max(startMin, gridStart)
-                    const visEnd = Math.min(endMin, gridEnd)
+                  // Each segment (a time range where the set of
+                  // on-shift members is constant) renders as a
+                  // single full-column-width purple wash. Inside the
+                  // wash we only show avatars for members whose
+                  // shift is starting or ending at that segment's
+                  // boundaries — so each person's icon appears
+                  // exactly twice per shift (top of the segment
+                  // where they arrive, bottom of the segment where
+                  // they leave), never repeated in the middle.
+                  const shiftSpans: ShiftSpan[] = laned.map(({ booking: ev }) => ({
+                    memberId: ev.memberId,
+                    startMin: timeToMinutes(ev.startTime),
+                    endMin: timeToMinutes(ev.endTime),
+                  }))
+                  const shiftByMember = new Map<string, ShiftSpan>()
+                  for (const s of shiftSpans) shiftByMember.set(s.memberId, s)
+                  const segments = buildScheduleSegments(shiftSpans)
+                  return segments.flatMap((seg) => {
+                    const visStart = Math.max(seg.startMin, gridStart)
+                    const visEnd = Math.min(seg.endMin, gridEnd)
                     if (visEnd <= visStart) return []
                     const topPx = ((visStart - gridStart) / 60) * 48
                     const heightPx = ((visEnd - visStart) / 60) * 48
-                    const member = memberById.get(ev.memberId)
-                    const memberName = memberNameById.get(ev.memberId) ?? 'Member'
-                    const color = teamMemberColors.get(ev.memberId) ?? memberColor(ev.memberId)
-                    const anchorXPx = LANE_LEFT_OFFSET + lane * LANE_STRIDE
-                    // Bracket sits centered under the avatar — its
-                    // left edge lines up with where a vertical line
-                    // would have been before, so the avatar-to-
-                    // bracket connection reads as one element.
-                    const bracketLeftPx = anchorXPx + (AVATAR_PX - BRACKET_W) / 2
-                    const bracketTopPx = topPx + AVATAR_PX + 2
-                    const bracketHeightPx = Math.max(0, heightPx - AVATAR_PX - 2)
-                    const tooltip = `${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`
-                    const nodes = []
-                    // Sleek bracket: `[` shape via three borders on
-                    // a thin div. Skipped on very short shifts where
-                    // there's no usable space below the avatar.
-                    if (bracketHeightPx > 6) {
-                      nodes.push(
-                        <div
-                          key={`${ev.key}-bracket`}
-                          aria-hidden="true"
-                          className="absolute pointer-events-none"
-                          style={{
-                            top: bracketTopPx,
-                            height: bracketHeightPx,
-                            left: `calc(${colLeft} + ${bracketLeftPx}px)`,
-                            width: BRACKET_W,
-                            borderLeft: `${BRACKET_BORDER}px solid ${color.accent}`,
-                            borderTop: `${BRACKET_BORDER}px solid ${color.accent}`,
-                            borderBottom: `${BRACKET_BORDER}px solid ${color.accent}`,
-                            borderTopLeftRadius: 5,
-                            borderBottomLeftRadius: 5,
-                            zIndex: 5 - lane,
-                          }}
-                        />,
-                      )
+                    // Partition this segment's members into those
+                    // who are *starting* their shift exactly here
+                    // and those who are *ending* exactly here. A
+                    // member can be both (a shift that spans only
+                    // this segment), in which case we show them in
+                    // both rows.
+                    const startingMembers: typeof teamMembers = []
+                    const endingMembers: typeof teamMembers = []
+                    for (const memberId of seg.memberIds) {
+                      const shift = shiftByMember.get(memberId)
+                      const member = memberById.get(memberId)
+                      if (!member || !shift) continue
+                      if (shift.startMin === seg.startMin) startingMembers.push(member)
+                      if (shift.endMin === seg.endMin) endingMembers.push(member)
                     }
-                    if (member) {
-                      nodes.push(
-                        <div
-                          key={`${ev.key}-avatar`}
-                          aria-hidden="true"
-                          title={tooltip}
-                          className="absolute pointer-events-none rounded-full"
-                          style={{
-                            top: topPx,
-                            left: `calc(${colLeft} + ${anchorXPx}px)`,
-                            width: AVATAR_PX,
-                            height: AVATAR_PX,
-                            zIndex: 6 - lane,
-                            boxShadow: `0 0 0 2px ${color.accent}`,
-                          }}
-                        >
-                          <MemberAvatar member={member} size="xs" />
-                        </div>,
-                      )
-                    }
-                    return nodes
+                    return [
+                      <div
+                        key={`${wd.key}-${seg.key}`}
+                        aria-hidden="true"
+                        className="absolute pointer-events-none rounded-md border border-purple-500/30 bg-purple-700/15 overflow-hidden flex flex-col z-0"
+                        style={{
+                          top: topPx + 1,
+                          height: Math.max(heightPx - 2, 16),
+                          left: `calc(${colLeft} + 1px)`,
+                          width: `calc(${colWidth} - 2px)`,
+                        }}
+                      >
+                        {/* Top row — members arriving at this
+                            segment's start boundary. Per-member
+                            color rings so different staff are easy
+                            to tell apart at a glance. */}
+                        {startingMembers.length > 0 && (
+                          <div className="flex items-center flex-wrap gap-1 px-1 pt-0.5">
+                            {startingMembers.map((m) => {
+                              const c = teamMemberColors.get(m.id) ?? memberColor(m.id)
+                              return (
+                                <span
+                                  key={`s-${m.id}`}
+                                  className="shrink-0 rounded-full"
+                                  style={{ boxShadow: `0 0 0 2px ${c.accent}` }}
+                                >
+                                  <MemberAvatar member={m} size="xs" />
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
+                        {/* Spacer pushes the ending row to the
+                            bottom of the segment. */}
+                        <div className="flex-1" />
+                        {/* Bottom row — members whose shift ends at
+                            this segment's end boundary. Only renders
+                            when the block is tall enough to read as
+                            "two separate rows" (≥ 32 px). */}
+                        {endingMembers.length > 0 && heightPx >= 32 && (
+                          <div className="flex items-center flex-wrap gap-1 px-1 pb-0.5">
+                            {endingMembers.map((m) => {
+                              const c = teamMemberColors.get(m.id) ?? memberColor(m.id)
+                              return (
+                                <span
+                                  key={`e-${m.id}`}
+                                  className="shrink-0 rounded-full opacity-90"
+                                  style={{ boxShadow: `0 0 0 2px ${c.accent}` }}
+                                >
+                                  <MemberAvatar member={m} size="xs" />
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>,
+                    ]
                   })
                 })}
 
