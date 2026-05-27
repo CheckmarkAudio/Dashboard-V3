@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react'
 import { loadWeekEvents } from '../../lib/calendar'
+import { sessionTypeColor } from '../../lib/calendar/sessionColors'
 import { addDays, startOfWeek } from '../../lib/time'
 import { localDateKey } from '../../lib/dates'
 import { useAuth } from '../../contexts/AuthContext'
@@ -522,8 +523,18 @@ export default function CalendarDayCard({
             {selectedBookings.map((b) => {
               const bNotes = bookingNotes[b.id] ?? []
               const isOpen = expandedNotes.has(b.id)
+              // 2026-05-26 (PR B) — session-type pastel color for the
+              // booking row's category chip + left-edge stripe accent.
+              const color = sessionTypeColor(b.type)
               return (
-                <div key={b.id} className="py-3 border-b border-border-strong last:border-0">
+                <div key={b.id} className="relative py-3 pl-2 border-b border-border-strong last:border-0">
+                  {/* Type-color left-edge stripe — subtle 2 px accent
+                      that reads as "category" at a glance without
+                      stealing focus from the row's text. */}
+                  <span
+                    aria-hidden="true"
+                    className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-full ${color.accent}`}
+                  />
                   <div className="flex items-center justify-between mb-1">
                     {/* Clickable title — opens BookingDetailModal (Lean A). */}
                     <button
@@ -542,7 +553,7 @@ export default function CalendarDayCard({
                     {formatTime12(b.startTime)} – {formatTime12(b.endTime)}
                   </p>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className="text-[9px] font-semibold text-gold/80 bg-gold/5 border border-gold/15 px-1.5 py-0.5 rounded">
+                    <span className={`text-[9px] font-semibold ${color.text} ${color.bg} border ${color.border} px-1.5 py-0.5 rounded`}>
                       {TYPE_LABELS[b.type] ?? b.type}
                     </span>
                     <span className="text-[9px] text-text-muted">{b.studio}</span>
