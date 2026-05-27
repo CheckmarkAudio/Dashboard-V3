@@ -63,9 +63,13 @@ function lighten(rgb: RGB): string {
 /** Turn an RGB triple into the four CSS strings the calendar needs. */
 export function memberColorFromRGB(rgb: RGB): MemberColor {
   const { r, g, b } = rgb
+  // 2026-05-27 — bumped fill 0.15 → 0.30 + border 0.40 → 0.65 per
+  // Bridget: "turn up opacity." Overlap still blends visibly (two
+  // 0.30 fills layer to ~0.51 effective) but solo blocks now read
+  // as a confident tint instead of a wash.
   return {
-    bg: `rgba(${r}, ${g}, ${b}, 0.15)`,
-    border: `rgba(${r}, ${g}, ${b}, 0.40)`,
+    bg: `rgba(${r}, ${g}, ${b}, 0.30)`,
+    border: `rgba(${r}, ${g}, ${b}, 0.65)`,
     text: lighten(rgb),
     accent: `rgb(${r}, ${g}, ${b})`,
   }
