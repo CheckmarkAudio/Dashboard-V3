@@ -1089,14 +1089,26 @@ export default function Calendar() {
                       if (shift.startMin === seg.startMin) startingMembers.push(member)
                       if (shift.endMin === seg.endMin) endingMembers.push(member)
                     }
+                    // 2026-05-27 — Per Bridget: "can we not have the
+                    // dividers though in the calendar sections since
+                    // those arent times where shifts stop?"
+                    //
+                    // The "dividers" she was seeing were a combo of
+                    // (a) the per-segment border + rounded corners
+                    // and (b) the hour-grid lines visible through
+                    // the /15 translucent wash. Dropping the
+                    // border + rounded corners makes adjacent
+                    // segments touch as one continuous shape, and
+                    // bumping the fill to /35 masks the grid lines
+                    // underneath so the wash reads as one block.
                     return [
                       <div
                         key={`${wd.key}-${seg.key}`}
                         aria-hidden="true"
-                        className="absolute pointer-events-none rounded-md border border-purple-500/30 bg-purple-700/15 overflow-hidden flex flex-col z-0"
+                        className="absolute pointer-events-none bg-purple-700/35 overflow-hidden flex flex-col z-0"
                         style={{
-                          top: topPx + 1,
-                          height: Math.max(heightPx - 2, 16),
+                          top: topPx,
+                          height: Math.max(heightPx, 16),
                           left: `calc(${colLeft} + 1px)`,
                           width: `calc(${colWidth} - 2px)`,
                         }}
