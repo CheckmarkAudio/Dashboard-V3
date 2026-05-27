@@ -86,6 +86,87 @@ async function dropboxAccessToken(
   return (await res.json()) as RefreshedToken
 }
 
+// 2026-05-26 — In-memory token cache.
+//
+// Each Supabase edge isolate that handles requests holds the
+// short-lived (4 hr) Dropbox access token for reuse across requests.
+// Before this, every action (token / finalize / finalize-forum /
+// thumbnail) minted a fresh OAuth-refresh round-trip — adding
+// ~300–600 ms per call. On the Media page that's 18 hits per page
+// open; on a warm isolate, all 18 now skip the mint entirely.
+//
+// Scope: process-local. Edge isolates spin up + down independently;
+// each holds its own cache. That's fine — the cache is purely a
+// latency optimization. Worst case (cold start, or isolate recycled):
+// the next request mints a fresh token, exactly like the old code.
+//
+// In-flight dedupe: when the cache is empty and N concurrent
+// requests race for a token, only the first one actually mints;
+// the rest await the same promise. Without this, a cold-start page
+// load would still trigger N simultaneous mints.
+//
+// Safety margin: refresh 60 s before nominal expiry so a token can't
+// expire mid-request.
+
+let cachedToken: { access_token: string; expires_at_ms: number } | null = null
+let inFlightRefresh: Promise<{ access_token: string; expires_at_ms: number }> | null = null
+const TOKEN_SAFETY_MARGIN_MS = 60_000
+
+async function getCachedDropboxAccessToken(): Promise<RefreshedToken> {
+  const now = Date.now()
+
+  // Cache hit + still fresh → return immediately.
+  if (cachedToken && cachedToken.expires_at_ms - now > TOKEN_SAFETY_MARGIN_MS) {
+    return {
+      access_token: cachedToken.access_token,
+      expires_in: Math.floor((cachedToken.expires_at_ms - now) / 1000),
+    }
+  }
+
+  // A refresh is already in flight (someone else hit the cold cache
+  // a few ms ago). Piggyback on its result instead of triggering a
+  // duplicate OAuth round-trip.
+  if (inFlightRefresh) {
+    const tok = await inFlightRefresh
+    return {
+      access_token: tok.access_token,
+      expires_in: Math.floor((tok.expires_at_ms - Date.now()) / 1000),
+    }
+  }
+
+  // Cache is empty or expired and no refresh is in flight — kick one
+  // off + store the promise so concurrent callers can dedupe on it.
+  const appKey = Deno.env.get("DROPBOX_APP_KEY")
+  const appSecret = Deno.env.get("DROPBOX_APP_SECRET")
+  const refreshToken = Deno.env.get("DROPBOX_REFRESH_TOKEN")
+  if (!appKey || !appSecret || !refreshToken) {
+    throw new Error("Dropbox credentials not configured")
+  }
+
+  inFlightRefresh = (async () => {
+    try {
+      const fresh = await dropboxAccessToken(appKey, appSecret, refreshToken)
+      const entry = {
+        access_token: fresh.access_token,
+        expires_at_ms: Date.now() + fresh.expires_in * 1000,
+      }
+      cachedToken = entry
+      return entry
+    } finally {
+      // Clear AFTER the cache write so concurrent waiters above see
+      // the populated cache; new requests after this fall through to
+      // the fresh-cache fast path on the next call.
+      inFlightRefresh = null
+    }
+  })()
+
+  const entry = await inFlightRefresh
+  return {
+    access_token: entry.access_token,
+    expires_in: Math.floor((entry.expires_at_ms - Date.now()) / 1000),
+  }
+}
+
 // ─── Dropbox upload-session commit + share link ──────────────────
 
 interface FinishedFile {
@@ -243,17 +324,14 @@ async function authenticateCaller(req: Request): Promise<
  * append_v2 calls) against content.dropboxapi.com directly.
  */
 async function handleToken(): Promise<Response> {
-  const appKey = Deno.env.get("DROPBOX_APP_KEY")
-  const appSecret = Deno.env.get("DROPBOX_APP_SECRET")
-  const refreshToken = Deno.env.get("DROPBOX_REFRESH_TOKEN")
-  if (!appKey || !appSecret || !refreshToken) {
-    return jsonResponse({ ok: false, error: "Dropbox credentials not configured" }, 500)
-  }
   try {
-    const token = await dropboxAccessToken(appKey, appSecret, refreshToken)
+    const token = await getCachedDropboxAccessToken()
     return jsonResponse({
       ok: true,
       access_token: token.access_token,
+      // expires_in reflects REMAINING time on the cached token, not
+      // the original 4hr lifetime — so the browser knows exactly how
+      // much window it has for chunked uploads on this credential.
       expires_in: token.expires_in,
     })
   } catch (err) {
@@ -303,20 +381,13 @@ async function handleFinalize(req: Request, ctx: CallerContext): Promise<Respons
     )
   }
 
-  const appKey = Deno.env.get("DROPBOX_APP_KEY")
-  const appSecret = Deno.env.get("DROPBOX_APP_SECRET")
-  const refreshToken = Deno.env.get("DROPBOX_REFRESH_TOKEN")
-  if (!appKey || !appSecret || !refreshToken) {
-    return jsonResponse({ ok: false, error: "Dropbox credentials not configured" }, 500)
-  }
-
-  // Fresh server-side token for the finish call. We don't trust the
-  // token the browser used for chunks — the commit goes through our
-  // own credentials.
+  // Server-side token for the finish call. We don't trust the token
+  // the browser used for chunks — the commit goes through our own
+  // credentials. Cached so a flurry of AddMedia finalizes don't each
+  // pay the OAuth refresh round-trip.
   let accessToken: string
   try {
-    const token = await dropboxAccessToken(appKey, appSecret, refreshToken)
-    accessToken = token.access_token
+    accessToken = (await getCachedDropboxAccessToken()).access_token
   } catch (err) {
     return jsonResponse({ ok: false, error: (err as Error).message }, 502)
   }
@@ -463,16 +534,9 @@ async function handleFinalizeForum(req: Request, ctx: CallerContext): Promise<Re
     return jsonResponse({ ok: false, error: "Malformed channel_id" }, 400)
   }
 
-  const appKey = Deno.env.get("DROPBOX_APP_KEY")
-  const appSecret = Deno.env.get("DROPBOX_APP_SECRET")
-  const refreshToken = Deno.env.get("DROPBOX_REFRESH_TOKEN")
-  if (!appKey || !appSecret || !refreshToken) {
-    return jsonResponse({ ok: false, error: "Dropbox credentials not configured" }, 500)
-  }
   let accessToken: string
   try {
-    const token = await dropboxAccessToken(appKey, appSecret, refreshToken)
-    accessToken = token.access_token
+    accessToken = (await getCachedDropboxAccessToken()).access_token
   } catch (err) {
     return jsonResponse({ ok: false, error: (err as Error).message }, 502)
   }
@@ -556,16 +620,9 @@ async function handleThumbnail(req: Request, _ctx: CallerContext): Promise<Respo
   }
   const size = body.size ?? "w256h256"
 
-  const appKey = Deno.env.get("DROPBOX_APP_KEY")
-  const appSecret = Deno.env.get("DROPBOX_APP_SECRET")
-  const refreshToken = Deno.env.get("DROPBOX_REFRESH_TOKEN")
-  if (!appKey || !appSecret || !refreshToken) {
-    return jsonResponse({ ok: false, error: "Dropbox credentials not configured" }, 500)
-  }
   let accessToken: string
   try {
-    const token = await dropboxAccessToken(appKey, appSecret, refreshToken)
-    accessToken = token.access_token
+    accessToken = (await getCachedDropboxAccessToken()).access_token
   } catch (err) {
     return jsonResponse({ ok: false, error: (err as Error).message }, 502)
   }
