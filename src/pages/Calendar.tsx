@@ -16,6 +16,7 @@ import { localDateKey } from '../lib/dates'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import { useTeamSchedule } from '../lib/schedule/useTeamSchedule'
 import { useStudioHours } from '../lib/schedule/useStudioHours'
+import { sessionTypeColor } from '../lib/calendar/sessionColors'
 import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2, CalendarRange, EyeOff, Filter } from 'lucide-react'
 
 // 2026-05-26 — Member pills on the calendar header display first names
@@ -989,23 +990,26 @@ export default function Calendar() {
                     const laneWidth = `(${colWidth} / ${groupSize})`
                     const laneLeft = `(${colLeft} + ${laneWidth} * ${lane})`
 
+                    // 2026-05-26 (PR B) — pastel block fill per session
+                    // type. The legacy `.calendar-booking-block` CSS
+                    // (gold-tinted, brand-uniform) is replaced with the
+                    // sessionTypeColor mapping so engineering reads as
+                    // mint, music_lesson as violet, etc. Status dot +
+                    // gold hover ring preserved as accents.
+                    const color = sessionTypeColor(b.type)
                     return (
                       <button
                         key={b.id}
                         type="button"
                         onClick={() => setDetailBooking(b)}
                         onContextMenu={(e) => {
-                          // Only admins see the context menu — members just
-                          // get the default browser menu (no admin actions
-                          // to surface). Skips preventDefault for non-admins
-                          // so they keep the native right-click experience.
                           if (!isAdmin) return
                           e.preventDefault()
                           e.stopPropagation()
                           setContextMenu({ booking: b, x: e.clientX, y: e.clientY })
                         }}
                         title={`${b.client} · ${formatTime12(b.startTime)}–${formatTime12(b.endTime)}${isAdmin ? ' · Right-click for actions' : ''}`}
-                        className="absolute calendar-booking-block px-1.5 py-0.5 overflow-hidden text-left cursor-pointer z-30 hover:ring-2 hover:ring-gold/50 hover:z-40 transition-all focus-ring"
+                        className={`absolute ${color.bg} ${color.border} border rounded-md px-1.5 py-0.5 overflow-hidden text-left cursor-pointer z-30 hover:ring-2 hover:ring-gold/50 hover:z-40 transition-all focus-ring`}
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 18),
@@ -1014,8 +1018,8 @@ export default function Calendar() {
                         }}
                       >
                         <div className="flex items-center gap-1">
-                          {b.status === 'Confirmed' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
-                          <p className="text-[10px] font-medium text-gold truncate leading-tight">{b.client}</p>
+                          {b.status === 'Confirmed' && <span className={`w-1.5 h-1.5 rounded-full ${color.accent} shrink-0`} />}
+                          <p className={`text-[10px] font-semibold ${color.text} truncate leading-tight`}>{b.client}</p>
                         </div>
                         {heightPx > 28 && <p className="text-[8px] text-text-muted truncate leading-tight">{b.assignee}</p>}
                         {heightPx > 42 && groupSize === 1 && (
