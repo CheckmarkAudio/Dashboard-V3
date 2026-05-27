@@ -974,21 +974,19 @@ export default function Calendar() {
                     const heightPx = ((visEnd - visStart) / 60) * 48
                     const colWidth = `((100% - 36px) / 7)`
                     const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                    // 2026-05-26 (PR C tweak) — Bridget's feedback: the
-                    // old "split the column into N equal lanes" math
-                    // turned 3+ overlapping shifts into thin smooshed
-                    // strips with truncated names. Switch to a
-                    // CASCADE layout: each block stays mostly column-
-                    // wide (75 %) and overlapping lanes offset 12.5 %
-                    // to the right per lane. Result is a "stacked
-                    // cards" look — each shift's left edge (where the
-                    // avatar + name live) stays visible even when 3+
-                    // members overlap. Lane 0 is on top; later lanes
-                    // recede.
-                    const widthFactor = groupSize === 1 ? 1 : 0.75
+                    // 2026-05-26 (PR C v2) — heavier overlap per
+                    // Bridget's "they need to overlap, not be smashed"
+                    // feedback. Each block holds 88 % of the column
+                    // width regardless of how many lanes the group
+                    // has; lanes offset 5–6 % to the right per lane so
+                    // overlapping shifts read as STACKED CARDS — most
+                    // of each card hidden behind the one above it,
+                    // just the leftmost ~5 % peeks out (enough room
+                    // for the avatar dot). Lane 0 is on top.
+                    const widthFactor = groupSize === 1 ? 1 : 0.88
                     const offsetFactor = groupSize === 1
                       ? 0
-                      : (1 - widthFactor) / (groupSize - 1)
+                      : Math.min(0.06, (1 - widthFactor) / (groupSize - 1))
                     const laneWidth = `(${colWidth} * ${widthFactor})`
                     const laneOffset = `(${colWidth} * ${offsetFactor * lane})`
                     const laneLeft = `(${colLeft} + ${laneOffset})`
