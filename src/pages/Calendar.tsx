@@ -358,6 +358,29 @@ export default function Calendar() {
     return map
   }, [teamMembers])
 
+  // 2026-05-26 (PR C) — reverse lookup: display_name → full member
+  // object. Bookings carry the assignee as a plain string (the join
+  // doesn't surface member_id on the booking row), so to drop an
+  // avatar inside the block we resolve the name back to a member we
+  // already have cached. Misses (e.g. an admin renamed a member
+  // after the booking landed) gracefully fall back to no avatar.
+  const memberByName = useMemo(() => {
+    const map = new Map<string, (typeof teamMembers)[number]>()
+    for (const m of teamMembers) {
+      if (m.display_name) map.set(m.display_name, m)
+    }
+    return map
+  }, [teamMembers])
+
+  // 2026-05-26 (PR C) — direct ID lookup for the schedule-shift
+  // overlay layer, where each block carries `member_id` (uuid) on
+  // the row. Faster than scanning `teamMembers` per block render.
+  const memberById = useMemo(() => {
+    const map = new Map<string, (typeof teamMembers)[number]>()
+    for (const m of teamMembers) map.set(m.id, m)
+    return map
+  }, [teamMembers])
+
   // 2026-05-23 — per-member filter pills at the top of the page.
   // Single-select model: null = show all members (the default —
   // preserves existing behavior), one id = show only that member's
@@ -954,6 +977,10 @@ export default function Calendar() {
                     const laneWidth = `(${colWidth} / ${groupSize})`
                     const laneLeft = `(${colLeft} + ${laneWidth} * ${lane})`
                     const memberName = memberNameById.get(ev.memberId) ?? 'Member'
+                    // 2026-05-26 (PR C) — pair the staff name with
+                    // their avatar so the schedule layer reads as
+                    // team-oriented at a glance.
+                    const member = memberById.get(ev.memberId)
                     return (
                       <div
                         key={ev.key}
@@ -968,9 +995,16 @@ export default function Calendar() {
                         }}
                       >
                         {heightPx > 22 && (
-                          <p className="text-[8px] text-purple-200/80 px-1 truncate leading-tight pt-0.5">
-                            {memberName}
-                          </p>
+                          <div className="flex items-center gap-1 px-1 pt-0.5">
+                            {member && heightPx > 36 && (
+                              <span className="shrink-0">
+                                <MemberAvatar member={member} size="xs" />
+                              </span>
+                            )}
+                            <p className="text-[8px] text-purple-200/80 truncate leading-tight">
+                              {memberName}
+                            </p>
+                          </div>
                         )}
                       </div>
                     )
@@ -1008,6 +1042,11 @@ export default function Calendar() {
                     // mint, music_lesson as violet, etc. Status dot +
                     // gold hover ring preserved as accents.
                     const color = sessionTypeColor(b.type)
+                    // 2026-05-26 (PR C) — resolve the assignee name
+                    // back to a team_member so we can drop their
+                    // avatar inside the block. Misses fall back to
+                    // text-only (existing behavior).
+                    const assigneeMember = memberByName.get(b.assignee)
                     return (
                       <button
                         key={b.id}
@@ -1019,7 +1058,7 @@ export default function Calendar() {
                           e.stopPropagation()
                           setContextMenu({ booking: b, x: e.clientX, y: e.clientY })
                         }}
-                        title={`${b.client} · ${formatTime12(b.startTime)}–${formatTime12(b.endTime)}${isAdmin ? ' · Right-click for actions' : ''}`}
+                        title={`${b.client} · ${formatTime12(b.startTime)}–${formatTime12(b.endTime)} · ${b.assignee}${isAdmin ? ' · Right-click for actions' : ''}`}
                         className={`absolute ${color.bg} ${color.border} border rounded-md px-1.5 py-0.5 overflow-hidden text-left cursor-pointer z-30 hover:ring-2 hover:ring-gold/50 hover:z-40 transition-all focus-ring`}
                         style={{
                           top: topPx + 1,
@@ -1032,9 +1071,18 @@ export default function Calendar() {
                           {b.status === 'Confirmed' && <span className={`w-1.5 h-1.5 rounded-full ${color.accent} shrink-0`} />}
                           <p className={`text-[10px] font-semibold ${color.text} truncate leading-tight`}>{b.client}</p>
                         </div>
-                        {heightPx > 28 && <p className="text-[8px] text-text-muted truncate leading-tight">{b.assignee}</p>}
-                        {heightPx > 42 && groupSize === 1 && (
-                          <p className="text-[8px] text-text-light truncate leading-tight">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>
+                        {heightPx > 28 && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {assigneeMember && (
+                              <span className="shrink-0">
+                                <MemberAvatar member={assigneeMember} size="xs" />
+                              </span>
+                            )}
+                            <p className="text-[8px] text-text-muted truncate leading-tight">{b.assignee}</p>
+                          </div>
+                        )}
+                        {heightPx > 56 && groupSize === 1 && (
+                          <p className="text-[8px] text-text-light truncate leading-tight mt-0.5">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>
                         )}
                       </button>
                     )
