@@ -33,6 +33,23 @@ function firstName(displayName: string | null | undefined): string {
   return head || displayName
 }
 
+// 2026-05-27 — Two-letter initials for the schedule-block header
+// strip. Bridget asked to swap first-name labels for first+last
+// initials at a bigger size so the labels read at a glance and stop
+// blending across overlapping blocks. Single-name display names get
+// just one letter; empty / unknown fall back to "?" so the header
+// stays anchored visually.
+function memberInitials(displayName: string | null | undefined): string {
+  const trimmed = (displayName ?? '').trim()
+  if (!trimmed) return '?'
+  const parts = trimmed.split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return (parts[0]?.[0] ?? '?').toUpperCase()
+  const first = parts[0]?.[0] ?? ''
+  const last = parts[parts.length - 1]?.[0] ?? ''
+  return `${first}${last}`.toUpperCase() || '?'
+}
+
 /**
  * Calendar-friendly booking row. Flattened from the real `sessions`
  * + `team_schedule_templates` join returned by `loadWeekEvents`, with
@@ -998,25 +1015,25 @@ export default function Calendar() {
                     const member = memberById.get(ev.memberId)
                     const memberName = memberNameById.get(ev.memberId) ?? 'Member'
                     const color = teamMemberColors.get(ev.memberId) ?? memberColor(ev.memberId)
-                    const first = firstName(memberName)
                     // 2026-05-27 — Cascade nest per Bridget: "can we
                     // nest them? so we can see a bit of their color
                     // without overlap?"
                     //
-                    // Each block stays at 85 % of the column width
-                    // and offsets right by an equal share per lane.
-                    // Lane 0 sits at the left of the column; lane N
-                    // peeks from the right. The leftmost slice of
-                    // each lane (~7.5 % of column width for 3-way
-                    // overlap) is its own pure color — no other
-                    // block painted there.
-                    const widthFactor = groupSize === 1 ? 1 : 0.85
+                    // Each block holds 80 % of the column width and
+                    // offsets right by an equal share per lane (was
+                    // 85 % / smaller offset before — bumped up so
+                    // avatars at the top of each block separate more
+                    // when members start at the same time). Lane 0
+                    // sits at the left of the column; lane N peeks
+                    // from the right.
+                    const widthFactor = groupSize === 1 ? 1 : 0.80
                     const offsetFactor = groupSize <= 1
                       ? 0
                       : (1 - widthFactor) / (groupSize - 1)
                     const laneWidth = `(${colWidth} * ${widthFactor})`
                     const laneOffset = `(${colWidth} * ${offsetFactor * lane})`
                     const laneLeft = `(${colLeft} + ${laneOffset})`
+                    const initials = memberInitials(memberName)
                     return (
                       <div
                         key={ev.key}
@@ -1030,24 +1047,34 @@ export default function Calendar() {
                           width: `calc(${laneWidth} - 2px)`,
                           backgroundColor: color.bg,
                           borderColor: color.border,
-                          // Lane 0 sits on top so its avatar + name
-                          // are always readable; subsequent lanes
-                          // recede. Stays under booking layer (z-30).
                           zIndex: 5 - lane,
                         }}
                       >
-                        {heightPx > 22 && (
-                          <div className="flex items-center gap-1 px-1 pt-0.5">
-                            {member && heightPx > 36 && (
+                        {/* 2026-05-27 — Opaque header strip per
+                            Bridget: "make the header of each time
+                            block opaque and font easy to read."
+                            Background is the member's solid accent
+                            (no alpha) so overlapping translucent
+                            block-bodies behind it can't bleed
+                            through and muddy the text. Initials live
+                            here at a readable size; the rest of the
+                            block stays the translucent tint so the
+                            cascade peek still reads. */}
+                        {heightPx > 18 && (
+                          <div
+                            className="flex items-center gap-1 px-1 py-0.5"
+                            style={{ backgroundColor: color.accent }}
+                          >
+                            {member && (
                               <span className="shrink-0">
                                 <MemberAvatar member={member} size="xs" />
                               </span>
                             )}
                             <p
-                              className="text-[8px] font-semibold truncate leading-tight"
-                              style={{ color: color.text }}
+                              className="text-[11px] font-bold leading-none tracking-wide"
+                              style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.35)' }}
                             >
-                              {first}
+                              {initials}
                             </p>
                           </div>
                         )}
