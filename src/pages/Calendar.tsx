@@ -16,7 +16,19 @@ import { localDateKey } from '../lib/dates'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import { useTeamSchedule } from '../lib/schedule/useTeamSchedule'
 import { useStudioHours } from '../lib/schedule/useStudioHours'
-import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2, CalendarRange, EyeOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2, CalendarRange, EyeOff, Filter } from 'lucide-react'
+
+// 2026-05-26 — Member pills on the calendar header display first names
+// only (per user direction "filter title easy to see"). Display names
+// are usually two words ("Bridget Reinhard"); a few are placeholders
+// like "Studio Intern" where the first token is still meaningful. Keep
+// it dead simple: split on whitespace, take the head, fall back to the
+// full string if the split somehow yields nothing.
+function firstName(displayName: string | null | undefined): string {
+  if (!displayName) return 'Member'
+  const head = displayName.trim().split(/\s+/)[0]
+  return head || displayName
+}
 
 /**
  * Calendar-friendly booking row. Flattened from the real `sessions`
@@ -552,24 +564,76 @@ export default function Calendar() {
         />
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
-          {loading && <Loader2 size={14} className="animate-spin text-text-light" aria-label="Loading calendar" />}
-          {error && (
-            <span className="flex items-center gap-1 text-xs text-amber-300">
-              <AlertCircle size={12} />
-              {error}
-            </span>
+      {/* 2026-05-26 — Restructured header per user feedback: title +
+          filter pills + Schedule + Request schedule all on a single
+          row; week navigation moved INTO the week-grid box below.
+          Filter pills use first names (not full display_name) and a
+          Filter icon replaces the "SHOW" subtext so the row reads as
+          "click any name to filter" without needing a verbal hint.
+          Wrap behavior: on narrow viewports the right-side controls
+          drop to a new row beneath the title block. */}
+      <div className="flex items-center justify-between gap-x-4 gap-y-2 mb-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
+            {loading && <Loader2 size={14} className="animate-spin text-text-light" aria-label="Loading calendar" />}
+            {error && (
+              <span className="flex items-center gap-1 text-xs text-amber-300">
+                <AlertCircle size={12} />
+                {error}
+              </span>
+            )}
+          </div>
+          {/* Member filter pills — inline with title. Renders only when
+              there's more than one staffer AND the schedule layer is on
+              (the pills filter the schedule overlay; with it hidden the
+              filter would have nothing to do). Filter icon leads the
+              row instead of a "SHOW" word so the affordance reads at a
+              glance. */}
+          {memberPillRow.length > 1 && showSchedule && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter size={14} className="text-text-muted" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={() => setSelectedMemberId(null)}
+                aria-pressed={!memberFilterActive}
+                title="Show every member's schedule"
+                className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold border transition-colors cursor-pointer ${
+                  !memberFilterActive
+                    ? 'bg-purple-700/15 text-purple-100 border-purple-500/30'
+                    : 'bg-surface-alt text-text-muted border-border hover:text-text'
+                }`}
+              >
+                All
+                <span className="opacity-70">{memberPillRow.length}</span>
+              </button>
+              {memberPillRow.map((m) => {
+                const isOn = selectedMemberId === m.id
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => selectMember(m.id)}
+                    aria-pressed={isOn}
+                    title={isOn ? `Back to all members` : `Show only ${m.display_name}`}
+                    className={`inline-flex items-center gap-1.5 h-7 pl-0.5 pr-2.5 rounded-full text-[11px] font-semibold border transition-all cursor-pointer ${
+                      isOn
+                        ? 'bg-purple-700/15 text-purple-100 border-purple-500/40 ring-1 ring-purple-500/20'
+                        : memberFilterActive
+                          ? 'bg-surface-alt/60 text-text-light border-border/60 opacity-60 hover:opacity-100 hover:text-text'
+                          : 'bg-surface-alt text-text-muted border-border hover:text-text'
+                    }`}
+                  >
+                    <MemberAvatar member={m} size="xs" />
+                    <span className="truncate max-w-[88px]">{firstName(m.display_name)}</span>
+                  </button>
+                )
+              })}
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2 text-text-muted">
-          {/* 2026-05-23 — Schedule layer toggle. Defaults to ON so the
-              sage/teal staffing layer is visible immediately; click
-              hides it for an unobstructed booking-only view. Counts
-              suffix reflects what's about to render so the toggle
-              tells the truth about what flipping it on will reveal. */}
+          {/* 2026-05-23 — Schedule layer toggle. Defaults to ON. */}
           <button
             type="button"
             onClick={() => setShowSchedule((v) => !v)}
@@ -587,11 +651,6 @@ export default function Calendar() {
               <span className="opacity-70">{filteredScheduleExpanded.length}</span>
             )}
           </button>
-          {/* 2026-05-23 — "+ Request schedule" entry point. Members
-              propose recurring weekly hours or single blocks here;
-              admin reviews from Members → Work Scheduler. Admins can
-              also use this button to draft a request on their own
-              behalf — same flow, no special-casing. */}
           {profile?.id && (
             <button
               type="button"
@@ -603,65 +662,8 @@ export default function Calendar() {
               <span>Request schedule</span>
             </button>
           )}
-          <button onClick={() => { if (weekOffset > -1) setWeekOffset(weekOffset - 1) }} className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset <= -1 ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronLeft size={16} /></button>
-          <button onClick={() => setWeekOffset(0)} className="text-xs font-semibold text-gold hover:underline">{weekLabel}</button>
-          <button onClick={() => { if (weekOffset < 3) setWeekOffset(weekOffset + 1) }} className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset >= 3 ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronRight size={16} /></button>
-          <span className="text-xs text-text-light ml-1">{weekStart} – {weekEnd}</span>
         </div>
       </div>
-
-      {/* 2026-05-23 — Per-member schedule filter row. Multi-select
-          avatar pills, one per active team member. Empty selection =
-          show everyone (default). Selecting one+ narrows the schedule
-          overlay to only those members' hours. Bookings stay
-          unfiltered — they belong to clients, not staff.
-          Per user: "I LOVE the schedule filter on calendar. Lets make
-          a filter toggle for each member to see everyones hours
-          separately." Only renders when there's >1 member; with
-          exactly 1 staffer the filter is moot. */}
-      {memberPillRow.length > 1 && showSchedule && (
-        <div className="flex items-center gap-2 flex-wrap mb-3">
-          <span className="text-[10px] uppercase tracking-wider font-semibold text-text-muted mr-1">
-            Show
-          </span>
-          <button
-            type="button"
-            onClick={() => setSelectedMemberId(null)}
-            aria-pressed={!memberFilterActive}
-            title="Show every member's schedule"
-            className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold border transition-colors ${
-              !memberFilterActive
-                ? 'bg-purple-700/15 text-purple-100 border-purple-500/30'
-                : 'bg-surface-alt text-text-muted border-border hover:text-text'
-            }`}
-          >
-            All
-            <span className="opacity-70">{memberPillRow.length}</span>
-          </button>
-          {memberPillRow.map((m) => {
-            const isOn = selectedMemberId === m.id
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => selectMember(m.id)}
-                aria-pressed={isOn}
-                title={isOn ? `Back to all members` : `Show only ${m.display_name}`}
-                className={`inline-flex items-center gap-1.5 h-7 pl-0.5 pr-2.5 rounded-full text-[11px] font-semibold border transition-all ${
-                  isOn
-                    ? 'bg-purple-700/15 text-purple-100 border-purple-500/40 ring-1 ring-purple-500/20'
-                    : memberFilterActive
-                      ? 'bg-surface-alt/60 text-text-light border-border/60 opacity-60 hover:opacity-100 hover:text-text'
-                      : 'bg-surface-alt text-text-muted border-border hover:text-text'
-                }`}
-              >
-                <MemberAvatar member={m} size="xs" />
-                <span className="truncate max-w-[120px]">{m.display_name}</span>
-              </button>
-            )
-          })}
-        </div>
-      )}
 
       {/* 2-column layout — matched height. Left column stacks the
           mini month-picker (added 2026-05-26) above the shared
@@ -702,8 +704,37 @@ export default function Calendar() {
 
         {/* ── Right column: This Week grid ── */}
         <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
-            <h2 className="text-[16px] font-bold text-text tracking-tight">This Week</h2>
+          {/* 2026-05-26 — Week-nav lives INSIDE the grid card now (per
+              user feedback: "put the [this week] and date ranges shown
+              in image two on the actual calendar box"). Chevrons +
+              "This Week" link reset to today's week; the date-range
+              label sits to the right. */}
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2 text-text-muted">
+            <button
+              type="button"
+              onClick={() => { if (weekOffset > -1) setWeekOffset(weekOffset - 1) }}
+              className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset <= -1 ? 'opacity-30 cursor-not-allowed' : ''}`}
+              aria-label="Previous week"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekOffset(0)}
+              className="text-[13px] font-bold text-gold hover:underline"
+              title="Jump to this week"
+            >
+              {weekLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => { if (weekOffset < 3) setWeekOffset(weekOffset + 1) }}
+              className={`p-1 rounded hover:bg-surface-hover transition-colors ${weekOffset >= 3 ? 'opacity-30 cursor-not-allowed' : ''}`}
+              aria-label="Next week"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <span className="text-[12px] text-text-light ml-1">{weekStart} – {weekEnd}</span>
           </div>
 
           <div>
