@@ -131,6 +131,58 @@ interface BookingLane<T> {
   lane: number
   groupSize: number
 }
+/**
+ * 2026-05-27 (PR C iter 5) — Schedule-overlay segment builder.
+ *
+ * Per Bridget: avatars should sit "next to one another, not
+ * overlapping." So we merge overlapping shifts into time-segments
+ * (a stretch where the set of members on shift is constant) and
+ * render one full-column-wide block per segment with the covering
+ * members' avatars in a side-by-side row.
+ *
+ * Example: Richard 11-3, Checkmark 11-6, Matthan 11-4 →
+ *   segment 11-3: [Richard, Checkmark, Matthan]
+ *   segment 3-4:  [Checkmark, Matthan]
+ *   segment 4-6:  [Checkmark]
+ */
+interface ShiftSpan {
+  memberId: string
+  startMin: number
+  endMin: number
+}
+interface ScheduleSegment {
+  key: string
+  startMin: number
+  endMin: number
+  memberIds: string[]
+}
+function buildScheduleSegments(shifts: ShiftSpan[]): ScheduleSegment[] {
+  if (shifts.length === 0) return []
+  const pointsSet = new Set<number>()
+  for (const s of shifts) {
+    pointsSet.add(s.startMin)
+    pointsSet.add(s.endMin)
+  }
+  const points = [...pointsSet].sort((a, b) => a - b)
+  const segments: ScheduleSegment[] = []
+  for (let i = 0; i < points.length - 1; i++) {
+    const t1 = points[i]
+    const t2 = points[i + 1]
+    if (t1 === undefined || t2 === undefined) continue
+    const memberIds = shifts
+      .filter((s) => s.startMin <= t1 && s.endMin >= t2)
+      .map((s) => s.memberId)
+    if (memberIds.length === 0) continue
+    segments.push({
+      key: `seg-${t1}-${t2}`,
+      startMin: t1,
+      endMin: t2,
+      memberIds,
+    })
+  }
+  return segments
+}
+
 function assignBookingLanes<T extends { startTime: string; endTime: string }>(
   dayBookings: T[],
 ): BookingLane<T>[] {
@@ -944,129 +996,70 @@ export default function Calendar() {
                 {showSchedule && WEEK.map((wd, dayIndex) => {
                   const daySchedules = schedulesByDate[wd.key] ?? []
                   if (daySchedules.length === 0) return null
-                  // 2026-05-26 (PR C iter 4) — Reddit-style nesting per
-                  // Bridget's direction: "lets think like how reddit
-                  // nests replys and maybe implement that look, but
-                  // keep the icons i like that."
+                  // 2026-05-27 (PR C iter 5) — Per Bridget: "lets make
+                  // the icons be all noticable next to one another,
+                  // not overlapping."
                   //
-                  // Each shift keeps its own block with its own avatar
-                  // + name (no segment merge). Overlapping shifts are
-                  // sorted by duration descending — the LONGEST shift
-                  // sits outermost, shorter overlapping shifts indent
-                  // inside it. Each nesting level steps in 12 % of the
-                  // column from its parent and gets a thicker left
-                  // edge stripe so the "thread line" reads at a
-                  // glance, exactly like a Reddit comment tree.
-                  const asEvents = daySchedules.map((s) => {
+                  // Merge overlapping shifts into time-segments. Each
+                  // segment renders as ONE full-column-wide block with
+                  // every covering member's avatar in a side-by-side
+                  // row inside it (no avatar overlap, no column
+                  // splitting, no nested indents). Time accuracy is
+                  // preserved because each segment spans only its own
+                  // time window.
+                  const shifts: ShiftSpan[] = daySchedules.map((s) => {
                     const start = new Date(s.starts_at)
                     const end = new Date(s.ends_at)
                     return {
-                      key: s.key,
                       memberId: s.member_id,
-                      note: s.note,
-                      source: s.source,
-                      startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
-                      endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
+                      startMin: start.getHours() * 60 + start.getMinutes(),
+                      endMin: end.getHours() * 60 + end.getMinutes(),
                     }
                   })
-                  // Lane assignment groups overlapping shifts; within
-                  // each group we reorder so the longest goes to
-                  // lane 0 (outermost) and the shortest gets the
-                  // deepest indent.
-                  const laned = assignBookingLanes(asEvents)
-                  // Re-sort lane indices within each overlap group by
-                  // duration descending so the visual "parent" is
-                  // always the longest shift in the group.
-                  const groupedByGroupSize = new Map<number, typeof laned>()
-                  for (const item of laned) {
-                    const arr = groupedByGroupSize.get(item.groupSize) ?? []
-                    arr.push(item)
-                    groupedByGroupSize.set(item.groupSize, arr)
-                  }
-                  // For each row's depth we need a stable mapping —
-                  // recompute lane index by duration so longer = outer
-                  // (depth 0). Simpler than refactoring
-                  // assignBookingLanes: just within this render pass.
-                  const depthByKey = new Map<string, number>()
-                  // Build the overlap groups again from `laned` by
-                  // mapping lanes back to their group: same `groupSize`
-                  // + contiguous in `laned` array implies same group
-                  // (assignBookingLanes emits group-by-group).
-                  let g: typeof laned = []
-                  let gSize = -1
-                  function flushGroup() {
-                    if (g.length === 0) return
-                    // Sort by duration desc so the longest gets depth 0
-                    const withDur = g.map((it) => ({
-                      it,
-                      dur: timeToMinutes(it.booking.endTime) - timeToMinutes(it.booking.startTime),
-                    }))
-                    withDur.sort((a, b) => b.dur - a.dur)
-                    withDur.forEach(({ it }, depth) => {
-                      depthByKey.set(it.booking.key, depth)
-                    })
-                    g = []
-                    gSize = -1
-                  }
-                  for (const item of laned) {
-                    if (item.groupSize !== gSize && g.length > 0) flushGroup()
-                    gSize = item.groupSize
-                    g.push(item)
-                  }
-                  flushGroup()
-
-                  return laned.map(({ booking: ev }) => {
-                    const startMin = timeToMinutes(ev.startTime)
-                    const endMin = timeToMinutes(ev.endTime)
-                    const gridStart = 7 * 60
-                    const gridEnd = 20 * 60
-                    const visStart = Math.max(startMin, gridStart)
-                    const visEnd = Math.min(endMin, gridEnd)
+                  const segments = buildScheduleSegments(shifts)
+                  const gridStart = 7 * 60
+                  const gridEnd = 20 * 60
+                  const colWidth = `((100% - 36px) / 7)`
+                  const colLeft = `(36px + ${colWidth} * ${dayIndex})`
+                  return segments.map((seg) => {
+                    const visStart = Math.max(seg.startMin, gridStart)
+                    const visEnd = Math.min(seg.endMin, gridEnd)
                     if (visEnd <= visStart) return null
                     const topPx = ((visStart - gridStart) / 60) * 48
                     const heightPx = ((visEnd - visStart) / 60) * 48
-                    const colWidth = `((100% - 36px) / 7)`
-                    const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                    const depth = depthByKey.get(ev.key) ?? 0
-                    // Indent 12 % of the column per nesting level. Cap
-                    // at 4 levels so even a 5+ way overlap still has
-                    // visible space for the innermost block.
-                    const cappedDepth = Math.min(depth, 4)
-                    const INDENT_PCT = 0.12
-                    const widthFactor = Math.max(0.4, 1 - cappedDepth * INDENT_PCT)
-                    const offsetFactor = cappedDepth * INDENT_PCT
-                    const laneWidth = `(${colWidth} * ${widthFactor})`
-                    const laneOffset = `(${colWidth} * ${offsetFactor})`
-                    const laneLeft = `(${colLeft} + ${laneOffset})`
-                    const memberName = memberNameById.get(ev.memberId) ?? 'Member'
-                    const member = memberById.get(ev.memberId)
-                    // Reddit-style: deeper levels render in front
-                    // (highest z) so they sit visibly on top of their
-                    // outer "parent" shift block.
+                    const segMembers = seg.memberIds
+                      .map((id) => memberById.get(id))
+                      .filter((m): m is NonNullable<typeof m> => Boolean(m))
+                    const segNames = seg.memberIds
+                      .map((id) => memberNameById.get(id) ?? 'Member')
+                      .join(', ')
+                    const startLabel = `${String(Math.floor(seg.startMin / 60)).padStart(2, '0')}:${String(seg.startMin % 60).padStart(2, '0')}`
+                    const endLabel = `${String(Math.floor(seg.endMin / 60)).padStart(2, '0')}:${String(seg.endMin % 60).padStart(2, '0')}`
                     return (
                       <div
-                        key={ev.key}
+                        key={`${wd.key}-${seg.key}`}
                         aria-hidden="true"
-                        title={`${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`}
-                        className={`absolute pointer-events-none rounded-md border bg-purple-700/15 border-purple-500/30 overflow-hidden ${depth > 0 ? 'border-l-[3px] border-l-purple-400/60' : ''}`}
+                        title={`${segNames} · ${formatTime12(startLabel)}–${formatTime12(endLabel)}`}
+                        className="absolute pointer-events-none rounded-md border bg-purple-700/15 border-purple-500/30 overflow-hidden z-0"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 16),
-                          left: `calc(${laneLeft} + 1px)`,
-                          width: `calc(${laneWidth} - 2px)`,
-                          zIndex: depth,
+                          left: `calc(${colLeft} + 1px)`,
+                          width: `calc(${colWidth} - 2px)`,
                         }}
                       >
                         {heightPx > 22 && (
-                          <div className="flex items-center gap-1 px-1 pt-0.5">
-                            {member && heightPx > 36 && (
-                              <span className="shrink-0">
-                                <MemberAvatar member={member} size="xs" />
+                          // gap-1 = 4 px between avatars → all visible
+                          // side-by-side, no overlap. flex-wrap so 4+
+                          // members in one segment line-break to a
+                          // second row instead of clipping off the
+                          // right edge of the block.
+                          <div className="flex items-center flex-wrap gap-1 px-1 pt-0.5">
+                            {segMembers.map((m) => (
+                              <span key={m.id} className="shrink-0">
+                                <MemberAvatar member={m} size="xs" />
                               </span>
-                            )}
-                            <p className="text-[8px] text-purple-100 font-semibold truncate leading-tight">
-                              {memberName}
-                            </p>
+                            ))}
                           </div>
                         )}
                       </div>
