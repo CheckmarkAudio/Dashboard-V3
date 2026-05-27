@@ -1004,10 +1004,23 @@ export default function Calendar() {
                   // dropping down in parallel. The rest of the day
                   // column stays clear so booking blocks remain
                   // legible underneath.
+                  // 2026-05-27 — Per Bridget: "can we make that more
+                  // look like brackets instead of steaks? we need to
+                  // make it look good and sleek."
+                  //
+                  // Replace the straight-line indicator with a proper
+                  // `[` bracket shape: top cap + vertical spine +
+                  // bottom cap, rendered via border-left + border-top
+                  // + border-bottom on a thin div, with rounded
+                  // top-left / bottom-left corners for the sleek
+                  // edge. Avatar at the top of the shift still
+                  // identifies who; the bracket below frames the
+                  // duration with start + end serifs.
                   const AVATAR_PX = 22
-                  const LANE_STRIDE = 24 // px between adjacent lane anchors
-                  const LANE_LEFT_OFFSET = 3 // px from column edge
-                  const LINE_W = 3
+                  const LANE_STRIDE = 24
+                  const LANE_LEFT_OFFSET = 3
+                  const BRACKET_W = 8
+                  const BRACKET_BORDER = 2
                   return laned.flatMap(({ booking: ev, lane }) => {
                     const startMin = timeToMinutes(ev.startTime)
                     const endMin = timeToMinutes(ev.endTime)
@@ -1020,27 +1033,34 @@ export default function Calendar() {
                     const memberName = memberNameById.get(ev.memberId) ?? 'Member'
                     const color = teamMemberColors.get(ev.memberId) ?? memberColor(ev.memberId)
                     const anchorXPx = LANE_LEFT_OFFSET + lane * LANE_STRIDE
-                    const lineCenterPx = anchorXPx + (AVATAR_PX - LINE_W) / 2
-                    const lineTopPx = topPx + AVATAR_PX + 2
-                    const lineHeightPx = Math.max(0, heightPx - AVATAR_PX - 2)
+                    // Bracket sits centered under the avatar — its
+                    // left edge lines up with where a vertical line
+                    // would have been before, so the avatar-to-
+                    // bracket connection reads as one element.
+                    const bracketLeftPx = anchorXPx + (AVATAR_PX - BRACKET_W) / 2
+                    const bracketTopPx = topPx + AVATAR_PX + 2
+                    const bracketHeightPx = Math.max(0, heightPx - AVATAR_PX - 2)
                     const tooltip = `${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`
                     const nodes = []
-                    // Vertical line first so the avatar paints on top
-                    // of its top edge (cleaner join). Skipped on very
-                    // short shifts where the avatar already covers
-                    // the full duration.
-                    if (lineHeightPx > 0) {
+                    // Sleek bracket: `[` shape via three borders on
+                    // a thin div. Skipped on very short shifts where
+                    // there's no usable space below the avatar.
+                    if (bracketHeightPx > 6) {
                       nodes.push(
                         <div
-                          key={`${ev.key}-line`}
+                          key={`${ev.key}-bracket`}
                           aria-hidden="true"
-                          className="absolute pointer-events-none rounded-full"
+                          className="absolute pointer-events-none"
                           style={{
-                            top: lineTopPx,
-                            height: lineHeightPx,
-                            left: `calc(${colLeft} + ${lineCenterPx}px)`,
-                            width: LINE_W,
-                            backgroundColor: color.accent,
+                            top: bracketTopPx,
+                            height: bracketHeightPx,
+                            left: `calc(${colLeft} + ${bracketLeftPx}px)`,
+                            width: BRACKET_W,
+                            borderLeft: `${BRACKET_BORDER}px solid ${color.accent}`,
+                            borderTop: `${BRACKET_BORDER}px solid ${color.accent}`,
+                            borderBottom: `${BRACKET_BORDER}px solid ${color.accent}`,
+                            borderTopLeftRadius: 5,
+                            borderBottomLeftRadius: 5,
                             zIndex: 5 - lane,
                           }}
                         />,
