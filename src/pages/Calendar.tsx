@@ -33,23 +33,6 @@ function firstName(displayName: string | null | undefined): string {
   return head || displayName
 }
 
-// 2026-05-27 — Two-letter initials for the schedule-block header
-// strip. Bridget asked to swap first-name labels for first+last
-// initials at a bigger size so the labels read at a glance and stop
-// blending across overlapping blocks. Single-name display names get
-// just one letter; empty / unknown fall back to "?" so the header
-// stays anchored visually.
-function memberInitials(displayName: string | null | undefined): string {
-  const trimmed = (displayName ?? '').trim()
-  if (!trimmed) return '?'
-  const parts = trimmed.split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  if (parts.length === 1) return (parts[0]?.[0] ?? '?').toUpperCase()
-  const first = parts[0]?.[0] ?? ''
-  const last = parts[parts.length - 1]?.[0] ?? ''
-  return `${first}${last}`.toUpperCase() || '?'
-}
-
 /**
  * Calendar-friendly booking row. Flattened from the real `sessions`
  * + `team_schedule_templates` join returned by `loadWeekEvents`, with
@@ -1004,82 +987,86 @@ export default function Calendar() {
                   const gridEnd = 20 * 60
                   const colWidth = `((100% - 36px) / 7)`
                   const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                  return laned.map(({ booking: ev, lane, groupSize }) => {
+                  // 2026-05-27 — Schedule overlay now renders as a
+                  // thin colored line per shift with the member's
+                  // avatar at the top, per Bridget: "rather than
+                  // taking up the whole calendar block, theres
+                  // brackets or a line streatching down showing who
+                  // is on shift? right now its a mess and we cant
+                  // see all of the user icons."
+                  //
+                  // The filled blocks are dropped entirely. Each
+                  // member's shift is a 24 px avatar at the start of
+                  // the time range + a 3 px vertical bar in their
+                  // accent color extending down for the duration.
+                  // Multiple members on shift = avatars side-by-side
+                  // at the top (lane-spaced), with their lines
+                  // dropping down in parallel. The rest of the day
+                  // column stays clear so booking blocks remain
+                  // legible underneath.
+                  const AVATAR_PX = 22
+                  const LANE_STRIDE = 24 // px between adjacent lane anchors
+                  const LANE_LEFT_OFFSET = 3 // px from column edge
+                  const LINE_W = 3
+                  return laned.flatMap(({ booking: ev, lane }) => {
                     const startMin = timeToMinutes(ev.startTime)
                     const endMin = timeToMinutes(ev.endTime)
                     const visStart = Math.max(startMin, gridStart)
                     const visEnd = Math.min(endMin, gridEnd)
-                    if (visEnd <= visStart) return null
+                    if (visEnd <= visStart) return []
                     const topPx = ((visStart - gridStart) / 60) * 48
                     const heightPx = ((visEnd - visStart) / 60) * 48
                     const member = memberById.get(ev.memberId)
                     const memberName = memberNameById.get(ev.memberId) ?? 'Member'
                     const color = teamMemberColors.get(ev.memberId) ?? memberColor(ev.memberId)
-                    // 2026-05-27 — Cascade nest per Bridget: "can we
-                    // nest them? so we can see a bit of their color
-                    // without overlap?"
-                    //
-                    // Each block holds 80 % of the column width and
-                    // offsets right by an equal share per lane (was
-                    // 85 % / smaller offset before — bumped up so
-                    // avatars at the top of each block separate more
-                    // when members start at the same time). Lane 0
-                    // sits at the left of the column; lane N peeks
-                    // from the right.
-                    const widthFactor = groupSize === 1 ? 1 : 0.80
-                    const offsetFactor = groupSize <= 1
-                      ? 0
-                      : (1 - widthFactor) / (groupSize - 1)
-                    const laneWidth = `(${colWidth} * ${widthFactor})`
-                    const laneOffset = `(${colWidth} * ${offsetFactor * lane})`
-                    const laneLeft = `(${colLeft} + ${laneOffset})`
-                    const initials = memberInitials(memberName)
-                    return (
-                      <div
-                        key={ev.key}
-                        aria-hidden="true"
-                        title={`${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`}
-                        className="absolute pointer-events-none rounded-md border overflow-hidden"
-                        style={{
-                          top: topPx + 1,
-                          height: Math.max(heightPx - 2, 16),
-                          left: `calc(${laneLeft} + 1px)`,
-                          width: `calc(${laneWidth} - 2px)`,
-                          backgroundColor: color.bg,
-                          borderColor: color.border,
-                          zIndex: 5 - lane,
-                        }}
-                      >
-                        {/* 2026-05-27 — Opaque header strip per
-                            Bridget: "make the header of each time
-                            block opaque and font easy to read."
-                            Background is the member's solid accent
-                            (no alpha) so overlapping translucent
-                            block-bodies behind it can't bleed
-                            through and muddy the text. Initials live
-                            here at a readable size; the rest of the
-                            block stays the translucent tint so the
-                            cascade peek still reads. */}
-                        {heightPx > 18 && (
-                          <div
-                            className="flex items-center gap-1 px-1 py-0.5"
-                            style={{ backgroundColor: color.accent }}
-                          >
-                            {member && (
-                              <span className="shrink-0">
-                                <MemberAvatar member={member} size="xs" />
-                              </span>
-                            )}
-                            <p
-                              className="text-[11px] font-bold leading-none tracking-wide"
-                              style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.35)' }}
-                            >
-                              {initials}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )
+                    const anchorXPx = LANE_LEFT_OFFSET + lane * LANE_STRIDE
+                    const lineCenterPx = anchorXPx + (AVATAR_PX - LINE_W) / 2
+                    const lineTopPx = topPx + AVATAR_PX + 2
+                    const lineHeightPx = Math.max(0, heightPx - AVATAR_PX - 2)
+                    const tooltip = `${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`
+                    const nodes = []
+                    // Vertical line first so the avatar paints on top
+                    // of its top edge (cleaner join). Skipped on very
+                    // short shifts where the avatar already covers
+                    // the full duration.
+                    if (lineHeightPx > 0) {
+                      nodes.push(
+                        <div
+                          key={`${ev.key}-line`}
+                          aria-hidden="true"
+                          className="absolute pointer-events-none rounded-full"
+                          style={{
+                            top: lineTopPx,
+                            height: lineHeightPx,
+                            left: `calc(${colLeft} + ${lineCenterPx}px)`,
+                            width: LINE_W,
+                            backgroundColor: color.accent,
+                            zIndex: 5 - lane,
+                          }}
+                        />,
+                      )
+                    }
+                    if (member) {
+                      nodes.push(
+                        <div
+                          key={`${ev.key}-avatar`}
+                          aria-hidden="true"
+                          title={tooltip}
+                          className="absolute pointer-events-none rounded-full"
+                          style={{
+                            top: topPx,
+                            left: `calc(${colLeft} + ${anchorXPx}px)`,
+                            width: AVATAR_PX,
+                            height: AVATAR_PX,
+                            zIndex: 6 - lane,
+                            boxShadow: `0 0 0 2px ${color.accent}`,
+                          }}
+                        >
+                          <MemberAvatar member={member} size="xs" />
+                        </div>,
+                      )
+                    }
+                    return nodes
                   })
                 })}
 
