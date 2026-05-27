@@ -671,8 +671,16 @@ export default function Calendar() {
           unique to this page. */}
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-3 items-stretch">
 
-        {/* ── Left column: Mini month + Selected day detail ── */}
+        {/* ── Left column: Selected day detail above mini-month ──
+            2026-05-26 — Bridget's review feedback: she wants the "Today /
+            On Shift Today" card on top + the mini month-picker beneath
+            it. Reads top-down as "what's today" → "jump to another day."
+            Same components, just flipped. */}
         <div className="flex flex-col gap-3">
+          <CalendarDayCard
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+          />
           <MiniMonthPicker
             selectedDate={selectedDate}
             onSelectDate={(key) => {
@@ -695,10 +703,6 @@ export default function Calendar() {
               setWeekOffset(offset)
               setSelectedDate(key)
             }}
-          />
-          <CalendarDayCard
-            selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
           />
         </div>
 
