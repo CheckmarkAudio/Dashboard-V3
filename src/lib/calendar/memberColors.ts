@@ -1,69 +1,83 @@
-// 2026-05-27 — Per-member color palette for the calendar schedule
-// overlay.
+// 2026-05-27 — Per-member calendar color palette.
 //
-// Per Bridget's direction: "make us all different colors, it doesn't
-// make sense to repeat the icons of one person multiple times down
-// the calendar since its a full time block with no breaks in time."
+// Returns CSS color strings (NOT Tailwind class names) so the same
+// shape can be produced from either:
+//   - a hashed-fallback palette (when the member has no avatar or
+//     extraction fails), OR
+//   - a live RGB sampled from their profile picture via
+//     `extractDominantColor()` in extractAvatarColor.ts
 //
-// Each member gets a stable, distinguishable hue derived from their
-// id, so overlapping shifts on the week grid read by COLOR rather
-// than by lane position — and each shift renders as a single
-// continuous block (no segment-merge avatar repetition).
-//
-// Palette is hand-picked at low-saturation tints so the colored
-// blocks blend with the existing dark-mode pastel chrome (matches
-// PR B's session-type palette aesthetic). 10 entries cycle for
-// teams above 10 members; collisions are visually minor since the
-// avatar inside the block disambiguates.
+// Per Bridget: "make the colors designated to each profile change
+// color to match the overall color of our profile pictures... make
+// that change dynamically so when we change our image, our
+// designated color shifts to fit the color of it. so for example
+// check mark will be gold because its standout color is gold etc."
+
+import type { RGB } from './extractAvatarColor'
 
 export interface MemberColor {
-  /** Block fill, ~15% alpha. */
+  /** Block fill — `rgba(...)` at ~15 % alpha so overlapping shifts blend. */
   bg: string
-  /** Block border, slightly higher alpha for definition. */
+  /** Block border — same hue at ~40 % alpha. */
   border: string
-  /** Text on the block fill — high contrast on dark mode. */
+  /** Text on the block — lightened version of the hue, readable on dark mode. */
   text: string
-  /** Solid accent for left-edge stripes or status dots. */
+  /** Solid hue for status dots, left stripes, etc. */
   accent: string
 }
 
-// 2026-05-27 — Alpha dialed down from /20 → /15 so when shifts
-// overlap at full column width the colors visibly blend rather than
-// dominate. /15 reads as a clear tint solo + softens to a wash when
-// two or three stack.
-const PALETTE: MemberColor[] = [
-  { bg: 'bg-violet-500/15',  border: 'border-violet-400/40',  text: 'text-violet-100',  accent: 'bg-violet-400'  },
-  { bg: 'bg-emerald-500/15', border: 'border-emerald-400/40', text: 'text-emerald-100', accent: 'bg-emerald-400' },
-  { bg: 'bg-sky-500/15',     border: 'border-sky-400/40',     text: 'text-sky-100',     accent: 'bg-sky-400'     },
-  { bg: 'bg-amber-500/15',   border: 'border-amber-400/40',   text: 'text-amber-100',   accent: 'bg-amber-400'   },
-  { bg: 'bg-rose-500/15',    border: 'border-rose-400/40',    text: 'text-rose-100',    accent: 'bg-rose-400'    },
-  { bg: 'bg-cyan-500/15',    border: 'border-cyan-400/40',    text: 'text-cyan-100',    accent: 'bg-cyan-400'    },
-  { bg: 'bg-fuchsia-500/15', border: 'border-fuchsia-400/40', text: 'text-fuchsia-100', accent: 'bg-fuchsia-400' },
-  { bg: 'bg-lime-500/15',    border: 'border-lime-400/40',    text: 'text-lime-100',    accent: 'bg-lime-400'    },
-  { bg: 'bg-orange-500/15',  border: 'border-orange-400/40',  text: 'text-orange-100',  accent: 'bg-orange-400'  },
-  { bg: 'bg-teal-500/15',    border: 'border-teal-400/40',    text: 'text-teal-100',    accent: 'bg-teal-400'    },
+// 10-color stable fallback palette (Tailwind 400-step values translated
+// to RGB). When a member has no avatar OR canvas extraction fails for
+// any reason, their member id hashes into one of these.
+const PALETTE_RGB: RGB[] = [
+  { r: 167, g: 139, b: 250 }, // violet-400
+  { r: 52,  g: 211, b: 153 }, // emerald-400
+  { r: 56,  g: 189, b: 248 }, // sky-400
+  { r: 251, g: 191, b: 36  }, // amber-400
+  { r: 251, g: 113, b: 133 }, // rose-400
+  { r: 34,  g: 211, b: 238 }, // cyan-400
+  { r: 232, g: 121, b: 249 }, // fuchsia-400
+  { r: 163, g: 230, b: 53  }, // lime-400
+  { r: 251, g: 146, b: 60  }, // orange-400
+  { r: 45,  g: 212, b: 191 }, // teal-400
 ]
 
-/**
- * Stable hash from a member id (uuid) to a small integer. djb2
- * hash — fast, good distribution for short strings, no deps. Bitwise
- * `| 0` keeps the result in a 32-bit signed range.
- */
 function hashId(id: string): number {
   let h = 5381
   for (let i = 0; i < id.length; i++) {
     h = ((h << 5) + h + id.charCodeAt(i)) | 0
   }
-  // Force non-negative for the modulo operation below.
   return Math.abs(h)
 }
 
 /**
- * Resolve a member id to a stable color from the palette. Same id
- * always returns the same color across page-loads / users / devices.
+ * Lighten an RGB triple for readable text on a low-alpha block fill.
+ * Adds ~80 toward white on each channel and clamps at 255. Works well
+ * for our dark calendar surface; very light source colors collapse
+ * to near-white which still reads on the tinted block.
+ */
+function lighten(rgb: RGB): string {
+  return `rgb(${Math.min(255, rgb.r + 80)}, ${Math.min(255, rgb.g + 80)}, ${Math.min(255, rgb.b + 80)})`
+}
+
+/** Turn an RGB triple into the four CSS strings the calendar needs. */
+export function memberColorFromRGB(rgb: RGB): MemberColor {
+  const { r, g, b } = rgb
+  return {
+    bg: `rgba(${r}, ${g}, ${b}, 0.15)`,
+    border: `rgba(${r}, ${g}, ${b}, 0.40)`,
+    text: lighten(rgb),
+    accent: `rgb(${r}, ${g}, ${b})`,
+  }
+}
+
+/**
+ * Default member color when we don't have (or can't sample) the
+ * member's avatar yet. Hashes the id to one of the 10 palette tints
+ * so the same person is always the same color until the avatar
+ * sample lands.
  */
 export function memberColor(memberId: string | null | undefined): MemberColor {
-  if (!memberId) return PALETTE[0]!
-  const idx = hashId(memberId) % PALETTE.length
-  return PALETTE[idx]!
+  const palette = memberId ? PALETTE_RGB[hashId(memberId) % PALETTE_RGB.length] : PALETTE_RGB[0]
+  return memberColorFromRGB(palette ?? PALETTE_RGB[0]!)
 }

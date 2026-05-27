@@ -18,6 +18,7 @@ import { useTeamSchedule } from '../lib/schedule/useTeamSchedule'
 import { useStudioHours } from '../lib/schedule/useStudioHours'
 import { sessionTypeColor } from '../lib/calendar/sessionColors'
 import { memberColor } from '../lib/calendar/memberColors'
+import { useTeamMemberColors } from '../lib/calendar/useTeamMemberColors'
 import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2, CalendarRange, EyeOff, Filter } from 'lucide-react'
 
 // 2026-05-26 — Member pills on the calendar header display first names
@@ -382,6 +383,14 @@ export default function Calendar() {
     for (const m of teamMembers) map.set(m.id, m)
     return map
   }, [teamMembers])
+
+  // 2026-05-27 — Avatar-derived calendar colors. Each member's
+  // shift block tints to the dominant color sampled from their
+  // profile picture (Checkmark's gold mic → gold blocks, etc).
+  // Cache lives at module scope keyed by avatar URL, so a re-upload
+  // triggers a fresh sample on the next read. Members without an
+  // avatar fall back to a stable hashed-palette color.
+  const teamMemberColors = useTeamMemberColors(teamMembers)
 
   // 2026-05-23 — per-member filter pills at the top of the page.
   // Single-select model: null = show all members (the default —
@@ -988,24 +997,25 @@ export default function Calendar() {
                     const heightPx = ((visEnd - visStart) / 60) * 48
                     const member = memberById.get(ev.memberId)
                     const memberName = memberNameById.get(ev.memberId) ?? 'Member'
-                    const color = memberColor(ev.memberId)
+                    // Avatar-derived color (falls back to hashed
+                    // palette while the canvas extraction is in
+                    // flight or if it fails).
+                    const color = teamMemberColors.get(ev.memberId) ?? memberColor(ev.memberId)
                     const first = firstName(memberName)
-                    // Avatar offset: 28 px per lane index so when
-                    // members start at the same time their avatars
-                    // line up side-by-side at the top of the block
-                    // instead of stacking on top of each other.
                     const avatarOffsetPx = lane * 28
                     return (
                       <div
                         key={ev.key}
                         aria-hidden="true"
                         title={`${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`}
-                        className={`absolute pointer-events-none rounded-md border ${color.bg} ${color.border} overflow-hidden z-0`}
+                        className="absolute pointer-events-none rounded-md border overflow-hidden z-0"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 16),
                           left: `calc(${colLeft} + 1px)`,
                           width: `calc(${colWidth} - 2px)`,
+                          backgroundColor: color.bg,
+                          borderColor: color.border,
                         }}
                       >
                         {heightPx > 22 && (
@@ -1018,7 +1028,10 @@ export default function Calendar() {
                                 <MemberAvatar member={member} size="xs" />
                               </span>
                             )}
-                            <p className={`text-[8px] ${color.text} font-semibold truncate leading-tight`}>
+                            <p
+                              className="text-[8px] font-semibold truncate leading-tight"
+                              style={{ color: color.text }}
+                            >
                               {first}
                             </p>
                           </div>
