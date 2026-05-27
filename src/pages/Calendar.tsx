@@ -131,6 +131,58 @@ interface BookingLane<T> {
   lane: number
   groupSize: number
 }
+/**
+ * 2026-05-27 (PR C iter 5) — Schedule-overlay segment builder.
+ *
+ * Per Bridget: avatars should sit "next to one another, not
+ * overlapping." So we merge overlapping shifts into time-segments
+ * (a stretch where the set of members on shift is constant) and
+ * render one full-column-wide block per segment with the covering
+ * members' avatars in a side-by-side row.
+ *
+ * Example: Richard 11-3, Checkmark 11-6, Matthan 11-4 →
+ *   segment 11-3: [Richard, Checkmark, Matthan]
+ *   segment 3-4:  [Checkmark, Matthan]
+ *   segment 4-6:  [Checkmark]
+ */
+interface ShiftSpan {
+  memberId: string
+  startMin: number
+  endMin: number
+}
+interface ScheduleSegment {
+  key: string
+  startMin: number
+  endMin: number
+  memberIds: string[]
+}
+function buildScheduleSegments(shifts: ShiftSpan[]): ScheduleSegment[] {
+  if (shifts.length === 0) return []
+  const pointsSet = new Set<number>()
+  for (const s of shifts) {
+    pointsSet.add(s.startMin)
+    pointsSet.add(s.endMin)
+  }
+  const points = [...pointsSet].sort((a, b) => a - b)
+  const segments: ScheduleSegment[] = []
+  for (let i = 0; i < points.length - 1; i++) {
+    const t1 = points[i]
+    const t2 = points[i + 1]
+    if (t1 === undefined || t2 === undefined) continue
+    const memberIds = shifts
+      .filter((s) => s.startMin <= t1 && s.endMin >= t2)
+      .map((s) => s.memberId)
+    if (memberIds.length === 0) continue
+    segments.push({
+      key: `seg-${t1}-${t2}`,
+      startMin: t1,
+      endMin: t2,
+      memberIds,
+    })
+  }
+  return segments
+}
+
 function assignBookingLanes<T extends { startTime: string; endTime: string }>(
   dayBookings: T[],
 ): BookingLane<T>[] {
@@ -355,6 +407,29 @@ export default function Calendar() {
   const memberNameById = useMemo(() => {
     const map = new Map<string, string>()
     teamMembers.forEach((m) => map.set(m.id, m.display_name || 'Member'))
+    return map
+  }, [teamMembers])
+
+  // 2026-05-26 (PR C) — reverse lookup: display_name → full member
+  // object. Bookings carry the assignee as a plain string (the join
+  // doesn't surface member_id on the booking row), so to drop an
+  // avatar inside the block we resolve the name back to a member we
+  // already have cached. Misses (e.g. an admin renamed a member
+  // after the booking landed) gracefully fall back to no avatar.
+  const memberByName = useMemo(() => {
+    const map = new Map<string, (typeof teamMembers)[number]>()
+    for (const m of teamMembers) {
+      if (m.display_name) map.set(m.display_name, m)
+    }
+    return map
+  }, [teamMembers])
+
+  // 2026-05-26 (PR C) — direct ID lookup for the schedule-shift
+  // overlay layer, where each block carries `member_id` (uuid) on
+  // the row. Faster than scanning `teamMembers` per block render.
+  const memberById = useMemo(() => {
+    const map = new Map<string, (typeof teamMembers)[number]>()
+    for (const m of teamMembers) map.set(m.id, m)
     return map
   }, [teamMembers])
 
@@ -921,56 +996,71 @@ export default function Calendar() {
                 {showSchedule && WEEK.map((wd, dayIndex) => {
                   const daySchedules = schedulesByDate[wd.key] ?? []
                   if (daySchedules.length === 0) return null
-                  // Convert each ExpandedSchedule to the {startTime, endTime}
-                  // shape assignBookingLanes expects (HH:MM strings in
-                  // local time).
-                  const asEvents = daySchedules.map((s) => {
+                  // 2026-05-27 (PR C iter 5) — Per Bridget: "lets make
+                  // the icons be all noticable next to one another,
+                  // not overlapping."
+                  //
+                  // Merge overlapping shifts into time-segments. Each
+                  // segment renders as ONE full-column-wide block with
+                  // every covering member's avatar in a side-by-side
+                  // row inside it (no avatar overlap, no column
+                  // splitting, no nested indents). Time accuracy is
+                  // preserved because each segment spans only its own
+                  // time window.
+                  const shifts: ShiftSpan[] = daySchedules.map((s) => {
                     const start = new Date(s.starts_at)
                     const end = new Date(s.ends_at)
                     return {
-                      key: s.key,
                       memberId: s.member_id,
-                      note: s.note,
-                      source: s.source,
-                      startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
-                      endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
+                      startMin: start.getHours() * 60 + start.getMinutes(),
+                      endMin: end.getHours() * 60 + end.getMinutes(),
                     }
                   })
-                  const laned = assignBookingLanes(asEvents)
-                  return laned.map(({ booking: ev, lane, groupSize }) => {
-                    const startMin = timeToMinutes(ev.startTime)
-                    const endMin = timeToMinutes(ev.endTime)
-                    const gridStart = 7 * 60
-                    const gridEnd = 20 * 60 // 7am to 8pm visible (HOURS goes 7–19, last row ends at 20)
-                    // Clip to visible grid so an overnight rule
-                    // doesn't paint outside the time grid.
-                    const visStart = Math.max(startMin, gridStart)
-                    const visEnd = Math.min(endMin, gridEnd)
+                  const segments = buildScheduleSegments(shifts)
+                  const gridStart = 7 * 60
+                  const gridEnd = 20 * 60
+                  const colWidth = `((100% - 36px) / 7)`
+                  const colLeft = `(36px + ${colWidth} * ${dayIndex})`
+                  return segments.map((seg) => {
+                    const visStart = Math.max(seg.startMin, gridStart)
+                    const visEnd = Math.min(seg.endMin, gridEnd)
                     if (visEnd <= visStart) return null
                     const topPx = ((visStart - gridStart) / 60) * 48
                     const heightPx = ((visEnd - visStart) / 60) * 48
-                    const colWidth = `((100% - 36px) / 7)`
-                    const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                    const laneWidth = `(${colWidth} / ${groupSize})`
-                    const laneLeft = `(${colLeft} + ${laneWidth} * ${lane})`
-                    const memberName = memberNameById.get(ev.memberId) ?? 'Member'
+                    const segMembers = seg.memberIds
+                      .map((id) => memberById.get(id))
+                      .filter((m): m is NonNullable<typeof m> => Boolean(m))
+                    const segNames = seg.memberIds
+                      .map((id) => memberNameById.get(id) ?? 'Member')
+                      .join(', ')
+                    const startLabel = `${String(Math.floor(seg.startMin / 60)).padStart(2, '0')}:${String(seg.startMin % 60).padStart(2, '0')}`
+                    const endLabel = `${String(Math.floor(seg.endMin / 60)).padStart(2, '0')}:${String(seg.endMin % 60).padStart(2, '0')}`
                     return (
                       <div
-                        key={ev.key}
+                        key={`${wd.key}-${seg.key}`}
                         aria-hidden="true"
-                        title={`${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`}
-                        className="absolute pointer-events-none rounded-md border bg-purple-700/10 border-purple-500/20 overflow-hidden z-0"
+                        title={`${segNames} · ${formatTime12(startLabel)}–${formatTime12(endLabel)}`}
+                        className="absolute pointer-events-none rounded-md border bg-purple-700/15 border-purple-500/30 overflow-hidden z-0"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 16),
-                          left: `calc(${laneLeft} + 1px)`,
-                          width: `calc(${laneWidth} - 2px)`,
+                          left: `calc(${colLeft} + 1px)`,
+                          width: `calc(${colWidth} - 2px)`,
                         }}
                       >
                         {heightPx > 22 && (
-                          <p className="text-[8px] text-purple-200/80 px-1 truncate leading-tight pt-0.5">
-                            {memberName}
-                          </p>
+                          // gap-1 = 4 px between avatars → all visible
+                          // side-by-side, no overlap. flex-wrap so 4+
+                          // members in one segment line-break to a
+                          // second row instead of clipping off the
+                          // right edge of the block.
+                          <div className="flex items-center flex-wrap gap-1 px-1 pt-0.5">
+                            {segMembers.map((m) => (
+                              <span key={m.id} className="shrink-0">
+                                <MemberAvatar member={m} size="xs" />
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </div>
                     )
@@ -1008,6 +1098,11 @@ export default function Calendar() {
                     // mint, music_lesson as violet, etc. Status dot +
                     // gold hover ring preserved as accents.
                     const color = sessionTypeColor(b.type)
+                    // 2026-05-26 (PR C) — resolve the assignee name
+                    // back to a team_member so we can drop their
+                    // avatar inside the block. Misses fall back to
+                    // text-only (existing behavior).
+                    const assigneeMember = memberByName.get(b.assignee)
                     return (
                       <button
                         key={b.id}
@@ -1019,7 +1114,7 @@ export default function Calendar() {
                           e.stopPropagation()
                           setContextMenu({ booking: b, x: e.clientX, y: e.clientY })
                         }}
-                        title={`${b.client} · ${formatTime12(b.startTime)}–${formatTime12(b.endTime)}${isAdmin ? ' · Right-click for actions' : ''}`}
+                        title={`${b.client} · ${formatTime12(b.startTime)}–${formatTime12(b.endTime)} · ${b.assignee}${isAdmin ? ' · Right-click for actions' : ''}`}
                         className={`absolute ${color.bg} ${color.border} border rounded-md px-1.5 py-0.5 overflow-hidden text-left cursor-pointer z-30 hover:ring-2 hover:ring-gold/50 hover:z-40 transition-all focus-ring`}
                         style={{
                           top: topPx + 1,
@@ -1032,9 +1127,18 @@ export default function Calendar() {
                           {b.status === 'Confirmed' && <span className={`w-1.5 h-1.5 rounded-full ${color.accent} shrink-0`} />}
                           <p className={`text-[10px] font-semibold ${color.text} truncate leading-tight`}>{b.client}</p>
                         </div>
-                        {heightPx > 28 && <p className="text-[8px] text-text-muted truncate leading-tight">{b.assignee}</p>}
-                        {heightPx > 42 && groupSize === 1 && (
-                          <p className="text-[8px] text-text-light truncate leading-tight">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>
+                        {heightPx > 28 && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {assigneeMember && (
+                              <span className="shrink-0">
+                                <MemberAvatar member={assigneeMember} size="xs" />
+                              </span>
+                            )}
+                            <p className="text-[8px] text-text-muted truncate leading-tight">{b.assignee}</p>
+                          </div>
+                        )}
+                        {heightPx > 56 && groupSize === 1 && (
+                          <p className="text-[8px] text-text-light truncate leading-tight mt-0.5">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>
                         )}
                       </button>
                     )
