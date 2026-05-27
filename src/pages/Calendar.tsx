@@ -685,7 +685,7 @@ export default function Calendar() {
               const todayMonday = new Date(today)
               todayMonday.setDate(today.getDate() - ((today.getDay() + 6) % 7))
               const [y, m, d] = key.split('-').map(Number)
-              const target = new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0)
+              const target = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0)
               const targetMonday = new Date(target)
               targetMonday.setDate(target.getDate() - ((target.getDay() + 6) % 7))
               const diffMs = targetMonday.getTime() - todayMonday.getTime()

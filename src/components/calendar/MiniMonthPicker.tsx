@@ -37,8 +37,11 @@ const MONTH_LABELS = [
  * avoids DST edge cases when we only care about the date portion).
  */
 function parseDateKey(key: string): Date {
+  // Build-time strict mode reads each split index as `number | undefined`,
+  // so default each piece. A malformed key here would already be a bug
+  // upstream — the fallbacks just keep Date() from being called with NaN.
   const [y, m, d] = key.split('-').map(Number)
-  return new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0)
+  return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0)
 }
 
 /**
