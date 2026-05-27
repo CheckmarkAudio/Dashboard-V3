@@ -987,7 +987,7 @@ export default function Calendar() {
                   const gridEnd = 20 * 60
                   const colWidth = `((100% - 36px) / 7)`
                   const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                  return laned.map(({ booking: ev, lane }) => {
+                  return laned.map(({ booking: ev, lane, groupSize }) => {
                     const startMin = timeToMinutes(ev.startTime)
                     const endMin = timeToMinutes(ev.endTime)
                     const visStart = Math.max(startMin, gridStart)
@@ -997,32 +997,47 @@ export default function Calendar() {
                     const heightPx = ((visEnd - visStart) / 60) * 48
                     const member = memberById.get(ev.memberId)
                     const memberName = memberNameById.get(ev.memberId) ?? 'Member'
-                    // Avatar-derived color (falls back to hashed
-                    // palette while the canvas extraction is in
-                    // flight or if it fails).
                     const color = teamMemberColors.get(ev.memberId) ?? memberColor(ev.memberId)
                     const first = firstName(memberName)
-                    const avatarOffsetPx = lane * 28
+                    // 2026-05-27 — Cascade nest per Bridget: "can we
+                    // nest them? so we can see a bit of their color
+                    // without overlap?"
+                    //
+                    // Each block stays at 85 % of the column width
+                    // and offsets right by an equal share per lane.
+                    // Lane 0 sits at the left of the column; lane N
+                    // peeks from the right. The leftmost slice of
+                    // each lane (~7.5 % of column width for 3-way
+                    // overlap) is its own pure color — no other
+                    // block painted there.
+                    const widthFactor = groupSize === 1 ? 1 : 0.85
+                    const offsetFactor = groupSize <= 1
+                      ? 0
+                      : (1 - widthFactor) / (groupSize - 1)
+                    const laneWidth = `(${colWidth} * ${widthFactor})`
+                    const laneOffset = `(${colWidth} * ${offsetFactor * lane})`
+                    const laneLeft = `(${colLeft} + ${laneOffset})`
                     return (
                       <div
                         key={ev.key}
                         aria-hidden="true"
                         title={`${memberName} scheduled · ${formatTime12(ev.startTime)}–${formatTime12(ev.endTime)}${ev.note ? ` · ${ev.note}` : ''}`}
-                        className="absolute pointer-events-none rounded-md border overflow-hidden z-0"
+                        className="absolute pointer-events-none rounded-md border overflow-hidden"
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 16),
-                          left: `calc(${colLeft} + 1px)`,
-                          width: `calc(${colWidth} - 2px)`,
+                          left: `calc(${laneLeft} + 1px)`,
+                          width: `calc(${laneWidth} - 2px)`,
                           backgroundColor: color.bg,
                           borderColor: color.border,
+                          // Lane 0 sits on top so its avatar + name
+                          // are always readable; subsequent lanes
+                          // recede. Stays under booking layer (z-30).
+                          zIndex: 5 - lane,
                         }}
                       >
                         {heightPx > 22 && (
-                          <div
-                            className="flex items-center gap-1 pt-0.5"
-                            style={{ paddingLeft: 4 + avatarOffsetPx }}
-                          >
+                          <div className="flex items-center gap-1 px-1 pt-0.5">
                             {member && heightPx > 36 && (
                               <span className="shrink-0">
                                 <MemberAvatar member={member} size="xs" />
