@@ -671,15 +671,22 @@ export default function Calendar() {
           unique to this page. */}
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-3 items-stretch">
 
-        {/* ── Left column: Selected day detail above mini-month ──
-            2026-05-26 — Bridget's review feedback: she wants the "Today /
-            On Shift Today" card on top + the mini month-picker beneath
-            it. Reads top-down as "what's today" → "jump to another day."
-            Same components, just flipped. */}
-        <div className="flex flex-col gap-3">
+        {/* ── Left column: Today card stretches to fill, mini-month
+            anchored at the bottom ──
+            2026-05-26 — Bridget's review feedback: "anchor the monthly
+            calendar snapshot at the bottom and stretch the today
+            calendar out to fit the space between it... even if the
+            today calendar isn't full." Outer `h-full` + `flex-1` on
+            the Today card pin the picker at the bottom and let the
+            card expand to fill whatever vertical space the week grid
+            on the right is consuming. `min-h-0` keeps the flex math
+            from over-sizing when the card has more content than the
+            available space. */}
+        <div className="flex flex-col gap-3 h-full">
           <CalendarDayCard
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
+            className="flex-1 min-h-0"
           />
           <MiniMonthPicker
             selectedDate={selectedDate}
