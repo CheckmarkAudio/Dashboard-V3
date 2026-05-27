@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import CreateBookingModal from '../components/CreateBookingModal'
 import CalendarDayCard from '../components/calendar/CalendarDayCard'
+import MiniMonthPicker from '../components/calendar/MiniMonthPicker'
 import BookingDetailModal, { type BookingDetail } from '../components/calendar/BookingDetailModal'
 import DeleteBookingDialog from '../components/calendar/DeleteBookingDialog'
 import ScheduleRequestModal, { type ScheduleRequestModalProps } from '../components/schedule/ScheduleRequestModal'
@@ -662,17 +663,42 @@ export default function Calendar() {
         </div>
       )}
 
-      {/* 2-column layout — matched height. Left column is the shared
-          CalendarDayCard (PR #22) so Overview renders the identical
-          widget and notes stay in sync between surfaces. Right column
-          is the week grid unique to this page. */}
+      {/* 2-column layout — matched height. Left column stacks the
+          mini month-picker (added 2026-05-26) above the shared
+          CalendarDayCard (PR #22). Right column is the week grid
+          unique to this page. */}
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-3 items-stretch">
 
-        {/* ── Left column: Selected day detail ── */}
-        <CalendarDayCard
-          selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
-        />
+        {/* ── Left column: Mini month + Selected day detail ── */}
+        <div className="flex flex-col gap-3">
+          <MiniMonthPicker
+            selectedDate={selectedDate}
+            onSelectDate={(key) => {
+              // Jumping to a day in any visible month must also slide
+              // the week grid to that day's week. Compute the offset
+              // between today's Monday and the target's Monday in
+              // 7-day units. No clamp here — unlike the prev/next
+              // chevrons (which guard against accidental over-paging),
+              // an explicit date-grid click is unambiguous user intent.
+              const today = new Date()
+              today.setHours(12, 0, 0, 0)
+              const todayMonday = new Date(today)
+              todayMonday.setDate(today.getDate() - ((today.getDay() + 6) % 7))
+              const [y, m, d] = key.split('-').map(Number)
+              const target = new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0)
+              const targetMonday = new Date(target)
+              targetMonday.setDate(target.getDate() - ((target.getDay() + 6) % 7))
+              const diffMs = targetMonday.getTime() - todayMonday.getTime()
+              const offset = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000))
+              setWeekOffset(offset)
+              setSelectedDate(key)
+            }}
+          />
+          <CalendarDayCard
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+          />
+        </div>
 
         {/* ── Right column: This Week grid ── */}
         <div className="bg-surface rounded-2xl border border-border overflow-hidden">
