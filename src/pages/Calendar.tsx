@@ -17,6 +17,8 @@ import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import { useTeamSchedule } from '../lib/schedule/useTeamSchedule'
 import { useStudioHours } from '../lib/schedule/useStudioHours'
 import { sessionTypeColor } from '../lib/calendar/sessionColors'
+import { memberColor } from '../lib/calendar/memberColors'
+import { useTeamMemberColors } from '../lib/calendar/useTeamMemberColors'
 import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2, CalendarRange, EyeOff, Filter } from 'lucide-react'
 
 // 2026-05-26 — Member pills on the calendar header display first names
@@ -131,19 +133,20 @@ interface BookingLane<T> {
   lane: number
   groupSize: number
 }
+
 /**
- * 2026-05-27 (PR C iter 5) — Schedule-overlay segment builder.
+ * 2026-05-27 — Schedule-overlay segment builder.
  *
- * Per Bridget: avatars should sit "next to one another, not
- * overlapping." So we merge overlapping shifts into time-segments
- * (a stretch where the set of members on shift is constant) and
- * render one full-column-wide block per segment with the covering
- * members' avatars in a side-by-side row.
- *
- * Example: Richard 11-3, Checkmark 11-6, Matthan 11-4 →
- *   segment 11-3: [Richard, Checkmark, Matthan]
- *   segment 3-4:  [Checkmark, Matthan]
- *   segment 4-6:  [Checkmark]
+ * Returns segments where a constant set of members is "on" between
+ * two consecutive transition times. Used so:
+ *   1. The colored block per segment fills the full column width
+ *      without lane-splitting + without redundant per-member
+ *      rectangles stacked vertically.
+ *   2. We can compute, for each segment, which members are
+ *      arriving (their shift starts here) vs. leaving (their shift
+ *      ends here) — so a member's avatar shows exactly TWICE per
+ *      shift (start + end) instead of once per overlapping segment
+ *      they pass through.
  */
 interface ShiftSpan {
   memberId: string
@@ -173,12 +176,7 @@ function buildScheduleSegments(shifts: ShiftSpan[]): ScheduleSegment[] {
       .filter((s) => s.startMin <= t1 && s.endMin >= t2)
       .map((s) => s.memberId)
     if (memberIds.length === 0) continue
-    segments.push({
-      key: `seg-${t1}-${t2}`,
-      startMin: t1,
-      endMin: t2,
-      memberIds,
-    })
+    segments.push({ key: `seg-${t1}-${t2}`, startMin: t1, endMin: t2, memberIds })
   }
   return segments
 }
@@ -404,12 +402,6 @@ export default function Calendar() {
     queryFn: fetchTeamMembers,
     staleTime: 60_000,
   })
-  const memberNameById = useMemo(() => {
-    const map = new Map<string, string>()
-    teamMembers.forEach((m) => map.set(m.id, m.display_name || 'Member'))
-    return map
-  }, [teamMembers])
-
   // 2026-05-26 (PR C) — reverse lookup: display_name → full member
   // object. Bookings carry the assignee as a plain string (the join
   // doesn't surface member_id on the booking row), so to drop an
@@ -433,6 +425,14 @@ export default function Calendar() {
     return map
   }, [teamMembers])
 
+  // 2026-05-27 — Avatar-derived calendar colors. Each member's
+  // shift block tints to the dominant color sampled from their
+  // profile picture (Checkmark's gold mic → gold blocks, etc).
+  // Cache lives at module scope keyed by avatar URL, so a re-upload
+  // triggers a fresh sample on the next read. Members without an
+  // avatar fall back to a stable hashed-palette color.
+  const teamMemberColors = useTeamMemberColors(teamMembers)
+
   // 2026-05-23 — per-member filter pills at the top of the page.
   // Single-select model: null = show all members (the default —
   // preserves existing behavior), one id = show only that member's
@@ -442,6 +442,17 @@ export default function Calendar() {
   // selecting multiple at once for the calendar filter."
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const memberFilterActive = selectedMemberId !== null
+
+  // 2026-05-27 — Per Bridget: "can the icons be more greyed out and
+  // when you hover over them they light up to show you the schedule
+  // of the one you are hovering over?"
+  //
+  // Schedule-overlay avatars sit grayscaled + dimmed by default.
+  // Hovering one (or any of its other appearances elsewhere on the
+  // calendar) snaps THAT member's icons to full color and dims
+  // every segment that doesn't contain them — so the hovered
+  // member's full week-schedule visually lights up on demand.
+  const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null)
 
   // Sort active members alphabetically for the pill row. Inactive
   // members are dropped — they shouldn't show as filter targets.
@@ -996,74 +1007,252 @@ export default function Calendar() {
                 {showSchedule && WEEK.map((wd, dayIndex) => {
                   const daySchedules = schedulesByDate[wd.key] ?? []
                   if (daySchedules.length === 0) return null
-                  // 2026-05-27 (PR C iter 5) — Per Bridget: "lets make
-                  // the icons be all noticable next to one another,
-                  // not overlapping."
+                  // 2026-05-27 (PR C iter 7) — Per Bridget: "now lets
+                  // have them overlap low opacity."
                   //
-                  // Merge overlapping shifts into time-segments. Each
-                  // segment renders as ONE full-column-wide block with
-                  // every covering member's avatar in a side-by-side
-                  // row inside it (no avatar overlap, no column
-                  // splitting, no nested indents). Time accuracy is
-                  // preserved because each segment spans only its own
-                  // time window.
-                  const shifts: ShiftSpan[] = daySchedules.map((s) => {
+                  // Each shift renders at FULL COLUMN WIDTH (no lane
+                  // splitting). Overlapping shifts stack on top of
+                  // each other — at /15 alpha the colors blend
+                  // visibly where they overlap so you can see "two
+                  // people are on this hour" by the colors mixing.
+                  // Each block still gets ONE avatar at the top.
+                  //
+                  // To prevent avatars from piling at the exact same
+                  // pixel when shifts start together, we still run
+                  // `assignBookingLanes` PURELY to compute a lane
+                  // index per shift, then use that index to stagger
+                  // the avatar position horizontally (24 px per lane)
+                  // — the blocks themselves stay full-column-width.
+                  const asEvents = daySchedules.map((s) => {
                     const start = new Date(s.starts_at)
                     const end = new Date(s.ends_at)
                     return {
+                      key: s.key,
                       memberId: s.member_id,
-                      startMin: start.getHours() * 60 + start.getMinutes(),
-                      endMin: end.getHours() * 60 + end.getMinutes(),
+                      note: s.note,
+                      startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
+                      endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
                     }
                   })
-                  const segments = buildScheduleSegments(shifts)
+                  const laned = assignBookingLanes(asEvents)
                   const gridStart = 7 * 60
                   const gridEnd = 20 * 60
                   const colWidth = `((100% - 36px) / 7)`
                   const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                  return segments.map((seg) => {
+                  // 2026-05-27 — Schedule overlay now renders as a
+                  // thin colored line per shift with the member's
+                  // avatar at the top, per Bridget: "rather than
+                  // taking up the whole calendar block, theres
+                  // brackets or a line streatching down showing who
+                  // is on shift? right now its a mess and we cant
+                  // see all of the user icons."
+                  //
+                  // The filled blocks are dropped entirely. Each
+                  // member's shift is a 24 px avatar at the start of
+                  // the time range + a 3 px vertical bar in their
+                  // accent color extending down for the duration.
+                  // Multiple members on shift = avatars side-by-side
+                  // at the top (lane-spaced), with their lines
+                  // dropping down in parallel. The rest of the day
+                  // column stays clear so booking blocks remain
+                  // legible underneath.
+                  // 2026-05-27 — Per Bridget: "lets go back to this
+                  // [filled segment blocks], but instead of having
+                  // the icons appear multiple times down the line in
+                  // chunks have an icon for each member for their
+                  // start time, and their end time."
+                  //
+                  // Each segment (a time range where the set of
+                  // on-shift members is constant) renders as a
+                  // single full-column-width purple wash. Inside the
+                  // wash we only show avatars for members whose
+                  // shift is starting or ending at that segment's
+                  // boundaries — so each person's icon appears
+                  // exactly twice per shift (top of the segment
+                  // where they arrive, bottom of the segment where
+                  // they leave), never repeated in the middle.
+                  const shiftSpans: ShiftSpan[] = laned.map(({ booking: ev }) => ({
+                    memberId: ev.memberId,
+                    startMin: timeToMinutes(ev.startTime),
+                    endMin: timeToMinutes(ev.endTime),
+                  }))
+                  const shiftByMember = new Map<string, ShiftSpan>()
+                  for (const s of shiftSpans) shiftByMember.set(s.memberId, s)
+                  const segments = buildScheduleSegments(shiftSpans)
+                  return segments.flatMap((seg) => {
                     const visStart = Math.max(seg.startMin, gridStart)
                     const visEnd = Math.min(seg.endMin, gridEnd)
-                    if (visEnd <= visStart) return null
+                    if (visEnd <= visStart) return []
                     const topPx = ((visStart - gridStart) / 60) * 48
                     const heightPx = ((visEnd - visStart) / 60) * 48
-                    const segMembers = seg.memberIds
-                      .map((id) => memberById.get(id))
-                      .filter((m): m is NonNullable<typeof m> => Boolean(m))
-                    const segNames = seg.memberIds
-                      .map((id) => memberNameById.get(id) ?? 'Member')
-                      .join(', ')
-                    const startLabel = `${String(Math.floor(seg.startMin / 60)).padStart(2, '0')}:${String(seg.startMin % 60).padStart(2, '0')}`
-                    const endLabel = `${String(Math.floor(seg.endMin / 60)).padStart(2, '0')}:${String(seg.endMin % 60).padStart(2, '0')}`
-                    return (
+                    // Partition this segment's members into those
+                    // who are *starting* their shift exactly here
+                    // and those who are *ending* exactly here. A
+                    // member can be both (a shift that spans only
+                    // this segment), in which case we show them in
+                    // both rows.
+                    const startingMembers: typeof teamMembers = []
+                    const endingMembers: typeof teamMembers = []
+                    for (const memberId of seg.memberIds) {
+                      const shift = shiftByMember.get(memberId)
+                      const member = memberById.get(memberId)
+                      if (!member || !shift) continue
+                      if (shift.startMin === seg.startMin) startingMembers.push(member)
+                      if (shift.endMin === seg.endMin) endingMembers.push(member)
+                    }
+                    // 2026-05-27 — Per Bridget: "can we not have the
+                    // dividers though in the calendar sections since
+                    // those arent times where shifts stop?"
+                    //
+                    // The "dividers" she was seeing were a combo of
+                    // (a) the per-segment border + rounded corners
+                    // and (b) the hour-grid lines visible through
+                    // the /15 translucent wash. Dropping the
+                    // border + rounded corners makes adjacent
+                    // segments touch as one continuous shape, and
+                    // bumping the fill to /35 masks the grid lines
+                    // underneath so the wash reads as one block.
+                    // 2026-05-27 — Per Bridget: "we need both the icon
+                    // to light up and the block time should also
+                    // light up, almost like a hoverover filtering.
+                    // when its not lit up its greyed out not blacked
+                    // out."
+                    //
+                    // Segment painting depends on the hover state:
+                    //   - No hover active → neutral purple wash
+                    //   - Hover on a member in THIS segment → fill
+                    //     becomes that member's accent color at
+                    //     /55 alpha so the block actively GLOWS in
+                    //     their hue, not just stays at neutral while
+                    //     others dim
+                    //   - Hover on a member NOT in this segment →
+                    //     segment opacity drops to 0.18 so it
+                    //     recedes
+                    const segContainsHovered =
+                      hoveredMemberId !== null &&
+                      seg.memberIds.includes(hoveredMemberId)
+                    const segDimmed =
+                      hoveredMemberId !== null && !segContainsHovered
+                    const hoveredColor = segContainsHovered
+                      ? teamMemberColors.get(hoveredMemberId!)
+                        ?? memberColor(hoveredMemberId!)
+                      : null
+                    const segBgStyle: React.CSSProperties = hoveredColor
+                      ? { backgroundColor: hoveredColor.bg.replace('0.30', '0.55') }
+                      : {}
+                    return [
                       <div
                         key={`${wd.key}-${seg.key}`}
                         aria-hidden="true"
-                        title={`${segNames} · ${formatTime12(startLabel)}–${formatTime12(endLabel)}`}
-                        className="absolute pointer-events-none rounded-md border bg-purple-700/15 border-purple-500/30 overflow-hidden z-0"
+                        className={`absolute pointer-events-none overflow-hidden flex flex-col z-0 transition-all ${hoveredColor ? '' : 'bg-purple-700/35'}`}
                         style={{
-                          top: topPx + 1,
-                          height: Math.max(heightPx - 2, 16),
+                          top: topPx,
+                          height: Math.max(heightPx, 16),
                           left: `calc(${colLeft} + 1px)`,
                           width: `calc(${colWidth} - 2px)`,
+                          opacity: segDimmed ? 0.18 : 1,
+                          ...segBgStyle,
                         }}
                       >
-                        {heightPx > 22 && (
-                          // gap-1 = 4 px between avatars → all visible
-                          // side-by-side, no overlap. flex-wrap so 4+
-                          // members in one segment line-break to a
-                          // second row instead of clipping off the
-                          // right edge of the block.
+                        {/* Top row — members arriving at this
+                            segment's start boundary. Per-member
+                            color rings so different staff are easy
+                            to tell apart at a glance. */}
+                        {startingMembers.length > 0 && (
                           <div className="flex items-center flex-wrap gap-1 px-1 pt-0.5">
-                            {segMembers.map((m) => (
-                              <span key={m.id} className="shrink-0">
-                                <MemberAvatar member={m} size="xs" />
-                              </span>
-                            ))}
+                            {startingMembers.map((m) => {
+                              const c = teamMemberColors.get(m.id) ?? memberColor(m.id)
+                              const isHovered = hoveredMemberId === m.id
+                              const dim = hoveredMemberId !== null && !isHovered
+                              return (
+                                <span
+                                  key={`s-${m.id}`}
+                                  title={m.display_name || 'Member'}
+                                  onMouseEnter={() => setHoveredMemberId(m.id)}
+                                  onMouseLeave={() => setHoveredMemberId(null)}
+                                  className="shrink-0 rounded-full pointer-events-auto cursor-pointer transition-all"
+                                  style={{
+                                    boxShadow: `0 0 0 ${isHovered ? 3 : 2}px ${c.accent}`,
+                                    // 2026-05-27 — Per Bridget: idle
+                                    // should be GREYED OUT, not
+                                    // blacked out. Drop the full
+                                    // grayscale + low opacity combo
+                                    // (which on dark mode reads as
+                                    // near-invisible). Keep full
+                                    // grayscale for the desaturation
+                                    // tell, but push opacity back up
+                                    // to ~0.85 so the avatar shape
+                                    // stays legible. Dim state (when
+                                    // a DIFFERENT member is being
+                                    // hovered) lowers to 0.45 for
+                                    // recession without disappearing.
+                                    filter: isHovered
+                                      ? 'none'
+                                      : dim
+                                        ? 'grayscale(1) opacity(0.45)'
+                                        : 'grayscale(1) opacity(0.85)',
+                                    transform: isHovered ? 'scale(1.15)' : 'scale(1)',
+                                    zIndex: isHovered ? 20 : 'auto',
+                                  }}
+                                >
+                                  <MemberAvatar member={m} size="xs" />
+                                </span>
+                              )
+                            })}
                           </div>
                         )}
-                      </div>
-                    )
+                        {/* Spacer pushes the ending row to the
+                            bottom of the segment. */}
+                        <div className="flex-1" />
+                        {/* Bottom row — members whose shift ends at
+                            this segment's end boundary. Only renders
+                            when the block is tall enough to read as
+                            "two separate rows" (≥ 32 px). */}
+                        {endingMembers.length > 0 && heightPx >= 32 && (
+                          <div className="flex items-center flex-wrap gap-1 px-1 pb-0.5">
+                            {endingMembers.map((m) => {
+                              const c = teamMemberColors.get(m.id) ?? memberColor(m.id)
+                              const isHovered = hoveredMemberId === m.id
+                              const dim = hoveredMemberId !== null && !isHovered
+                              return (
+                                <span
+                                  key={`e-${m.id}`}
+                                  title={m.display_name || 'Member'}
+                                  onMouseEnter={() => setHoveredMemberId(m.id)}
+                                  onMouseLeave={() => setHoveredMemberId(null)}
+                                  className="shrink-0 rounded-full pointer-events-auto cursor-pointer transition-all"
+                                  style={{
+                                    boxShadow: `0 0 0 ${isHovered ? 3 : 2}px ${c.accent}`,
+                                    // 2026-05-27 — Per Bridget: idle
+                                    // should be GREYED OUT, not
+                                    // blacked out. Drop the full
+                                    // grayscale + low opacity combo
+                                    // (which on dark mode reads as
+                                    // near-invisible). Keep full
+                                    // grayscale for the desaturation
+                                    // tell, but push opacity back up
+                                    // to ~0.85 so the avatar shape
+                                    // stays legible. Dim state (when
+                                    // a DIFFERENT member is being
+                                    // hovered) lowers to 0.45 for
+                                    // recession without disappearing.
+                                    filter: isHovered
+                                      ? 'none'
+                                      : dim
+                                        ? 'grayscale(1) opacity(0.45)'
+                                        : 'grayscale(1) opacity(0.85)',
+                                    transform: isHovered ? 'scale(1.15)' : 'scale(1)',
+                                    zIndex: isHovered ? 20 : 'auto',
+                                  }}
+                                >
+                                  <MemberAvatar member={m} size="xs" />
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>,
+                    ]
                   })
                 })}
 
