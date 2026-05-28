@@ -1112,24 +1112,46 @@ export default function Calendar() {
                     // segments touch as one continuous shape, and
                     // bumping the fill to /35 masks the grid lines
                     // underneath so the wash reads as one block.
-                    // Segment dims when a hover target is active
-                    // and this segment doesn't contain that member.
+                    // 2026-05-27 — Per Bridget: "we need both the icon
+                    // to light up and the block time should also
+                    // light up, almost like a hoverover filtering.
+                    // when its not lit up its greyed out not blacked
+                    // out."
+                    //
+                    // Segment painting depends on the hover state:
+                    //   - No hover active → neutral purple wash
+                    //   - Hover on a member in THIS segment → fill
+                    //     becomes that member's accent color at
+                    //     /55 alpha so the block actively GLOWS in
+                    //     their hue, not just stays at neutral while
+                    //     others dim
+                    //   - Hover on a member NOT in this segment →
+                    //     segment opacity drops to 0.18 so it
+                    //     recedes
                     const segContainsHovered =
                       hoveredMemberId !== null &&
                       seg.memberIds.includes(hoveredMemberId)
                     const segDimmed =
                       hoveredMemberId !== null && !segContainsHovered
+                    const hoveredColor = segContainsHovered
+                      ? teamMemberColors.get(hoveredMemberId!)
+                        ?? memberColor(hoveredMemberId!)
+                      : null
+                    const segBgStyle: React.CSSProperties = hoveredColor
+                      ? { backgroundColor: hoveredColor.bg.replace('0.30', '0.55') }
+                      : {}
                     return [
                       <div
                         key={`${wd.key}-${seg.key}`}
                         aria-hidden="true"
-                        className="absolute pointer-events-none bg-purple-700/35 overflow-hidden flex flex-col z-0 transition-opacity"
+                        className={`absolute pointer-events-none overflow-hidden flex flex-col z-0 transition-all ${hoveredColor ? '' : 'bg-purple-700/35'}`}
                         style={{
                           top: topPx,
                           height: Math.max(heightPx, 16),
                           left: `calc(${colLeft} + 1px)`,
                           width: `calc(${colWidth} - 2px)`,
-                          opacity: segDimmed ? 0.25 : 1,
+                          opacity: segDimmed ? 0.18 : 1,
+                          ...segBgStyle,
                         }}
                       >
                         {/* Top row — members arriving at this
@@ -1151,19 +1173,24 @@ export default function Calendar() {
                                   className="shrink-0 rounded-full pointer-events-auto cursor-pointer transition-all"
                                   style={{
                                     boxShadow: `0 0 0 ${isHovered ? 3 : 2}px ${c.accent}`,
-                                    // 2026-05-27 — Bumped from 0.55 →
-                                    // 1.0 so the idle state is fully
-                                    // monochrome at 60 % opacity. The
-                                    // previous 0.55 was too subtle —
-                                    // avatars still read as fully
-                                    // colored at a glance. Now they
-                                    // sit as obviously-greyed bg
-                                    // until you hover.
+                                    // 2026-05-27 — Per Bridget: idle
+                                    // should be GREYED OUT, not
+                                    // blacked out. Drop the full
+                                    // grayscale + low opacity combo
+                                    // (which on dark mode reads as
+                                    // near-invisible). Keep full
+                                    // grayscale for the desaturation
+                                    // tell, but push opacity back up
+                                    // to ~0.85 so the avatar shape
+                                    // stays legible. Dim state (when
+                                    // a DIFFERENT member is being
+                                    // hovered) lowers to 0.45 for
+                                    // recession without disappearing.
                                     filter: isHovered
                                       ? 'none'
                                       : dim
-                                        ? 'grayscale(1) opacity(0.35)'
-                                        : 'grayscale(1) opacity(0.6)',
+                                        ? 'grayscale(1) opacity(0.45)'
+                                        : 'grayscale(1) opacity(0.85)',
                                     transform: isHovered ? 'scale(1.15)' : 'scale(1)',
                                     zIndex: isHovered ? 20 : 'auto',
                                   }}
@@ -1196,19 +1223,24 @@ export default function Calendar() {
                                   className="shrink-0 rounded-full pointer-events-auto cursor-pointer transition-all"
                                   style={{
                                     boxShadow: `0 0 0 ${isHovered ? 3 : 2}px ${c.accent}`,
-                                    // 2026-05-27 — Bumped from 0.55 →
-                                    // 1.0 so the idle state is fully
-                                    // monochrome at 60 % opacity. The
-                                    // previous 0.55 was too subtle —
-                                    // avatars still read as fully
-                                    // colored at a glance. Now they
-                                    // sit as obviously-greyed bg
-                                    // until you hover.
+                                    // 2026-05-27 — Per Bridget: idle
+                                    // should be GREYED OUT, not
+                                    // blacked out. Drop the full
+                                    // grayscale + low opacity combo
+                                    // (which on dark mode reads as
+                                    // near-invisible). Keep full
+                                    // grayscale for the desaturation
+                                    // tell, but push opacity back up
+                                    // to ~0.85 so the avatar shape
+                                    // stays legible. Dim state (when
+                                    // a DIFFERENT member is being
+                                    // hovered) lowers to 0.45 for
+                                    // recession without disappearing.
                                     filter: isHovered
                                       ? 'none'
                                       : dim
-                                        ? 'grayscale(1) opacity(0.35)'
-                                        : 'grayscale(1) opacity(0.6)',
+                                        ? 'grayscale(1) opacity(0.45)'
+                                        : 'grayscale(1) opacity(0.85)',
                                     transform: isHovered ? 'scale(1.15)' : 'scale(1)',
                                     zIndex: isHovered ? 20 : 'auto',
                                   }}
