@@ -11,6 +11,7 @@ import { APP_ROUTES } from '../app/routes'
 import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
 import NotificationsBell from './notifications/NotificationsBell'
+import MessagesBell from './messages/MessagesBell'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import MemberAvatar from './members/MemberAvatar'
 import { useToast } from './Toast'
@@ -718,6 +719,11 @@ export default function Layout() {
                 redundant. The bell's dropdown uses `getBoundingClientRect`
                 to anchor to its actual position, so the panel still
                 opens flush against the right edge. */}
+            {/* Direct Messages — sits just left of the notifications
+                bell. Same dropdown interaction model; its unread badge
+                counts DM/group threads (forum channels stay on the
+                notifications bell). */}
+            <MessagesBell />
             <NotificationsBell />
           </div>
         </div>
