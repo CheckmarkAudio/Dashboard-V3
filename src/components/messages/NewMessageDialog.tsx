@@ -1,15 +1,15 @@
-// "New message" dialog — start a 1:1 DM or a group thread.
+// "New message" dialog — two distinct modes:
 //
-// Mirrors CreateChannelDialog's chrome (centered modal, gold primary
-// action). The user searches + multi-selects teammates:
-//   • exactly 1 selected → find_or_create_dm (idempotent 1:1)
-//   • 2+ selected        → create_group_dm (+ optional title)
-// On success it hands the resulting channel_id back to the caller, which
-// navigates into the Forum DM view.
+//   • direct (default) — click a single teammate and you're routed
+//     straight into that 1:1 DM (find_or_create_dm). No confirm step.
+//   • group — opened via the "New group" toggle; multi-select teammates
+//     + optional title, then "Start group" (create_group_dm).
+//
+// Chrome mirrors CreateChannelDialog (centered modal, gold primary).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Check, Loader2, Search, Users, X } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, Search, Users, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import { createGroupDm, findOrCreateDm } from '../../lib/queries/dms'
@@ -25,13 +25,16 @@ interface NewMessageDialogProps {
 export default function NewMessageDialog({ onClose, onCreated }: NewMessageDialogProps) {
   const { profile } = useAuth()
   const { toast } = useToast()
+  const [mode, setMode] = useState<'direct' | 'group'>('direct')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [title, setTitle] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // Direct mode: the member row currently being opened (spinner + lock).
+  const [busyId, setBusyId] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { searchRef.current?.focus() }, [])
+  useEffect(() => { searchRef.current?.focus() }, [mode])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -55,26 +58,49 @@ export default function NewMessageDialog({ onClose, onCreated }: NewMessageDialo
     [teamQuery.data, selected],
   )
 
-  const isGroup = selected.length > 1
-  const canSubmit = selected.length >= 1 && !submitting
-
-  const toggle = (id: string) =>
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
-
-  const submit = async () => {
-    if (!canSubmit) return
-    setSubmitting(true)
+  // ── direct mode — click a teammate → open the 1:1 immediately ──
+  const openDirect = async (memberId: string) => {
+    if (busyId) return
+    setBusyId(memberId)
     try {
-      const channelId = isGroup
-        ? await createGroupDm(selected, title.trim() || null)
-        : await findOrCreateDm(selected[0]!)
+      const channelId = await findOrCreateDm(memberId)
       onCreated(channelId)
       onClose()
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Could not start the conversation', 'error')
+      toast(err instanceof Error ? err.message : 'Could not open the conversation', 'error')
+      setBusyId(null)
+    }
+  }
+
+  // ── group mode — multi-select then create ──
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+
+  const canStartGroup = selected.length >= 2 && !submitting
+
+  const startGroup = async () => {
+    if (!canStartGroup) return
+    setSubmitting(true)
+    try {
+      const channelId = await createGroupDm(selected, title.trim() || null)
+      onCreated(channelId)
+      onClose()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not start the group', 'error')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const enterGroupMode = () => {
+    setMode('group')
+    setSearch('')
+  }
+  const backToDirect = () => {
+    setMode('direct')
+    setSelected([])
+    setTitle('')
+    setSearch('')
   }
 
   return (
@@ -90,23 +116,47 @@ export default function NewMessageDialog({ onClose, onCreated }: NewMessageDialo
         className="w-full max-w-md mx-4 bg-surface rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
       >
         <header className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
-          <div className="flex items-center gap-2">
-            <Users size={14} className="text-gold" aria-hidden="true" />
-            <h2 id="new-message-title" className="text-[14px] font-bold text-text">New message</h2>
+          <div className="flex items-center gap-2 min-w-0">
+            {mode === 'group' && (
+              <button
+                type="button"
+                onClick={backToDirect}
+                aria-label="Back to direct message"
+                className="p-1 -ml-1 rounded-md text-text-muted hover:text-text hover:bg-surface-hover transition-colors focus-ring"
+              >
+                <ArrowLeft size={15} aria-hidden="true" />
+              </button>
+            )}
+            <Users size={14} className="text-gold shrink-0" aria-hidden="true" />
+            <h2 id="new-message-title" className="text-[14px] font-bold text-text truncate">
+              {mode === 'group' ? 'New group' : 'New message'}
+            </h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="p-1 rounded-md text-text-muted hover:text-text hover:bg-surface-hover transition-colors focus-ring"
-          >
-            <X size={14} />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {mode === 'direct' && (
+              <button
+                type="button"
+                onClick={enterGroupMode}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-gold hover:bg-gold/10 transition-colors focus-ring"
+              >
+                <Users size={12} strokeWidth={2.5} aria-hidden="true" />
+                New group
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="p-1 rounded-md text-text-muted hover:text-text hover:bg-surface-hover transition-colors focus-ring"
+            >
+              <X size={14} />
+            </button>
+          </div>
         </header>
 
         <div className="p-5 space-y-4 overflow-y-auto">
-          {/* Selected chips */}
-          {selectedMembers.length > 0 && (
+          {/* Group: selected chips + title */}
+          {mode === 'group' && selectedMembers.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {selectedMembers.map((m) => (
                 <button
@@ -124,8 +174,7 @@ export default function NewMessageDialog({ onClose, onCreated }: NewMessageDialo
             </div>
           )}
 
-          {/* Group title (only when 2+ selected) */}
-          {isGroup && (
+          {mode === 'group' && (
             <div className="space-y-1.5">
               <label htmlFor="group-title" className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted">
                 Group name (optional)
@@ -145,7 +194,7 @@ export default function NewMessageDialog({ onClose, onCreated }: NewMessageDialo
           {/* Member search */}
           <div className="space-y-1.5">
             <label htmlFor="member-search" className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-              To
+              {mode === 'group' ? 'Add people' : 'Message'}
             </label>
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-light" aria-hidden="true" />
@@ -159,6 +208,9 @@ export default function NewMessageDialog({ onClose, onCreated }: NewMessageDialo
                 className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-alt border border-border text-[13px] text-text placeholder:text-text-light focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30"
               />
             </div>
+            {mode === 'direct' && (
+              <p className="text-[11px] text-text-light">Tap a teammate to open the conversation.</p>
+            )}
           </div>
 
           {/* Member list */}
@@ -170,6 +222,22 @@ export default function NewMessageDialog({ onClose, onCreated }: NewMessageDialo
               <p className="text-[12px] text-text-light px-1 py-2">No teammates match “{search}”.</p>
             )}
             {candidates.map((m) => {
+              if (mode === 'direct') {
+                const isBusy = busyId === m.id
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    disabled={Boolean(busyId)}
+                    onClick={() => void openDirect(m.id)}
+                    className="w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg text-left transition-colors hover:bg-surface-hover disabled:opacity-60 disabled:cursor-default"
+                  >
+                    <MemberAvatar member={m} size="sm" />
+                    <span className="flex-1 min-w-0 text-[13px] font-medium text-text truncate">{m.display_name}</span>
+                    {isBusy && <Loader2 size={14} className="shrink-0 animate-spin text-gold" aria-hidden="true" />}
+                  </button>
+                )
+              }
               const isSel = selected.includes(m.id)
               return (
                 <button
@@ -196,25 +264,34 @@ export default function NewMessageDialog({ onClose, onCreated }: NewMessageDialo
           </div>
         </div>
 
-        <footer className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border bg-surface-alt/30 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-3 py-2 rounded-lg text-[12px] font-semibold text-text-muted hover:text-text hover:bg-surface-hover transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void submit()}
-            disabled={!canSubmit}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gold text-black text-[12px] font-bold hover:bg-gold-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-          >
-            {submitting ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : null}
-            {isGroup ? 'Start group' : 'Message'}
-          </button>
-        </footer>
+        {/* Footer — only the group flow needs a confirm button; direct
+            mode commits on row click. */}
+        {mode === 'group' && (
+          <footer className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border bg-surface-alt/30 shrink-0">
+            <span className="text-[11px] text-text-light">
+              {selected.length < 2 ? 'Pick at least 2 people' : `${selected.length} selected`}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                className="px-3 py-2 rounded-lg text-[12px] font-semibold text-text-muted hover:text-text hover:bg-surface-hover transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void startGroup()}
+                disabled={!canStartGroup}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gold text-black text-[12px] font-bold hover:bg-gold-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+              >
+                {submitting ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : null}
+                Start group
+              </button>
+            </div>
+          </footer>
+        )}
       </div>
     </div>
   )
