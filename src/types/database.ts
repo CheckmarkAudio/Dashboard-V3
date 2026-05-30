@@ -73,58 +73,79 @@ export type Database = {
       }
       assigned_tasks: {
         Row: {
-          assigned_to: string
+          assigned_to: string | null
           category: string | null
           completed_at: string | null
+          completed_by: string | null
           created_at: string
           description: string | null
           due_date: string | null
           id: string
           is_completed: boolean
           is_required: boolean
-          recipient_assignment_id: string
+          recipient_assignment_id: string | null
+          recurrence_last_spawned_at: string | null
+          recurrence_parent_id: string | null
+          recurrence_spec: Json | null
+          scope: string
           sort_order: number
           source_template_id: string | null
           source_template_item_id: string | null
           source_type: Database["public"]["Enums"]["assigned_source_type"]
+          studio_space: string | null
+          team_id: string | null
           title: string
           updated_at: string
           visible_on_overview: boolean
         }
         Insert: {
-          assigned_to: string
+          assigned_to?: string | null
           category?: string | null
           completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
           description?: string | null
           due_date?: string | null
           id?: string
           is_completed?: boolean
           is_required?: boolean
-          recipient_assignment_id: string
+          recipient_assignment_id?: string | null
+          recurrence_last_spawned_at?: string | null
+          recurrence_parent_id?: string | null
+          recurrence_spec?: Json | null
+          scope?: string
           sort_order?: number
           source_template_id?: string | null
           source_template_item_id?: string | null
           source_type: Database["public"]["Enums"]["assigned_source_type"]
+          studio_space?: string | null
+          team_id?: string | null
           title: string
           updated_at?: string
           visible_on_overview?: boolean
         }
         Update: {
-          assigned_to?: string
+          assigned_to?: string | null
           category?: string | null
           completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
           description?: string | null
           due_date?: string | null
           id?: string
           is_completed?: boolean
           is_required?: boolean
-          recipient_assignment_id?: string
+          recipient_assignment_id?: string | null
+          recurrence_last_spawned_at?: string | null
+          recurrence_parent_id?: string | null
+          recurrence_spec?: Json | null
+          scope?: string
           sort_order?: number
           source_template_id?: string | null
           source_template_item_id?: string | null
           source_type?: Database["public"]["Enums"]["assigned_source_type"]
+          studio_space?: string | null
+          team_id?: string | null
           title?: string
           updated_at?: string
           visible_on_overview?: boolean
@@ -152,6 +173,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "assigned_tasks_recurrence_parent_id_fkey"
+            columns: ["recurrence_parent_id"]
+            isOneToOne: false
+            referencedRelation: "assigned_tasks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "assigned_tasks_source_template_id_fkey"
             columns: ["source_template_id"]
             isOneToOne: false
@@ -165,11 +193,18 @@ export type Database = {
             referencedRelation: "task_template_items"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "assigned_tasks_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
         ]
       }
       assignment_notifications: {
         Row: {
-          batch_id: string
+          batch_id: string | null
           body: string | null
           created_at: string
           id: string
@@ -177,10 +212,13 @@ export type Database = {
           notification_type: Database["public"]["Enums"]["assignment_notification_type"]
           read_at: string | null
           recipient_id: string
+          session_id: string | null
+          task_reassign_request_id: string | null
+          task_request_id: string | null
           title: string
         }
         Insert: {
-          batch_id: string
+          batch_id?: string | null
           body?: string | null
           created_at?: string
           id?: string
@@ -188,10 +226,13 @@ export type Database = {
           notification_type: Database["public"]["Enums"]["assignment_notification_type"]
           read_at?: string | null
           recipient_id: string
+          session_id?: string | null
+          task_reassign_request_id?: string | null
+          task_request_id?: string | null
           title: string
         }
         Update: {
-          batch_id?: string
+          batch_id?: string | null
           body?: string | null
           created_at?: string
           id?: string
@@ -199,6 +240,9 @@ export type Database = {
           notification_type?: Database["public"]["Enums"]["assignment_notification_type"]
           read_at?: string | null
           recipient_id?: string
+          session_id?: string | null
+          task_reassign_request_id?: string | null
+          task_request_id?: string | null
           title?: string
         }
         Relationships: [
@@ -221,6 +265,27 @@ export type Database = {
             columns: ["recipient_id"]
             isOneToOne: false
             referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_notifications_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_notifications_task_reassign_request_id_fkey"
+            columns: ["task_reassign_request_id"]
+            isOneToOne: false
+            referencedRelation: "task_reassign_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_notifications_task_request_id_fkey"
+            columns: ["task_request_id"]
+            isOneToOne: false
+            referencedRelation: "task_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -265,6 +330,46 @@ export type Database = {
           {
             foreignKeyName: "assignment_recipients_recipient_id_fkey"
             columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_channel_members: {
+        Row: {
+          added_at: string
+          channel_id: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          channel_id: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          channel_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_channel_members_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_channel_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_channel_members_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "team_members"
             referencedColumns: ["id"]
@@ -320,7 +425,9 @@ export type Database = {
           created_by: string | null
           description: string | null
           id: string
+          kind: string
           name: string
+          pinned_at: string | null
           slug: string
         }
         Insert: {
@@ -328,7 +435,9 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          kind?: string
           name: string
+          pinned_at?: string | null
           slug: string
         }
         Update: {
@@ -336,34 +445,69 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          kind?: string
           name?: string
+          pinned_at?: string | null
           slug?: string
+        }
+        Relationships: []
+      }
+      chat_link_previews: {
+        Row: {
+          description: string | null
+          fetched_at: string
+          image_url: string | null
+          site_name: string | null
+          title: string | null
+          url: string
+        }
+        Insert: {
+          description?: string | null
+          fetched_at?: string
+          image_url?: string | null
+          site_name?: string | null
+          title?: string | null
+          url: string
+        }
+        Update: {
+          description?: string | null
+          fetched_at?: string
+          image_url?: string | null
+          site_name?: string | null
+          title?: string | null
+          url?: string
         }
         Relationships: []
       }
       chat_messages: {
         Row: {
+          attachments: Json
           channel_id: string
           content: string
           created_at: string | null
+          edited_at: string | null
           id: string
           sender_id: string
           sender_initial: string
           sender_name: string
         }
         Insert: {
+          attachments?: Json
           channel_id: string
           content: string
           created_at?: string | null
+          edited_at?: string | null
           id?: string
           sender_id: string
           sender_initial?: string
           sender_name: string
         }
         Update: {
+          attachments?: Json
           channel_id?: string
           content?: string
           created_at?: string | null
+          edited_at?: string | null
           id?: string
           sender_id?: string
           sender_initial?: string
@@ -375,6 +519,70 @@ export type Database = {
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          email: string | null
+          google_review_link: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          google_review_link?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          google_review_link?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -531,6 +739,222 @@ export type Database = {
           {
             foreignKeyName: "education_students_assigned_to_fkey"
             columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flywheel_events: {
+        Row: {
+          created_at: string
+          id: string
+          member_id: string | null
+          metadata: Json
+          occurred_at: string
+          source_id: string | null
+          source_type: string
+          stage: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          member_id?: string | null
+          metadata?: Json
+          occurred_at?: string
+          source_id?: string | null
+          source_type: string
+          stage: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          member_id?: string | null
+          metadata?: Json
+          occurred_at?: string
+          source_id?: string | null
+          source_type?: string
+          stage?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flywheel_events_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flywheel_events_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_calendar_connections: {
+        Row: {
+          calendar_id: string
+          connected_by: string | null
+          created_at: string
+          encrypted_refresh_token: string
+          google_email: string
+          google_sync_token: string | null
+          inbound_last_sync_error: string | null
+          inbound_last_sync_summary: Json
+          inbound_last_synced_at: string | null
+          last_sync_error: string | null
+          last_tested_at: string | null
+          refresh_token_iv: string
+          team_id: string
+          token_scope: string[]
+          token_type: string
+          updated_at: string
+        }
+        Insert: {
+          calendar_id?: string
+          connected_by?: string | null
+          created_at?: string
+          encrypted_refresh_token: string
+          google_email: string
+          google_sync_token?: string | null
+          inbound_last_sync_error?: string | null
+          inbound_last_sync_summary?: Json
+          inbound_last_synced_at?: string | null
+          last_sync_error?: string | null
+          last_tested_at?: string | null
+          refresh_token_iv: string
+          team_id: string
+          token_scope?: string[]
+          token_type?: string
+          updated_at?: string
+        }
+        Update: {
+          calendar_id?: string
+          connected_by?: string | null
+          created_at?: string
+          encrypted_refresh_token?: string
+          google_email?: string
+          google_sync_token?: string | null
+          inbound_last_sync_error?: string | null
+          inbound_last_sync_summary?: Json
+          inbound_last_synced_at?: string | null
+          last_sync_error?: string | null
+          last_tested_at?: string | null
+          refresh_token_iv?: string
+          team_id?: string
+          token_scope?: string[]
+          token_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_calendar_connections_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_calendar_connections_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_oauth_states: {
+        Row: {
+          created_at: string
+          created_by: string
+          expires_at: string
+          redirect_to: string
+          state: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          expires_at?: string
+          redirect_to: string
+          state: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          redirect_to?: string
+          state?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_oauth_states_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_oauth_states_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_submissions: {
+        Row: {
+          content_type: string | null
+          created_at: string
+          drive_file_id: string
+          drive_view_url: string | null
+          id: string
+          member_id: string
+          original_filename: string
+          size_bytes: number
+          stored_filename: string
+        }
+        Insert: {
+          content_type?: string | null
+          created_at?: string
+          drive_file_id: string
+          drive_view_url?: string | null
+          id?: string
+          member_id: string
+          original_filename: string
+          size_bytes: number
+          stored_filename: string
+        }
+        Update: {
+          content_type?: string | null
+          created_at?: string
+          drive_file_id?: string
+          drive_view_url?: string | null
+          id?: string
+          member_id?: string
+          original_filename?: string
+          size_bytes?: number
+          stored_filename?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_submissions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_submissions_member_id_fkey"
+            columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "team_members"
             referencedColumns: ["id"]
@@ -801,6 +1225,9 @@ export type Database = {
       sessions: {
         Row: {
           assigned_to: string | null
+          calendar_last_changed_at: string | null
+          calendar_last_changed_source: string
+          client_id: string | null
           client_name: string | null
           created_at: string | null
           created_by: string | null
@@ -812,6 +1239,9 @@ export type Database = {
           id: string
           notes: string | null
           project_id: string | null
+          recurrence_last_spawned_at: string | null
+          recurrence_parent_id: string | null
+          recurrence_spec: Json | null
           room: string | null
           session_date: string
           session_type: string
@@ -821,6 +1251,9 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          calendar_last_changed_at?: string | null
+          calendar_last_changed_source?: string
+          client_id?: string | null
           client_name?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -832,6 +1265,9 @@ export type Database = {
           id?: string
           notes?: string | null
           project_id?: string | null
+          recurrence_last_spawned_at?: string | null
+          recurrence_parent_id?: string | null
+          recurrence_spec?: Json | null
           room?: string | null
           session_date: string
           session_type: string
@@ -841,6 +1277,9 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          calendar_last_changed_at?: string | null
+          calendar_last_changed_source?: string
+          client_id?: string | null
           client_name?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -852,6 +1291,9 @@ export type Database = {
           id?: string
           notes?: string | null
           project_id?: string | null
+          recurrence_last_spawned_at?: string | null
+          recurrence_parent_id?: string | null
+          recurrence_spec?: Json | null
           room?: string | null
           session_date?: string
           session_type?: string
@@ -875,6 +1317,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sessions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sessions_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
@@ -893,6 +1342,61 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_recurrence_parent_id_fkey"
+            columns: ["recurrence_parent_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_hours_of_operation: {
+        Row: {
+          active: boolean
+          close_time: string
+          created_at: string
+          id: string
+          open_time: string
+          updated_at: string
+          updated_by: string | null
+          weekday: number
+        }
+        Insert: {
+          active?: boolean
+          close_time: string
+          created_at?: string
+          id?: string
+          open_time: string
+          updated_at?: string
+          updated_by?: string | null
+          weekday: number
+        }
+        Update: {
+          active?: boolean
+          close_time?: string
+          created_at?: string
+          id?: string
+          open_time?: string
+          updated_at?: string
+          updated_by?: string | null
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_hours_of_operation_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_hours_of_operation_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
             referencedColumns: ["id"]
           },
         ]
@@ -1131,6 +1635,201 @@ export type Database = {
             columns: ["reviewer_id"]
             isOneToOne: false
             referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_reassign_requests: {
+        Row: {
+          created_at: string
+          current_assignee_id: string
+          direction: string
+          id: string
+          note: string | null
+          requester_id: string
+          resolved_at: string | null
+          resolver_id: string | null
+          status: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_assignee_id: string
+          direction?: string
+          id?: string
+          note?: string | null
+          requester_id: string
+          resolved_at?: string | null
+          resolver_id?: string | null
+          status?: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          current_assignee_id?: string
+          direction?: string
+          id?: string
+          note?: string | null
+          requester_id?: string
+          resolved_at?: string | null
+          resolver_id?: string | null
+          status?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_reassign_requests_current_assignee_id_fkey"
+            columns: ["current_assignee_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reassign_requests_current_assignee_id_fkey"
+            columns: ["current_assignee_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reassign_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reassign_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reassign_requests_resolver_id_fkey"
+            columns: ["resolver_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reassign_requests_resolver_id_fkey"
+            columns: ["resolver_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_reassign_requests_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "assigned_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_requests: {
+        Row: {
+          approved_task_id: string | null
+          category: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          is_required: boolean
+          kind: string
+          proposed: Json | null
+          recurrence_spec: Json | null
+          requester_id: string
+          reviewed_at: string | null
+          reviewer_id: string | null
+          reviewer_note: string | null
+          status: string
+          target_task_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          approved_task_id?: string | null
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_required?: boolean
+          kind?: string
+          proposed?: Json | null
+          recurrence_spec?: Json | null
+          requester_id: string
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          reviewer_note?: string | null
+          status?: string
+          target_task_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          approved_task_id?: string | null
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_required?: boolean
+          kind?: string
+          proposed?: Json | null
+          recurrence_spec?: Json | null
+          requester_id?: string
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          reviewer_note?: string | null
+          status?: string
+          target_task_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_requests_approved_task_id_fkey"
+            columns: ["approved_task_id"]
+            isOneToOne: false
+            referencedRelation: "assigned_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_target_task_id_fkey"
+            columns: ["target_task_id"]
+            isOneToOne: false
+            referencedRelation: "assigned_tasks"
             referencedColumns: ["id"]
           },
         ]
@@ -1581,8 +2280,148 @@ export type Database = {
           },
         ]
       }
+      team_maintenance_completions: {
+        Row: {
+          checked_at: string
+          checked_by: string
+          id: string
+          item_id: string
+          period_key: string
+          team_id: string
+        }
+        Insert: {
+          checked_at?: string
+          checked_by: string
+          id?: string
+          item_id: string
+          period_key: string
+          team_id: string
+        }
+        Update: {
+          checked_at?: string
+          checked_by?: string
+          id?: string
+          item_id?: string
+          period_key?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_maintenance_completions_checked_by_fkey"
+            columns: ["checked_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_maintenance_completions_checked_by_fkey"
+            columns: ["checked_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_maintenance_completions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "team_maintenance_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_maintenance_completions_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_maintenance_items: {
+        Row: {
+          assigned_to: string | null
+          cadence: string
+          claim_type: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_archived: boolean
+          sort_order: number
+          team_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          cadence: string
+          claim_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          sort_order?: number
+          team_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          cadence?: string
+          claim_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          sort_order?: number
+          team_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_maintenance_items_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_maintenance_items_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_maintenance_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_maintenance_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_maintenance_items_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_members: {
         Row: {
+          avatar_url: string | null
+          banner_url: string | null
+          bio: string | null
           created_at: string | null
           department: string | null
           display_name: string
@@ -1590,14 +2429,23 @@ export type Database = {
           end_date: string | null
           id: string
           managed_by: string | null
+          notification_prefs: Json
           phone: string | null
           position: string | null
+          preferences: Json
+          pronouns: string | null
           role: string
+          socials: Json
           start_date: string | null
           status: string | null
           team_id: string | null
+          timezone: string | null
+          updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
+          banner_url?: string | null
+          bio?: string | null
           created_at?: string | null
           department?: string | null
           display_name: string
@@ -1605,14 +2453,23 @@ export type Database = {
           end_date?: string | null
           id: string
           managed_by?: string | null
+          notification_prefs?: Json
           phone?: string | null
           position?: string | null
+          preferences?: Json
+          pronouns?: string | null
           role: string
+          socials?: Json
           start_date?: string | null
           status?: string | null
           team_id?: string | null
+          timezone?: string | null
+          updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
+          banner_url?: string | null
+          bio?: string | null
           created_at?: string | null
           department?: string | null
           display_name?: string
@@ -1620,12 +2477,18 @@ export type Database = {
           end_date?: string | null
           id?: string
           managed_by?: string | null
+          notification_prefs?: Json
           phone?: string | null
           position?: string | null
+          preferences?: Json
+          pronouns?: string | null
           role?: string
+          socials?: Json
           start_date?: string | null
           status?: string | null
           team_id?: string | null
+          timezone?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -1778,6 +2641,214 @@ export type Database = {
         }
         Relationships: []
       }
+      team_schedule_blocks: {
+        Row: {
+          approved_by: string | null
+          created_at: string
+          ends_at: string
+          id: string
+          member_id: string
+          note: string | null
+          requested_by: string | null
+          reviewed_at: string | null
+          reviewer_note: string | null
+          starts_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_by?: string | null
+          created_at?: string
+          ends_at: string
+          id?: string
+          member_id: string
+          note?: string | null
+          requested_by?: string | null
+          reviewed_at?: string | null
+          reviewer_note?: string | null
+          starts_at: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_by?: string | null
+          created_at?: string
+          ends_at?: string
+          id?: string
+          member_id?: string
+          note?: string | null
+          requested_by?: string | null
+          reviewed_at?: string | null
+          reviewer_note?: string | null
+          starts_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_schedule_blocks_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_blocks_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_blocks_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_blocks_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_blocks_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_blocks_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_schedule_recurring: {
+        Row: {
+          active: boolean
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          effective_from: string | null
+          effective_until: string | null
+          end_time: string
+          id: string
+          member_id: string
+          note: string | null
+          pending_deletion: boolean
+          requested_by: string | null
+          reviewed_at: string | null
+          reviewer_note: string | null
+          start_time: string
+          status: string
+          updated_at: string
+          weekday: number
+        }
+        Insert: {
+          active?: boolean
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string | null
+          effective_until?: string | null
+          end_time: string
+          id?: string
+          member_id: string
+          note?: string | null
+          pending_deletion?: boolean
+          requested_by?: string | null
+          reviewed_at?: string | null
+          reviewer_note?: string | null
+          start_time: string
+          status?: string
+          updated_at?: string
+          weekday: number
+        }
+        Update: {
+          active?: boolean
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string | null
+          effective_until?: string | null
+          end_time?: string
+          id?: string
+          member_id?: string
+          note?: string | null
+          pending_deletion?: boolean
+          requested_by?: string | null
+          reviewed_at?: string | null
+          reviewer_note?: string | null
+          start_time?: string
+          status?: string
+          updated_at?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_schedule_recurring_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_recurring_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_recurring_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_recurring_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_recurring_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_recurring_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_recurring_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_recurring_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_schedule_templates: {
         Row: {
           day_of_week: number
@@ -1840,6 +2911,61 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      time_clock_entries: {
+        Row: {
+          clocked_in_at: string
+          clocked_out_at: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          team_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          clocked_in_at?: string
+          clocked_out_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          team_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          clocked_in_at?: string
+          clocked_out_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          team_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_clock_entries_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_clock_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_clock_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       weekly_admin_reviews: {
         Row: {
@@ -2491,20 +3617,311 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_bootstrap_member_password: {
+        Args: { p_new_password: string; p_user_id: string }
+        Returns: boolean
+      }
+      admin_clone_task_to_members: {
+        Args: { p_member_ids: string[]; p_task_id: string }
+        Returns: Json
+      }
+      admin_currently_clocked_in: {
+        Args: never
+        Returns: {
+          clocked_in_at: string
+          display_name: string
+          email: string
+          entry_id: string
+          user_id: string
+        }[]
+      }
+      admin_delete_assigned_tasks: {
+        Args: { p_task_ids: string[] }
+        Returns: Json
+      }
+      admin_delete_future_sessions: {
+        Args: { p_cancel_note?: string; p_session_id: string }
+        Returns: Json
+      }
+      admin_delete_session: {
+        Args: { p_cancel_note?: string; p_session_id: string }
+        Returns: Json
+      }
+      admin_list_all_assigned_tasks: {
+        Args: { p_include_completed?: boolean }
+        Returns: Json
+      }
+      admin_list_all_sessions: {
+        Args: { p_include_past?: boolean }
+        Returns: Json
+      }
+      admin_list_clock_entries: {
+        Args: { p_limit?: number; p_member_id?: string }
+        Returns: {
+          clocked_in_at: string
+          clocked_out_at: string
+          duration_minutes: number
+          entry_id: string
+          member_id: string
+          member_name: string
+          notes: string
+        }[]
+      }
+      admin_recent_approvals: { Args: { p_limit?: number }; Returns: Json }
+      admin_recent_assignments: { Args: { p_limit?: number }; Returns: Json }
+      admin_team_maintenance_archive: {
+        Args: { p_item_id: string }
+        Returns: undefined
+      }
+      admin_team_maintenance_create:
+        | {
+            Args: {
+              p_cadence: string
+              p_description?: string
+              p_sort_order?: number
+              p_title: string
+            }
+            Returns: {
+              assigned_to: string | null
+              cadence: string
+              claim_type: string
+              created_at: string
+              created_by: string | null
+              description: string | null
+              id: string
+              is_archived: boolean
+              sort_order: number
+              team_id: string
+              title: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "team_maintenance_items"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_assigned_to?: string
+              p_cadence: string
+              p_claim_type?: string
+              p_description?: string
+              p_sort_order?: number
+              p_title: string
+            }
+            Returns: {
+              assigned_to: string | null
+              cadence: string
+              claim_type: string
+              created_at: string
+              created_by: string | null
+              description: string | null
+              id: string
+              is_archived: boolean
+              sort_order: number
+              team_id: string
+              title: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "team_maintenance_items"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+      admin_team_maintenance_update:
+        | {
+            Args: {
+              p_cadence?: string
+              p_clear_description?: boolean
+              p_description?: string
+              p_item_id: string
+              p_sort_order?: number
+              p_title?: string
+            }
+            Returns: {
+              assigned_to: string | null
+              cadence: string
+              claim_type: string
+              created_at: string
+              created_by: string | null
+              description: string | null
+              id: string
+              is_archived: boolean
+              sort_order: number
+              team_id: string
+              title: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "team_maintenance_items"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_assigned_to?: string
+              p_cadence?: string
+              p_claim_type?: string
+              p_clear_assigned_to?: boolean
+              p_clear_description?: boolean
+              p_description?: string
+              p_item_id: string
+              p_sort_order?: number
+              p_title?: string
+            }
+            Returns: {
+              assigned_to: string | null
+              cadence: string
+              claim_type: string
+              created_at: string
+              created_by: string | null
+              description: string | null
+              id: string
+              is_archived: boolean
+              sort_order: number
+              team_id: string
+              title: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "team_maintenance_items"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+      admin_update_assigned_task:
+        | {
+            Args: {
+              p_category?: string
+              p_clear_category?: boolean
+              p_clear_description?: boolean
+              p_clear_due?: boolean
+              p_clear_studio_space?: boolean
+              p_description?: string
+              p_due_date?: string
+              p_studio_space?: string
+              p_task_id: string
+              p_title?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_assigned_to?: string
+              p_category?: string
+              p_clear_assigned_to?: boolean
+              p_clear_category?: boolean
+              p_clear_description?: boolean
+              p_clear_due?: boolean
+              p_clear_recurrence_spec?: boolean
+              p_clear_studio_space?: boolean
+              p_description?: string
+              p_due_date?: string
+              p_is_required?: boolean
+              p_recurrence_spec?: Json
+              p_studio_space?: string
+              p_task_id: string
+              p_title?: string
+            }
+            Returns: Json
+          }
+      admin_update_session: {
+        Args: {
+          p_assigned_to?: string
+          p_clear_assigned_to?: boolean
+          p_clear_client_name?: boolean
+          p_clear_notes?: boolean
+          p_clear_room?: boolean
+          p_client_name?: string
+          p_end_time?: string
+          p_notes?: string
+          p_room?: string
+          p_session_date?: string
+          p_session_id: string
+          p_session_type?: string
+          p_start_time?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
       approve_task_edit_request: {
         Args: { p_apply_to_template?: boolean; p_request_id: string }
         Returns: undefined
       }
-      assign_custom_task_to_members: {
-        Args: {
-          p_category?: string
-          p_description?: string
-          p_due_date?: string
-          p_is_required?: boolean
-          p_member_ids: string[]
-          p_show_on_overview?: boolean
-          p_title: string
+      approve_task_reassignment: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      approve_task_request: {
+        Args: { p_category?: string; p_request_id: string }
+        Returns: Json
+      }
+      archive_client: {
+        Args: { p_id: string }
+        Returns: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          email: string | null
+          google_review_link: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          team_id: string
+          updated_at: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "clients"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      assign_custom_task_to_members:
+        | {
+            Args: {
+              p_category?: string
+              p_description?: string
+              p_due_date?: string
+              p_is_required?: boolean
+              p_member_ids: string[]
+              p_show_on_overview?: boolean
+              p_title: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_category?: string
+              p_description?: string
+              p_due_date?: string
+              p_is_required?: boolean
+              p_member_ids: string[]
+              p_scope?: string
+              p_show_on_overview?: boolean
+              p_title: string
+            }
+            Returns: Json
+          }
+      assign_custom_tasks_to_members: {
+        Args: {
+          p_batch_title?: string
+          p_member_ids: string[]
+          p_scope?: string
+          p_tasks: Json
+        }
+        Returns: Json
+      }
+      assign_session: {
+        Args: { p_assignee_id: string; p_session_id: string }
         Returns: Json
       }
       assign_template_items_to_members: {
@@ -2534,13 +3951,88 @@ export type Database = {
         }
         Returns: Json
       }
+      cancel_my_task_reassignment: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      cancel_my_task_request: { Args: { p_request_id: string }; Returns: Json }
       cancel_task_assignment_batch: {
         Args: { p_batch_id: string; p_hide_open_tasks?: boolean }
         Returns: Json
       }
+      clock_in: {
+        Args: never
+        Returns: {
+          clocked_in_at: string
+          clocked_out_at: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          team_id: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "time_clock_entries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      clock_out: {
+        Args: { p_notes?: string }
+        Returns: {
+          clocked_in_at: string
+          clocked_out_at: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          team_id: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "time_clock_entries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       complete_assigned_task: {
         Args: { p_assigned_task_id: string; p_is_completed: boolean }
         Returns: Json
+      }
+      create_client: {
+        Args: {
+          p_email?: string
+          p_google_review_link?: string
+          p_name: string
+          p_notes?: string
+          p_phone?: string
+        }
+        Returns: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          email: string | null
+          google_review_link: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          team_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "clients"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_group_dm: {
+        Args: { p_members: string[]; p_title?: string }
+        Returns: string
       }
       create_task_template: {
         Args: {
@@ -2552,12 +4044,17 @@ export type Database = {
         Returns: Json
       }
       cron_materialize_checklists: { Args: never; Returns: undefined }
+      decline_task_reassignment: {
+        Args: { p_note?: string; p_request_id: string }
+        Returns: Json
+      }
       delete_task_template: { Args: { p_template_id: string }; Returns: Json }
       delete_task_template_item: { Args: { p_item_id: string }; Returns: Json }
       duplicate_task_template: {
         Args: { p_new_name: string; p_template_id: string }
         Returns: Json
       }
+      find_or_create_dm: { Args: { p_other: string }; Returns: string }
       get_assignment_notifications: {
         Args: { p_limit?: number; p_unread_only?: boolean; p_user_id: string }
         Returns: Json
@@ -2577,7 +4074,44 @@ export type Database = {
           unread_count: number
         }[]
       }
+      get_clients: {
+        Args: { p_include_archived?: boolean }
+        Returns: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          email: string | null
+          google_review_link: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          team_id: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "clients"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_direct_reports: { Args: { manager: string }; Returns: string[] }
+      get_dm_threads: {
+        Args: never
+        Returns: {
+          channel_id: string
+          kind: string
+          last_read_at: string
+          latest_content: string
+          latest_created_at: string
+          latest_id: string
+          latest_sender: string
+          members: Json
+          title: string
+          unread_count: number
+        }[]
+      }
       get_member_assigned_tasks: {
         Args: {
           p_include_completed?: boolean
@@ -2586,7 +4120,34 @@ export type Database = {
         }
         Returns: Json
       }
+      get_my_incoming_reassign_requests: { Args: never; Returns: Json }
+      get_my_open_clock_entry: {
+        Args: never
+        Returns: {
+          clocked_in_at: string
+          clocked_out_at: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          team_id: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "time_clock_entries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_my_outgoing_pending_reassign_requests: { Args: never; Returns: Json }
+      get_my_task_requests: { Args: { p_limit?: number }; Returns: Json }
       get_my_team_id: { Args: never; Returns: string }
+      get_pending_task_requests: { Args: never; Returns: Json }
+      get_studio_assigned_tasks: {
+        Args: { p_include_completed?: boolean; p_user_id: string }
+        Returns: Json
+      }
       get_task_template_detail: {
         Args: { p_template_id: string }
         Returns: Json
@@ -2595,12 +4156,23 @@ export type Database = {
         Args: { p_include_inactive?: boolean; p_role_tag?: string }
         Returns: Json
       }
+      get_team_assigned_tasks: {
+        Args: { p_include_completed?: boolean; p_user_id: string }
+        Returns: Json
+      }
       intern_generate_checklist: {
         Args: { p_date: string; p_frequency: string; p_intern_id: string }
         Returns: string
       }
       intern_get_user_role: { Args: never; Returns: string }
+      is_channel_member: {
+        Args: { p_channel: string; p_uid?: string }
+        Returns: boolean
+      }
+      is_private_channel: { Args: { p_channel: string }; Returns: boolean }
       is_team_admin: { Args: never; Returns: boolean }
+      mark_all_assignment_notifications_read: { Args: never; Returns: Json }
+      mark_all_channels_read: { Args: never; Returns: Json }
       mark_assignment_notification_read: {
         Args: { p_notification_id: string }
         Returns: Json
@@ -2617,6 +4189,9 @@ export type Database = {
       owner_set_member_role: {
         Args: { p_new_role: string; p_user_id: string }
         Returns: {
+          avatar_url: string | null
+          banner_url: string | null
+          bio: string | null
           created_at: string | null
           department: string | null
           display_name: string
@@ -2624,12 +4199,18 @@ export type Database = {
           end_date: string | null
           id: string
           managed_by: string | null
+          notification_prefs: Json
           phone: string | null
           position: string | null
+          preferences: Json
+          pronouns: string | null
           role: string
+          socials: Json
           start_date: string | null
           status: string | null
           team_id: string | null
+          timezone: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -2646,6 +4227,175 @@ export type Database = {
           p_target_position?: string
         }
         Returns: Json
+      }
+      record_flywheel_event: {
+        Args: {
+          p_member_id?: string
+          p_metadata?: Json
+          p_occurred_at?: string
+          p_source_id?: string
+          p_source_type: string
+          p_stage: string
+        }
+        Returns: string
+      }
+      reject_task_request: {
+        Args: { p_note?: string; p_request_id: string }
+        Returns: Json
+      }
+      request_recurring_deletion: {
+        Args: { p_note?: string; p_rule_id: string }
+        Returns: {
+          active: boolean
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          effective_from: string | null
+          effective_until: string | null
+          end_time: string
+          id: string
+          member_id: string
+          note: string | null
+          pending_deletion: boolean
+          requested_by: string | null
+          reviewed_at: string | null
+          reviewer_note: string | null
+          start_time: string
+          status: string
+          updated_at: string
+          weekday: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "team_schedule_recurring"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      request_task_reassignment: {
+        Args: { p_note?: string; p_task_id: string }
+        Returns: Json
+      }
+      search_clients: {
+        Args: { p_query: string }
+        Returns: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          email: string | null
+          google_review_link: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          team_id: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "clients"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      spawn_recurring_session_instances: { Args: never; Returns: undefined }
+      spawn_recurring_task_instances: { Args: never; Returns: undefined }
+      submit_task_delete_request: {
+        Args: { p_reason?: string; p_task_id: string }
+        Returns: Json
+      }
+      submit_task_edit_request: {
+        Args: { p_proposed: Json; p_reason?: string; p_task_id: string }
+        Returns: Json
+      }
+      submit_task_request:
+        | {
+            Args: {
+              p_category?: string
+              p_description?: string
+              p_due_date?: string
+              p_title: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_category?: string
+              p_description?: string
+              p_due_date?: string
+              p_recurrence_spec?: Json
+              p_title: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_category?: string
+              p_description?: string
+              p_due_date?: string
+              p_is_required?: boolean
+              p_recurrence_spec?: Json
+              p_title: string
+            }
+            Returns: Json
+          }
+      submit_task_transfer_request: {
+        Args: { p_note: string; p_target_member_id: string; p_task_id: string }
+        Returns: Json
+      }
+      team_maintenance_list: {
+        Args: never
+        Returns: {
+          assigned_to: string
+          assigned_to_name: string
+          cadence: string
+          claim_type: string
+          completions: Json
+          created_at: string
+          description: string
+          id: string
+          period_key: string
+          sort_order: number
+          title: string
+        }[]
+      }
+      team_maintenance_period_key: {
+        Args: { p_at?: string; p_cadence: string }
+        Returns: string
+      }
+      team_maintenance_toggle: {
+        Args: { p_check: boolean; p_item_id: string }
+        Returns: Json
+      }
+      update_client: {
+        Args: {
+          p_archived?: boolean
+          p_email?: string
+          p_google_review_link?: string
+          p_id: string
+          p_name?: string
+          p_notes?: string
+          p_phone?: string
+        }
+        Returns: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          email: string | null
+          google_review_link: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          team_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "clients"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       update_task_template: {
         Args: {
@@ -2670,6 +4420,35 @@ export type Database = {
         }
         Returns: Json
       }
+      withdraw_recurring_deletion_request: {
+        Args: { p_rule_id: string }
+        Returns: {
+          active: boolean
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          effective_from: string | null
+          effective_until: string | null
+          end_time: string
+          id: string
+          member_id: string
+          note: string | null
+          pending_deletion: boolean
+          requested_by: string | null
+          reviewed_at: string | null
+          reviewer_note: string | null
+          start_time: string
+          status: string
+          updated_at: string
+          weekday: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "team_schedule_recurring"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       assigned_source_type: "custom" | "template_full" | "template_partial"
@@ -2677,6 +4456,16 @@ export type Database = {
         | "task_assigned"
         | "template_assigned"
         | "partial_template_assigned"
+        | "session_assigned"
+        | "session_reassigned"
+        | "task_request_submitted"
+        | "task_request_approved"
+        | "task_request_rejected"
+        | "task_reassign_requested"
+        | "task_reassign_approved"
+        | "task_reassign_declined"
+        | "task_edited"
+        | "task_request_cancelled"
       assignment_type: "custom_task" | "template_full" | "template_partial"
       recipient_status: "active" | "completed" | "archived" | "cancelled"
       task_edit_change_type: "add" | "rename" | "delete"
@@ -2814,6 +4603,16 @@ export const Constants = {
         "task_assigned",
         "template_assigned",
         "partial_template_assigned",
+        "session_assigned",
+        "session_reassigned",
+        "task_request_submitted",
+        "task_request_approved",
+        "task_request_rejected",
+        "task_reassign_requested",
+        "task_reassign_approved",
+        "task_reassign_declined",
+        "task_edited",
+        "task_request_cancelled",
       ],
       assignment_type: ["custom_task", "template_full", "template_partial"],
       recipient_status: ["active", "completed", "archived", "cancelled"],

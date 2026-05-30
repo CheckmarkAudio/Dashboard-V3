@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { usePresence } from '../contexts/PresenceContext'
@@ -11,6 +11,9 @@ import MediaPicker from '../components/forum/MediaPicker'
 import AttachmentDisplay from '../components/forum/AttachmentDisplay'
 import LinkifiedText from '../components/forum/LinkifiedText'
 import CreateChannelDialog from '../components/forum/CreateChannelDialog'
+import NewMessageDialog from '../components/messages/NewMessageDialog'
+import { useDmThreads } from '../components/messages/useDmThreads'
+import { dmKeys, dmThreadLabel, markDmRead } from '../lib/queries/dms'
 import { chatColorTokens, resolveChatColorKey } from '../lib/forum/chatColor'
 import { detectLinkEmbed } from '../lib/forum/attachments'
 import { extractUrls } from '../lib/forum/linkify'
@@ -60,7 +63,15 @@ export default function Content() {
   const { profile, isAdmin } = useAuth()
   const { isOnline } = usePresence()
   const [searchParams, setSearchParams] = useSearchParams()
+  const queryClient = useQueryClient()
   const requestedChannel = searchParams.get('channel')
+  // Direct Messages — `?dm=<channel_id>` deep-links a private thread.
+  // DM/group channels aren't in the public `channels` list; we hydrate
+  // a synthetic active channel from the DM thread list (below).
+  const requestedDm = searchParams.get('dm')
+  const [showNewMessage, setShowNewMessage] = useState(false)
+  const dmThreadsQuery = useDmThreads()
+  const dmThreads = dmThreadsQuery.data ?? []
   const [channels, setChannels] = useState<Channel[]>([])
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null)
   // 2026-05-20 — Admin-only "create channel" dialog. Opens from
@@ -121,6 +132,9 @@ export default function Content() {
     const { data } = await supabase
       .from('chat_channels')
       .select('*')
+      // Public forum channels only — DM/group channels (kind in
+      // dm/group) surface in the Direct Messages section instead.
+      .eq('kind', 'public')
       .order('pinned_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: true })
     const list = data ?? []
@@ -152,6 +166,8 @@ export default function Content() {
   )
 
   useEffect(() => {
+    // A DM is being deep-linked — don't auto-snap to a public channel.
+    if (requestedDm) return
     if (channels.length === 0) return
     const requested = requestedChannel?.trim().toLowerCase()
     const target = requested
@@ -160,7 +176,48 @@ export default function Content() {
     if (!target) return
     if (activeChannel?.id !== target.id) setActiveChannel(target)
     if (!requestedChannel) setChannelParam(target, true)
-  }, [activeChannel?.id, channels, requestedChannel, setChannelParam])
+  }, [activeChannel?.id, channels, requestedChannel, requestedDm, setChannelParam])
+
+  // Navigate to a DM thread — sets the `?dm=` param; the effect below
+  // hydrates the active channel + marks it read.
+  const goToDm = useCallback(
+    (channelId: string) => {
+      const next = new URLSearchParams(searchParams)
+      next.delete('channel')
+      next.set('dm', channelId)
+      setSearchParams(next)
+    },
+    [searchParams, setSearchParams],
+  )
+
+  // Hydrate a synthetic active channel for the requested DM. The DM's
+  // stored name is an opaque token, so the display label is derived
+  // from members (dmThreadLabel). The message pane + send pipeline key
+  // off `activeChannel.id` (the real channel_id) so they work unchanged.
+  useEffect(() => {
+    if (!requestedDm) return
+    const thread = dmThreads.find((t) => t.channel_id === requestedDm)
+    if (!thread) return
+    if (activeChannel?.id === requestedDm) return
+    setActiveChannel({
+      id: thread.channel_id,
+      name: dmThreadLabel(thread),
+      slug: '',
+      description: thread.kind === 'group' && thread.title ? thread.title : '',
+      pinned_at: null,
+    })
+  }, [requestedDm, dmThreads, activeChannel?.id])
+
+  // Mark the DM read once per open (fires when `?dm=` changes), then
+  // refresh the thread list so the header badge clears.
+  useEffect(() => {
+    if (!requestedDm) return
+    void markDmRead(requestedDm)
+      .then(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
+      .catch(() => {})
+  }, [requestedDm, queryClient])
+
+  const activeIsDm = Boolean(activeChannel) && dmThreads.some((t) => t.channel_id === activeChannel?.id)
 
   // 2026-05-24 — close the admin channel context menu on outside
   // click / Escape. Mirrors the calendar booking context-menu pattern.
@@ -718,6 +775,55 @@ export default function Content() {
             </div>
           </div>
 
+          {/* Direct Messages — private 1:1 + group threads. Distinct
+              from public #channels above: the stored channel name is an
+              opaque token, so each row's label is derived from members
+              (dmThreadLabel). "+ New" opens the member picker. */}
+          <div className="px-3 pt-3 pb-2 border-t border-border/50">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-semibold text-text-light uppercase tracking-wider">Direct Messages</p>
+              <button
+                type="button"
+                onClick={() => setShowNewMessage(true)}
+                aria-label="New direct message"
+                title="New direct message"
+                className="inline-flex items-center justify-center w-5 h-5 rounded-md text-text-light hover:text-gold hover:bg-gold/10 transition-colors focus-ring"
+              >
+                <Plus size={12} strokeWidth={2.5} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="space-y-0.5">
+              {dmThreads.length === 0 && !dmThreadsQuery.isLoading && (
+                <p className="text-[11px] text-text-light italic px-1 py-1">No conversations yet</p>
+              )}
+              {dmThreads.map((t) => {
+                const label = dmThreadLabel(t)
+                const lead = t.members[0] ?? null
+                const isActive = activeChannel?.id === t.channel_id
+                const unread = t.unread_count > 0
+                return (
+                  <button
+                    key={t.channel_id}
+                    onClick={() => goToDm(t.channel_id)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all ${
+                      isActive ? 'bg-gold/10 text-gold' : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
+                    }`}
+                  >
+                    <span className="relative shrink-0">
+                      <MemberAvatar member={lead} displayName={label} size="xs" />
+                      {unread && !isActive && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-rose-500 ring-1 ring-surface" aria-hidden="true" />
+                      )}
+                    </span>
+                    <span className={`text-[12px] tracking-tight truncate ${unread && !isActive ? 'font-bold text-text' : 'font-medium'}`}>
+                      {label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           {/* Members — Lean 8 presence dots replace the always-green
               static dot. Online = currently has the app open in any
               tab (PresenceContext). Members sort online-first. */}
@@ -769,7 +875,11 @@ export default function Content() {
           <div className="px-5 py-3 border-b border-border flex items-center justify-between shrink-0">
             <div>
               <h2 className="text-[15px] font-bold text-text tracking-tight flex items-center gap-1.5">
-                <Hash size={14} className="text-gold" />
+                {activeIsDm ? (
+                  <Users size={14} className="text-gold" aria-hidden="true" />
+                ) : (
+                  <Hash size={14} className="text-gold" aria-hidden="true" />
+                )}
                 {activeChannel?.name ?? 'Select a channel'}
               </h2>
               {activeChannel?.description && (
@@ -829,7 +939,7 @@ export default function Content() {
                       void sendMessage()
                     }
                   }}
-                  placeholder={`Message #${activeChannel.name}...`}
+                  placeholder={activeIsDm ? `Message ${activeChannel.name}...` : `Message #${activeChannel.name}...`}
                   className="flex-1 bg-surface-alt border border-border rounded-xl px-4 py-2.5 text-[14px] placeholder:text-text-light focus:border-gold"
                 />
                 <button
@@ -862,6 +972,18 @@ export default function Content() {
               const fresh = list.find((c) => c.id === created.id)
               if (fresh) selectChannel(fresh)
             })
+          }}
+        />
+      )}
+
+      {/* New direct message / group picker. On create it refreshes the
+          DM thread list and deep-links the new thread via `?dm=`. */}
+      {showNewMessage && (
+        <NewMessageDialog
+          onClose={() => setShowNewMessage(false)}
+          onCreated={(channelId) => {
+            void queryClient.invalidateQueries({ queryKey: dmKeys.list() })
+            goToDm(channelId)
           }}
         />
       )}
