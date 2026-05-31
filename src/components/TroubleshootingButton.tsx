@@ -1,16 +1,18 @@
 import { useCallback, useState } from 'react'
-import { LifeBuoy, Send } from 'lucide-react'
+import { MessageSquareText, Send } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from './Toast'
 import { Button, Input, Modal, Select, Textarea } from './ui'
 
 /**
- * Lean 8 — global Troubleshooting button.
+ * Global "Feedback" button (formerly "Help" / Troubleshooting).
  *
  * Replaces the inline Troubleshooting form that used to live at the
- * bottom of the Forum page. The user wanted it accessible from any
- * page (not just /content), so it's now a floating button anchored
- * to the bottom-right of the viewport with a Modal for the form.
+ * bottom of the Forum page. Accessible from any page as a floating
+ * button — anchored to the bottom-LEFT so it stays clear of the
+ * Messenger-style chat dock in the bottom-right. Opens a Modal form.
+ * (Component/file name kept as TroubleshootingButton to avoid churn;
+ * only the user-facing label changed to "Feedback".)
  *
  * The form itself is unchanged from the original — short
  * description, what we tried, severity, submit. There's no backend
@@ -68,22 +70,23 @@ export default function TroubleshootingButton() {
 
   return (
     <>
+      {/* Bottom-LEFT so it stays clear of the chat dock (bottom-right). */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="Report an issue"
-        aria-label="Report an issue"
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 px-3 py-2 rounded-full bg-surface ring-1 ring-border-light shadow-lg text-text-muted hover:text-gold hover:ring-gold/40 transition-colors focus-ring"
+        title="Send feedback"
+        aria-label="Send feedback"
+        className="fixed bottom-5 left-5 z-40 inline-flex items-center gap-2 px-3 py-2 rounded-full bg-surface ring-1 ring-border-light shadow-lg text-text-muted hover:text-gold hover:ring-gold/40 transition-colors focus-ring"
       >
-        <LifeBuoy size={14} aria-hidden="true" />
-        <span className="text-[12px] font-semibold">Help</span>
+        <MessageSquareText size={14} aria-hidden="true" />
+        <span className="text-[12px] font-semibold">Feedback</span>
       </button>
 
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="Report an issue"
-        description="Tell us what's broken or feels off. Goes straight to the team."
+        title="Send feedback"
+        description="Tell us what's broken or what could be better. Goes straight to the team."
         size="sm"
         footer={
           <>
