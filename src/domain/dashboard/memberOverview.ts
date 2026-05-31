@@ -62,7 +62,7 @@ export function buildMemberFlywheelChartData(
     { name: 'workflow', pct: bookPct, backed: true },
     { name: 'production', pct: deliverPct, backed: true },
     { name: 'education', pct: null, backed: false },
-    { name: 'growth', pct: null, backed: false },
+    { name: 'retention', pct: null, backed: false },
   ]
 }
 

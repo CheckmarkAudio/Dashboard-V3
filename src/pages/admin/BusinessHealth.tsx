@@ -50,7 +50,7 @@ const STAGE_DETAIL: Record<FlywheelStage, { subtitle: string; target: string }> 
   workflow:   { subtitle: 'Booking & Admin',        target: 'Sessions booked / month' },
   production: { subtitle: 'Delivery',               target: '95% on-time delivery' },
   education:  { subtitle: 'Community & Learning',    target: 'Workshops + lessons / month' },
-  growth:     { subtitle: 'Advocacy & Retention',    target: 'Reviews + referrals / month' },
+  retention:  { subtitle: 'Advocacy & Re-engagement', target: 'Repeat clients + reviews / month' },
 }
 const STAGES = FLYWHEEL_STAGES.map((s) => ({
   key: s.key,

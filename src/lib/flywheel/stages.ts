@@ -12,12 +12,16 @@
 //   workflow    — Workflow & Administration   (booking, onboarding, conversion)
 //   production  — Production & Completion      (deliver radio-ready work)
 //   education   — Education & Community         (workshops, LMS, forum)
-//   growth      — Growth, Advocacy & Retention (reviews, referrals, loyalty)
+//   retention   — Retention & Advocacy          (recurring clients, reviews, re-engagement)
+//
+// Note: "retention" names the *action* that fuels growth — recurring
+// bookings, 5-star reviews, reaching back out to past clients for deals /
+// events. Growth itself is the outcome we observe across the whole loop.
 //
 // These keys match the `flywheel_events.stage` CHECK constraint and the
 // `record_flywheel_event` RPC (migration 20260530140000).
 
-export type FlywheelStage = 'discovery' | 'workflow' | 'production' | 'education' | 'growth'
+export type FlywheelStage = 'discovery' | 'workflow' | 'production' | 'education' | 'retention'
 
 export interface FlywheelStageMeta {
   key: FlywheelStage
@@ -66,8 +70,8 @@ export const FLYWHEEL_STAGES: FlywheelStageMeta[] = [
     dot: 'bg-violet-400', text: 'text-violet-300', bg: 'bg-violet-500/10', ring: 'ring-violet-500/30', fg: 'text-violet-200', hex: '#a78bfa',
   },
   {
-    key: 'growth', label: 'Growth', fullLabel: 'Growth, Advocacy & Retention',
-    description: 'Reviews, referrals, and loyalty — the momentum loop.',
+    key: 'retention', label: 'Retention', fullLabel: 'Retention & Advocacy',
+    description: 'Recurring clients, 5-star reviews, and re-engaging past clients — the action that fuels growth.',
     order: 4,
     dot: 'bg-emerald-400', text: 'text-emerald-300', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/30', fg: 'text-emerald-200', hex: '#34d399',
   },
