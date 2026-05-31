@@ -29,6 +29,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { Badge, PageHeader } from '../components/ui'
 import { uploadFileToDropbox, UploadCancelledError } from '../lib/dropboxUpload'
+import { emitFlywheelEvent } from '../lib/queries/flywheelEvents'
 
 // 2026-05-14 pivoted from Drive → Dropbox after Google killed
 // service-account quotas on personal accounts. The env var name is
@@ -277,6 +278,20 @@ export default function AddMedia() {
         queryClient.setQueryData<MediaSubmissionRow[]>(historyKey, (prev) => {
           const existing = prev ?? []
           return [submission as MediaSubmissionRow, ...existing]
+        })
+        // Flywheel — Phase 1: every successful upload = a Share event.
+        // Fire-and-forget; emit failures must not regress the upload.
+        // Metadata captures filename + size so Phase 2 can show "top
+        // contributors this week" without re-joining the submission row.
+        void emitFlywheelEvent({
+          stage: 'share',
+          source_type: 'media_upload',
+          source_id: (submission as { id?: string } | null)?.id ?? null,
+          metadata: {
+            file_name: next.file.name,
+            file_size_bytes: next.file.size,
+            file_type: next.file.type || null,
+          },
         })
       } catch (err) {
         // User-cancelled uploads vanish from the queue; everything
