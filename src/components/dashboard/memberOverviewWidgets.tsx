@@ -28,27 +28,8 @@ import {
   fetchFlywheelActivity,
   describeFlywheelEvent,
   flywheelKeys,
-  type FlywheelStage,
 } from '../../lib/queries/flywheelEvents'
-
-// Stage tokens shared between the activity feed + status pills.
-// Refined 5-stage platform model (discovery → workflow → production →
-// education → growth). One label per stage so the pill stays compact.
-type Stage = FlywheelStage
-const STAGE_LABELS: Record<Stage, string> = {
-  discovery: 'Discovery',
-  workflow: 'Workflow',
-  production: 'Production',
-  education: 'Education',
-  growth: 'Growth',
-}
-const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring: string }> = {
-  discovery:  { dot: 'bg-cyan-400',    text: 'text-cyan-300',    bg: 'bg-cyan-500/5',    ring: 'ring-cyan-500/15' },
-  workflow:   { dot: 'bg-orange-400',  text: 'text-orange-300',  bg: 'bg-orange-500/5',  ring: 'ring-orange-500/15' },
-  production: { dot: 'bg-blue-400',    text: 'text-blue-300',    bg: 'bg-blue-500/5',    ring: 'ring-blue-500/15' },
-  education:  { dot: 'bg-violet-400',  text: 'text-violet-300',  bg: 'bg-violet-500/5',  ring: 'ring-violet-500/15' },
-  growth:     { dot: 'bg-emerald-400', text: 'text-emerald-300', bg: 'bg-emerald-500/5', ring: 'ring-emerald-500/15' },
-}
+import { FLYWHEEL_STAGE_META } from '../../lib/flywheel/stages'
 
 /** Compact "12m ago" / "3h ago" / "Yesterday" relative time. */
 function activityRelTime(iso: string): string {
@@ -272,7 +253,7 @@ export function TeamActivityWidget() {
     <div className="flex flex-col h-full -mx-1">
       <div className="flex-1 space-y-0">
         {items.map((item) => {
-          const ss = STAGE_STYLES[item.stage]
+          const ss = FLYWHEEL_STAGE_META[item.stage]
           return (
             <div
               key={item.id}
@@ -282,7 +263,7 @@ export function TeamActivityWidget() {
                 className={`shrink-0 mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${ss.bg} ${ss.text} ring-1 ${ss.ring}`}
               >
                 <span className={`w-1 h-1 rounded-full ${ss.dot}`} aria-hidden="true" />
-                {STAGE_LABELS[item.stage]}
+                {ss.label}
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] text-text leading-snug">

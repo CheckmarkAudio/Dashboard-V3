@@ -1,3 +1,5 @@
+import type { FlywheelStage as FlywheelStageCanon } from '../lib/flywheel/stages'
+
 export interface TeamMember {
   id: string
   email: string
@@ -277,7 +279,9 @@ export interface EducationStudent {
   created_at: string
 }
 
-export type FlywheelStage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
+// Canonical stage keys live in src/lib/flywheel/stages — re-exported
+// here so existing `import { FlywheelStage } from '../types'` keeps working.
+export type FlywheelStage = FlywheelStageCanon
 
 export interface MemberKPI {
   id: string

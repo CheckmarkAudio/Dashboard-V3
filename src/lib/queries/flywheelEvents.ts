@@ -17,8 +17,11 @@
 // reason.
 
 import { supabase } from '../supabase'
+import type { FlywheelStage } from '../flywheel/stages'
 
-export type FlywheelStage = 'discovery' | 'workflow' | 'production' | 'education' | 'growth'
+// Re-exported from the canonical module so existing
+// `import { FlywheelStage } from '.../flywheelEvents'` callers keep working.
+export type { FlywheelStage }
 
 /**
  * Free-text discriminator for which kind of source row produced the

@@ -5,23 +5,30 @@
 // approval modal can reuse the flywheel picker at approve-time.
 
 import type { ReactNode } from 'react'
+import {
+  FLYWHEEL_STAGES as FLYWHEEL_STAGES_CANON,
+  type FlywheelStage as FlywheelStageKey,
+} from '../../../lib/flywheel/stages'
 
 // ─── Flywheel stage picker ──────────────────────────────────────────
 //
-// Source of truth for the five stages + their brand colors. The keys
-// match `assigned_tasks.category` values historically used by the
-// pre-PR-11 CreateTaskModal so existing reads that branch on category
-// stay consistent.
+// Backed by the canonical flywheel module (src/lib/flywheel/stages) so
+// the five stages + their colors never drift from the rest of the app.
+// The picker's value is the canonical stage key
+// (discovery/workflow/production/education/growth), stored on
+// `assigned_tasks.category` (and task_requests.category).
 
-export type FlywheelStage = 'Deliver' | 'Capture' | 'Share' | 'Attract' | 'Book'
+export type FlywheelStage = FlywheelStageKey
 
-export const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; dot: string; fg: string; ring: string; bg: string }[] = [
-  { key: 'Deliver', label: 'Deliver', dot: 'bg-blue-400',   fg: 'text-blue-200',   ring: 'ring-blue-500/40',   bg: 'bg-blue-500/15' },
-  { key: 'Capture', label: 'Capture', dot: 'bg-violet-400', fg: 'text-violet-200', ring: 'ring-violet-500/40', bg: 'bg-violet-500/15' },
-  { key: 'Share',   label: 'Share',   dot: 'bg-cyan-400',   fg: 'text-cyan-200',   ring: 'ring-cyan-500/40',   bg: 'bg-cyan-500/15' },
-  { key: 'Attract', label: 'Attract', dot: 'bg-pink-400',   fg: 'text-pink-200',   ring: 'ring-pink-500/40',   bg: 'bg-pink-500/15' },
-  { key: 'Book',    label: 'Book',    dot: 'bg-orange-400', fg: 'text-orange-200', ring: 'ring-orange-500/40', bg: 'bg-orange-500/15' },
-]
+export const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; dot: string; fg: string; ring: string; bg: string }[] =
+  FLYWHEEL_STAGES_CANON.map((s) => ({
+    key: s.key,
+    label: s.label,
+    dot: s.dot,
+    fg: s.fg,
+    ring: s.ring,
+    bg: s.bg,
+  }))
 
 export function FlywheelStagePicker({
   value,

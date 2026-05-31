@@ -2,6 +2,12 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  FLYWHEEL_STAGES as FLYWHEEL_STAGES_CANON,
+  FLYWHEEL_STAGE_KEYS,
+  normalizeLegacyStage,
+  type FlywheelStage,
+} from '../../lib/flywheel/stages'
+import {
   AlertCircle,
   CalendarPlus,
   Check,
@@ -49,14 +55,15 @@ function TodayAnchor({ right }: { right?: React.ReactNode }) {
   )
 }
 
-type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
-const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring: string; label: string }> = {
-  deliver: { dot: 'bg-blue-400',   text: 'text-blue-300',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15',   label: 'Deliver' },
-  capture: { dot: 'bg-violet-400', text: 'text-violet-300', bg: 'bg-violet-500/5', ring: 'ring-violet-500/15', label: 'Capture' },
-  share:   { dot: 'bg-cyan-400',   text: 'text-cyan-300',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15',   label: 'Share'   },
-  attract: { dot: 'bg-pink-400',   text: 'text-pink-300',   bg: 'bg-pink-500/5',   ring: 'ring-pink-500/15',   label: 'Attract' },
-  book:    { dot: 'bg-orange-400', text: 'text-orange-300', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15', label: 'Book'    },
-}
+type Stage = FlywheelStage
+const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring: string; label: string }> =
+  FLYWHEEL_STAGES_CANON.reduce(
+    (acc, s) => {
+      acc[s.key] = { dot: s.dot, text: s.text, bg: s.bg, ring: s.ring, label: s.label }
+      return acc
+    },
+    {} as Record<Stage, { dot: string; text: string; bg: string; ring: string; label: string }>,
+  )
 
 // ─── Assign widget ───────────────────────────────────────────────────
 //
@@ -175,7 +182,7 @@ function AssignTile({
 // stage, current aggregate KPI progress (% of target), and a mini bar.
 // Links to /admin/health for the full analytics page.
 
-type StageKey = Lowercase<'Deliver' | 'Capture' | 'Share' | 'Attract' | 'Book'>
+type StageKey = FlywheelStage
 
 export function AdminFlywheelWidget() {
   const { profile } = useAuth()
@@ -214,9 +221,8 @@ export function AdminFlywheelWidget() {
     // lowercase StageKey used for lookups against STAGE_STYLES.
     const tasksByStage = new Map<StageKey, { total: number; completed: number }>()
     for (const t of tasks) {
-      if (!t.category) continue
-      const key = t.category.toLowerCase() as StageKey
-      if (!['deliver', 'capture', 'share', 'attract', 'book'].includes(key)) continue
+      const key = normalizeLegacyStage(t.category)
+      if (!key) continue
       const bucket = tasksByStage.get(key) ?? { total: 0, completed: 0 }
       bucket.total += 1
       if (t.is_completed) bucket.completed += 1
@@ -225,7 +231,8 @@ export function AdminFlywheelWidget() {
 
     const byStage = new Map<StageKey, { defs: typeof defs; totalPct: number; count: number }>()
     for (const d of defs) {
-      const stage = d.flywheel_stage as StageKey
+      const stage = normalizeLegacyStage(d.flywheel_stage)
+      if (!stage) continue
       const bucket = byStage.get(stage) ?? { defs: [], totalPct: 0, count: 0 }
       const kpiEntries = entries.filter((e) => e.kpi_id === d.id)
       const latest = kpiEntries[kpiEntries.length - 1]?.value
@@ -237,7 +244,7 @@ export function AdminFlywheelWidget() {
       bucket.defs.push(d)
       byStage.set(stage, bucket)
     }
-    const stageOrder: StageKey[] = ['deliver', 'capture', 'share', 'attract', 'book']
+    const stageOrder: StageKey[] = FLYWHEEL_STAGE_KEYS
     return stageOrder.map((key) => {
       const s = STAGE_STYLES[key]
       const bucket = byStage.get(key)

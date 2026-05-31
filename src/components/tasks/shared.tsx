@@ -9,23 +9,31 @@
 
 import type { ReactNode } from 'react'
 import { Check, Eye, EyeOff, Flame } from 'lucide-react'
+import {
+  FLYWHEEL_STAGES,
+  FLYWHEEL_STAGE_KEYS,
+  normalizeLegacyStage,
+  type FlywheelStage,
+} from '../../lib/flywheel/stages'
 
 // ─── Stage model ─────────────────────────────────────────────────────
+// Re-exported from the canonical flywheel module (src/lib/flywheel/stages)
+// so the task surfaces, the Assign picker, the KPI panel, and the charts
+// all share ONE definition of the five stages.
 
-export type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
+export type Stage = FlywheelStage
 
-export const STAGES: readonly Stage[] = ['deliver', 'capture', 'share', 'attract', 'book']
+export const STAGES: readonly Stage[] = FLYWHEEL_STAGE_KEYS
 
-// Stage tag palette — perceptually balanced so no hue dominates the
-// row visually. Used by the StagePill filter row + any callout that
-// needs the stage's color identity.
-export const STAGE_STYLE: Record<Stage, { label: string; text: string; dot: string; bg: string; ring: string }> = {
-  deliver: { label: 'Deliver', text: 'text-blue-400/70',   dot: 'bg-blue-400',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15' },
-  capture: { label: 'Capture', text: 'text-violet-400/70', dot: 'bg-violet-400', bg: 'bg-violet-500/5', ring: 'ring-violet-500/15' },
-  share:   { label: 'Share',   text: 'text-cyan-500/70',   dot: 'bg-cyan-400',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15' },
-  attract: { label: 'Attract', text: 'text-pink-400/70',   dot: 'bg-pink-400',   bg: 'bg-pink-500/5',   ring: 'ring-pink-500/15' },
-  book:    { label: 'Book',    text: 'text-orange-500/70', dot: 'bg-orange-400', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15' },
-}
+// Stage tag palette, derived from the canonical color tokens.
+export const STAGE_STYLE: Record<Stage, { label: string; text: string; dot: string; bg: string; ring: string }> =
+  FLYWHEEL_STAGES.reduce(
+    (acc, s) => {
+      acc[s.key] = { label: s.label, text: s.text, dot: s.dot, bg: s.bg, ring: s.ring }
+      return acc
+    },
+    {} as Record<Stage, { label: string; text: string; dot: string; bg: string; ring: string }>,
+  )
 
 export const EM_DASH = '—'
 
@@ -333,9 +341,9 @@ export function PriorityToggle({
 // lowercase so the STAGE union type is the single source of truth.
 // Returns null for tasks that aren't flywheel-tagged.
 export function taskStage(category: string | null | undefined): Stage | null {
-  if (!category) return null
-  const key = category.toLowerCase().trim()
-  return (STAGES as readonly string[]).includes(key) ? (key as Stage) : null
+  // normalizeLegacyStage handles both new keys and any lingering legacy
+  // values (Deliver/Capture/…) so reads stay correct during rollout.
+  return normalizeLegacyStage(category)
 }
 
 // Short, at-a-glance due-date label for the right-side task column.
@@ -360,7 +368,8 @@ export function countByStage(
   idKey: (t: { id: string } & { stage: Stage; done: boolean }) => string = (t) => (t as { id: string }).id,
 ): Record<'all' | Stage, number> {
   const active = tasks.filter((t) => !t.done && !submitted.has(idKey(t as { id: string } & typeof t)))
-  const counts: Record<'all' | Stage, number> = { all: active.length, deliver: 0, capture: 0, share: 0, attract: 0, book: 0 }
+  const counts = { all: active.length } as Record<'all' | Stage, number>
+  for (const k of STAGES) counts[k] = 0
   for (const t of active) counts[t.stage]++
   return counts
 }
