@@ -8,13 +8,12 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { MessageSquare, Plus, X } from 'lucide-react'
-import { APP_ROUTES } from '../../app/routes'
 import MemberAvatar from '../members/MemberAvatar'
 import { dmKeys, dmThreadLabel, type DmThread } from '../../lib/queries/dms'
 import { useDmThreads, useDmUnreadCount } from './useDmThreads'
+import { useDmDock } from './DmDockContext'
 import NewMessageDialog from './NewMessageDialog'
 
 const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)'
@@ -32,8 +31,8 @@ function relativeTime(iso: string | null): string {
 }
 
 export default function MessagesBell() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { openThread: openInDock } = useDmDock()
   const unread = useDmUnreadCount()
   const { data: threads = [] } = useDmThreads()
   const [open, setOpen] = useState(false)
@@ -84,7 +83,9 @@ export default function MessagesBell() {
 
   const openThread = (channelId: string) => {
     setOpen(false)
-    navigate(`${APP_ROUTES.member.content}?dm=${channelId}`)
+    // Pop the conversation into the floating dock so it follows the
+    // user across pages (Messenger-style), rather than navigating away.
+    openInDock(channelId)
   }
 
   const onCreated = (channelId: string) => {

@@ -1,0 +1,203 @@
+// DmDock — Facebook-Messenger-style floating chat dock.
+//
+// Mounted in Layout (outside the routed <Outlet/>) so open conversations
+// stay put as the user moves between pages. Each open thread is either an
+// expanded chat window or a collapsed "head" in the bottom-right corner.
+
+import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Minus, Send, X } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
+import MemberAvatar from '../members/MemberAvatar'
+import LinkifiedText from '../forum/LinkifiedText'
+import { dmKeys, dmThreadLabel, markDmRead, type DmThread } from '../../lib/queries/dms'
+import { useDmDock } from './DmDockContext'
+import { useDmThreads } from './useDmThreads'
+import { useChannelChat } from './useChannelChat'
+
+export default function DmDock() {
+  const { profile } = useAuth()
+  const { open, minimized, closeThread, toggleMinimize } = useDmDock()
+  const { data: threads = [] } = useDmThreads()
+
+  if (!profile || open.length === 0) return null
+
+  const byId = new Map(threads.map((t) => [t.channel_id, t]))
+
+  return (
+    <div className="fixed bottom-0 right-4 z-[55] flex items-end gap-3 pointer-events-none">
+      {open.map((channelId) => (
+        <DmChatWindow
+          key={channelId}
+          channelId={channelId}
+          thread={byId.get(channelId)}
+          minimized={Boolean(minimized[channelId])}
+          onToggleMinimize={() => toggleMinimize(channelId)}
+          onClose={() => closeThread(channelId)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function DmChatWindow({
+  channelId,
+  thread,
+  minimized,
+  onToggleMinimize,
+  onClose,
+}: {
+  channelId: string
+  thread: DmThread | undefined
+  minimized: boolean
+  onToggleMinimize: () => void
+  onClose: () => void
+}) {
+  const { profile } = useAuth()
+  const queryClient = useQueryClient()
+  const { messages, loading, send } = useChannelChat(channelId)
+  const [input, setInput] = useState('')
+  const endRef = useRef<HTMLDivElement>(null)
+
+  const label = thread ? dmThreadLabel(thread) : 'Conversation'
+  const lead = thread?.members[0] ?? null
+  const unread = thread?.unread_count ?? 0
+
+  // Auto-scroll to newest while expanded.
+  useEffect(() => {
+    if (!minimized) endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, minimized])
+
+  // Mark read while the window is open + expanded (clears the bell badge).
+  useEffect(() => {
+    if (minimized || loading) return
+    void markDmRead(channelId)
+      .then(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
+      .catch(() => {})
+  }, [channelId, minimized, loading, messages.length, queryClient])
+
+  const submit = () => {
+    const t = input.trim()
+    if (!t) return
+    setInput('')
+    void send(t)
+  }
+
+  // ── Minimized: a head with an unread dot ──
+  if (minimized) {
+    return (
+      <button
+        type="button"
+        onClick={onToggleMinimize}
+        className="pointer-events-auto relative mb-3 rounded-full shadow-lg ring-2 ring-surface hover:scale-105 transition-transform focus-ring"
+        title={label}
+        aria-label={`Open conversation with ${label}${unread > 0 ? `, ${unread} unread` : ''}`}
+      >
+        <MemberAvatar member={lead} displayName={label} size="lg" />
+        {unread > 0 && (
+          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums ring-2 ring-surface">
+            {unread > 9 ? '9+' : unread}
+          </span>
+        )}
+      </button>
+    )
+  }
+
+  // ── Expanded: full chat window ──
+  return (
+    <div className="pointer-events-auto mb-0 w-[320px] max-w-[calc(100vw-2rem)] h-[440px] max-h-[calc(100vh-5rem)] flex flex-col bg-surface border border-border rounded-t-2xl shadow-2xl overflow-hidden animate-slide-up">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border bg-surface-alt/40 shrink-0">
+        <button
+          type="button"
+          onClick={onToggleMinimize}
+          className="flex items-center gap-2 min-w-0 flex-1 text-left focus-ring rounded-lg -m-1 p-1 hover:bg-surface-hover transition-colors"
+          title="Minimize"
+        >
+          <MemberAvatar member={lead} displayName={label} size="sm" />
+          <span className="text-[13px] font-bold text-text truncate">{label}</span>
+        </button>
+        <button
+          type="button"
+          onClick={onToggleMinimize}
+          aria-label="Minimize conversation"
+          className="p-1 rounded-md text-text-muted hover:text-text hover:bg-surface-hover transition-colors focus-ring"
+        >
+          <Minus size={15} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close conversation"
+          className="p-1 rounded-md text-text-muted hover:text-text hover:bg-surface-hover transition-colors focus-ring"
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-0">
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-gold/20 border-t-gold" />
+          </div>
+        ) : messages.length === 0 ? (
+          <p className="text-[12px] text-text-light text-center py-6">No messages yet. Say hi 👋</p>
+        ) : (
+          messages.map((m) => {
+            const isMe = profile?.id === m.sender_id
+            return (
+              <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} ${m._status === 'sending' ? 'opacity-70' : ''}`}>
+                <div
+                  className={`px-3 py-1.5 rounded-2xl text-[13px] leading-relaxed break-words whitespace-pre-wrap max-w-[80%] ${
+                    isMe
+                      ? 'bg-gold/15 text-text border border-gold/25 rounded-br-sm'
+                      : 'bg-surface-alt text-text-muted border border-border rounded-bl-sm'
+                  }`}
+                  title={m._status === 'failed' ? 'Failed to send' : undefined}
+                >
+                  {/* Group threads: show who said it. */}
+                  {!isMe && thread?.kind === 'group' && (
+                    <span className="block text-[10px] font-semibold text-gold/80 mb-0.5">{m.sender_name}</span>
+                  )}
+                  <LinkifiedText text={m.content} />
+                  {m._status === 'failed' && <span className="block text-[10px] text-rose-400 mt-0.5">Failed — tap to retry</span>}
+                </div>
+              </div>
+            )
+          })
+        )}
+        <div ref={endRef} />
+      </div>
+
+      {/* Composer */}
+      <div className="px-2.5 py-2 border-t border-border shrink-0 flex items-center gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              submit()
+            }
+          }}
+          placeholder={`Message ${label.split(' ')[0]}…`}
+          className="flex-1 min-w-0 bg-surface-alt border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-gold focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!input.trim()}
+          aria-label="Send message"
+          className={`shrink-0 p-2 rounded-xl transition-all ${
+            input.trim() ? 'bg-gold text-black hover:bg-gold-muted' : 'bg-surface-alt text-text-light border border-border cursor-not-allowed'
+          }`}
+        >
+          <Send size={15} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  )
+}
+

@@ -12,6 +12,8 @@ import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
 import NotificationsBell from './notifications/NotificationsBell'
 import MessagesBell from './messages/MessagesBell'
+import { DmDockProvider } from './messages/DmDockContext'
+import DmDock from './messages/DmDock'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import MemberAvatar from './members/MemberAvatar'
 import { useToast } from './Toast'
@@ -557,6 +559,7 @@ export default function Layout() {
   )
 
   return (
+    <DmDockProvider>
     <div
       className="dashboard-shell flex flex-col"
       style={{ minHeight: 'calc(100vh - var(--shell-gap) * 2)' }}
@@ -780,7 +783,12 @@ export default function Layout() {
           on every signed-in page. The inline form on /content was
           retired in the same PR. */}
       <TroubleshootingButton />
+
+      {/* Messenger-style floating chat dock. Lives outside the routed
+          <Outlet/> so open conversations follow the user page to page. */}
+      <DmDock />
     </div>
+    </DmDockProvider>
   )
 }
 
