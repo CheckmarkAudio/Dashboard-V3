@@ -7,6 +7,7 @@ import { fetchTeamAssignedTasks } from '../../lib/queries/assignments'
 import { Check, RefreshCcw, Target, CheckSquare, Briefcase, Info, PieChart as PieChartIcon } from 'lucide-react'
 import { ExportButtons, toExportColumns } from '../../components/ui'
 import { taskExportColumns } from '../../lib/columns/taskColumns'
+import { FLYWHEEL_STAGES, normalizeLegacyStage, type FlywheelStage } from '../../lib/flywheel/stages'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, LineChart, Line, CartesianGrid,
@@ -41,13 +42,23 @@ import {
 
 // ── Flywheel stages (authoritative order for this page) ────────────────
 
-const STAGES = [
-  { name: 'Deliver', subtitle: 'Client Fulfillment', target: '95% on-time delivery', color: '#34d399' },
-  { name: 'Capture', subtitle: 'Lead Capture Rate', target: '80% lead-to-session', color: '#38bdf8' },
-  { name: 'Share',   subtitle: 'Content Distribution', target: '3 posts/week', color: '#a78bfa' },
-  { name: 'Attract', subtitle: 'Consult Demand', target: '10 inquiries/month', color: '#fbbf24' },
-  { name: 'Book',    subtitle: 'Paid Sessions', target: '20 sessions/month', color: '#fb7185' },
-] as const
+// Stage display rows for this page, keyed by the canonical flywheel keys.
+// `key` is used for all matching/aggregation; `name` is the display label.
+// Subtitles/targets are interim copy — PR3 swaps the % to ledger-derived.
+const STAGE_DETAIL: Record<FlywheelStage, { subtitle: string; target: string }> = {
+  discovery:  { subtitle: 'Inbound & Content',     target: 'Leads + content / week' },
+  workflow:   { subtitle: 'Booking & Admin',        target: 'Sessions booked / month' },
+  production: { subtitle: 'Delivery',               target: '95% on-time delivery' },
+  education:  { subtitle: 'Community & Learning',    target: 'Workshops + lessons / month' },
+  growth:     { subtitle: 'Advocacy & Retention',    target: 'Reviews + referrals / month' },
+}
+const STAGES = FLYWHEEL_STAGES.map((s) => ({
+  key: s.key,
+  name: s.label,
+  subtitle: STAGE_DETAIL[s.key].subtitle,
+  target: STAGE_DETAIL[s.key].target,
+  color: s.hex,
+}))
 
 // ── Presets + data shapes for sections without a live backing yet ──────
 
@@ -184,7 +195,7 @@ export default function BusinessHealth() {
   // (PR #27) so a task tagged with a flywheel stage actually counts
   // in the per-stage metrics.
   const { tasks, bookings, pendingIds, togglePending, submitPending, hasPending } = useTasks()
-  const [selectedStage, setSelectedStage] = useState<typeof STAGES[number]['name']>('Deliver')
+  const [selectedStage, setSelectedStage] = useState<FlywheelStage>('discovery')
   const [timeFilter, setTimeFilter] = useState<'total' | 'year' | 'month' | 'week' | 'day'>('week')
   const [preset, setPreset] = useState<Preset>('all')
   const [from, setFrom] = useState('1900-01-01')
@@ -234,51 +245,41 @@ export default function BusinessHealth() {
   const stageStats = useMemo(() => {
     const stats: Record<string, { total: number; done: number; open: number; pct: number }> = {}
     for (const stage of STAGES) {
-      if (stage.name === 'Book') {
-        // Bookings still come from the legacy useTasks mock context
-        // until the sessions page wires through here. Keep this
-        // stage on the existing data source so the widget shape
-        // doesn't change.
-        const total = bookings.length
-        const done = bookings.filter(b => b.status === 'Confirmed').length
-        stats[stage.name] = {
-          total,
-          done,
-          open: total - done,
-          pct: total > 0 ? Math.round((done / total) * 100) : 0,
-        }
-      } else {
-        // Real assigned_tasks aggregation. Category strings arrive
-        // Title-cased ('Deliver' etc.) from the FlywheelStagePicker,
-        // which matches STAGES.name exactly.
-        const matching = assignedTasks.filter(t => t.category === stage.name)
-        const done = matching.filter(t => t.is_completed).length
-        const total = matching.length
-        stats[stage.name] = {
-          total,
-          done,
-          open: total - done,
-          pct: total > 0 ? Math.round((done / total) * 100) : 0,
-        }
+      // Real assigned_tasks tagged to this stage (category stores the
+      // canonical key; normalizeLegacyStage tolerates any legacy leftover).
+      const matching = assignedTasks.filter(t => normalizeLegacyStage(t.category) === stage.key)
+      let total = matching.length
+      let done = matching.filter(t => t.is_completed).length
+      // Bookings count toward the Workflow stage (booking & administration)
+      // until PR2 derives all stages from the flywheel_events ledger.
+      if (stage.key === 'workflow') {
+        total += bookings.length
+        done += bookings.filter(b => b.status === 'Confirmed').length
+      }
+      stats[stage.key] = {
+        total,
+        done,
+        open: total - done,
+        pct: total > 0 ? Math.round((done / total) * 100) : 0,
       }
     }
     return stats
   }, [assignedTasks, bookings])
 
   // Totals cover both surfaces: real tagged tasks + bookings.
-  const totalAssignedTagged = assignedTasks.filter(t => t.category && ['Deliver', 'Capture', 'Share', 'Attract'].includes(t.category)).length
-  const totalAssignedDone = assignedTasks.filter(t => t.category && ['Deliver', 'Capture', 'Share', 'Attract'].includes(t.category) && t.is_completed).length
+  const totalAssignedTagged = assignedTasks.filter(t => normalizeLegacyStage(t.category) !== null).length
+  const totalAssignedDone = assignedTasks.filter(t => normalizeLegacyStage(t.category) !== null && t.is_completed).length
   const totalItems = totalAssignedTagged + bookings.length
   const totalDone = totalAssignedDone + bookings.filter(b => b.status === 'Confirmed').length
   const overallPct = totalItems > 0 ? Math.round((totalDone / totalItems) * 100) : 0
   const healthLabel = overallPct >= 85 ? 'Excellent' : overallPct >= 65 ? 'Good' : overallPct >= 40 ? 'Average' : 'Low'
 
-  const stage = STAGES.find(s => s.name === selectedStage) ?? STAGES[0]
+  const stage = STAGES.find(s => s.key === selectedStage) ?? STAGES[0]!
   // Drill-down list: real assigned_tasks tagged to this stage, plus
   // the legacy mock-context tasks so the drilldown isn't blank until
   // the ledger lands. Sort done-last so open work surfaces first.
-  const realStageTasks = assignedTasks.filter(t => t.category === selectedStage)
-  const mockStageTasks = tasks.filter(t => t.stage === selectedStage)
+  const realStageTasks = assignedTasks.filter(t => normalizeLegacyStage(t.category) === selectedStage)
+  const mockStageTasks = tasks.filter(t => normalizeLegacyStage(t.stage) === selectedStage)
   const stageTasks = [...realStageTasks.map(t => ({
     id: t.id,
     title: t.title,
@@ -294,9 +295,9 @@ export default function BusinessHealth() {
   const tasksByKpiStage = useMemo(() =>
     STAGES.map(s => ({
       stage: s.name,
-      count: s.name === 'Book' ? bookings.length : (stageStats[s.name]?.total ?? 0),
+      count: stageStats[s.key]?.total ?? 0,
       color: s.color,
-    })), [stageStats, bookings])
+    })), [stageStats])
 
   // ── Empty-state guards ────────────────────────────────────────────────
 
@@ -350,13 +351,13 @@ export default function BusinessHealth() {
         <div className="bg-surface rounded-2xl border border-border px-5 py-4">
           <p className="text-[10px] text-text-light uppercase tracking-wider">Best Stage</p>
           <p className="text-[20px] font-bold text-gold tracking-tight mt-1">
-            {hasAnyWork ? [...STAGES].sort((a, b) => (stageStats[b.name]?.pct ?? 0) - (stageStats[a.name]?.pct ?? 0))[0]?.name : '—'}
+            {hasAnyWork ? [...STAGES].sort((a, b) => (stageStats[b.key]?.pct ?? 0) - (stageStats[a.key]?.pct ?? 0))[0]?.name : '—'}
           </p>
         </div>
         <div className="bg-surface rounded-2xl border border-border px-5 py-4">
           <p className="text-[10px] text-text-light uppercase tracking-wider">Needs Attention</p>
           <p className="text-[20px] font-bold text-text-muted tracking-tight mt-1">
-            {hasAnyWork ? [...STAGES].sort((a, b) => (stageStats[a.name]?.pct ?? 0) - (stageStats[b.name]?.pct ?? 0))[0]?.name : '—'}
+            {hasAnyWork ? [...STAGES].sort((a, b) => (stageStats[a.key]?.pct ?? 0) - (stageStats[b.key]?.pct ?? 0))[0]?.name : '—'}
           </p>
         </div>
       </div>
@@ -428,8 +429,8 @@ export default function BusinessHealth() {
       {(() => {
         const chartData = STAGES.map(s => ({
           name: s.name,
-          done: stageStats[s.name]?.done ?? 0,
-          open: stageStats[s.name]?.open ?? 0,
+          done: stageStats[s.key]?.done ?? 0,
+          open: stageStats[s.key]?.open ?? 0,
           color: s.color,
         }))
         const maxCount = Math.max(1, ...chartData.map(d => d.done + d.open))
@@ -494,10 +495,10 @@ export default function BusinessHealth() {
 
         <div className="px-5 py-3 border-b border-border/50 flex gap-1">
           {STAGES.map(s => {
-            const st = stageStats[s.name] ?? { pct: 0 }
-            const active = selectedStage === s.name
+            const st = stageStats[s.key] ?? { pct: 0 }
+            const active = selectedStage === s.key
             return (
-              <button key={s.name} onClick={() => setSelectedStage(s.name)}
+              <button key={s.key} onClick={() => setSelectedStage(s.key)}
                 className={`flex-1 py-3 rounded-xl text-center transition-all ${active ? 'bg-gold/8 border border-gold/20' : 'hover:bg-white/[0.02]'}`}>
                 <p className={`text-[13px] font-semibold tracking-tight ${active ? 'text-gold' : 'text-text-muted'}`}>{s.name}</p>
                 <p className={`text-[18px] font-bold tracking-tight mt-0.5 ${active ? 'text-text' : 'text-text-light'}`}>{st.pct}%</p>
@@ -524,7 +525,7 @@ export default function BusinessHealth() {
           </div>
 
           <div className="space-y-0">
-            {selectedStage === 'Book' ? (
+            {selectedStage === 'workflow' ? (
               bookings.map(b => {
                 const isDone = b.status === 'Confirmed'
                 return (
@@ -553,8 +554,8 @@ export default function BusinessHealth() {
                 )
               })
             )}
-            {selectedStage !== 'Book' && stageTasks.length === 0 && <p className="text-[13px] text-text-light text-center py-6">No tasks in this stage yet.</p>}
-            {selectedStage === 'Book' && bookings.length === 0 && <p className="text-[13px] text-text-light text-center py-6">No bookings yet.</p>}
+            {selectedStage !== 'workflow' && stageTasks.length === 0 && <p className="text-[13px] text-text-light text-center py-6">No tasks in this stage yet.</p>}
+            {selectedStage === 'workflow' && bookings.length === 0 && <p className="text-[13px] text-text-light text-center py-6">No bookings yet.</p>}
           </div>
 
           {hasPending && (
@@ -577,7 +578,7 @@ export default function BusinessHealth() {
             </div>
             <div className="flex items-center justify-between py-3 border-b border-border">
               <span className="flex items-center gap-2 text-sm text-text-muted"><Target size={14} className="text-text-light" /> KPI Tasks</span>
-              <span className="text-xl font-bold tabular-nums text-text">{tasks.filter(t => ['Deliver','Capture','Share','Attract'].includes(t.stage)).length}</span>
+              <span className="text-xl font-bold tabular-nums text-text">{tasks.filter(t => normalizeLegacyStage(t.stage) !== null).length}</span>
             </div>
             <div className="flex items-center justify-between py-3 border-b border-border">
               <span className="flex items-center gap-2 text-sm text-text-muted"><CheckSquare size={14} className="text-text-light" /> Studio Tasks</span>

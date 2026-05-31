@@ -6,14 +6,10 @@ import { TrendingUp, TrendingDown, Minus, Plus, X, Save, Loader2, Target } from 
 import type { TeamMember, MemberKPI, MemberKPIEntry, FlywheelStage } from '../../types'
 import { downsampleSingle } from '../../lib/chartData'
 import { getKPITrend } from '../../lib/kpi'
+import { FLYWHEEL_STAGES as FLYWHEEL_STAGES_CANON } from '../../lib/flywheel/stages'
 
-const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; color: string }[] = [
-  { key: 'deliver', label: 'Deliver', color: 'text-emerald-400' },
-  { key: 'capture', label: 'Capture', color: 'text-sky-400' },
-  { key: 'share', label: 'Share', color: 'text-violet-400' },
-  { key: 'attract', label: 'Attract', color: 'text-amber-400' },
-  { key: 'book', label: 'Book', color: 'text-rose-400' },
-]
+const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; color: string }[] =
+  FLYWHEEL_STAGES_CANON.map((s) => ({ key: s.key, label: s.label, color: s.text }))
 
 /** MyTeam cards use a tighter 3-point window. */
 const TEAM_CARD_TREND_WINDOW = 3
@@ -38,7 +34,7 @@ export default function MemberKPIPanel({
 }: MemberKPIPanelProps) {
   const [showKpiForm, setShowKpiForm] = useState(false)
   const [kpiName, setKpiName] = useState('')
-  const [kpiStage, setKpiStage] = useState<FlywheelStage>('deliver')
+  const [kpiStage, setKpiStage] = useState<FlywheelStage>('discovery')
   const [kpiUnit, setKpiUnit] = useState('count')
   const [kpiTarget, setKpiTarget] = useState('')
   const [kpiSubmitting, setKpiSubmitting] = useState(false)

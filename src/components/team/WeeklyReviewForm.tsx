@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { Calendar, Save, Loader2 } from 'lucide-react'
 import type { TeamMember, WeeklyAdminReview, FlywheelStage } from '../../types'
+import { FLYWHEEL_STAGES as FLYWHEEL_STAGES_CANON, FLYWHEEL_STAGE_KEYS } from '../../lib/flywheel/stages'
 
-const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; color: string }[] = [
-  { key: 'deliver', label: 'Deliver', color: 'text-emerald-400' },
-  { key: 'capture', label: 'Capture', color: 'text-sky-400' },
-  { key: 'share', label: 'Share', color: 'text-violet-400' },
-  { key: 'attract', label: 'Attract', color: 'text-amber-400' },
-  { key: 'book', label: 'Book', color: 'text-rose-400' },
-]
+const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; color: string }[] =
+  FLYWHEEL_STAGES_CANON.map((s) => ({ key: s.key, label: s.label, color: s.text }))
+
+const DEFAULT_REVIEW_SCORES = (): Record<FlywheelStage, number> =>
+  FLYWHEEL_STAGE_KEYS.reduce(
+    (acc, k) => { acc[k] = 3; return acc },
+    {} as Record<FlywheelStage, number>,
+  )
 
 export interface WeeklyReviewFormProps {
   reports: TeamMember[]
@@ -37,7 +39,7 @@ export default function WeeklyReviewForm({
   reports, selectedMember, reviews, weekStart, onSelectMember, onSubmitReview, initialValues,
 }: WeeklyReviewFormProps) {
   const [reviewScores, setReviewScores] = useState<Record<FlywheelStage, number>>(
-    initialValues?.scores ?? { deliver: 3, capture: 3, share: 3, attract: 3, book: 3 },
+    initialValues?.scores ?? DEFAULT_REVIEW_SCORES(),
   )
   const [reviewStrengths, setReviewStrengths] = useState(initialValues?.strengths ?? '')
   const [reviewImprovements, setReviewImprovements] = useState(initialValues?.improvements ?? '')

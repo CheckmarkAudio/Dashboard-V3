@@ -10,6 +10,7 @@ import { getKPITrend, type KPITrend } from '../lib/kpi'
 import { fetchKPIDefinitions, fetchKPIEntries, kpiKeys } from '../lib/queries/kpi'
 import { fetchDirectReports, teamMemberKeys } from '../lib/queries/teamMembers'
 import type { MemberKPI, MemberKPIEntry, FlywheelStage } from '../types'
+import { FLYWHEEL_STAGES as FLYWHEEL_STAGES_CANON } from '../lib/flywheel/stages'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
@@ -21,13 +22,8 @@ import {
 // red/yellow/green family (those are reserved for priority / status
 // in a future change). Matches the STAGE_STYLES Record used across
 // dashboard widgets.
-const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; color: string; bg: string }[] = [
-  { key: 'deliver', label: 'Deliver', color: 'text-blue-400',   bg: 'bg-blue-500/5' },
-  { key: 'capture', label: 'Capture', color: 'text-violet-400', bg: 'bg-violet-500/5' },
-  { key: 'share',   label: 'Share',   color: 'text-cyan-400',   bg: 'bg-cyan-500/5' },
-  { key: 'attract', label: 'Attract', color: 'text-pink-400',   bg: 'bg-pink-500/5' },
-  { key: 'book',    label: 'Book',    color: 'text-orange-400', bg: 'bg-orange-500/5' },
-]
+const FLYWHEEL_STAGES: { key: FlywheelStage; label: string; color: string; bg: string }[] =
+  FLYWHEEL_STAGES_CANON.map((s) => ({ key: s.key, label: s.label, color: s.text, bg: s.bg }))
 
 function getTrendColor(trend: KPITrend) {
   if (trend === 'up') return '#10b981'

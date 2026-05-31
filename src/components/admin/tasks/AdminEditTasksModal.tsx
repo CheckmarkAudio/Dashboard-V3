@@ -16,6 +16,7 @@ import {
 import { CompletedToggle, formatDueShort } from '../../tasks/shared'
 import type { AssignedTask } from '../../../types/assignments'
 import type { TeamMember } from '../../../types'
+import { normalizeLegacyStage } from '../../../lib/flywheel/stages'
 
 /**
  * AdminEditTasksModal — PR #40.
@@ -174,15 +175,10 @@ export default function AdminEditTasksModal({ onClose }: { onClose: () => void }
   )
 }
 
-// Capitalised stored category → FlywheelStage. DB stores "Deliver"
-// etc; the picker uses the same title-case union, so no conversion
-// needed — just a safe coercion.
+// Stored category → canonical FlywheelStage. Handles new keys and any
+// lingering legacy values (Deliver/Capture/…) via the shared normalizer.
 function asStage(value: string | null | undefined): FlywheelStage | null {
-  if (!value) return null
-  if (value === 'Deliver' || value === 'Capture' || value === 'Share' || value === 'Attract' || value === 'Book') {
-    return value
-  }
-  return null
+  return normalizeLegacyStage(value)
 }
 
 function EditableRow({

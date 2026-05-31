@@ -1,5 +1,6 @@
 import { getKPITrend } from '../../lib/kpi'
 import type { MemberKPI, MemberKPIEntry } from '../../types'
+import type { FlywheelStage as FlywheelStageCanon } from '../../lib/flywheel/stages'
 
 /**
  * Five stages of the Checkmark Audio business flywheel, rendered in
@@ -19,7 +20,7 @@ import type { MemberKPI, MemberKPIEntry } from '../../types'
  * `null` for unbacked stages so the UI can render them muted instead of
  * fabricating a number.
  */
-export type FlywheelStage = 'Deliver' | 'Capture' | 'Share' | 'Attract' | 'Book'
+export type FlywheelStage = FlywheelStageCanon
 
 export interface FlywheelChartDatum {
   name: FlywheelStage
@@ -32,7 +33,7 @@ export interface FlywheelChartDatum {
 export function buildMemberFlywheelChartData(
   dailyCompletion: number,
   sessionCount: number,
-  mustDoComplete: boolean,
+  _mustDoComplete: boolean,
   primaryKpi: MemberKPI | null,
   kpiEntries: MemberKPIEntry[],
 ): FlywheelChartDatum[] {
@@ -52,12 +53,16 @@ export function buildMemberFlywheelChartData(
   // exists; we scale linearly up to 3 sessions as "fully booked."
   const bookPct = sessionCount === 0 ? 0 : Math.min(100, Math.round((sessionCount / 3) * 100))
 
+  // Interim per-member proxies until PR2 wires these to the flywheel_events
+  // ledger. Booking activity → workflow; task/KPI attainment → production.
+  // discovery / education / growth have no per-member proxy yet → null
+  // (rendered muted rather than fabricated). Order follows the canonical loop.
   return [
-    { name: 'Deliver', pct: deliverPct, backed: true },
-    { name: 'Capture', pct: mustDoComplete ? 100 : 0, backed: true },
-    { name: 'Share', pct: null, backed: false },
-    { name: 'Attract', pct: null, backed: false },
-    { name: 'Book', pct: bookPct, backed: true },
+    { name: 'discovery', pct: null, backed: false },
+    { name: 'workflow', pct: bookPct, backed: true },
+    { name: 'production', pct: deliverPct, backed: true },
+    { name: 'education', pct: null, backed: false },
+    { name: 'growth', pct: null, backed: false },
   ]
 }
 
