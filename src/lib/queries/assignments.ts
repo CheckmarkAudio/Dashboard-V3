@@ -360,15 +360,13 @@ export async function completeAssignedTask(
   }
   const normalized = normalizeAssignedTask((data ?? {}) as Partial<AssignedTask>)
 
-  // Flywheel: emit a Deliver event when a task transitions to completed
-  // (Phase 1 of the event-ledger revamp). Fire-and-forget — emit
-  // failures must never regress the user's task-toggle action. Metadata
-  // captures the task's flywheel-stage category so Phase 2 aggregations
-  // can break down Deliver by sub-stage if useful (e.g. "Capture tasks
-  // I finished this week").
+  // Flywheel: a completed task = a Production event (delivering the
+  // work). Fire-and-forget — emit failures must never regress the
+  // user's task-toggle action. Metadata captures the task's category
+  // so Phase 2 aggregations can break Production down by sub-type.
   if (isCompleted) {
     void emitFlywheelEvent({
-      stage: 'deliver',
+      stage: 'production',
       source_type: 'task',
       source_id: normalized.id,
       metadata: {

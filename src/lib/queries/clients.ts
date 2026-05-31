@@ -53,12 +53,12 @@ export async function createClient(input: CreateClientInput): Promise<Client> {
   }
   const client = data as Client
 
-  // Flywheel — Phase 1: every new client = an Attract event.
-  // Fire-and-forget so emit failures don't regress the client save.
-  // Metadata captures whether contact details came along (email/phone)
-  // so Phase 2 can split "warm lead" vs "name-only" if useful.
+  // Flywheel: every new client = a Discovery event (a lead entered the
+  // funnel). Fire-and-forget so emit failures don't regress the client
+  // save. Metadata captures whether contact details came along so
+  // Phase 2 can split "warm lead" vs "name-only" if useful.
   void emitFlywheelEvent({
-    stage: 'attract',
+    stage: 'discovery',
     source_type: 'client',
     source_id: client.id,
     metadata: {
