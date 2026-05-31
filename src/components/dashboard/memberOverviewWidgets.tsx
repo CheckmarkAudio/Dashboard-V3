@@ -24,16 +24,43 @@ import MyTasksCard from '../tasks/MyTasksCard'
 import CreateBookingModal from '../CreateBookingModal'
 import NotificationsPanel from '../notifications/NotificationsPanel'
 import MemberAvatar from '../members/MemberAvatar'
+import {
+  fetchFlywheelActivity,
+  describeFlywheelEvent,
+  flywheelKeys,
+  type FlywheelStage,
+} from '../../lib/queries/flywheelEvents'
 
 // Stage tokens shared between the activity feed + status pills.
-// Sourced from the v1.0 design system (Deliver/Capture/Share/Attract/Book).
-type Stage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
+// Refined 5-stage platform model (discovery → workflow → production →
+// education → growth). One label per stage so the pill stays compact.
+type Stage = FlywheelStage
+const STAGE_LABELS: Record<Stage, string> = {
+  discovery: 'Discovery',
+  workflow: 'Workflow',
+  production: 'Production',
+  education: 'Education',
+  growth: 'Growth',
+}
 const STAGE_STYLES: Record<Stage, { dot: string; text: string; bg: string; ring: string }> = {
-  deliver: { dot: 'bg-blue-400',   text: 'text-blue-300',   bg: 'bg-blue-500/5',   ring: 'ring-blue-500/15' },
-  capture: { dot: 'bg-violet-400', text: 'text-violet-300', bg: 'bg-violet-500/5', ring: 'ring-violet-500/15' },
-  share:   { dot: 'bg-cyan-400',   text: 'text-cyan-300',   bg: 'bg-cyan-500/5',   ring: 'ring-cyan-500/15' },
-  attract: { dot: 'bg-pink-400',   text: 'text-pink-300',   bg: 'bg-pink-500/5',   ring: 'ring-pink-500/15' },
-  book:    { dot: 'bg-orange-400', text: 'text-orange-300', bg: 'bg-orange-500/5', ring: 'ring-orange-500/15' },
+  discovery:  { dot: 'bg-cyan-400',    text: 'text-cyan-300',    bg: 'bg-cyan-500/5',    ring: 'ring-cyan-500/15' },
+  workflow:   { dot: 'bg-orange-400',  text: 'text-orange-300',  bg: 'bg-orange-500/5',  ring: 'ring-orange-500/15' },
+  production: { dot: 'bg-blue-400',    text: 'text-blue-300',    bg: 'bg-blue-500/5',    ring: 'ring-blue-500/15' },
+  education:  { dot: 'bg-violet-400',  text: 'text-violet-300',  bg: 'bg-violet-500/5',  ring: 'ring-violet-500/15' },
+  growth:     { dot: 'bg-emerald-400', text: 'text-emerald-300', bg: 'bg-emerald-500/5', ring: 'ring-emerald-500/15' },
+}
+
+/** Compact "12m ago" / "3h ago" / "Yesterday" relative time. */
+function activityRelTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const min = Math.floor(diff / 60_000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const d = Math.floor(hr / 24)
+  if (d === 1) return 'Yesterday'
+  return `${d}d ago`
 }
 
 // NOTE: durationLabel + SessionStatusPill + computeSessionStatus were
@@ -132,20 +159,6 @@ export function TodayCalendarWidget() {
 }
 
 /**
- * Team Activity — placeholder feed showing what the screenshot's "Team
- * activity" section will look like. Mock data until the flywheel event
- * ledger ships (Phase 2 of the original blueprint), at which point this
- * reads from the immutable event table instead.
- */
-const MOCK_ACTIVITY: { id: string; stage: Stage; actor: string; text: string; timeAgo: string }[] = [
-  { id: '1', stage: 'share',   actor: 'Ava K.',     text: 'published a new BTS reel for Sage Linden',                  timeAgo: '12m ago' },
-  { id: '2', stage: 'deliver', actor: 'Jordan L.',  text: "marked 'Masters — Tiger Beatz' as ready for delivery",      timeAgo: '34m ago' },
-  { id: '3', stage: 'book',    actor: 'Richard B.', text: 'booked a recurring lesson block with Anna P.',              timeAgo: '2h ago' },
-  { id: '4', stage: 'capture', actor: 'System',     text: 'captured 4 new leads from the Beat Leasing landing',        timeAgo: '3h ago' },
-  { id: '5', stage: 'attract', actor: 'Marcus R.',  text: 'added a new invoice for The Artists Café',                  timeAgo: 'Yesterday' },
-]
-
-/**
  * Booking Snapshot — compact upcoming counter + "Book a Session" CTA.
  *
  * The CTA opens the canonical CreateBookingModal (same one Sessions.tsx
@@ -222,12 +235,44 @@ export function ForumNotificationsWidget() {
 // them outside the widget.
 
 export function TeamActivityWidget() {
+  // Live flywheel ledger feed (Phase 2). RLS scopes rows to the caller's
+  // team; a 60s poll keeps it fresh without a realtime sub.
+  const { data, isLoading, error } = useQuery({
+    queryKey: flywheelKeys.activity(8),
+    queryFn: () => fetchFlywheelActivity(8),
+    refetchInterval: 60_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center text-text-light">
+        <Loader2 size={18} className="animate-spin" />
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="h-full flex items-center justify-center text-[12px] text-text-light px-2 text-center">
+        Couldn’t load activity.
+      </div>
+    )
+  }
+  const items = data ?? []
+  if (items.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-center px-4 text-text-light">
+        <Flame size={18} className="mb-2 text-gold/50" aria-hidden="true" />
+        <p className="text-[12px]">No flywheel activity yet.</p>
+        <p className="text-[11px] mt-0.5">Bookings, uploads, new clients, and completed tasks show up here.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full -mx-1">
       <div className="flex-1 space-y-0">
-        {MOCK_ACTIVITY.map((item) => {
+        {items.map((item) => {
           const ss = STAGE_STYLES[item.stage]
-          const stageCap = item.stage.charAt(0).toUpperCase() + item.stage.slice(1)
           return (
             <div
               key={item.id}
@@ -237,21 +282,19 @@ export function TeamActivityWidget() {
                 className={`shrink-0 mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${ss.bg} ${ss.text} ring-1 ${ss.ring}`}
               >
                 <span className={`w-1 h-1 rounded-full ${ss.dot}`} aria-hidden="true" />
-                {stageCap}
+                {STAGE_LABELS[item.stage]}
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] text-text leading-snug">
-                  <span className="font-medium">{item.actor}</span> {item.text}
+                  <span className="font-medium">{item.actor ?? 'Someone'}</span>{' '}
+                  {describeFlywheelEvent(item)}
                 </p>
-                <p className="text-[10px] text-text-light mt-0.5">{item.timeAgo}</p>
+                <p className="text-[10px] text-text-light mt-0.5">{activityRelTime(item.occurred_at)}</p>
               </div>
             </div>
           )
         })}
       </div>
-      <p className="text-[10px] text-text-light italic mt-2 px-1">
-        Activity feed is mock data until the flywheel event ledger ships.
-      </p>
     </div>
   )
 }
