@@ -71,3 +71,77 @@ export async function emitFlywheelEvent(input: RecordFlywheelEventInput): Promis
     return null
   }
 }
+
+// ─── Reads (Phase 2) ──────────────────────────────────────────────
+//
+// The Team Activity feed reads recent events directly — flywheel_events
+// has a team-scoped SELECT RLS policy (team_id = get_my_team_id()), so a
+// plain client query is automatically isolated to the caller's team. The
+// member_id FK lets us embed the actor's display name in one round trip.
+
+export const flywheelKeys = {
+  all: ['flywheel'] as const,
+  activity: (limit: number) => [...flywheelKeys.all, 'activity', limit] as const,
+}
+
+export interface FlywheelActivityRow {
+  id: string
+  stage: FlywheelStage
+  source_type: string
+  metadata: Record<string, unknown> | null
+  occurred_at: string
+  /** Actor's display name (joined from team_members), or null for system events. */
+  actor: string | null
+}
+
+type RawActivityRow = {
+  id: string
+  stage: FlywheelStage
+  source_type: string
+  metadata: Record<string, unknown> | null
+  occurred_at: string
+  member: { display_name: string | null } | { display_name: string | null }[] | null
+}
+
+/** Most-recent flywheel events for the caller's team (RLS-scoped). */
+export async function fetchFlywheelActivity(limit = 8): Promise<FlywheelActivityRow[]> {
+  const { data, error } = await supabase
+    .from('flywheel_events')
+    .select('id, stage, source_type, metadata, occurred_at, member:team_members!flywheel_events_member_id_fkey(display_name)')
+    .order('occurred_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return ((data ?? []) as unknown as RawActivityRow[]).map((r) => ({
+    id: r.id,
+    stage: r.stage,
+    source_type: r.source_type,
+    metadata: r.metadata ?? null,
+    occurred_at: r.occurred_at,
+    actor: Array.isArray(r.member) ? (r.member[0]?.display_name ?? null) : (r.member?.display_name ?? null),
+  }))
+}
+
+/**
+ * Turn a ledger row into a human sentence fragment (the actor name is
+ * rendered separately by the widget). Falls back gracefully for source
+ * types added later that this switch doesn't know about yet.
+ */
+export function describeFlywheelEvent(
+  row: Pick<FlywheelActivityRow, 'stage' | 'source_type' | 'metadata'>,
+): string {
+  const m = row.metadata ?? {}
+  const str = (k: string): string | null => (typeof m[k] === 'string' ? (m[k] as string) : null)
+  switch (row.source_type) {
+    case 'task':
+      return str('title') ? `completed “${str('title')}”` : 'completed a task'
+    case 'client':
+      return str('name') ? `added a new client · ${str('name')}` : 'added a new client'
+    case 'media_upload':
+      return str('file_name') ? `uploaded ${str('file_name')}` : 'uploaded media'
+    case 'session':
+      if (m.milestone === 'client_converted') return 'converted a new client'
+      return str('session_type') ? `booked a ${str('session_type')} session` : 'booked a session'
+    default:
+      return `logged a ${row.stage} event`
+  }
+}
