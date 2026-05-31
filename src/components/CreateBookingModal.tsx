@@ -448,32 +448,29 @@ export default function CreateBookingModal({
       toast(`Booking saved, but Google Calendar sync failed: ${(err as Error).message}`, 'error')
     }
 
-    // Flywheel — Phase 1 emit hook. Only fire on insert (not on edit
-    // updates); fire-and-forget so emit failures don't regress the
-    // booking save. Emits TWO stages from a single booking action:
+    // Flywheel emit hook. Only fire on insert (not on edit updates);
+    // fire-and-forget so emit failures don't regress the booking save.
+    // Both events land in the WORKFLOW stage (booking & administration),
+    // distinguished by metadata.milestone:
     //
-    //   • Book — every new booking counts as activity in the Book
-    //     stage. Metadata carries session_type + room so Phase 2
-    //     aggregations can filter (e.g. "paid sessions only" means
-    //     metadata.session_type != 'Consult'). Recurring bookings
-    //     today only emit ONE Book event for the parent insert;
-    //     spawn_recurring_session_instances child rows are NOT yet
+    //   • booking_created — every new booking. Metadata carries
+    //     session_type + room so Phase 2 can filter (e.g. paid-only =
+    //     session_type != 'Consult'). Recurring bookings emit ONE event
+    //     for the parent insert; spawned child instances are not yet
     //     instrumented — Phase 2 will add that server-side.
     //
-    //   • Capture — only when this is the client's FIRST session
-    //     (any type). The funnel says: Attract = lead arrives;
-    //     Capture = lead becomes a paying client; Book = activity.
-    //     "First session" is the cleanest proxy for the
-    //     Attract→Capture transition for a music studio. Skipped
-    //     when payload.client_id is null (free-form name, no linked
-    //     client record to check history against).
+    //   • client_converted — only when this is the client's FIRST
+    //     session (any type): the lead has converted into a paying
+    //     client. Skipped when payload.client_id is null (free-form
+    //     name, no linked client record to check history against).
     if (!isEditMode && data?.id) {
       const newSessionId = data.id
       void emitFlywheelEvent({
-        stage: 'book',
+        stage: 'workflow',
         source_type: 'session',
         source_id: newSessionId,
         metadata: {
+          milestone: 'booking_created',
           session_type: payload.session_type,
           room: payload.room,
           client_id: payload.client_id ?? null,
@@ -492,10 +489,11 @@ export default function CreateBookingModal({
           // the one we just created → Capture event.
           if ((count ?? 0) === 0) {
             await emitFlywheelEvent({
-              stage: 'capture',
+              stage: 'workflow',
               source_type: 'session',
               source_id: newSessionId,
               metadata: {
+                milestone: 'client_converted',
                 client_id: linkedClientId,
                 session_type: payload.session_type,
               },

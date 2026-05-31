@@ -1,7 +1,10 @@
-// Phase 1 of the Flywheel event ledger.
+// Flywheel event ledger.
 //
 // Append-only ledger of every studio action mapped to one of the 5
-// flywheel stages (Deliver → Capture → Share → Attract → Book).
+// flywheel stages of the refined platform model:
+//   discovery → workflow → production → education → growth
+//   (Discovery & Media · Workflow & Admin · Production & Completion ·
+//    Education & Community · Growth, Advocacy & Retention)
 // Insert path is the `record_flywheel_event` RPC — the table has no
 // direct INSERT policy, so client code must use this helper. Reads
 // come later (Phase 2 aggregations).
@@ -15,7 +18,7 @@
 
 import { supabase } from '../supabase'
 
-export type FlywheelStage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
+export type FlywheelStage = 'discovery' | 'workflow' | 'production' | 'education' | 'growth'
 
 /**
  * Free-text discriminator for which kind of source row produced the
@@ -24,10 +27,10 @@ export type FlywheelStage = 'deliver' | 'capture' | 'share' | 'attract' | 'book'
  * need DDL). Add new entries here as you wire new emit points.
  */
 export type FlywheelSourceType =
-  | 'task'           // assigned_tasks row completed
-  | 'session'        // sessions row created (Book + sometimes Capture)
-  | 'client'         // clients row created (Attract)
-  | 'media_upload'   // AddMedia upload completed (Share)
+  | 'task'           // assigned_tasks completed         → production
+  | 'session'        // sessions row created             → workflow (booking + first-session conversion)
+  | 'client'         // clients row created              → discovery
+  | 'media_upload'   // AddMedia upload completed         → discovery (content asset)
 
 export interface RecordFlywheelEventInput {
   stage: FlywheelStage
