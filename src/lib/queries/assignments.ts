@@ -12,6 +12,7 @@
 
 import { supabase } from '../supabase'
 import { emitFlywheelEvent } from './flywheelEvents'
+import { normalizeLegacyStage } from '../flywheel/stages'
 import type {
   ReportTemplate,
   TaskAssignment,
@@ -360,22 +361,25 @@ export async function completeAssignedTask(
   }
   const normalized = normalizeAssignedTask((data ?? {}) as Partial<AssignedTask>)
 
-  // Flywheel: a completed task = a Production event (delivering the
-  // work). Fire-and-forget — emit failures must never regress the
-  // user's task-toggle action. Metadata captures the task's category
-  // so Phase 2 aggregations can break Production down by sub-type.
+  // Flywheel: a completed task emits to the stage it's TAGGED with —
+  // a marketing task counts as Discovery, a study task as Education, a
+  // mixing task as Production, etc. Untagged (or free-text category)
+  // tasks emit nothing. Fire-and-forget — never regress the toggle.
   if (isCompleted) {
-    void emitFlywheelEvent({
-      stage: 'production',
-      source_type: 'task',
-      source_id: normalized.id,
-      metadata: {
-        title: normalized.title,
-        scope: normalized.scope,
-        category: normalized.category ?? null,
-        studio_space: normalized.studio_space ?? null,
-      },
-    })
+    const stage = normalizeLegacyStage(normalized.category)
+    if (stage) {
+      void emitFlywheelEvent({
+        stage,
+        source_type: 'task',
+        source_id: normalized.id,
+        metadata: {
+          title: normalized.title,
+          scope: normalized.scope,
+          category: normalized.category ?? null,
+          studio_space: normalized.studio_space ?? null,
+        },
+      })
+    }
   }
 
   return normalized

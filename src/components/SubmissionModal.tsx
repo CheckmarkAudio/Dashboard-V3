@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { emitFlywheelEvent } from '../lib/queries/flywheelEvents'
 import { getMustDoConfig } from '../lib/mustDoConfig'
 import { localDateKey } from '../lib/dates'
 import { useToast } from './Toast'
@@ -59,6 +60,12 @@ export default function SubmissionModal({ onClose, onSubmitted }: SubmissionModa
     if (error) {
       toast('Failed to submit. Try again.', 'error')
     } else {
+      // Flywheel: a submitted deliverable = Production (value delivered).
+      void emitFlywheelEvent({
+        stage: 'production',
+        source_type: 'deliverable',
+        metadata: { submission_type: submissionType, platform: isContentRole ? platform : null },
+      })
       toast('Deliverable submitted')
       onSubmitted()
       onClose()

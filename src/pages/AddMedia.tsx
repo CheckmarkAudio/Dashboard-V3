@@ -279,13 +279,12 @@ export default function AddMedia() {
           const existing = prev ?? []
           return [submission as MediaSubmissionRow, ...existing]
         })
-        // Flywheel: a media upload = a Discovery event (content asset
-        // that fuels the inbound funnel). Fire-and-forget; emit failures
-        // must not regress the upload. Metadata captures filename + size
-        // so Phase 2 can show "top contributors this week" without
-        // re-joining the submission row.
+        // Flywheel: uploading media into the Dropbox pipeline = a Workflow
+        // event (getting work + assets into the system). Fire-and-forget;
+        // emit failures must not regress the upload. (Publicly *featuring*
+        // a sample for marketing is a Discovery-tagged task instead.)
         void emitFlywheelEvent({
-          stage: 'discovery',
+          stage: 'workflow',
           source_type: 'media_upload',
           source_id: (submission as { id?: string } | null)?.id ?? null,
           metadata: {

@@ -30,10 +30,16 @@ export type { FlywheelStage }
  * need DDL). Add new entries here as you wire new emit points.
  */
 export type FlywheelSourceType =
-  | 'task'           // assigned_tasks completed         → production
-  | 'session'        // sessions row created             → workflow (booking + first-session conversion)
-  | 'client'         // clients row created              → discovery
-  | 'media_upload'   // AddMedia upload completed         → discovery (content asset)
+  | 'task'              // assigned_tasks completed → the task's tagged stage
+  | 'session'           // sessions row created → workflow (convert) / retention (repeat)
+  | 'client'            // clients row created → discovery
+  | 'media_upload'      // AddMedia → Dropbox upload → workflow
+  | 'lead'              // team_leads row created → discovery
+  | 'pipeline'          // artist_pipeline row created → discovery
+  | 'deliverable'       // deliverable_submissions → production
+  | 'checklist'         // studio checklist item completed → workflow
+  | 'forum_post'        // public forum message → education
+  | 'education_student' // education_students enrolled → education
 
 export interface RecordFlywheelEventInput {
   stage: FlywheelStage
@@ -140,10 +146,23 @@ export function describeFlywheelEvent(
     case 'client':
       return str('name') ? `added a new client · ${str('name')}` : 'added a new client'
     case 'media_upload':
-      return str('file_name') ? `uploaded ${str('file_name')}` : 'uploaded media'
+      return str('file_name') ? `uploaded ${str('file_name')}` : 'uploaded media to Dropbox'
     case 'session':
       if (m.milestone === 'client_converted') return 'converted a new client'
+      if (m.milestone === 'repeat_booking') return 'booked a returning client'
       return str('session_type') ? `booked a ${str('session_type')} session` : 'booked a session'
+    case 'lead':
+      return str('company') ? `added a lead · ${str('company')}` : 'added a new lead'
+    case 'pipeline':
+      return str('artist_name') ? `added ${str('artist_name')} to the pipeline` : 'added an artist to the pipeline'
+    case 'deliverable':
+      return str('submission_type') ? `submitted a ${str('submission_type')} deliverable` : 'submitted a deliverable'
+    case 'checklist':
+      return str('label') ? `checked off “${str('label')}”` : 'completed a checklist item'
+    case 'forum_post':
+      return str('channel') ? `posted in #${str('channel')}` : 'posted in the forum'
+    case 'education_student':
+      return str('student_name') ? `enrolled ${str('student_name')}` : 'enrolled a student'
     default:
       return `logged a ${row.stage} event`
   }

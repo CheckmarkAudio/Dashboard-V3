@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { emitFlywheelEvent } from '../lib/queries/flywheelEvents'
 import { normalizeEmail } from '../lib/email'
 import { useToast } from '../components/Toast'
 import {
@@ -96,6 +97,12 @@ export default function Leads() {
         setSubmitting(false)
         return
       }
+      // Flywheel: a new lead = Discovery (someone entered the funnel).
+      void emitFlywheelEvent({
+        stage: 'discovery',
+        source_type: 'lead',
+        metadata: { contact: payload.contact, company: payload.company },
+      })
     }
 
     setShowForm(false)
