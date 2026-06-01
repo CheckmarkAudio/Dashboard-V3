@@ -4112,6 +4112,13 @@ export type Database = {
           unread_count: number
         }[]
       }
+      get_flywheel_stage_summary: {
+        Args: { p_member?: string; p_since?: string; p_until?: string }
+        Returns: {
+          event_count: number
+          stage: string
+        }[]
+      }
       get_member_assigned_tasks: {
         Args: {
           p_include_completed?: boolean

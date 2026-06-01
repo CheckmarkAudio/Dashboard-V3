@@ -17,7 +17,8 @@ import {
 import { APP_ROUTES } from '../../app/routes'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
 import CalendarDayCard from '../calendar/CalendarDayCard'
-import { buildMemberFlywheelChartData, getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
+import { getKpiTrendLabel } from '../../domain/dashboard/memberOverview'
+import { useAuth } from '../../contexts/AuthContext'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import type { TeamMember } from '../../types'
 import MyTasksCard from '../tasks/MyTasksCard'
@@ -27,9 +28,10 @@ import MemberAvatar from '../members/MemberAvatar'
 import {
   fetchFlywheelActivity,
   describeFlywheelEvent,
+  fetchFlywheelStageSummary,
   flywheelKeys,
 } from '../../lib/queries/flywheelEvents'
-import { FLYWHEEL_STAGE_META } from '../../lib/flywheel/stages'
+import { FLYWHEEL_STAGE_META, FLYWHEEL_STAGES, FLYWHEEL_STAGE_KEYS } from '../../lib/flywheel/stages'
 
 /** Compact "12m ago" / "3h ago" / "Yesterday" relative time. */
 function activityRelTime(iso: string): string {
@@ -388,27 +390,28 @@ export function TeamDirectoryWidget() {
 }
 
 export function FlywheelSummaryWidget() {
+  const { profile } = useAuth()
   const { daily, todaySessions, mustDoSubmission, primaryKpi, kpiEntries, loading, error } = useMemberOverviewContext()
+  // PR2: the member's own flywheel activity now comes from the real
+  // ledger (was placeholder proxies). All-time per-stage event counts.
+  const summaryQuery = useQuery({
+    queryKey: flywheelKeys.summary(null, null, profile?.id ?? null),
+    queryFn: () => fetchFlywheelStageSummary({ member: profile?.id ?? null }),
+    enabled: Boolean(profile?.id),
+  })
   const status = <WidgetStatus error={error} loading={loading} />
   if (loading || error) return status
 
-  const chartData = buildMemberFlywheelChartData(
-    daily.percentage,
-    todaySessions.length,
-    !!mustDoSubmission,
-    primaryKpi,
-    kpiEntries,
-  )
   const kpiTrendLabel = getKpiTrendLabel(kpiEntries)
-
-  // Recharts needs a numeric value; unbacked stages render with value 0
-  // but we style them differently via Cell fill/opacity so they read as
-  // "coming soon" rather than "zero."
-  const recharts = chartData.map((entry) => ({
-    name: entry.name,
-    pct: entry.pct ?? 0,
-    backed: entry.backed,
+  const byStage = new Map((summaryQuery.data ?? []).map((s) => [s.stage, s.event_count]))
+  const maxCount = Math.max(1, ...FLYWHEEL_STAGE_KEYS.map((k) => byStage.get(k) ?? 0))
+  const recharts = FLYWHEEL_STAGES.map((s) => ({
+    name: s.label,
+    count: byStage.get(s.key) ?? 0,
+    pct: Math.round(((byStage.get(s.key) ?? 0) / maxCount) * 100),
+    hex: s.hex,
   }))
+  const totalEvents = recharts.reduce((a, r) => a + r.count, 0)
 
   return (
     <div className="h-full flex flex-col">
@@ -430,26 +433,32 @@ export function FlywheelSummaryWidget() {
         </div>
       )}
       <div className="h-[110px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={recharts}>
-            <Bar dataKey="pct" radius={[4, 4, 0, 0]} barSize={30}>
-              {recharts.map((entry) => (
-                <Cell
-                  key={entry.name}
-                  fill="#C9A84C"
-                  fillOpacity={entry.backed ? 0.72 : 0.22}
-                />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {summaryQuery.isLoading ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-gold/20 border-t-gold" />
+          </div>
+        ) : totalEvents === 0 ? (
+          <div className="h-full flex items-center justify-center text-[11px] text-text-light">
+            No flywheel events yet
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={recharts}>
+              <Bar dataKey="pct" radius={[4, 4, 0, 0]} barSize={30}>
+                {recharts.map((entry) => (
+                  <Cell key={entry.name} fill={entry.hex} fillOpacity={entry.count > 0 ? 0.8 : 0.18} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
       <div className="flex justify-between px-1 mt-1">
-        {chartData.map((entry) => (
+        {recharts.map((entry) => (
           <span
             key={entry.name}
-            className={`text-[9px] ${entry.backed ? 'text-text-light' : 'text-text-light/50 italic'}`}
-            title={entry.backed ? undefined : 'Awaiting flywheel event ledger'}
+            className="text-[9px] text-text-light"
+            title={`${entry.count} event${entry.count === 1 ? '' : 's'}`}
           >
             {entry.name}
           </span>

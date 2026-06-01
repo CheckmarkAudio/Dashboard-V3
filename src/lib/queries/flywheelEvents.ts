@@ -2,12 +2,12 @@
 //
 // Append-only ledger of every studio action mapped to one of the 5
 // flywheel stages of the refined platform model:
-//   discovery → workflow → production → education → growth
+//   discovery → workflow → production → education → retention
 //   (Discovery & Media · Workflow & Admin · Production & Completion ·
-//    Education & Community · Growth, Advocacy & Retention)
+//    Education & Community · Retention & Advocacy)
 // Insert path is the `record_flywheel_event` RPC — the table has no
-// direct INSERT policy, so client code must use this helper. Reads
-// come later (Phase 2 aggregations).
+// direct INSERT policy, so client code must use this helper. Reads:
+// `fetchFlywheelActivity` (feed) + `fetchFlywheelStageSummary` (counts).
 //
 // Best-practice: emit calls SHOULD be fire-and-forget — never block
 // the user's primary action on whether the event recorded. If the
@@ -91,6 +91,36 @@ export async function emitFlywheelEvent(input: RecordFlywheelEventInput): Promis
 export const flywheelKeys = {
   all: ['flywheel'] as const,
   activity: (limit: number) => [...flywheelKeys.all, 'activity', limit] as const,
+  summary: (since: string | null, until: string | null, member: string | null) =>
+    [...flywheelKeys.all, 'summary', since, until, member] as const,
+}
+
+export interface FlywheelStageCount {
+  stage: FlywheelStage
+  event_count: number
+}
+
+/**
+ * Per-stage flywheel event counts for the caller's team over an optional
+ * date range (and optional single member). Always returns all five stages
+ * (zero-filled), so charts render a complete axis. Backed by the
+ * `get_flywheel_stage_summary` RPC (team-scoped, SECURITY DEFINER).
+ */
+export async function fetchFlywheelStageSummary(opts?: {
+  since?: string | null
+  until?: string | null
+  member?: string | null
+}): Promise<FlywheelStageCount[]> {
+  const { data, error } = await supabase.rpc('get_flywheel_stage_summary', {
+    p_since: opts?.since ?? undefined,
+    p_until: opts?.until ?? undefined,
+    p_member: opts?.member ?? undefined,
+  })
+  if (error) throw error
+  return ((data ?? []) as { stage: string; event_count: number }[]).map((r) => ({
+    stage: r.stage as FlywheelStage,
+    event_count: r.event_count ?? 0,
+  }))
 }
 
 export interface FlywheelActivityRow {
