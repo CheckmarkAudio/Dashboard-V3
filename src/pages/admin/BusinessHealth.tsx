@@ -4,6 +4,7 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTasks } from '../../contexts/TaskContext'
 import { fetchTeamAssignedTasks } from '../../lib/queries/assignments'
+import { fetchFlywheelStageSummary, flywheelKeys } from '../../lib/queries/flywheelEvents'
 import { Check, RefreshCcw, Target, CheckSquare, Briefcase, Info, PieChart as PieChartIcon } from 'lucide-react'
 import { ExportButtons, toExportColumns } from '../../components/ui'
 import { taskExportColumns } from '../../lib/columns/taskColumns'
@@ -217,6 +218,18 @@ export default function BusinessHealth() {
   })
   const assignedTasks = assignedTasksQuery.data ?? []
 
+  // Real flywheel-event counts per stage over the active date range —
+  // drives the "Flywheel Activity" chart off the ledger (was task-category
+  // aggregation). `from`/`to` are yyyy-mm-dd; widen to full-day bounds.
+  const flywheelSummaryQuery = useQuery({
+    queryKey: flywheelKeys.summary(from || null, to || null, null),
+    queryFn: () => fetchFlywheelStageSummary({
+      since: from ? `${from}T00:00:00` : null,
+      until: to ? `${to}T23:59:59` : null,
+    }),
+  })
+  const flywheelSummary = flywheelSummaryQuery.data ?? []
+
   // Tasks filtered by the active from/to range. A task qualifies when
   // EITHER its completed_at (when finished) OR its created_at (when
   // added) falls inside the window — gives "task activity in this
@@ -427,54 +440,48 @@ export default function BusinessHealth() {
            glance. Replaces the old monochrome % bar; real counts tell
            admins how much work is actually tagged to each stage. */}
       {(() => {
-        const chartData = STAGES.map(s => ({
-          name: s.name,
-          done: stageStats[s.key]?.done ?? 0,
-          open: stageStats[s.key]?.open ?? 0,
-          color: s.color,
-        }))
-        const maxCount = Math.max(1, ...chartData.map(d => d.done + d.open))
+        // Real flywheel-event counts per stage from the ledger (PR2).
+        const byStage = new Map(flywheelSummary.map(s => [s.stage, s.event_count]))
+        const chartData = STAGES.map(s => ({ name: s.name, events: byStage.get(s.key) ?? 0, color: s.color }))
+        const maxCount = Math.max(1, ...chartData.map(d => d.events))
+        const totalEvents = chartData.reduce((a, d) => a + d.events, 0)
         return (
           <div className="bg-surface rounded-2xl border border-border p-5">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-[16px] font-bold text-text tracking-tight">Flywheel Activity</h2>
-              <span className="text-[11px] text-text-light">Tasks per stage</span>
+              <span className="text-[11px] text-text-light">Events per stage · live ledger</span>
             </div>
             <p className="text-[11px] text-text-light mb-4">
-              <span className="inline-flex items-center gap-1.5 mr-3">
-                <span className="w-2 h-2 rounded-sm bg-gold inline-block" aria-hidden="true" />
-                Completed
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-sm bg-gold/30 inline-block" aria-hidden="true" />
-                Assigned · in progress
-              </span>
+              Real actions recorded across the flywheel in this date range.
             </p>
-            <div className="h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} barSize={32} barGap={8}>
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6e6e76', fontSize: 12 }} />
-                  <YAxis domain={[0, Math.ceil(maxCount * 1.1)]} axisLine={false} tickLine={false} tick={{ fill: '#46464e', fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={tooltipStyle}
-                    labelStyle={tooltipLabelStyle}
-                    formatter={(value, name) => [
-                      `${value} ${Number(value) === 1 ? 'task' : 'tasks'}`,
-                      name === 'done' ? 'Completed' : 'Assigned · open',
-                    ]}
-                    cursor={{ fill: 'rgba(201, 168, 76, 0.05)' }}
-                  />
-                  {/* Opaque completed segment (bottom of stack) */}
-                  <Bar dataKey="done" stackId="a" radius={[0, 0, 0, 0]}>
-                    {chartData.map((d, i) => <Cell key={`done-${i}`} fill={d.color} fillOpacity={0.95} />)}
-                  </Bar>
-                  {/* Translucent open segment (top of stack) */}
-                  <Bar dataKey="open" stackId="a" radius={[6, 6, 0, 0]}>
-                    {chartData.map((d, i) => <Cell key={`open-${i}`} fill={d.color} fillOpacity={0.3} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {flywheelSummaryQuery.isLoading ? (
+              <div className="h-[220px] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-gold/20 border-t-gold" />
+              </div>
+            ) : totalEvents === 0 ? (
+              <div className="h-[220px] flex flex-col items-center justify-center text-text-light">
+                <PieChartIcon size={20} className="mb-2" aria-hidden="true" />
+                <p className="text-[12px]">No flywheel events in this range yet.</p>
+              </div>
+            ) : (
+              <div className="h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} barSize={36}>
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6e6e76', fontSize: 12 }} />
+                    <YAxis domain={[0, Math.ceil(maxCount * 1.1)]} axisLine={false} tickLine={false} tick={{ fill: '#46464e', fontSize: 10 }} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      labelStyle={tooltipLabelStyle}
+                      formatter={(value) => [`${value} ${Number(value) === 1 ? 'event' : 'events'}`, 'Activity']}
+                      cursor={{ fill: 'rgba(201, 168, 76, 0.05)' }}
+                    />
+                    <Bar dataKey="events" radius={[6, 6, 0, 0]}>
+                      {chartData.map((d, i) => <Cell key={`ev-${i}`} fill={d.color} fillOpacity={0.9} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         )
       })()}
