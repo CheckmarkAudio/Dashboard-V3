@@ -485,8 +485,9 @@ export default function CreateBookingModal({
             .select('id', { count: 'exact', head: true })
             .eq('client_id', linkedClientId)
             .neq('id', newSessionId)
-          // count === 0 means the only session for this client is
-          // the one we just created → Capture event.
+          // count === 0 → this is the client's first session: conversion
+          // (Workflow). count > 0 → a returning client booking again:
+          // Retention (the action that fuels growth).
           if ((count ?? 0) === 0) {
             await emitFlywheelEvent({
               stage: 'workflow',
@@ -496,6 +497,18 @@ export default function CreateBookingModal({
                 milestone: 'client_converted',
                 client_id: linkedClientId,
                 session_type: payload.session_type,
+              },
+            })
+          } else {
+            await emitFlywheelEvent({
+              stage: 'retention',
+              source_type: 'session',
+              source_id: newSessionId,
+              metadata: {
+                milestone: 'repeat_booking',
+                client_id: linkedClientId,
+                session_type: payload.session_type,
+                prior_sessions: count ?? 0,
               },
             })
           }

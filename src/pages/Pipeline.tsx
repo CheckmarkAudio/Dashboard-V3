@@ -4,6 +4,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
 import { supabase } from '../lib/supabase'
+import { emitFlywheelEvent } from '../lib/queries/flywheelEvents'
 import { fetchPipelineEntries, pipelineKeys } from '../lib/queries/pipeline'
 import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import { isFollowupOverdue } from '../lib/dates'
@@ -132,6 +133,12 @@ export default function Pipeline() {
       toast(error.message || 'Could not add artist', 'error')
       return
     }
+    // Flywheel: a new pipeline artist = Discovery (top-of-funnel prospect).
+    void emitFlywheelEvent({
+      stage: 'discovery',
+      source_type: 'pipeline',
+      metadata: { artist_name: payload.artist_name },
+    })
     toast('Artist added', 'success')
     setShowAddForm(false)
     setAddForm(EMPTY_FORM)

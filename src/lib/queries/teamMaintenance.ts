@@ -15,6 +15,7 @@
 // per member who's checked off so far this period).
 
 import { supabase } from '../supabase'
+import { emitFlywheelEvent } from './flywheelEvents'
 
 export type MaintenanceCadence = 'daily' | 'weekly' | 'monthly'
 // 2026-05-25 — renamed 'everyone' → 'all_members' + added 'individual'.
@@ -100,6 +101,16 @@ export async function toggleMaintenanceCheck(
   if (error) {
     console.error('[queries/teamMaintenance] toggleMaintenanceCheck failed:', error)
     throw new Error(error.message)
+  }
+  // Flywheel: completing a studio checklist item = Workflow (the studio
+  // staying run-ready). Only fire on check (not on un-check).
+  if (check) {
+    void emitFlywheelEvent({
+      stage: 'workflow',
+      source_type: 'checklist',
+      source_id: itemId,
+      metadata: {},
+    })
   }
   return data as {
     item_id: string

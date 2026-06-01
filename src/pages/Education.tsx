@@ -3,6 +3,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/Toast'
 import { supabase } from '../lib/supabase'
+import { emitFlywheelEvent } from '../lib/queries/flywheelEvents'
 import type { EducationStudent, TeamMember } from '../types'
 import {
   GraduationCap,
@@ -173,6 +174,12 @@ export default function Education() {
         toast(error.message || 'Could not add student', 'error')
         return
       }
+      // Flywheel: enrolling a student = Education (community / long-term pipeline).
+      void emitFlywheelEvent({
+        stage: 'education',
+        source_type: 'education_student',
+        metadata: { student_name: payload.student_name, instrument: payload.instrument ?? null },
+      })
       toast('Student added', 'success')
     }
     closeForm()
