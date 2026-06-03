@@ -14,6 +14,7 @@ import NotificationsBell from './notifications/NotificationsBell'
 import MessagesBell from './messages/MessagesBell'
 import { DmDockProvider } from './messages/DmDockContext'
 import DmDock from './messages/DmDock'
+import FlywheelDemoBadge from './flywheel/FlywheelDemoBadge'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import MemberAvatar from './members/MemberAvatar'
 import { useToast } from './Toast'
@@ -787,6 +788,9 @@ export default function Layout() {
       {/* Messenger-style floating chat dock. Lives outside the routed
           <Outlet/> so open conversations follow the user page to page. */}
       <DmDock />
+
+      {/* "DEMO DATA" badge — only renders when ?flywheel-demo=1 is active. */}
+      <FlywheelDemoBadge />
     </div>
     </DmDockProvider>
   )

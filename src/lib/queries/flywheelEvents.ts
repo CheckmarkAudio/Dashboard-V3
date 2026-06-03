@@ -18,6 +18,7 @@
 
 import { supabase } from '../supabase'
 import type { FlywheelStage } from '../flywheel/stages'
+import { isFlywheelDemo, demoStageSummary, demoActivityFeed } from '../flywheel/demo'
 
 // Re-exported from the canonical module so existing
 // `import { FlywheelStage } from '.../flywheelEvents'` callers keep working.
@@ -111,6 +112,7 @@ export async function fetchFlywheelStageSummary(opts?: {
   until?: string | null
   member?: string | null
 }): Promise<FlywheelStageCount[]> {
+  if (isFlywheelDemo()) return demoStageSummary(opts)
   const { data, error } = await supabase.rpc('get_flywheel_stage_summary', {
     p_since: opts?.since ?? undefined,
     p_until: opts?.until ?? undefined,
@@ -144,6 +146,7 @@ type RawActivityRow = {
 
 /** Most-recent flywheel events for the caller's team (RLS-scoped). */
 export async function fetchFlywheelActivity(limit = 8): Promise<FlywheelActivityRow[]> {
+  if (isFlywheelDemo()) return demoActivityFeed(limit)
   const { data, error } = await supabase
     .from('flywheel_events')
     .select('id, stage, source_type, metadata, occurred_at, member:team_members!flywheel_events_member_id_fkey(display_name)')
