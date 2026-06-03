@@ -230,6 +230,29 @@ export default function BusinessHealth() {
   })
   const flywheelSummary = flywheelSummaryQuery.data ?? []
 
+  // PR3: the "Flywheel KPIs" panel is now ledger-derived. The time toggle
+  // (total/year/month/week/day) actually filters now — it drives a separate
+  // stage-summary query over the chosen window. Per-stage event counts +
+  // each stage's share of total activity replace the old task-based %.
+  const kpiRange = useMemo(() => {
+    if (timeFilter === 'total') return { since: null as string | null, until: null as string | null }
+    const now = new Date()
+    const since = new Date(now)
+    if (timeFilter === 'day') since.setDate(now.getDate() - 1)
+    else if (timeFilter === 'week') since.setDate(now.getDate() - 7)
+    else if (timeFilter === 'month') since.setMonth(now.getMonth() - 1)
+    else since.setFullYear(now.getFullYear() - 1)
+    return { since: since.toISOString(), until: now.toISOString() }
+  }, [timeFilter])
+  const kpiSummaryQuery = useQuery({
+    queryKey: flywheelKeys.summary(kpiRange.since, kpiRange.until, null),
+    queryFn: () => fetchFlywheelStageSummary({ since: kpiRange.since, until: kpiRange.until }),
+  })
+  const kpiByStage = new Map((kpiSummaryQuery.data ?? []).map(s => [s.stage, s.event_count]))
+  const kpiTotal = (kpiSummaryQuery.data ?? []).reduce((a, s) => a + s.event_count, 0)
+  const selectedCount = kpiByStage.get(selectedStage) ?? 0
+  const selectedSharePct = kpiTotal > 0 ? Math.round((selectedCount / kpiTotal) * 100) : 0
+
   // Tasks filtered by the active from/to range. A task qualifies when
   // EITHER its completed_at (when finished) OR its created_at (when
   // added) falls inside the window — gives "task activity in this
@@ -301,7 +324,6 @@ export default function BusinessHealth() {
     due: t.due_date,
   })), ...mockStageTasks]
   const sortedStageTasks = [...stageTasks].sort((a, b) => a.completed === b.completed ? 0 : a.completed ? 1 : -1)
-  const stats = stageStats[selectedStage] ?? { total: 0, done: 0, open: 0, pct: 0 }
 
   // ── Donut data — raw task counts per stage, real + mock ──────────────
 
@@ -502,13 +524,13 @@ export default function BusinessHealth() {
 
         <div className="px-5 py-3 border-b border-border/50 flex gap-1">
           {STAGES.map(s => {
-            const st = stageStats[s.key] ?? { pct: 0 }
+            const count = kpiByStage.get(s.key) ?? 0
             const active = selectedStage === s.key
             return (
               <button key={s.key} onClick={() => setSelectedStage(s.key)}
                 className={`flex-1 py-3 rounded-xl text-center transition-all ${active ? 'bg-gold/8 border border-gold/20' : 'hover:bg-white/[0.02]'}`}>
                 <p className={`text-[13px] font-semibold tracking-tight ${active ? 'text-gold' : 'text-text-muted'}`}>{s.name}</p>
-                <p className={`text-[18px] font-bold tracking-tight mt-0.5 ${active ? 'text-text' : 'text-text-light'}`}>{st.pct}%</p>
+                <p className={`text-[18px] font-bold tracking-tight mt-0.5 tabular-nums ${active ? 'text-text' : 'text-text-light'}`}>{count}</p>
               </button>
             )
           })}
@@ -523,12 +545,13 @@ export default function BusinessHealth() {
 
           <div className="mt-4 mb-5">
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[12px] text-text-light">Progress</p>
-              <p className="text-[14px] font-bold text-text">{stats.pct}%</p>
+              <p className="text-[12px] text-text-light">Activity · {timeFilter === 'total' ? 'all time' : `past ${timeFilter}`}</p>
+              <p className="text-[14px] font-bold text-text tabular-nums">{selectedCount} event{selectedCount === 1 ? '' : 's'}</p>
             </div>
             <div className="h-2 bg-surface-alt rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all duration-700 ease-out bg-gold" style={{ width: `${stats.pct}%` }} />
+              <div className="h-full rounded-full transition-all duration-700 ease-out bg-gold" style={{ width: `${selectedSharePct}%` }} />
             </div>
+            <p className="text-[10px] text-text-light mt-1">{selectedSharePct}% of all flywheel activity this period</p>
           </div>
 
           <div className="space-y-0">
