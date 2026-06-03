@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FLYWHEEL_STAGES as FLYWHEEL_STAGES_CANON,
   FLYWHEEL_STAGE_KEYS,
-  normalizeLegacyStage,
   type FlywheelStage,
 } from '../../lib/flywheel/stages'
 import {
@@ -21,12 +20,10 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import { useAuth } from '../../contexts/AuthContext'
 import { useAdminOverviewContext } from '../../contexts/AdminOverviewContext'
-import { fetchTeamAssignedTasks } from '../../lib/queries/assignments'
 import { supabase } from '../../lib/supabase'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
-import { fetchKPIDefinitions, fetchKPIEntries, kpiKeys } from '../../lib/queries/kpi'
+import { fetchFlywheelStageSummary, flywheelKeys } from '../../lib/queries/flywheelEvents'
 import { useToast } from '../Toast'
 import CreateBookingModal from '../CreateBookingModal'
 import MultiTaskCreateModal from '../tasks/requests/MultiTaskCreateModal'
@@ -182,128 +179,59 @@ function AssignTile({
 // stage, current aggregate KPI progress (% of target), and a mini bar.
 // Links to /admin/health for the full analytics page.
 
-type StageKey = FlywheelStage
 
 export function AdminFlywheelWidget() {
-  const { profile } = useAuth()
-  const defsQuery = useQuery({
-    queryKey: kpiKeys.definitions(),
-    queryFn: fetchKPIDefinitions,
+  // Ledger-driven (PR #272): all-time team flywheel-event counts per stage
+  // from get_flywheel_stage_summary. Replaces the old task/KPI-def mash-up
+  // so the Hub widget matches the Analytics charts + Overview widgets.
+  const summaryQuery = useQuery({
+    queryKey: flywheelKeys.summary(null, null, null),
+    queryFn: () => fetchFlywheelStageSummary({}),
   })
-  const entriesQuery = useQuery({
-    queryKey: kpiKeys.entries(),
-    queryFn: fetchKPIEntries,
-  })
-  // PR #27 — pull team-wide assigned_tasks so the flywheel reflects
-  // real task activity per stage. Completed = opaque, assigned-but-
-  // not-yet-done = translucent in the bar below each stage. Same
-  // cache key the Tasks page + member widgets use, so the fetch is
-  // deduped by react-query.
-  const tasksQuery = useQuery({
-    queryKey: ['team-assigned-tasks', profile?.id ?? 'none', 'all'] as const,
-    queryFn: () => fetchTeamAssignedTasks(profile!.id, { includeCompleted: true }),
-    enabled: Boolean(profile?.id),
-  })
+  const loading = summaryQuery.isLoading
+  const error = summaryQuery.error
 
-  // PR #28 — include tasksQuery in the loading + error surface so
-  // the widget doesn't silently show "no tasks tagged" while the
-  // team task RPC is still in flight or has failed.
-  const loading = defsQuery.isLoading || entriesQuery.isLoading || tasksQuery.isLoading
-  const error = defsQuery.error ?? entriesQuery.error ?? tasksQuery.error
-
-  const stages = useMemo(() => {
-    const defs = defsQuery.data ?? []
-    const entries = entriesQuery.data ?? []
-    const tasks = tasksQuery.data ?? []
-
-    // Task category strings are Title-cased ('Deliver', ...) — the
-    // FlywheelStagePicker emits exactly these. Normalize to the
-    // lowercase StageKey used for lookups against STAGE_STYLES.
-    const tasksByStage = new Map<StageKey, { total: number; completed: number }>()
-    for (const t of tasks) {
-      const key = normalizeLegacyStage(t.category)
-      if (!key) continue
-      const bucket = tasksByStage.get(key) ?? { total: 0, completed: 0 }
-      bucket.total += 1
-      if (t.is_completed) bucket.completed += 1
-      tasksByStage.set(key, bucket)
-    }
-
-    const byStage = new Map<StageKey, { defs: typeof defs; totalPct: number; count: number }>()
-    for (const d of defs) {
-      const stage = normalizeLegacyStage(d.flywheel_stage)
-      if (!stage) continue
-      const bucket = byStage.get(stage) ?? { defs: [], totalPct: 0, count: 0 }
-      const kpiEntries = entries.filter((e) => e.kpi_id === d.id)
-      const latest = kpiEntries[kpiEntries.length - 1]?.value
-      if (d.target_value && latest != null) {
-        const pct = Math.min(100, Math.round((Number(latest) / Number(d.target_value)) * 100))
-        bucket.totalPct += pct
-        bucket.count += 1
-      }
-      bucket.defs.push(d)
-      byStage.set(stage, bucket)
-    }
-    const stageOrder: StageKey[] = FLYWHEEL_STAGE_KEYS
-    return stageOrder.map((key) => {
-      const s = STAGE_STYLES[key]
-      const bucket = byStage.get(key)
-      const pct = bucket && bucket.count > 0 ? Math.round(bucket.totalPct / bucket.count) : null
-      const taskStats = tasksByStage.get(key) ?? { total: 0, completed: 0 }
-      return {
-        key,
-        label: s.label,
-        style: s,
-        pct,
-        kpiCount: bucket?.defs.length ?? 0,
-        taskTotal: taskStats.total,
-        taskCompleted: taskStats.completed,
-      }
-    })
-  }, [defsQuery.data, entriesQuery.data, tasksQuery.data])
-
-  // Summary figures for the header strip — total KPIs tracked + overall
-  // aggregate % (average of the stages that have data). Gives admins
-  // something quantitative at the top of the widget instead of making
-  // them scan every bar.
-  const totalKpis = stages.reduce((acc, s) => acc + s.kpiCount, 0)
-  const backedStages = stages.filter((s) => s.pct !== null)
-  const overallPct = backedStages.length > 0
-    ? Math.round(backedStages.reduce((acc, s) => acc + (s.pct ?? 0), 0) / backedStages.length)
-    : null
+  const byStage = new Map((summaryQuery.data ?? []).map((s) => [s.stage, s.event_count]))
+  const stages = FLYWHEEL_STAGE_KEYS.map((key) => ({
+    key,
+    label: STAGE_STYLES[key].label,
+    style: STAGE_STYLES[key],
+    count: byStage.get(key) ?? 0,
+  }))
+  const totalEvents = stages.reduce((acc, s) => acc + s.count, 0)
+  const maxCount = Math.max(1, ...stages.map((s) => s.count))
+  const activeStages = stages.filter((s) => s.count > 0).length
 
   return (
     <div className="flex flex-col h-full">
       <TodayAnchor
         right={
-          !loading && !error && overallPct !== null ? (
+          !loading && !error ? (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gold/15 ring-1 ring-gold/40 text-gold text-[10px] font-bold tracking-wider uppercase">
-              <Target size={9} /> {overallPct}% overall
+              <Target size={9} /> {totalEvents} events
             </span>
           ) : null
         }
       />
 
-      {/* KPI summary strip — shows how many KPIs exist + how many
-          stages currently have data. Without this the widget's header
-          is just a date and feels empty on a 2-row-tall card. */}
+      {/* Summary strip — total recorded flywheel events + how many of the
+          five stages have any activity yet. */}
       {!loading && !error && (
         <div className="grid grid-cols-2 gap-2 mb-3 shrink-0">
           <div className="rounded-lg bg-surface-alt/60 border border-border/50 px-2.5 py-2">
-            <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold">KPIs Tracked</p>
-            <p className="text-[18px] font-bold text-text tabular-nums leading-tight mt-0.5">{totalKpis}</p>
+            <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold">Total Events</p>
+            <p className="text-[18px] font-bold text-text tabular-nums leading-tight mt-0.5">{totalEvents}</p>
           </div>
           <div className="rounded-lg bg-surface-alt/60 border border-border/50 px-2.5 py-2">
-            <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold">Stages With Data</p>
+            <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold">Active Stages</p>
             <p className="text-[18px] font-bold text-text tabular-nums leading-tight mt-0.5">
-              {backedStages.length}<span className="text-text-light text-[14px]">/5</span>
+              {activeStages}<span className="text-text-light text-[14px]">/5</span>
             </p>
           </div>
         </div>
       )}
 
-      {/* Stage bars — each row is bigger so five of them fill the
-          remaining space without needing justify-center spacing. */}
+      {/* Stage bars — one per stage, length relative to the busiest stage. */}
       <div className="flex-1 min-h-0 space-y-2.5">
         {loading ? (
           <div className="h-full flex items-center justify-center text-text-light">
@@ -312,18 +240,15 @@ export function AdminFlywheelWidget() {
         ) : error ? (
           <div className="h-full flex items-center gap-2 text-sm text-amber-300 px-2">
             <AlertCircle size={16} className="shrink-0" />
-            <span className="truncate">Could not load KPI data</span>
+            <span className="truncate">Could not load flywheel data</span>
+          </div>
+        ) : totalEvents === 0 ? (
+          <div className="h-full flex items-center justify-center text-[12px] text-text-light px-3 text-center">
+            No flywheel activity yet — actions will show up here as they happen.
           </div>
         ) : (
           stages.map((s) => {
-            // PR #27 — Task-completion portion of the bar. Each stage
-            // now surfaces real task activity: opaque = completed,
-            // translucent = assigned-but-not-yet-done. Empty background
-            // (zero tasks tagged) shows neutral surface.
-            const taskPct = s.taskTotal > 0
-              ? Math.round((s.taskCompleted / s.taskTotal) * 100)
-              : 0
-            const openCount = s.taskTotal - s.taskCompleted
+            const widthPct = s.count > 0 ? Math.max(6, Math.round((s.count / maxCount) * 100)) : 0
             return (
               <div key={s.key} className="rounded-lg bg-surface-alt/40 border border-border/40 px-3 py-2">
                 <div className="flex items-center justify-between mb-1.5">
@@ -332,59 +257,15 @@ export function AdminFlywheelWidget() {
                     {s.label}
                   </span>
                   <span className="text-[12px] tabular-nums text-text font-semibold">
-                    {s.taskTotal > 0 ? (
-                      <span>
-                        {s.taskCompleted}<span className="text-text-light">/{s.taskTotal}</span>
-                      </span>
-                    ) : s.pct !== null ? (
-                      `${s.pct}%`
-                    ) : (
-                      <span className="text-text-light italic font-normal">no tasks tagged</span>
-                    )}
+                    {s.count} event{s.count === 1 ? '' : 's'}
                   </span>
                 </div>
-                {/* Dual-opacity task bar: opaque completed segment +
-                    translucent assigned-but-open segment on the same
-                    track. Full width when all tasks done; empty when
-                    no tasks tagged to this stage. */}
-                <div className="h-2 rounded-full bg-surface overflow-hidden relative">
-                  {s.taskTotal > 0 ? (
-                    <div className="absolute inset-0 flex">
-                      <div
-                        className={`h-full ${s.style.dot} transition-all duration-500`}
-                        style={{ width: `${taskPct}%` }}
-                        aria-label={`${s.taskCompleted} completed`}
-                      />
-                      <div
-                        className={`h-full ${s.style.dot} transition-all duration-500`}
-                        style={{
-                          width: `${100 - taskPct}%`,
-                          opacity: 0.3,
-                        }}
-                        aria-label={`${openCount} open`}
-                      />
-                    </div>
-                  ) : (
-                    // Fallback: if no tasks tagged, show the KPI-based
-                    // bar so the widget isn't empty on a fresh install.
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${s.pct === null ? '' : s.style.dot}`}
-                      style={{ width: `${s.pct ?? 4}%`, opacity: s.pct === null ? 0.25 : 1 }}
-                    />
-                  )}
+                <div className="h-2 rounded-full bg-surface overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${s.count > 0 ? s.style.dot : ''}`}
+                    style={{ width: `${widthPct}%` }}
+                  />
                 </div>
-                <p className="text-[10px] text-text-light mt-1">
-                  {s.taskTotal > 0 ? (
-                    <>
-                      {s.taskCompleted} done · {openCount} open
-                      {s.kpiCount > 0 && ` · ${s.kpiCount} KPI${s.kpiCount === 1 ? '' : 's'}`}
-                    </>
-                  ) : s.kpiCount === 0 ? (
-                    'Tracking zero KPIs · no tasks tagged'
-                  ) : (
-                    `${s.kpiCount} KPI${s.kpiCount === 1 ? '' : 's'} linked · no tasks tagged`
-                  )}
-                </p>
               </div>
             )
           })
