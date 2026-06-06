@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useTasks } from '../../contexts/TaskContext'
 import { fetchTeamAssignedTasks } from '../../lib/queries/assignments'
 import { fetchFlywheelStageSummary, flywheelKeys } from '../../lib/queries/flywheelEvents'
+import { isFlywheelDemo, demoStageSummary, demoMonthlyTrend, demoTasksByEmployee, demoStudioBuckets } from '../../lib/flywheel/demo'
 import { Check, RefreshCcw, Target, CheckSquare, Briefcase, Info, PieChart as PieChartIcon } from 'lucide-react'
 import { ExportButtons, toExportColumns } from '../../components/ui'
 import { taskExportColumns } from '../../lib/columns/taskColumns'
@@ -280,6 +281,17 @@ export default function BusinessHealth() {
 
   const stageStats = useMemo(() => {
     const stats: Record<string, { total: number; done: number; open: number; pct: number }> = {}
+    // Demo preview: synthesize per-stage totals (≈80% "done") so the pie,
+    // summary cards, and Best/Needs populate without touching the DB.
+    if (isFlywheelDemo()) {
+      const byKey = new Map(demoStageSummary().map((d) => [d.stage, d.event_count]))
+      for (const stage of STAGES) {
+        const total = byKey.get(stage.key) ?? 0
+        const done = Math.round(total * 0.8)
+        stats[stage.key] = { total, done, open: total - done, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
+      }
+      return stats
+    }
     for (const stage of STAGES) {
       // Real assigned_tasks tagged to this stage (category stores the
       // canonical key; normalizeLegacyStage tolerates any legacy leftover).
@@ -305,8 +317,13 @@ export default function BusinessHealth() {
   // Totals cover both surfaces: real tagged tasks + bookings.
   const totalAssignedTagged = assignedTasks.filter(t => normalizeLegacyStage(t.category) !== null).length
   const totalAssignedDone = assignedTasks.filter(t => normalizeLegacyStage(t.category) !== null && t.is_completed).length
-  const totalItems = totalAssignedTagged + bookings.length
-  const totalDone = totalAssignedDone + bookings.filter(b => b.status === 'Confirmed').length
+  const demoActive = isFlywheelDemo()
+  const totalItems = demoActive
+    ? Object.values(stageStats).reduce((a, s) => a + s.total, 0)
+    : totalAssignedTagged + bookings.length
+  const totalDone = demoActive
+    ? Object.values(stageStats).reduce((a, s) => a + s.done, 0)
+    : totalAssignedDone + bookings.filter(b => b.status === 'Confirmed').length
   const overallPct = totalItems > 0 ? Math.round((totalDone / totalItems) * 100) : 0
   const healthLabel = overallPct >= 85 ? 'Excellent' : overallPct >= 65 ? 'Good' : overallPct >= 40 ? 'Average' : 'Low'
 
@@ -336,13 +353,20 @@ export default function BusinessHealth() {
 
   // ── Empty-state guards ────────────────────────────────────────────────
 
+  // Demo preview feeds the placeholder-backed charts too, so the whole
+  // page can be evaluated (Bookings Trend, KPI Performance bar, Tasks by
+  // Employee, Studio Tasks). Real mode keeps the empty consts until live.
+  const monthlyTrend = demoActive ? demoMonthlyTrend() : MONTHLY_TREND
+  const tasksByEmployee = demoActive ? demoTasksByEmployee() : TASKS_BY_EMPLOYEE
+  const studioBuckets = demoActive ? demoStudioBuckets() : STUDIO_BUCKETS
+
   const hasAnyWork      = totalItems > 0
   const hasKpiCounts    = tasksByKpiStage.some(s => s.count > 0)
-  const hasTrendData    = MONTHLY_TREND.length > 0
-  const hasEmployeeData = TASKS_BY_EMPLOYEE.length > 0
-  const hasStudioData   = STUDIO_BUCKETS.length > 0
+  const hasTrendData    = monthlyTrend.length > 0
+  const hasEmployeeData = tasksByEmployee.length > 0
+  const hasStudioData   = studioBuckets.length > 0
 
-  const totalBookingsInTrend = MONTHLY_TREND.reduce((s, r) => s + r.bookings, 0)
+  const totalBookingsInTrend = monthlyTrend.reduce((s, r) => s + r.bookings, 0)
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
@@ -656,7 +680,7 @@ export default function BusinessHealth() {
         {hasTrendData ? (
           <div className="h-72" aria-hidden="true">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={MONTHLY_TREND} barCategoryGap="30%">
+              <BarChart data={monthlyTrend} barCategoryGap="30%">
                 <CartesianGrid stroke="#34343d" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={false} tickLine={false} width={40} />
@@ -684,7 +708,7 @@ export default function BusinessHealth() {
         {hasTrendData ? (
           <div className="h-56" aria-hidden="true">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={MONTHLY_TREND}>
+              <LineChart data={monthlyTrend}>
                 <CartesianGrid stroke="#34343d" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={false} tickLine={false} width={32} />
@@ -713,7 +737,7 @@ export default function BusinessHealth() {
         {hasEmployeeData ? (
           <div className="h-80" aria-hidden="true">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={TASKS_BY_EMPLOYEE} layout="vertical" barCategoryGap="25%">
+              <BarChart data={tasksByEmployee} layout="vertical" barCategoryGap="25%">
                 <CartesianGrid stroke="#34343d" strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
                 <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#e2e2ea' }} axisLine={false} tickLine={false} width={120} />
@@ -737,7 +761,7 @@ export default function BusinessHealth() {
         </div>
         {hasEmployeeData ? (
           <div className="space-y-0">
-            {TASKS_BY_EMPLOYEE.map(emp => (
+            {tasksByEmployee.map(emp => (
               <div key={emp.name} className="flex items-center justify-between py-2 border-b border-border last:border-b-0">
                 <span className="text-sm text-text">{emp.name}</span>
                 <span className="flex items-center gap-2 text-sm">
@@ -764,7 +788,7 @@ export default function BusinessHealth() {
         </div>
         {hasStudioData ? (
           <div className="space-y-0">
-            {STUDIO_BUCKETS.map(b => (
+            {studioBuckets.map(b => (
               <div key={b.label} className="flex items-center justify-between py-2 border-b border-border last:border-b-0">
                 <span className="text-sm text-text">{b.label}</span>
                 <span className="font-bold text-text tabular-nums">{b.count}</span>

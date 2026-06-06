@@ -88,6 +88,39 @@ const DEMO_FEED: DemoEvent[] = [
   { stage: 'discovery', source_type: 'task', metadata: { title: 'Post Craigslist + Nextdoor ads' }, actor: 'Checkmark Admin', minsAgo: 520 },
 ]
 
+// ── Analytics-page demo data (BusinessHealth's non-ledger charts) ──────
+// These sections read from placeholder consts that are empty until real
+// data flows; in demo mode we feed them so the WHOLE page can be evaluated.
+
+/** Monthly bookings / tasks / studio counts (KPI Performance bar + Bookings Trend line). */
+export function demoMonthlyTrend(): { month: string; bookings: number; tasks: number; studio: number }[] {
+  const months = ['Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May']
+  const bookings = [9, 12, 11, 15, 14, 18]
+  const tasks = [34, 41, 38, 47, 44, 52]
+  const studio = [12, 15, 13, 17, 16, 20]
+  return months.map((month, i) => ({ month, bookings: bookings[i]!, tasks: tasks[i]!, studio: studio[i]! }))
+}
+
+/** Per-employee KPI vs studio task split (Tasks by Employee). */
+export function demoTasksByEmployee(): { name: string; tasks: number; kpi: number; studio: number }[] {
+  return [
+    { name: 'Gavin Hammond', kpi: 38, studio: 14 },
+    { name: 'Studio Intern', kpi: 26, studio: 22 },
+    { name: 'Checkmark Admin', kpi: 19, studio: 9 },
+    { name: 'Maya R.', kpi: 12, studio: 6 },
+  ].map((r) => ({ ...r, tasks: r.kpi + r.studio }))
+}
+
+/** Unassigned studio-maintenance task buckets (Studio Tasks list). */
+export function demoStudioBuckets(): { label: string; count: number }[] {
+  return [
+    { label: 'Control Room reset', count: 14 },
+    { label: 'Gear inventory', count: 9 },
+    { label: 'Studio A cleanup', count: 11 },
+    { label: 'Cable management', count: 6 },
+  ]
+}
+
 /** Synthetic recent activity feed (most recent first), capped to `limit`. */
 export function demoActivityFeed(limit = 8): FlywheelActivityRow[] {
   return DEMO_FEED.slice(0, limit).map((e, i) => ({
