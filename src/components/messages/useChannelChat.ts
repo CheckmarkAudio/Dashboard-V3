@@ -1,11 +1,13 @@
-// useChannelChat — minimal load + realtime + optimistic send for a single
-// chat channel. Powers the floating dock windows (text-only for v1; the
-// full Forum pane keeps attachments / unfurl / edit-delete). Works for any
-// channel the caller can read — RLS gates DM/group access server-side.
+// useChannelChat — load + realtime + optimistic send for a single chat
+// channel. Powers the floating dock windows. Supports text + media
+// attachments (same `chat_messages.attachments` jsonb + forum upload path
+// the Forum pane uses). Works for any channel the caller can read — RLS
+// gates DM/group access server-side.
 
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import type { ChatAttachment } from '../../lib/forum/attachments'
 
 export type ChatMessage = {
   id: string
@@ -15,11 +17,12 @@ export type ChatMessage = {
   sender_initial: string
   content: string
   created_at: string
+  attachments?: ChatAttachment[] | null
   /** Client-only optimistic state; never round-trips to the DB. */
   _status?: 'sending' | 'failed'
 }
 
-const COLS = 'id, channel_id, sender_id, sender_name, sender_initial, content, created_at'
+const COLS = 'id, channel_id, sender_id, sender_name, sender_initial, content, created_at, attachments'
 
 export function useChannelChat(channelId: string | null) {
   const { profile } = useAuth()
@@ -83,9 +86,10 @@ export function useChannelChat(channelId: string | null) {
   }, [channelId])
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, attachments: ChatAttachment[] = []) => {
       const trimmed = text.trim()
-      if (!trimmed || !channelId || !profile) return
+      // Allow attachment-only messages (e.g. just an image, no caption).
+      if ((!trimmed && attachments.length === 0) || !channelId || !profile) return
       const name = profile.display_name ?? 'User'
       const userId = profile.id
       const initial = name.charAt(0).toUpperCase()
@@ -98,13 +102,14 @@ export function useChannelChat(channelId: string | null) {
         sender_initial: initial,
         content: trimmed,
         created_at: new Date().toISOString(),
+        attachments,
         _status: 'sending',
       }
       setMessages((prev) => [...prev, optimistic])
       try {
         const { data, error } = await supabase
           .from('chat_messages')
-          .insert({ channel_id: channelId, sender_id: userId, sender_name: name, sender_initial: initial, content: trimmed })
+          .insert({ channel_id: channelId, sender_id: userId, sender_name: name, sender_initial: initial, content: trimmed, attachments })
           .select(COLS)
           .single()
         if (error || !data) throw error ?? new Error('send failed')

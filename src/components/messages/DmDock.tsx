@@ -10,6 +10,9 @@ import { Minus, Send, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import MemberAvatar from '../members/MemberAvatar'
 import LinkifiedText from '../forum/LinkifiedText'
+import MediaPicker from '../forum/MediaPicker'
+import AttachmentDisplay from '../forum/AttachmentDisplay'
+import type { ChatAttachment } from '../../lib/forum/attachments'
 import { dmKeys, dmThreadLabel, markDmRead, type DmThread } from '../../lib/queries/dms'
 import { useDmDock } from './DmDockContext'
 import { useDmThreads } from './useDmThreads'
@@ -57,6 +60,7 @@ function DmChatWindow({
   const queryClient = useQueryClient()
   const { messages, loading, send } = useChannelChat(channelId)
   const [input, setInput] = useState('')
+  const [pending, setPending] = useState<ChatAttachment[]>([])
   const endRef = useRef<HTMLDivElement>(null)
 
   const label = thread ? dmThreadLabel(thread) : 'Conversation'
@@ -76,11 +80,14 @@ function DmChatWindow({
       .catch(() => {})
   }, [channelId, minimized, loading, messages.length, queryClient])
 
+  const canSend = input.trim().length > 0 || pending.length > 0
   const submit = () => {
+    if (!canSend) return
     const t = input.trim()
-    if (!t) return
+    const atts = pending
     setInput('')
-    void send(t)
+    setPending([])
+    void send(t, atts)
   }
 
   // ── Minimized: a head with an unread dot ──
@@ -160,7 +167,12 @@ function DmChatWindow({
                   {!isMe && thread?.kind === 'group' && (
                     <span className="block text-[10px] font-semibold text-gold/80 mb-0.5">{m.sender_name}</span>
                   )}
-                  <LinkifiedText text={m.content} />
+                  {m.content && <LinkifiedText text={m.content} />}
+                  {Array.isArray(m.attachments) && m.attachments.length > 0 && (
+                    <div className={m.content ? 'mt-1.5' : ''}>
+                      <AttachmentDisplay attachments={m.attachments} ownBubble={isMe} />
+                    </div>
+                  )}
                   {m._status === 'failed' && <span className="block text-[10px] text-rose-400 mt-0.5">Failed — tap to retry</span>}
                 </div>
               </div>
@@ -170,32 +182,42 @@ function DmChatWindow({
         <div ref={endRef} />
       </div>
 
-      {/* Composer */}
-      <div className="px-2.5 py-2 border-t border-border shrink-0 flex items-center gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              submit()
-            }
-          }}
-          placeholder={`Message ${label.split(' ')[0]}…`}
-          className="flex-1 min-w-0 bg-surface-alt border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-gold focus:outline-none"
+      {/* Composer — MediaPicker (same as the Forum) stacks above the
+          input row; renders the pending-attachment strip itself. */}
+      <div className="px-2.5 py-2 border-t border-border shrink-0 space-y-2">
+        <MediaPicker
+          channelId={channelId}
+          userId={profile?.id ?? 'anon'}
+          pending={pending}
+          onAdd={(a) => setPending((prev) => [...prev, a])}
+          onRemove={(idx) => setPending((prev) => prev.filter((_, i) => i !== idx))}
         />
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!input.trim()}
-          aria-label="Send message"
-          className={`shrink-0 p-2 rounded-xl transition-all ${
-            input.trim() ? 'bg-gold text-black hover:bg-gold-muted' : 'bg-surface-alt text-text-light border border-border cursor-not-allowed'
-          }`}
-        >
-          <Send size={15} aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                submit()
+              }
+            }}
+            placeholder={`Message ${label.split(' ')[0]}…`}
+            className="flex-1 min-w-0 bg-surface-alt border border-border rounded-xl px-3 py-2 text-[13px] placeholder:text-text-light focus:border-gold focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!canSend}
+            aria-label="Send message"
+            className={`shrink-0 p-2 rounded-xl transition-all ${
+              canSend ? 'bg-gold text-black hover:bg-gold-muted' : 'bg-surface-alt text-text-light border border-border cursor-not-allowed'
+            }`}
+          >
+            <Send size={15} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
   )
