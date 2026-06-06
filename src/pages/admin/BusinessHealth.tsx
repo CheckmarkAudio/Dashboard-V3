@@ -11,7 +11,7 @@ import { ExportButtons, toExportColumns } from '../../components/ui'
 import { taskExportColumns } from '../../lib/columns/taskColumns'
 import { FLYWHEEL_STAGES, normalizeLegacyStage, type FlywheelStage } from '../../lib/flywheel/stages'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
   PieChart, Pie, LineChart, Line, CartesianGrid,
 } from 'recharts'
 
@@ -82,6 +82,18 @@ const STUDIO_BUCKETS: { label: string; count: number }[] = []
 
 const tooltipStyle = { background: '#1e1e25', border: '1px solid #34343d', borderRadius: 8, fontSize: 12, color: '#e2e2ea' }
 const tooltipLabelStyle = { color: '#bcbcc6' }
+// Ensures every tooltip line (value + name) is light on the dark bubble —
+// recharts otherwise tints item text with the series color, which can render
+// near-invisible on the dark popover.
+const tooltipItemStyle = { color: '#e2e2ea' }
+
+/** Round up to a "nice" goal ceiling (50/100/… steps) above a value. */
+function niceCeil(n: number): number {
+  if (n <= 10) return Math.max(1, Math.ceil(n))
+  const mag = Math.pow(10, Math.floor(Math.log10(n)))
+  const step = mag / 2
+  return Math.ceil(n / step) * step
+}
 
 function ChartEmptyState({ height = 'h-64', message }: { height?: string; message: string }) {
   return (
@@ -491,41 +503,67 @@ export default function BusinessHealth() {
         const chartData = STAGES.map(s => ({ name: s.name, events: byStage.get(s.key) ?? 0, color: s.color }))
         const maxCount = Math.max(1, ...chartData.map(d => d.events))
         const totalEvents = chartData.reduce((a, d) => a + d.events, 0)
+        // Goal ceiling: a "nice" round number above the busiest stage, with
+        // headroom. The translucent track behind each bar runs to this goal,
+        // so each bar reads as progress toward the target.
+        const goal = niceCeil(maxCount * 1.25)
         return (
           <div className="bg-surface rounded-2xl border border-border p-5">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-[16px] font-bold text-text tracking-tight">Flywheel Activity</h2>
               <span className="text-[11px] text-text-light">Events per stage · live ledger</span>
             </div>
-            <p className="text-[11px] text-text-light mb-4">
-              Real actions recorded across the flywheel in this date range.
+            <p className="text-[11px] text-text-light mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>Real actions recorded across the flywheel in this date range.</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded-[3px] bg-gold/10 ring-1 ring-gold/25" aria-hidden="true" />
+                goal · {goal.toLocaleString()}
+              </span>
             </p>
             {flywheelSummaryQuery.isLoading ? (
-              <div className="h-[220px] flex items-center justify-center">
+              <div className="h-[280px] flex items-center justify-center">
                 <div className="animate-spin rounded-full h-6 w-6 border-2 border-gold/20 border-t-gold" />
               </div>
             ) : totalEvents === 0 ? (
-              <div className="h-[220px] flex flex-col items-center justify-center text-text-light">
+              <div className="h-[280px] flex flex-col items-center justify-center text-text-light">
                 <PieChartIcon size={20} className="mb-2" aria-hidden="true" />
                 <p className="text-[12px]">No flywheel events in this range yet.</p>
               </div>
             ) : (
-              <div className="h-[220px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} barSize={36}>
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6e6e76', fontSize: 12 }} />
-                    <YAxis domain={[0, Math.ceil(maxCount * 1.1)]} axisLine={false} tickLine={false} tick={{ fill: '#46464e', fontSize: 10 }} allowDecimals={false} />
-                    <Tooltip
-                      contentStyle={tooltipStyle}
-                      labelStyle={tooltipLabelStyle}
-                      formatter={(value) => [`${value} ${Number(value) === 1 ? 'event' : 'events'}`, 'Activity']}
-                      cursor={{ fill: 'rgba(201, 168, 76, 0.05)' }}
-                    />
-                    <Bar dataKey="events" radius={[6, 6, 0, 0]}>
-                      {chartData.map((d, i) => <Cell key={`ev-${i}`} fill={d.color} fillOpacity={0.9} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              // Nested inset panel — frames the chart in the same chrome
+              // language as the dashboard widgets so it reads as a deliberate
+              // module, not a loose graphic.
+              <div className="rounded-xl border border-border/60 bg-surface-alt/30 p-4">
+                <div className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} barSize={56} barCategoryGap="22%" margin={{ top: 18, right: 8, left: -6, bottom: 0 }}>
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#8a8a93', fontSize: 12, fontWeight: 600 }} />
+                      <YAxis domain={[0, goal]} axisLine={false} tickLine={false} tick={{ fill: '#8a8a93', fontSize: 10 }} allowDecimals={false} width={34} />
+                      <Tooltip
+                        contentStyle={tooltipStyle}
+                        labelStyle={tooltipLabelStyle}
+                        itemStyle={tooltipItemStyle}
+                        formatter={(value) => [`${value} ${Number(value) === 1 ? 'event' : 'events'}`, 'Activity']}
+                        cursor={{ fill: 'rgba(201, 168, 76, 0.06)' }}
+                      />
+                      {/* Solid colored bar = actual; the `background` paints a
+                          translucent gold track up to the goal ceiling. */}
+                      <Bar dataKey="events" radius={[8, 8, 0, 0]} background={{ fill: 'rgba(201, 168, 76, 0.07)', radius: 8 }}>
+                        {chartData.map((d, i) => <Cell key={`ev-${i}`} fill={d.color} fillOpacity={0.95} />)}
+                        {/* On-bar count — white + drop-shadow reads on every
+                            stage color and in both light/dark themes. */}
+                        <LabelList
+                          dataKey="events"
+                          position="insideTop"
+                          offset={12}
+                          fill="#ffffff"
+                          fontSize={15}
+                          style={{ fontWeight: 800, textShadow: '0 1px 3px rgba(0,0,0,0.55)' }}
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
           </div>
