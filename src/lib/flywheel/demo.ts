@@ -88,6 +88,17 @@ const DEMO_FEED: DemoEvent[] = [
   { stage: 'discovery', source_type: 'task', metadata: { title: 'Post Craigslist + Nextdoor ads' }, actor: 'Checkmark Admin', minsAgo: 520 },
 ]
 
+// Per-stage completion rates for the demo (done ÷ total). Varied on purpose
+// so the Stage Health scorecard shows a realistic spread — Production humming,
+// Retention lagging — rather than a flat 80% everywhere.
+export const DEMO_STAGE_DONE_RATE: Record<FlywheelStage, number> = {
+  production: 0.88,
+  workflow: 0.79,
+  discovery: 0.66,
+  education: 0.54,
+  retention: 0.43,
+}
+
 // ── Analytics-page demo data (BusinessHealth's non-ledger charts) ──────
 // These sections read from placeholder consts that are empty until real
 // data flows; in demo mode we feed them so the WHOLE page can be evaluated.

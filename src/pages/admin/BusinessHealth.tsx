@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useTasks } from '../../contexts/TaskContext'
 import { fetchTeamAssignedTasks } from '../../lib/queries/assignments'
 import { fetchFlywheelStageSummary, flywheelKeys } from '../../lib/queries/flywheelEvents'
-import { isFlywheelDemo, demoStageSummary, demoMonthlyTrend, demoTasksByEmployee, demoStudioBuckets } from '../../lib/flywheel/demo'
+import { isFlywheelDemo, demoStageSummary, demoMonthlyTrend, demoTasksByEmployee, demoStudioBuckets, DEMO_STAGE_DONE_RATE } from '../../lib/flywheel/demo'
 import { Check, RefreshCcw, Target, CheckSquare, Briefcase, Info, PieChart as PieChartIcon } from 'lucide-react'
 import { ExportButtons, toExportColumns } from '../../components/ui'
 import { taskExportColumns } from '../../lib/columns/taskColumns'
@@ -299,7 +299,7 @@ export default function BusinessHealth() {
       const byKey = new Map(demoStageSummary().map((d) => [d.stage, d.event_count]))
       for (const stage of STAGES) {
         const total = byKey.get(stage.key) ?? 0
-        const done = Math.round(total * 0.8)
+        const done = Math.round(total * (DEMO_STAGE_DONE_RATE[stage.key] ?? 0.7))
         stats[stage.key] = { total, done, open: total - done, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
       }
       return stats
@@ -379,6 +379,17 @@ export default function BusinessHealth() {
   const hasStudioData   = studioBuckets.length > 0
 
   const totalBookingsInTrend = monthlyTrend.reduce((s, r) => s + r.bookings, 0)
+
+  // Tasks & Bookings summary box — sourced from the demo dataset in preview
+  // mode (the legacy useTasks mock context is empty), real counts otherwise.
+  const bookingsCount = demoActive ? totalBookingsInTrend : bookings.length
+  const kpiTaskCount = demoActive
+    ? tasksByEmployee.reduce((a, e) => a + e.kpi, 0)
+    : tasks.filter(t => normalizeLegacyStage(t.stage) !== null).length
+  const studioTaskCount = demoActive
+    ? tasksByEmployee.reduce((a, e) => a + e.studio, 0)
+    : tasks.filter(t => ['Administrative', 'Coding', 'Maintenance'].includes(t.stage)).length
+  const totalTaskCount = demoActive ? kpiTaskCount + studioTaskCount : tasks.length
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
@@ -659,6 +670,73 @@ export default function BusinessHealth() {
         </div>
       </div>
 
+      {/* ── 4b. Stage Health — completion rate per stage, normalized ── */}
+      {(() => {
+        const rows = STAGES.map(s => {
+          const st = stageStats[s.key] ?? { total: 0, done: 0, pct: 0 }
+          return { key: s.key, name: s.name, color: s.color, total: st.total, done: st.done, pct: st.pct }
+        })
+        const active = rows.filter(r => r.total > 0)
+        const ranked = [...active].sort((a, b) => b.pct - a.pct)
+        const leading = ranked[0]
+        const lagging = ranked[ranked.length - 1]
+        const avgPct = active.length ? Math.round(active.reduce((a, r) => a + r.pct, 0) / active.length) : 0
+        // Health color by completion rate — same scale for every stage so a
+        // high-volume stage doesn't look "best" just for being busy.
+        const healthColor = (pct: number) => pct >= 75 ? '#34d399' : pct >= 50 ? '#60a5fa' : pct >= 25 ? '#fb923c' : '#fb7185'
+        const healthWord = (pct: number) => pct >= 75 ? 'On track' : pct >= 50 ? 'Steady' : pct >= 25 ? 'Slipping' : 'Needs work'
+        return (
+          <div className="bg-surface rounded-2xl border border-border p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-[16px] font-bold text-text tracking-tight">Stage Health</h2>
+              <span className="text-[11px] text-text-light">Completion rate · {avgPct}% avg</span>
+            </div>
+            <p className="text-[11px] text-text-light mb-4">
+              How much of each stage's work actually gets finished — measured as a rate, so volume doesn't skew it.
+            </p>
+            {active.length === 0 ? (
+              <p className="text-[12px] text-text-light text-center py-6">No stage activity yet to score.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold">Leading</p>
+                    <p className="text-[15px] font-bold text-text mt-0.5">{leading!.name} <span className="text-emerald-400 tabular-nums">{leading!.pct}%</span></p>
+                  </div>
+                  <div className="rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold">Needs attention</p>
+                    <p className="text-[15px] font-bold text-text mt-0.5">{lagging!.name} <span className="text-rose-400 tabular-nums">{lagging!.pct}%</span></p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {rows.map(r => (
+                    <div key={r.key}>
+                      <div className="flex items-center justify-between mb-1 text-[12px]">
+                        <span className="inline-flex items-center gap-2 font-semibold text-text">
+                          <span className="w-2 h-2 rounded-full" style={{ background: r.color }} aria-hidden="true" />
+                          {r.name}
+                        </span>
+                        {r.total > 0 ? (
+                          <span className="text-text-muted tabular-nums">
+                            <span className="font-bold text-text">{r.pct}%</span>
+                            <span className="text-text-light"> · {r.done}/{r.total} done · {healthWord(r.pct)}</span>
+                          </span>
+                        ) : (
+                          <span className="text-text-light italic">no activity</span>
+                        )}
+                      </div>
+                      <div className="h-2.5 rounded-full bg-surface-alt overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${r.pct}%`, background: healthColor(r.pct) }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )
+      })()}
+
       {/* ── 5. Tasks by KPI Stage donut + Tasks & Bookings summary ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-surface rounded-2xl border border-border p-5">
@@ -666,19 +744,19 @@ export default function BusinessHealth() {
           <div className="space-y-0">
             <div className="flex items-center justify-between py-3 border-b border-border">
               <span className="flex items-center gap-2 text-sm text-text-muted"><Briefcase size={14} className="text-text-light" /> Bookings</span>
-              <span className="text-xl font-bold tabular-nums text-text">{bookings.length}</span>
+              <span className="text-xl font-bold tabular-nums text-text">{bookingsCount}</span>
             </div>
             <div className="flex items-center justify-between py-3 border-b border-border">
               <span className="flex items-center gap-2 text-sm text-text-muted"><Target size={14} className="text-text-light" /> KPI Tasks</span>
-              <span className="text-xl font-bold tabular-nums text-text">{tasks.filter(t => normalizeLegacyStage(t.stage) !== null).length}</span>
+              <span className="text-xl font-bold tabular-nums text-text">{kpiTaskCount}</span>
             </div>
             <div className="flex items-center justify-between py-3 border-b border-border">
               <span className="flex items-center gap-2 text-sm text-text-muted"><CheckSquare size={14} className="text-text-light" /> Studio Tasks</span>
-              <span className="text-xl font-bold tabular-nums text-text">{tasks.filter(t => ['Administrative','Coding','Maintenance'].includes(t.stage)).length}</span>
+              <span className="text-xl font-bold tabular-nums text-text">{studioTaskCount}</span>
             </div>
             <div className="flex items-center justify-between py-3">
               <span className="flex items-center gap-2 text-sm text-text-muted"><CheckSquare size={14} className="text-text-light" /> Total Tasks</span>
-              <span className="text-xl font-bold tabular-nums text-gold">{tasks.length}</span>
+              <span className="text-xl font-bold tabular-nums text-gold">{totalTaskCount}</span>
             </div>
           </div>
         </div>
@@ -711,8 +789,8 @@ export default function BusinessHealth() {
           </div>
           <div className="flex items-center gap-4 text-xs">
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-400" /> Bookings</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-gold" /> KPI Tasks</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-amber-400" /> Studio Tasks</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-400" /> KPI Tasks</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-violet-400" /> Studio Tasks</span>
           </div>
         </div>
         {hasTrendData ? (
@@ -724,8 +802,8 @@ export default function BusinessHealth() {
                 <YAxis tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={false} tickLine={false} width={40} />
                 <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                 <Bar dataKey="bookings" name="Bookings"  fill="#34d399" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="tasks"    name="KPI Tasks" fill="#C9A84C" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="studio"   name="Studio"    fill="#fbbf24" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="tasks"    name="KPI Tasks" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="studio"   name="Studio"    fill="#a78bfa" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -741,7 +819,7 @@ export default function BusinessHealth() {
             <h2 className="text-lg font-bold">Bookings Trend</h2>
             <p className="text-[13px] text-text-muted mt-0.5">Confirmed sessions over the tracked period.</p>
           </div>
-          <p className="text-2xl font-bold text-gold tabular-nums">{totalBookingsInTrend || bookings.length}</p>
+          <p className="text-2xl font-bold text-emerald-400 tabular-nums">{totalBookingsInTrend || bookings.length}</p>
         </div>
         {hasTrendData ? (
           <div className="h-56" aria-hidden="true">
@@ -751,7 +829,7 @@ export default function BusinessHealth() {
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={false} tickLine={false} width={32} />
                 <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} />
-                <Line type="monotone" dataKey="bookings" stroke="#C9A84C" strokeWidth={2.5} dot={{ r: 4, fill: '#C9A84C' }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="bookings" stroke="#34d399" strokeWidth={2.5} dot={{ r: 4, fill: '#34d399' }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -768,8 +846,8 @@ export default function BusinessHealth() {
             <p className="text-[13px] text-text-muted mt-0.5">KPI-assigned vs. studio (unassigned) work per person.</p>
           </div>
           <div className="flex items-center gap-4 text-xs">
-            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-400" /> KPI</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-amber-400" /> Studio</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-400" /> KPI</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-violet-400" /> Studio</span>
           </div>
         </div>
         {hasEmployeeData ? (
@@ -780,8 +858,8 @@ export default function BusinessHealth() {
                 <XAxis type="number" tick={{ fontSize: 11, fill: '#bcbcc6' }} axisLine={{ stroke: '#34343d' }} tickLine={false} />
                 <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#e2e2ea' }} axisLine={false} tickLine={false} width={120} />
                 <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                <Bar dataKey="kpi"    name="KPI"    stackId="t" fill="#34d399" radius={[4, 0, 0, 4]} />
-                <Bar dataKey="studio" name="Studio" stackId="t" fill="#fbbf24" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="kpi"    name="KPI"    stackId="t" fill="#60a5fa" radius={[4, 0, 0, 4]} />
+                <Bar dataKey="studio" name="Studio" stackId="t" fill="#a78bfa" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -804,9 +882,9 @@ export default function BusinessHealth() {
                 <span className="text-sm text-text">{emp.name}</span>
                 <span className="flex items-center gap-2 text-sm">
                   <span className="text-[11px] text-text-muted tabular-nums">
-                    <span className="text-emerald-400 font-semibold">{emp.kpi}</span>
+                    <span className="text-blue-400 font-semibold">{emp.kpi}</span>
                     <span className="text-text-light mx-1">·</span>
-                    <span className="text-amber-400 font-semibold">{emp.studio}</span>
+                    <span className="text-violet-400 font-semibold">{emp.studio}</span>
                   </span>
                   <span className="font-bold text-text tabular-nums w-8 text-right">{emp.tasks}</span>
                 </span>
@@ -817,8 +895,8 @@ export default function BusinessHealth() {
           <ChartEmptyState height="h-32" message="Each team member will list here with their KPI vs. studio task counts once work is logged." />
         )}
         <p className="text-[11px] text-text-light mt-2 flex items-center gap-3">
-          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-400" /> KPI</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-amber-400" /> Studio</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-blue-400" /> KPI</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-violet-400" /> Studio</span>
         </p>
 
         <div className="bg-surface-alt/50 rounded-xl py-2 px-3 mb-2 mt-5 text-center">
