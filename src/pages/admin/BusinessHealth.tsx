@@ -120,20 +120,25 @@ function PresetPill({ active, onClick, children }: { active: boolean; onClick: (
 }
 
 /** Gold-monochrome gauge for the KPI Health summary card. */
-function HealthGauge({ pct }: { pct: number }) {
+function HealthGauge({ pct, color = '#C9A84C' }: { pct: number; color?: string }) {
   const angle = -90 + (pct / 100) * 180
   return (
     <svg width="36" height="22" viewBox="0 0 60 34" fill="none" className="shrink-0">
       <path d="M6 30 A24 24 0 0 1 30 6" stroke="#46464e" strokeWidth="4" strokeLinecap="round" fill="none" />
       <path d="M30 6 A24 24 0 0 1 54 30" stroke="#46464e" strokeWidth="4" strokeLinecap="round" fill="none" />
-      <path d="M6 30 A24 24 0 0 1 30 6" stroke="#C9A84C" strokeWidth="4" strokeLinecap="round" fill="none" opacity={pct > 50 ? 1 : 0.4} />
-      <path d="M30 6 A24 24 0 0 1 54 30" stroke="#C9A84C" strokeWidth="4" strokeLinecap="round" fill="none" opacity={pct > 75 ? 1 : 0.15} />
+      <path d="M6 30 A24 24 0 0 1 30 6" stroke={color} strokeWidth="4" strokeLinecap="round" fill="none" opacity={pct > 50 ? 1 : 0.4} />
+      <path d="M30 6 A24 24 0 0 1 54 30" stroke={color} strokeWidth="4" strokeLinecap="round" fill="none" opacity={pct > 75 ? 1 : 0.15} />
       <g transform={`rotate(${angle}, 30, 30)`}>
         <line x1="30" y1="30" x2="30" y2="10" stroke="#d0d0d6" strokeWidth="2" strokeLinecap="round" />
       </g>
       <circle cx="30" cy="30" r="3" fill="#d0d0d6" />
     </svg>
   )
+}
+
+/** Red → yellow → green health hex by percentage (KPI Health gauge + number). */
+function healthHex(pct: number): string {
+  return pct >= 75 ? '#34d399' : pct >= 50 ? '#fbbf24' : '#fb7185'
 }
 
 // ── Page ───────────────────────────────────────────────────────────────
@@ -391,6 +396,14 @@ export default function BusinessHealth() {
     : tasks.filter(t => ['Administrative', 'Coding', 'Maintenance'].includes(t.stage)).length
   const totalTaskCount = demoActive ? kpiTaskCount + studioTaskCount : tasks.length
 
+  // Best / Needs-attention stage objects (carry the canonical stage color so
+  // the summary cards can tint to match each stage). Ranked by completion %.
+  const rankedStages = [...STAGES]
+    .filter(s => (stageStats[s.key]?.total ?? 0) > 0)
+    .sort((a, b) => (stageStats[b.key]?.pct ?? 0) - (stageStats[a.key]?.pct ?? 0))
+  const bestStage = rankedStages[0] ?? null
+  const needsStage = rankedStages.length > 0 ? rankedStages[rankedStages.length - 1] : null
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
       {/* ── Heading ── */}
@@ -425,21 +438,31 @@ export default function BusinessHealth() {
         <div className="bg-surface rounded-2xl border border-border px-5 py-4">
           <p className="text-[10px] text-text-light uppercase tracking-wider">KPI Health</p>
           <div className="flex items-center gap-3 mt-1">
-            <p className="text-[20px] font-bold text-gold tracking-tight">{overallPct}%</p>
-            <HealthGauge pct={overallPct} />
+            <p className="text-[20px] font-bold tracking-tight tabular-nums" style={{ color: healthHex(overallPct) }}>{overallPct}%</p>
+            <HealthGauge pct={overallPct} color={healthHex(overallPct)} />
           </div>
-          <p className="text-[11px] text-text-light mt-0.5">{healthLabel}</p>
+          <p className="text-[11px] font-semibold mt-0.5" style={{ color: healthHex(overallPct) }}>{healthLabel}</p>
         </div>
         <div className="bg-surface rounded-2xl border border-border px-5 py-4">
           <p className="text-[10px] text-text-light uppercase tracking-wider">Best Stage</p>
-          <p className="text-[20px] font-bold text-gold tracking-tight mt-1">
-            {hasAnyWork ? [...STAGES].sort((a, b) => (stageStats[b.key]?.pct ?? 0) - (stageStats[a.key]?.pct ?? 0))[0]?.name : '—'}
+          <p className="text-[20px] font-bold tracking-tight mt-1 flex items-center gap-2">
+            {hasAnyWork && bestStage ? (
+              <>
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: bestStage.color }} aria-hidden="true" />
+                <span style={{ color: bestStage.color }}>{bestStage.name}</span>
+              </>
+            ) : <span className="text-text-muted">—</span>}
           </p>
         </div>
         <div className="bg-surface rounded-2xl border border-border px-5 py-4">
           <p className="text-[10px] text-text-light uppercase tracking-wider">Needs Attention</p>
-          <p className="text-[20px] font-bold text-text-muted tracking-tight mt-1">
-            {hasAnyWork ? [...STAGES].sort((a, b) => (stageStats[a.key]?.pct ?? 0) - (stageStats[b.key]?.pct ?? 0))[0]?.name : '—'}
+          <p className="text-[20px] font-bold tracking-tight mt-1 flex items-center gap-2">
+            {hasAnyWork && needsStage ? (
+              <>
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: needsStage.color }} aria-hidden="true" />
+                <span style={{ color: needsStage.color }}>{needsStage.name}</span>
+              </>
+            ) : <span className="text-text-muted">—</span>}
           </p>
         </div>
       </div>
@@ -699,13 +722,21 @@ export default function BusinessHealth() {
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 mb-5">
-                  <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-3 py-2.5">
+                  <div className="rounded-xl border px-3 py-2.5" style={{ borderColor: `${leading!.color}40`, background: `${leading!.color}10` }}>
                     <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold">Leading</p>
-                    <p className="text-[15px] font-bold text-text mt-0.5">{leading!.name} <span className="text-emerald-400 tabular-nums">{leading!.pct}%</span></p>
+                    <p className="text-[15px] font-bold mt-0.5 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: leading!.color }} aria-hidden="true" />
+                      <span style={{ color: leading!.color }}>{leading!.name}</span>
+                      <span className="text-emerald-400 tabular-nums ml-auto">{leading!.pct}%</span>
+                    </p>
                   </div>
-                  <div className="rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2.5">
+                  <div className="rounded-xl border px-3 py-2.5" style={{ borderColor: `${lagging!.color}40`, background: `${lagging!.color}10` }}>
                     <p className="text-[10px] uppercase tracking-wider text-text-light font-semibold">Needs attention</p>
-                    <p className="text-[15px] font-bold text-text mt-0.5">{lagging!.name} <span className="text-rose-400 tabular-nums">{lagging!.pct}%</span></p>
+                    <p className="text-[15px] font-bold mt-0.5 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: lagging!.color }} aria-hidden="true" />
+                      <span style={{ color: lagging!.color }}>{lagging!.name}</span>
+                      <span className="text-rose-400 tabular-nums ml-auto">{lagging!.pct}%</span>
+                    </p>
                   </div>
                 </div>
                 <div className="space-y-3">
