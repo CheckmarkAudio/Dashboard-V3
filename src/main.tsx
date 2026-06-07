@@ -36,6 +36,19 @@ if (typeof window !== 'undefined') {
       // onAuthStateChange PASSWORD_RECOVERY listener still catches it.
     }
   }
+
+  // Flywheel DEMO preview flag — capture `?flywheel-demo=1` HERE, before
+  // React mounts and before the preview auto-login redirect can strip the
+  // query string. Persisting to sessionStorage means every flywheel read
+  // (and the DEMO badge) picks it up regardless of later navigation.
+  // `?flywheel-demo=0` clears it. Off by default → real users never trip it.
+  try {
+    const demo = new URLSearchParams(search).get('flywheel-demo')
+    if (demo === '1') window.sessionStorage.setItem('flywheel-demo', '1')
+    else if (demo === '0') window.sessionStorage.removeItem('flywheel-demo')
+  } catch {
+    // privacy-mode browsers — demo simply stays off
+  }
 }
 
 // Phase 3.1 — react-query cache layer.
