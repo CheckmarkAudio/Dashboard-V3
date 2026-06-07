@@ -15,6 +15,8 @@ import {
   type Client,
   type CreateClientInput,
 } from '../../lib/queries/clients'
+import { logClientReview, fetchReviewStats, reviewKeys, type ReviewSource } from '../../lib/queries/reviews'
+import { flywheelKeys } from '../../lib/queries/flywheelEvents'
 
 /**
  * ClientsPanel — self-contained clients list + toolbar + editor modal.
@@ -44,11 +46,17 @@ export default function ClientsPanel({ registerAddClient }: ClientsPanelProps) {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
 
+  const [reviewClient, setReviewClient] = useState<Client | null>(null)
+
   const listQuery = useQuery({
     queryKey: clientKeys.list(showArchived),
     queryFn: () => fetchClients({ includeArchived: showArchived }),
   })
   const clients = listQuery.data ?? []
+
+  // Per-client review stats (count + avg ★), team-scoped.
+  const reviewStatsQuery = useQuery({ queryKey: reviewKeys.stats(), queryFn: fetchReviewStats })
+  const reviewStats = reviewStatsQuery.data?.byClient
 
   // Hand a stable opener to the parent so the page-header "+ Add Client"
   // button can fire it without prop-drilling state down.
@@ -219,12 +227,18 @@ export default function ClientsPanel({ registerAddClient }: ClientsPanelProps) {
                                 </span>
                               )}
                             </p>
-                            <p className="text-[11px] text-text-light truncate">
+                            <p className="text-[11px] text-text-light truncate flex items-center gap-2">
                               {new Date(c.created_at).toLocaleDateString('en-US', {
                                 month: 'short',
                                 day: 'numeric',
                                 year: 'numeric',
                               })}
+                              {reviewStats?.get(c.id) && (
+                                <span className="inline-flex items-center gap-0.5 text-amber-300 font-semibold" title={`${reviewStats.get(c.id)!.count} review${reviewStats.get(c.id)!.count === 1 ? '' : 's'}`}>
+                                  <Star size={10} className="fill-current" aria-hidden="true" />
+                                  {reviewStats.get(c.id)!.avg} · {reviewStats.get(c.id)!.count}
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -307,6 +321,16 @@ export default function ClientsPanel({ registerAddClient }: ClientsPanelProps) {
                               >
                                 <Edit2 size={12} aria-hidden="true" /> Edit client
                               </button>
+                              <button
+                                role="menuitem"
+                                onClick={() => {
+                                  setReviewClient(c)
+                                  setOpenMenuId(null)
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text hover:bg-surface-hover transition-colors"
+                              >
+                                <Star size={12} aria-hidden="true" /> Log review
+                              </button>
                               {c.archived ? (
                                 <button
                                   role="menuitem"
@@ -357,6 +381,130 @@ export default function ClientsPanel({ registerAddClient }: ClientsPanelProps) {
           }}
         />
       )}
+
+      {reviewClient && (
+        <LogReviewModal
+          client={reviewClient}
+          onClose={() => setReviewClient(null)}
+          onLogged={() => {
+            void queryClient.invalidateQueries({ queryKey: reviewKeys.all })
+            void queryClient.invalidateQueries({ queryKey: flywheelKeys.all })
+            setReviewClient(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * LogReviewModal — record a received client review. Writes via
+ * log_client_review() which also emits a Retention flywheel event.
+ */
+function LogReviewModal({
+  client,
+  onClose,
+  onLogged,
+}: {
+  client: Client
+  onClose: () => void
+  onLogged: () => void
+}) {
+  const { toast } = useToast()
+  const [rating, setRating] = useState(5)
+  const [hover, setHover] = useState(0)
+  const [source, setSource] = useState<ReviewSource>('google')
+  const [body, setBody] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const submit = async () => {
+    if (submitting) return
+    setSubmitting(true)
+    try {
+      await logClientReview({ clientId: client.id, rating, source, body: body.trim() || null })
+      toast(`Logged a ${rating}★ review from ${client.name}`)
+      onLogged()
+    } catch (err) {
+      toast(`Couldn't log review: ${(err as Error).message}`, 'error')
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="relative bg-surface rounded-2xl border border-border w-full max-w-md mx-4 p-6 shadow-2xl animate-fade-in"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="log-review-title"
+      >
+        <div className="flex items-center justify-between mb-1">
+          <h2 id="log-review-title" className="text-lg font-bold text-text flex items-center gap-2">
+            <Star size={16} className="text-amber-300" aria-hidden="true" /> Log a review
+          </h2>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-[13px] text-text-muted mb-5">From <span className="font-semibold text-text">{client.name}</span> — counts toward the Retention stage.</p>
+
+        {/* Star rating */}
+        <div className="flex items-center gap-1 mb-5" role="radiogroup" aria-label="Rating">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setRating(n)}
+              onMouseEnter={() => setHover(n)}
+              onMouseLeave={() => setHover(0)}
+              aria-label={`${n} star${n === 1 ? '' : 's'}`}
+              aria-checked={rating === n}
+              role="radio"
+              className="p-1 focus-ring rounded"
+            >
+              <Star
+                size={28}
+                className={(hover || rating) >= n ? 'text-amber-400 fill-current' : 'text-border-light'}
+                aria-hidden="true"
+              />
+            </button>
+          ))}
+          <span className="ml-2 text-sm font-bold text-text tabular-nums">{rating}.0</span>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="review-source" className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5">Source</label>
+            <select
+              id="review-source"
+              value={source}
+              onChange={(e) => setSource(e.target.value as ReviewSource)}
+              className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2.5 text-sm focus:border-gold focus:outline-none"
+            >
+              <option value="google">Google</option>
+              <option value="manual">Word of mouth / other platform</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="review-body" className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5">Note (optional)</label>
+            <textarea
+              id="review-body"
+              rows={3}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="What did they say? (optional)"
+              className="w-full bg-surface-alt border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-text-light focus:border-gold focus:outline-none resize-y"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-5 mt-5 border-t border-border">
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button variant="primary" onClick={() => void submit()} loading={submitting}>Log review</Button>
+        </div>
+      </div>
     </div>
   )
 }
