@@ -1445,6 +1445,60 @@ export type Database = {
           },
         ]
       }
+      support_reports: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          page_url: string | null
+          reported_by: string | null
+          severity: string
+          status: string
+          team_id: string
+          user_agent: string | null
+          what_tried: string | null
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          page_url?: string | null
+          reported_by?: string | null
+          severity?: string
+          status?: string
+          team_id: string
+          user_agent?: string | null
+          what_tried?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          page_url?: string | null
+          reported_by?: string | null
+          severity?: string
+          status?: string
+          team_id?: string
+          user_agent?: string | null
+          what_tried?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_reports_reported_by_fkey"
+            columns: ["reported_by"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_reports_reported_by_fkey"
+            columns: ["reported_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_assignment_batches: {
         Row: {
           assigned_by: string
@@ -4358,8 +4412,22 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      set_support_report_status: {
+        Args: { p_id: string; p_status: string }
+        Returns: undefined
+      }
       spawn_recurring_session_instances: { Args: never; Returns: undefined }
       spawn_recurring_task_instances: { Args: never; Returns: undefined }
+      submit_support_report: {
+        Args: {
+          p_description: string
+          p_page_url?: string
+          p_severity?: string
+          p_user_agent?: string
+          p_what_tried?: string
+        }
+        Returns: string
+      }
       submit_task_delete_request: {
         Args: { p_reason?: string; p_task_id: string }
         Returns: Json
