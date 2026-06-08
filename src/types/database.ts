@@ -523,6 +523,50 @@ export type Database = {
           },
         ]
       }
+      client_reviews: {
+        Row: {
+          body: string | null
+          client_id: string | null
+          created_at: string
+          id: string
+          logged_by: string | null
+          rating: number
+          reviewed_at: string
+          source: string
+          team_id: string
+        }
+        Insert: {
+          body?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          logged_by?: string | null
+          rating: number
+          reviewed_at?: string
+          source?: string
+          team_id: string
+        }
+        Update: {
+          body?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          logged_by?: string | null
+          rating?: number
+          reviewed_at?: string
+          source?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_reviews_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           archived: boolean
@@ -4178,6 +4222,15 @@ export type Database = {
       }
       is_private_channel: { Args: { p_channel: string }; Returns: boolean }
       is_team_admin: { Args: never; Returns: boolean }
+      log_client_review: {
+        Args: {
+          p_body?: string
+          p_client_id: string
+          p_rating: number
+          p_source?: string
+        }
+        Returns: string
+      }
       mark_all_assignment_notifications_read: { Args: never; Returns: Json }
       mark_all_channels_read: { Args: never; Returns: Json }
       mark_assignment_notification_read: {

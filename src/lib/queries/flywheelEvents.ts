@@ -41,6 +41,7 @@ export type FlywheelSourceType =
   | 'checklist'         // studio checklist item completed → workflow
   | 'forum_post'        // public forum message → education
   | 'education_student' // education_students enrolled → education
+  | 'review'            // client review logged → retention
 
 export interface RecordFlywheelEventInput {
   stage: FlywheelStage
@@ -196,6 +197,10 @@ export function describeFlywheelEvent(
       return str('channel') ? `posted in #${str('channel')}` : 'posted in the forum'
     case 'education_student':
       return str('student_name') ? `enrolled ${str('student_name')}` : 'enrolled a student'
+    case 'review': {
+      const rating = typeof m.rating === 'number' ? m.rating : null
+      return rating ? `logged a ${rating}★ review` : 'logged a client review'
+    }
     default:
       return `logged a ${row.stage} event`
   }
