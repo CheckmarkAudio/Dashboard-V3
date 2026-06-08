@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { MessageSquareText, Send } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from './Toast'
+import { submitSupportReport } from '../lib/queries/supportReports'
 import { Button, Input, Modal, Select, Textarea } from './ui'
 
 /**
@@ -14,12 +15,10 @@ import { Button, Input, Modal, Select, Textarea } from './ui'
  * (Component/file name kept as TroubleshootingButton to avoid churn;
  * only the user-facing label changed to "Feedback".)
  *
- * The form itself is unchanged from the original — short
- * description, what we tried, severity, submit. There's no backend
- * yet to receive these reports (the original was placeholder UI
- * too), so submit shows a thank-you toast and closes. When the
- * future `support_reports` table lands, only the submit handler
- * needs to change.
+ * The form — short description, what we tried, severity — submits
+ * through the `submit_support_report()` RPC into the `support_reports`
+ * table (team-scoped; the page path + user-agent are captured for
+ * triage). Admins can read their team's reports via RLS.
  */
 
 const SEVERITIES = ['Low', 'Medium', 'High', 'Critical'] as const
@@ -54,18 +53,27 @@ export default function TroubleshootingButton() {
       }
       setSubmitting(true)
       try {
-        // No backend table for support reports yet — the original
-        // form on /content was placeholder too. When `support_reports`
-        // lands, swap this for a `supabase.from('support_reports').insert(...)`.
-        await new Promise((r) => setTimeout(r, 300))
-        toast('Thanks — issue logged. We\'ll take a look.', 'success')
+        // Persists via the submit_support_report() RPC (the only write
+        // path — support_reports has no direct INSERT policy). Captures
+        // the current page + user-agent so admins can triage.
+        await submitSupportReport({
+          description,
+          whatTried,
+          severity,
+          pageUrl: typeof window !== 'undefined' ? window.location.pathname + window.location.search : null,
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        })
+        toast('Thanks — feedback sent. We\'ll take a look.', 'success')
         setOpen(false)
         reset()
+      } catch (err) {
+        console.error('[Feedback] submit failed:', err)
+        toast('Couldn\'t send that — please try again.', 'error')
       } finally {
         setSubmitting(false)
       }
     },
-    [description, toast],
+    [description, whatTried, severity, toast],
   )
 
   return (
