@@ -15,9 +15,10 @@ import {
   type GoogleCalendarConnectionStatus,
 } from '../../lib/googleCalendar'
 import {
-  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid, Clock,
+  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid, Clock, MessageSquareText,
 } from 'lucide-react'
 import StudioHoursPanel from '../../components/admin/StudioHoursPanel'
+import FeedbackReportsPanel from '../../components/admin/FeedbackReportsPanel'
 
 /**
  * Settings section nav model. Each section renders its own right-pane
@@ -33,6 +34,7 @@ type SectionKey =
   | 'studio-hours'
   | 'organization'
   | 'notifications'
+  | 'feedback'
   | 'database'
 
 type Section = AdminSection<SectionKey>
@@ -48,6 +50,7 @@ const SECTIONS: Section[] = [
   { key: 'studio-hours',   icon: Clock,       title: 'Studio Hours',   subtitle: 'When the studio is open' },
   { key: 'organization',   icon: Globe,       title: 'Organization',   subtitle: 'Name and branding' },
   { key: 'notifications',  icon: Bell,        title: 'Notifications',  subtitle: 'Alerts and preferences' },
+  { key: 'feedback',       icon: MessageSquareText, title: 'Feedback',   subtitle: 'Reports from the Feedback button' },
   { key: 'database',       icon: Database,    title: 'Database',       subtitle: 'Connection and admin' },
 ]
 
@@ -260,6 +263,7 @@ export default function AdminSettings() {
         {/* ── Right: active section content ── */}
         <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px]">
           {activeSection === 'account-access' && <AccountAccessPanel />}
+          {activeSection === 'feedback' && <FeedbackReportsPanel />}
           {activeSection === 'widgets' && <WidgetBank />}
 
           {activeSection === 'theme' && (
