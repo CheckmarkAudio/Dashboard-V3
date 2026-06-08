@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkmark Studio Flyer Draft Previews</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #141414;
+      color: #f6f1e7;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      padding: 18px 22px;
+      background: rgba(20, 20, 20, 0.94);
+      border-bottom: 2px solid #f6f1e7;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: Impact, "Arial Black", Arial, sans-serif;
+      font-size: 28px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    p {
+      margin: 6px 0 0;
+      color: #cfc8ba;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(360px, 1fr));
+      gap: 24px;
+      padding: 24px;
+    }
+
+    .draft {
+      border: 2px solid #f6f1e7;
+      background: #0a0a0a;
+      box-shadow: 8px 8px 0 #000;
+    }
+
+    .draft-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 2px solid #f6f1e7;
+      background: #f6f1e7;
+      color: #0a0a0a;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .draft-title a {
+      color: #0a0a0a;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .frame-wrap {
+      height: 760px;
+      overflow: auto;
+      background: #242424;
+      padding: 16px;
+    }
+
+    iframe {
+      width: 816px;
+      height: 1056px;
+      border: 0;
+      transform: scale(0.66);
+      transform-origin: top left;
+      background: white;
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Checkmark Studio Flyer Drafts</h1>
+    <p>Local previews only. Open a draft directly if you want a larger view.</p>
+  </header>
+
+  <main class="grid">
+    <section class="draft">
+      <div class="draft-title">
+        <span>Draft 01 - Basement Show</span>
+        <a href="checkmark-studio-services-draft-01-basement-show.html">Open full size</a>
+      </div>
+      <div class="frame-wrap">
+        <iframe src="checkmark-studio-services-draft-01-basement-show.html" title="Draft 01"></iframe>
+      </div>
+    </section>
+
+    <section class="draft">
+      <div class="draft-title">
+        <span>Draft 02 - Pink Zine</span>
+        <a href="checkmark-studio-services-draft-02-pink-zine.html">Open full size</a>
+      </div>
+      <div class="frame-wrap">
+        <iframe src="checkmark-studio-services-draft-02-pink-zine.html" title="Draft 02"></iframe>
+      </div>
+    </section>
+
+    <section class="draft">
+      <div class="draft-title">
+        <span>Draft 03 - Newsprint Rip</span>
+        <a href="checkmark-studio-services-draft-03-newsprint-rip.html">Open full size</a>
+      </div>
+      <div class="frame-wrap">
+        <iframe src="checkmark-studio-services-draft-03-newsprint-rip.html" title="Draft 03"></iframe>
+      </div>
+    </section>
+
+    <section class="draft">
+      <div class="draft-title">
+        <span>Draft 04 - Copy Machine</span>
+        <a href="checkmark-studio-services-draft-04-copy-machine.html">Open full size</a>
+      </div>
+      <div class="frame-wrap">
+        <iframe src="checkmark-studio-services-draft-04-copy-machine.html" title="Draft 04"></iframe>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

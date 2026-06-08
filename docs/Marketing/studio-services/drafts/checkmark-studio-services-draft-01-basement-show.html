@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Draft 01 - Basement Show</title>
+  <style>
+    @page { size: Letter; margin: 0; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #222;
+      color: #080808;
+      font-family: Impact, "Arial Black", Arial, Helvetica, sans-serif;
+    }
+    .page {
+      position: relative;
+      width: 8.5in;
+      height: 11in;
+      overflow: hidden;
+      isolation: isolate;
+      padding: .36in .42in .24in;
+      background:
+        
+    radial-gradient(circle at 2px 2px, rgba(0,0,0,.18) 1px, transparent 2px),
+    radial-gradient(circle at 8px 6px, rgba(0,0,0,.11) 1px, transparent 2px),
+        #f5f0dc;
+      background-size: 10px 10px, 14px 14px, auto;
+    }
+    .page::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .28;
+      background:
+        repeating-linear-gradient(-0.7deg, transparent 0 38px, rgba(0,0,0,.1) 39px, transparent 43px),
+        repeating-linear-gradient(-9deg, transparent 0 62px, rgba(255,255,255,.42) 63px, transparent 65px);
+      mix-blend-mode: multiply;
+      z-index: -1;
+    }
+    .page::after {
+      content: "";
+      position: absolute;
+      inset: .08in;
+      border: .045in solid #080808;
+      pointer-events: none;
+      box-shadow: inset 0 0 0 .025in #f5f0dc, inset 0 0 0 .04in #080808;
+    }
+    .edge {
+      position: absolute;
+      left: -.2in;
+      right: -.2in;
+      height: .22in;
+      background: repeating-linear-gradient(135deg, #080808 0 .055in, transparent .055in .12in);
+      opacity: .95;
+    }
+    .edge.top { top: .13in; transform: rotate(-0.7deg); }
+    .edge.bottom { bottom: .13in; transform: rotate(calc(-0.7deg * -1)); }
+    .brand {
+      position: relative;
+      display: grid;
+      grid-template-columns: .82in 1fr;
+      gap: .12in;
+      align-items: center;
+      margin: .18in 0 .12in;
+      transform: rotate(-0.7deg);
+    }
+    .logo {
+      display: grid;
+      place-items: center;
+      width: .78in;
+      height: .78in;
+      background: #080808;
+      border: .035in solid #080808;
+      box-shadow: .07in .07in 0 #d7d2c0;
+    }
+    .logo img {
+      width: .6in;
+      height: .6in;
+      object-fit: contain;
+      filter: contrast(1.3);
+    }
+    .brand-copy {
+      background: #080808;
+      color: #f5f0dc;
+      padding: .08in .14in;
+      box-shadow: .07in .07in 0 #ffffff;
+    }
+    .brand-copy h2 {
+      margin: 0;
+      font-size: .35in;
+      line-height: .85;
+      text-transform: uppercase;
+    }
+    .brand-copy p {
+      margin: .055in 0 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: .095in;
+      font-weight: 950;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .tags {
+      display: flex;
+      gap: .075in;
+      margin: .08in 0 .12in;
+      transform: rotate(calc(-0.7deg * -1));
+    }
+    .tags span {
+      display: inline-block;
+      padding: .055in .08in;
+      background: #d7d2c0;
+      border: .035in solid #080808;
+      box-shadow: .04in .04in 0 #080808;
+      font-size: .145in;
+      text-transform: uppercase;
+    }
+    .tags span:first-child {
+      background: #ffffff;
+    }
+    .headline {
+      width: 7.35in;
+      margin: .12in 0 .1in;
+      transform: rotate(-0.7deg);
+    }
+    .word {
+      display: inline-block;
+      margin: 0 .04in .055in 0;
+      padding: .018in .075in .038in;
+      background: #080808;
+      color: #f5f0dc;
+      border: .035in solid #080808;
+      box-shadow: .045in .045in 0 #d7d2c0;
+      font-size: .7in;
+      line-height: .88;
+      text-transform: uppercase;
+    }
+    .word.light {
+      background: #f5f0dc;
+      color: #080808;
+      box-shadow: .045in .045in 0 #080808;
+    }
+    .word.skew {
+      transform: rotate(1.4deg) skew(-4deg);
+    }
+    .subhead {
+      width: 7.1in;
+      margin: .1in 0 .16in;
+      padding: .12in .15in;
+      background: #080808;
+      color: #f5f0dc;
+      border-left: .14in solid #ffffff;
+      outline: .03in solid #080808;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: .16in;
+      line-height: 1.16;
+      font-weight: 950;
+      transform: rotate(calc(-0.7deg * -0.5));
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.05fr .95fr;
+      gap: .18in;
+      align-items: start;
+    }
+    .stack {
+      display: grid;
+      gap: .09in;
+    }
+    .service {
+      min-height: .86in;
+      padding: .1in .12in .095in;
+      background: #f5f0dc;
+      border: .045in solid #080808;
+      box-shadow: .07in .07in 0 #080808;
+    }
+    .service:nth-child(1) { transform: rotate(-.7deg); }
+    .service:nth-child(2) { transform: rotate(.8deg); }
+    .service:nth-child(3) { transform: rotate(-1deg); }
+    .service .num {
+      display: inline-block;
+      margin-bottom: .035in;
+      padding: .028in .055in;
+      background: #080808;
+      color: #f5f0dc;
+      font-size: .086in;
+      text-transform: uppercase;
+    }
+    .service h3 {
+      margin: 0;
+      font-size: .285in;
+      line-height: .86;
+      text-transform: uppercase;
+    }
+    .service p {
+      margin: .05in 0 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: .092in;
+      line-height: 1.2;
+      font-weight: 950;
+    }
+    .rate {
+      position: relative;
+      min-height: 1.82in;
+      padding: .15in;
+      background: #080808;
+      color: #f5f0dc;
+      border: .045in solid #080808;
+      box-shadow: .08in .08in 0 #ffffff;
+      transform: rotate(calc(-0.7deg * -1));
+      overflow: hidden;
+    }
+    .rate::before {
+      content: "";
+      position: absolute;
+      inset: -.2in;
+      opacity: .22;
+      background: repeating-linear-gradient(-38deg, transparent 0 .16in, #d7d2c0 .17in .19in);
+    }
+    .rate > * { position: relative; }
+    .rate .label {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: .095in;
+      font-weight: 950;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .price {
+      margin: .03in 0;
+      font-size: .66in;
+      line-height: .9;
+    }
+    .regular {
+      display: inline-block;
+      padding: .045in .07in;
+      background: #f5f0dc;
+      color: #080808;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: .105in;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+    .fit {
+      margin-top: .15in;
+      padding: .13in;
+      background: #d7d2c0;
+      border: .045in solid #080808;
+      box-shadow: .07in .07in 0 #080808;
+      transform: rotate(-0.7deg);
+    }
+    .fit h3 {
+      margin: 0 0 .075in;
+      font-size: .28in;
+      line-height: .86;
+      text-transform: uppercase;
+    }
+    .fit ul {
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .05in;
+      list-style: none;
+    }
+    .fit li {
+      padding: .038in .052in;
+      border: .025in solid #080808;
+      background: #f5f0dc;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: .088in;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+    .contact-row {
+      position: absolute;
+      left: .58in;
+      right: .58in;
+      bottom: 1.16in;
+      display: grid;
+      grid-template-columns: .92fr 1.08fr;
+      gap: .16in;
+      align-items: stretch;
+    }
+    .callout,
+    .contact {
+      border: .045in solid #080808;
+      box-shadow: .07in .07in 0 #080808;
+    }
+    .callout {
+      padding: .13in;
+      background: #ffffff;
+      transform: rotate(calc(-0.7deg * -1));
+    }
+    .callout h3 {
+      margin: 0;
+      font-size: .29in;
+      line-height: .86;
+      text-transform: uppercase;
+    }
+    .callout p {
+      margin: .08in 0 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: .096in;
+      line-height: 1.18;
+      font-weight: 950;
+    }
+    .contact {
+      padding: .13in;
+      background: #080808;
+      color: #f5f0dc;
+      transform: rotate(-0.7deg);
+    }
+    .contact .label {
+      margin: 0;
+      font-size: .135in;
+      text-transform: uppercase;
+    }
+    .phone {
+      margin: .045in 0 .07in;
+      font-size: .32in;
+      line-height: .88;
+    }
+    .address {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: .1in;
+      line-height: 1.22;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+    .tearoffs {
+      position: absolute;
+      left: .58in;
+      right: .58in;
+      bottom: .24in;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: .045in;
+    }
+    .tab {
+      min-height: .75in;
+      padding: .045in .035in;
+      background: #f5f0dc;
+      border: .035in solid #080808;
+      text-align: center;
+    }
+    .tab:nth-child(odd) { transform: rotate(-1.2deg); }
+    .tab:nth-child(even) { transform: rotate(1deg); }
+    .tab b {
+      display: block;
+      font-size: .07in;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+    .tab span {
+      display: block;
+      margin-top: .035in;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: .088in;
+      line-height: 1.03;
+      font-weight: 950;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="edge top"></div>
+    <div class="edge bottom"></div>
+    <header class="brand">
+      <div class="logo"><img src="../../../src/assets/checkmark-audio-logo.png" alt="Checkmark Audio logo"></div>
+      <div class="brand-copy">
+        <h2>Checkmark Audio</h2>
+        <p>Recording studio / Albuquerque</p>
+      </div>
+    </header>
+    <div class="tags">
+      <span>Vocal recording</span>
+      <span>Mixing</span>
+      <span>Mastering</span>
+    </div>
+    <section class="headline"><span class="word">Record</span>
+        <span class="word light">It</span>
+        <span class="word skew">Loud</span>
+        <span class="word light">Make</span>
+        <span class="word">It</span>
+        <span class="word light skew">Hit</span></section>
+    <p class="subhead">
+      Studio services for singers, rappers, bands, voiceover, demos, hooks, ad libs,
+      and songs that need to sound finished.
+    </p>
+    <section class="grid">
+      <div class="stack">
+        <article class="service"><span class="num">01 / Track</span><h3>Vocal Recording</h3><p>Clean takes in a focused room. Bring the song, verse, script, or idea.</p></article>
+        <article class="service"><span class="num">02 / Shape</span><h3>Mixing</h3><p>Balance, punch, space, and polish so your track feels alive.</p></article>
+        <article class="service"><span class="num">03 / Finish</span><h3>Mastering</h3><p>Final loudness and clarity for sharing, streaming, and showing people.</p></article>
+      </div>
+      <div>
+        <section class="rate"><p class="label">Summer vocal recording rate</p><div class="price">$50/hr</div><div class="regular">Regular rate $65/hr</div></section>
+        <section class="fit"><h3>Good for</h3><ul><li>Singers</li><li>Rappers</li><li>Hooks</li><li>Demos</li><li>Voiceover</li><li>Ad libs</li><li>Bands</li><li>Creators</li></ul></section>
+      </div>
+    </section>
+    <section class="contact-row">
+      <div class="callout"><h3>Bring the track. We’ll help shape the sound.</h3><p>Call or text to book a session, ask about available times, or set up a free consult.</p></div>
+      <div class="contact"><p class="label">Call or text</p><div class="phone">505-267-0558</div><div class="address">Checkmark Audio<br>5413 Lomas Blvd<br>Albuquerque, NM 87110</div></div>
+    </section>
+    <section class="tearoffs"><div class="tab t1"><b>Book</b><span>505-267-0558</span></div>
+        <div class="tab t2"><b>Record</b><span>505-267-0558</span></div>
+        <div class="tab t3"><b>Mix</b><span>505-267-0558</span></div>
+        <div class="tab t4"><b>Master</b><span>505-267-0558</span></div>
+        <div class="tab t5"><b>Studio</b><span>505-267-0558</span></div>
+        <div class="tab t6"><b>Music</b><span>505-267-0558</span></div>
+        <div class="tab t7"><b>Consult</b><span>505-267-0558</span></div></section>
+  </main>
+</body>
+</html>
