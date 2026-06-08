@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkmark Audio Punk Flyer</title>
+  <style>
+    @page {
+      size: Letter;
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #222;
+      color: #090909;
+      font-family: Impact, "Arial Black", "Helvetica Neue Condensed Black", Arial, sans-serif;
+    }
+
+    .page {
+      position: relative;
+      width: 8.5in;
+      height: 11in;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 18%, rgba(0,0,0,0.18) 0 1px, transparent 1px),
+        radial-gradient(circle at 72% 72%, rgba(0,0,0,0.14) 0 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,0,0,0.035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(0,0,0,0.028) 1px, transparent 1px),
+        #f4f0df;
+      background-size: 7px 7px, 11px 11px, 0.18in 0.18in, 0.18in 0.18in, auto;
+      padding: 0.36in 0.42in 0.25in;
+      isolation: isolate;
+    }
+
+    .page::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.38;
+      background:
+        repeating-linear-gradient(11deg, transparent 0 17px, rgba(0,0,0,0.08) 18px, transparent 20px),
+        repeating-linear-gradient(-4deg, transparent 0 42px, rgba(0,0,0,0.055) 43px, transparent 45px);
+      mix-blend-mode: multiply;
+      z-index: -1;
+    }
+
+    .page::after {
+      content: "";
+      position: absolute;
+      inset: 0.08in;
+      border: 0.045in solid #090909;
+      pointer-events: none;
+      box-shadow: inset 0 0 0 0.025in #f4f0df, inset 0 0 0 0.04in #090909;
+    }
+
+    .xerox-edge {
+      position: absolute;
+      left: -0.25in;
+      right: -0.25in;
+      height: 0.25in;
+      background:
+        repeating-linear-gradient(135deg, #090909 0 0.06in, transparent 0.06in 0.12in);
+      opacity: 0.9;
+    }
+
+    .xerox-edge.top {
+      top: 0.12in;
+      transform: rotate(-0.5deg);
+    }
+
+    .xerox-edge.bottom {
+      bottom: 0.12in;
+      transform: rotate(0.5deg);
+    }
+
+    .brand-strip {
+      position: relative;
+      display: grid;
+      grid-template-columns: 0.82in 1fr;
+      gap: 0.12in;
+      align-items: center;
+      margin: 0.18in 0 0.12in;
+      transform: rotate(-1deg);
+    }
+
+    .logo {
+      display: grid;
+      place-items: center;
+      width: 0.78in;
+      height: 0.78in;
+      background: #090909;
+      border: 0.035in solid #090909;
+      box-shadow: 0.07in 0.07in 0 #fff;
+    }
+
+    .logo img {
+      width: 0.6in;
+      height: 0.6in;
+      object-fit: contain;
+      filter: contrast(1.35);
+    }
+
+    .brand-name {
+      background: #090909;
+      color: #f4f0df;
+      padding: 0.08in 0.14in;
+      border: 0.025in solid #090909;
+      box-shadow: 0.07in 0.07in 0 #fff;
+    }
+
+    .brand-name h2 {
+      margin: 0;
+      font-size: 0.36in;
+      line-height: 0.85;
+      letter-spacing: 0.015em;
+      text-transform: uppercase;
+    }
+
+    .brand-name p {
+      margin: 0.055in 0 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-weight: 950;
+      font-size: 0.095in;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .ransom {
+      position: relative;
+      margin-top: 0.18in;
+      width: 7.3in;
+      transform: rotate(0.7deg);
+    }
+
+    .word {
+      display: inline-block;
+      margin: 0 0.04in 0.055in 0;
+      padding: 0.015in 0.075in 0.035in;
+      background: #090909;
+      color: #f4f0df;
+      font-size: 0.72in;
+      line-height: 0.88;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      box-shadow: 0.045in 0.045in 0 #fff;
+    }
+
+    .word.light {
+      background: #f4f0df;
+      color: #090909;
+      border: 0.045in solid #090909;
+      box-shadow: 0.045in 0.045in 0 #090909;
+      transform: rotate(-1deg);
+    }
+
+    .word.skew {
+      transform: rotate(1.5deg) skew(-3deg);
+    }
+
+    .subhead {
+      margin: 0.11in 0 0.18in;
+      padding: 0.12in 0.16in;
+      width: 7.15in;
+      background: #090909;
+      color: #f4f0df;
+      border-left: 0.14in solid #f4f0df;
+      outline: 0.035in solid #090909;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 0.17in;
+      line-height: 1.18;
+      font-weight: 950;
+      transform: rotate(-0.5deg);
+    }
+
+    .slash-row {
+      display: flex;
+      gap: 0.08in;
+      align-items: center;
+      margin: 0.08in 0 0.18in;
+      transform: rotate(-1.1deg);
+    }
+
+    .slash-row span {
+      display: inline-block;
+      padding: 0.055in 0.08in;
+      border: 0.035in solid #090909;
+      background: #fff;
+      font-size: 0.15in;
+      text-transform: uppercase;
+      box-shadow: 0.045in 0.045in 0 #090909;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 0.18in;
+      align-items: start;
+    }
+
+    .stack {
+      display: grid;
+      gap: 0.09in;
+    }
+
+    .service {
+      position: relative;
+      min-height: 0.9in;
+      padding: 0.11in 0.13in 0.1in;
+      background: #f4f0df;
+      border: 0.045in solid #090909;
+      box-shadow: 0.07in 0.07in 0 #090909;
+    }
+
+    .service:nth-child(1) {
+      transform: rotate(-0.7deg);
+    }
+
+    .service:nth-child(2) {
+      transform: rotate(0.9deg);
+    }
+
+    .service:nth-child(3) {
+      transform: rotate(-1.1deg);
+    }
+
+    .service .num {
+      display: inline-block;
+      margin-bottom: 0.04in;
+      padding: 0.03in 0.055in;
+      background: #090909;
+      color: #f4f0df;
+      font-size: 0.09in;
+      text-transform: uppercase;
+    }
+
+    .service h3 {
+      margin: 0;
+      font-size: 0.3in;
+      line-height: 0.86;
+      text-transform: uppercase;
+    }
+
+    .service p {
+      margin: 0.055in 0 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 0.096in;
+      line-height: 1.22;
+      font-weight: 950;
+    }
+
+    .rate {
+      position: relative;
+      padding: 0.16in;
+      min-height: 1.9in;
+      background: #090909;
+      color: #f4f0df;
+      border: 0.045in solid #090909;
+      box-shadow: 0.08in 0.08in 0 #fff;
+      transform: rotate(1deg);
+      overflow: hidden;
+    }
+
+    .rate::before {
+      content: "";
+      position: absolute;
+      inset: -0.2in;
+      opacity: 0.22;
+      background: repeating-linear-gradient(-38deg, transparent 0 0.16in, #fff 0.17in 0.19in);
+    }
+
+    .rate > * {
+      position: relative;
+    }
+
+    .rate .label {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 0.102in;
+      font-weight: 950;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .rate .price {
+      margin: 0.03in 0;
+      font-size: 0.7in;
+      line-height: 0.92;
+      text-transform: uppercase;
+    }
+
+    .rate .regular {
+      display: inline-block;
+      padding: 0.045in 0.07in;
+      background: #f4f0df;
+      color: #090909;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 0.11in;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .fit {
+      margin-top: 0.16in;
+      padding: 0.14in;
+      background: #fff;
+      border: 0.045in solid #090909;
+      box-shadow: 0.07in 0.07in 0 #090909;
+      transform: rotate(-0.7deg);
+    }
+
+    .fit h3 {
+      margin: 0 0 0.08in;
+      font-size: 0.29in;
+      line-height: 0.86;
+      text-transform: uppercase;
+    }
+
+    .fit ul {
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.055in;
+      list-style: none;
+    }
+
+    .fit li {
+      padding: 0.04in 0.055in;
+      border: 0.025in solid #090909;
+      background: #f4f0df;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 0.094in;
+      line-height: 1;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .contact-block {
+      position: absolute;
+      left: 0.6in;
+      right: 0.6in;
+      bottom: 1.18in;
+      display: grid;
+      grid-template-columns: 0.92fr 1.08fr;
+      gap: 0.16in;
+      align-items: stretch;
+    }
+
+    .callout {
+      padding: 0.13in;
+      background: #f4f0df;
+      border: 0.045in solid #090909;
+      box-shadow: 0.07in 0.07in 0 #090909;
+      transform: rotate(1.1deg);
+    }
+
+    .callout h3 {
+      margin: 0;
+      font-size: 0.31in;
+      line-height: 0.86;
+      text-transform: uppercase;
+    }
+
+    .callout p {
+      margin: 0.08in 0 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 0.1in;
+      line-height: 1.2;
+      font-weight: 950;
+    }
+
+    .contact {
+      padding: 0.13in;
+      background: #090909;
+      color: #f4f0df;
+      border: 0.045in solid #090909;
+      box-shadow: 0.07in 0.07in 0 #fff;
+      transform: rotate(-0.8deg);
+    }
+
+    .contact .label {
+      margin: 0;
+      font-size: 0.145in;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+
+    .phone {
+      margin: 0.045in 0 0.075in;
+      font-size: 0.34in;
+      line-height: 0.88;
+      text-transform: uppercase;
+    }
+
+    .address {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 0.104in;
+      line-height: 1.24;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .tearoffs {
+      position: absolute;
+      left: 0.58in;
+      right: 0.58in;
+      bottom: 0.24in;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 0.045in;
+    }
+
+    .tab {
+      min-height: 0.75in;
+      padding: 0.045in 0.035in;
+      background: #f4f0df;
+      border: 0.035in solid #090909;
+      text-align: center;
+    }
+
+    .tab:nth-child(odd) {
+      transform: rotate(-1.2deg);
+    }
+
+    .tab:nth-child(even) {
+      transform: rotate(1deg);
+    }
+
+    .tab b {
+      display: block;
+      font-size: 0.07in;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+
+    .tab span {
+      display: block;
+      margin-top: 0.035in;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 0.088in;
+      line-height: 1.03;
+      font-weight: 950;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="xerox-edge top"></div>
+    <div class="xerox-edge bottom"></div>
+
+    <header class="brand-strip">
+      <div class="logo">
+        <img src="../../../src/assets/checkmark-audio-logo.png" alt="Checkmark Audio logo">
+      </div>
+      <div class="brand-name">
+        <h2>Checkmark Audio</h2>
+        <p>Recording studio / Albuquerque</p>
+      </div>
+    </header>
+
+    <div class="slash-row">
+      <span>Vocal Recording</span>
+      <span>Mixing</span>
+      <span>Mastering</span>
+    </div>
+
+    <section class="ransom" aria-label="Flyer headline">
+      <span class="word">Record</span>
+      <span class="word light">It</span>
+      <span class="word skew">Loud</span>
+      <span class="word light">Make</span>
+      <span class="word">It</span>
+      <span class="word skew">Hit</span>
+    </section>
+
+    <p class="subhead">
+      Studio services for singers, rappers, bands, voiceover, demos, hooks, ad libs,
+      and songs that need to sound finished.
+    </p>
+
+    <section class="main-grid">
+      <div class="stack">
+        <article class="service">
+          <span class="num">01 / Track</span>
+          <h3>Vocal Recording</h3>
+          <p>Clean takes in a focused room. Bring the song, verse, script, or idea.</p>
+        </article>
+        <article class="service">
+          <span class="num">02 / Shape</span>
+          <h3>Mixing</h3>
+          <p>Balance, punch, space, and polish so your track feels alive.</p>
+        </article>
+        <article class="service">
+          <span class="num">03 / Finish</span>
+          <h3>Mastering</h3>
+          <p>Final loudness and clarity for sharing, streaming, and showing people.</p>
+        </article>
+      </div>
+
+      <div>
+        <section class="rate">
+          <p class="label">Summer vocal recording rate</p>
+          <div class="price">$50/hr</div>
+          <div class="regular">Regular rate $65/hr</div>
+        </section>
+
+        <section class="fit">
+          <h3>Good for</h3>
+          <ul>
+            <li>Singers</li>
+            <li>Rappers</li>
+            <li>Hooks</li>
+            <li>Demos</li>
+            <li>Voiceover</li>
+            <li>Ad libs</li>
+            <li>Bands</li>
+            <li>Creators</li>
+          </ul>
+        </section>
+      </div>
+    </section>
+
+    <section class="contact-block">
+      <div class="callout">
+        <h3>Bring the track. We’ll help shape the sound.</h3>
+        <p>Call or text to book a session, ask about available times, or set up a free consult.</p>
+      </div>
+      <div class="contact">
+        <p class="label">Call or text</p>
+        <div class="phone">505-267-0558</div>
+        <div class="address">
+          Checkmark Audio<br>
+          5413 Lomas Blvd<br>
+          Albuquerque, NM 87110
+        </div>
+      </div>
+    </section>
+
+    <section class="tearoffs" aria-label="Tear-off contact tabs">
+      <div class="tab"><b>Book</b><span>505-267-0558</span></div>
+      <div class="tab"><b>Record</b><span>505-267-0558</span></div>
+      <div class="tab"><b>Mix</b><span>505-267-0558</span></div>
+      <div class="tab"><b>Master</b><span>505-267-0558</span></div>
+      <div class="tab"><b>Studio</b><span>505-267-0558</span></div>
+      <div class="tab"><b>Music</b><span>505-267-0558</span></div>
+      <div class="tab"><b>Consult</b><span>505-267-0558</span></div>
+    </section>
+  </main>
+</body>
+</html>

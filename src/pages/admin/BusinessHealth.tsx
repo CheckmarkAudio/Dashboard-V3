@@ -4,6 +4,7 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTasks } from '../../contexts/TaskContext'
 import { fetchTeamAssignedTasks } from '../../lib/queries/assignments'
+import { fetchAllSessions, adminSessionKeys } from '../../lib/queries/adminSessions'
 import { fetchFlywheelStageSummary, flywheelKeys } from '../../lib/queries/flywheelEvents'
 import { isFlywheelDemo, demoStageSummary, demoMonthlyTrend, demoTasksByEmployee, demoStudioBuckets, DEMO_STAGE_DONE_RATE } from '../../lib/flywheel/demo'
 import { Check, RefreshCcw, Target, CheckSquare, Briefcase, Info, PieChart as PieChartIcon } from 'lucide-react'
@@ -35,11 +36,14 @@ import {
  * removed; everything lives here under Analytics so the admin nav
  * only exposes a single destination for all charts and breakdowns.
  *
- * Data currently derives from the in-memory TaskContext (which starts
- * empty pre-onboarding). Time-based trends, employee breakdowns, and
- * studio buckets have no backing data source yet and render
- * empty-state panels until the Phase 2 flywheel event ledger wires
- * them to Supabase.
+ * Data sources (all live, team-scoped via RLS):
+ *   • KPI / Flywheel Activity  → flywheel_events ledger (RPC summary)
+ *   • Bookings / trends        → sessions table (admin_list_all_sessions)
+ *   • Tasks (KPI vs Other)     → assigned_tasks (tagged = flywheel stage)
+ *   • Studio Tasks (unassigned)→ assigned_tasks scope='studio'
+ * Demo preview (?flywheel-demo=1) swaps in a synthetic dataset so the
+ * whole page can be evaluated without writing to the shared prod DB.
+ * Charts fall back to honest empty states when a source has no rows yet.
  */
 
 // ── Flywheel stages (authoritative order for this page) ────────────────
@@ -73,10 +77,6 @@ const PRESETS: { key: Preset; label: string }[] = [
   { key: 'year',    label: 'This Year' },
   { key: 'all',     label: 'All Time' },
 ]
-
-const MONTHLY_TREND: { month: string; bookings: number; tasks: number; studio: number }[] = []
-const TASKS_BY_EMPLOYEE: { name: string; tasks: number; kpi: number; studio: number }[] = []
-const STUDIO_BUCKETS: { label: string; count: number }[] = []
 
 // ── Chart primitives ───────────────────────────────────────────────────
 
@@ -213,7 +213,7 @@ export default function BusinessHealth() {
   // flywheel bars now comes from real assigned_tasks via Supabase
   // (PR #27) so a task tagged with a flywheel stage actually counts
   // in the per-stage metrics.
-  const { tasks, bookings, pendingIds, togglePending, submitPending, hasPending } = useTasks()
+  const { tasks, pendingIds, togglePending, submitPending, hasPending } = useTasks()
   const [selectedStage, setSelectedStage] = useState<FlywheelStage>('discovery')
   const [timeFilter, setTimeFilter] = useState<'total' | 'year' | 'month' | 'week' | 'day'>('week')
   const [preset, setPreset] = useState<Preset>('all')
@@ -235,6 +235,15 @@ export default function BusinessHealth() {
     enabled: Boolean(profile?.id),
   })
   const assignedTasks = assignedTasksQuery.data ?? []
+
+  // Real bookings — the `sessions` table (admin RPC), incl. past sessions
+  // so the 6-month trend has history. Replaces the legacy useTasks mock
+  // `bookings` for every count/chart on this page.
+  const sessionsQuery = useQuery({
+    queryKey: adminSessionKeys.list(true),
+    queryFn: () => fetchAllSessions({ includePast: true }),
+  })
+  const realSessions = sessionsQuery.data ?? []
 
   // Real flywheel-event counts per stage over the active date range —
   // drives the "Flywheel Activity" chart off the ledger (was task-category
@@ -318,8 +327,8 @@ export default function BusinessHealth() {
       // Bookings count toward the Workflow stage (booking & administration)
       // until PR2 derives all stages from the flywheel_events ledger.
       if (stage.key === 'workflow') {
-        total += bookings.length
-        done += bookings.filter(b => b.status === 'Confirmed').length
+        total += realSessions.length
+        done += realSessions.filter(s => s.status === 'confirmed').length
       }
       stats[stage.key] = {
         total,
@@ -329,7 +338,7 @@ export default function BusinessHealth() {
       }
     }
     return stats
-  }, [assignedTasks, bookings])
+  }, [assignedTasks, realSessions])
 
   // Totals cover both surfaces: real tagged tasks + bookings.
   const totalAssignedTagged = assignedTasks.filter(t => normalizeLegacyStage(t.category) !== null).length
@@ -337,10 +346,10 @@ export default function BusinessHealth() {
   const demoActive = isFlywheelDemo()
   const totalItems = demoActive
     ? Object.values(stageStats).reduce((a, s) => a + s.total, 0)
-    : totalAssignedTagged + bookings.length
+    : totalAssignedTagged + realSessions.length
   const totalDone = demoActive
     ? Object.values(stageStats).reduce((a, s) => a + s.done, 0)
-    : totalAssignedDone + bookings.filter(b => b.status === 'Confirmed').length
+    : totalAssignedDone + realSessions.filter(s => s.status === 'confirmed').length
   const overallPct = totalItems > 0 ? Math.round((totalDone / totalItems) * 100) : 0
   const healthLabel = overallPct >= 85 ? 'Excellent' : overallPct >= 65 ? 'Good' : overallPct >= 40 ? 'Average' : 'Low'
 
@@ -370,16 +379,71 @@ export default function BusinessHealth() {
 
   // ── Empty-state guards ────────────────────────────────────────────────
 
+  // Real-data aggregations for the trend / employee / studio charts.
+  // Bookings = real `sessions`; tasks = real `assigned_tasks` split into
+  // KPI (flywheel-tagged) vs Other (untagged). Demo mode swaps in the
+  // synthetic dataset so the whole page can be evaluated zero-DB-cost.
+  const realAgg = useMemo(() => {
+    const isTagged = (cat: string | null) => normalizeLegacyStage(cat) !== null
+
+    // Last 6 calendar months, oldest → newest.
+    const now = new Date()
+    const months: { key: string; label: string }[] = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      months.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: d.toLocaleString('en-US', { month: 'short' }),
+      })
+    }
+    const monthly = months.map(({ key, label }) => {
+      const bookings = realSessions.filter(s => (s.session_date ?? '').startsWith(key)).length
+      const done = assignedTasks.filter(t => (isoToLocalDateKey(t.completed_at) ?? '').startsWith(key))
+      return {
+        month: label,
+        bookings,
+        tasks: done.filter(t => isTagged(t.category)).length,
+        studio: done.filter(t => !isTagged(t.category)).length,
+      }
+    })
+
+    // Per-employee: KPI (tagged) vs Other (untagged) task counts.
+    const byEmp = new Map<string, { kpi: number; studio: number }>()
+    for (const t of assignedTasks) {
+      const name = t.assigned_to_name?.trim()
+      if (!name) continue
+      const cur = byEmp.get(name) ?? { kpi: 0, studio: 0 }
+      if (isTagged(t.category)) cur.kpi += 1
+      else cur.studio += 1
+      byEmp.set(name, cur)
+    }
+    const employees = [...byEmp.entries()]
+      .map(([name, v]) => ({ name, kpi: v.kpi, studio: v.studio, tasks: v.kpi + v.studio }))
+      .sort((a, b) => b.tasks - a.tasks)
+
+    // Studio-scope (unassigned) tasks grouped by space — empty until
+    // studio-scope tasks exist, then this populates automatically.
+    const byStudio = new Map<string, number>()
+    for (const t of assignedTasks) {
+      if (t.scope !== 'studio') continue
+      const label = t.studio_space?.trim() || 'General'
+      byStudio.set(label, (byStudio.get(label) ?? 0) + 1)
+    }
+    const studio = [...byStudio.entries()].map(([label, count]) => ({ label, count }))
+
+    return { monthly, employees, studio }
+  }, [assignedTasks, realSessions])
+
   // Demo preview feeds the placeholder-backed charts too, so the whole
-  // page can be evaluated (Bookings Trend, KPI Performance bar, Tasks by
-  // Employee, Studio Tasks). Real mode keeps the empty consts until live.
-  const monthlyTrend = demoActive ? demoMonthlyTrend() : MONTHLY_TREND
-  const tasksByEmployee = demoActive ? demoTasksByEmployee() : TASKS_BY_EMPLOYEE
-  const studioBuckets = demoActive ? demoStudioBuckets() : STUDIO_BUCKETS
+  // page can be evaluated. Real mode now derives everything from live
+  // sessions + assigned_tasks (above).
+  const monthlyTrend = demoActive ? demoMonthlyTrend() : realAgg.monthly
+  const tasksByEmployee = demoActive ? demoTasksByEmployee() : realAgg.employees
+  const studioBuckets = demoActive ? demoStudioBuckets() : realAgg.studio
 
   const hasAnyWork      = totalItems > 0
   const hasKpiCounts    = tasksByKpiStage.some(s => s.count > 0)
-  const hasTrendData    = monthlyTrend.length > 0
+  const hasTrendData    = monthlyTrend.some(m => m.bookings > 0 || m.tasks > 0 || m.studio > 0)
   const hasEmployeeData = tasksByEmployee.length > 0
   const hasStudioData   = studioBuckets.length > 0
 
@@ -387,14 +451,14 @@ export default function BusinessHealth() {
 
   // Tasks & Bookings summary box — sourced from the demo dataset in preview
   // mode (the legacy useTasks mock context is empty), real counts otherwise.
-  const bookingsCount = demoActive ? totalBookingsInTrend : bookings.length
+  const bookingsCount = demoActive ? totalBookingsInTrend : realSessions.length
   const kpiTaskCount = demoActive
     ? tasksByEmployee.reduce((a, e) => a + e.kpi, 0)
-    : tasks.filter(t => normalizeLegacyStage(t.stage) !== null).length
+    : totalAssignedTagged
   const studioTaskCount = demoActive
     ? tasksByEmployee.reduce((a, e) => a + e.studio, 0)
-    : tasks.filter(t => ['Administrative', 'Coding', 'Maintenance'].includes(t.stage)).length
-  const totalTaskCount = demoActive ? kpiTaskCount + studioTaskCount : tasks.length
+    : assignedTasks.length - totalAssignedTagged
+  const totalTaskCount = demoActive ? kpiTaskCount + studioTaskCount : assignedTasks.length
 
   // Best / Needs-attention stage objects (carry the canonical stage color so
   // the summary cards can tint to match each stage). Ranked by completion %.
@@ -652,15 +716,16 @@ export default function BusinessHealth() {
 
           <div className="space-y-0">
             {selectedStage === 'workflow' ? (
-              bookings.map(b => {
-                const isDone = b.status === 'Confirmed'
+              realSessions.slice(0, 12).map(s => {
+                const isDone = s.status === 'confirmed'
+                const hhmm = (t: string | null) => (t ? t.slice(0, 5) : '')
                 return (
-                  <div key={b.id} className={`flex items-center gap-2 py-[11px] border-b border-border/30 last:border-0 ${isDone ? 'opacity-25' : ''}`}>
+                  <div key={s.id} className={`flex items-center gap-2 py-[11px] border-b border-border/30 last:border-0 ${isDone ? 'opacity-25' : ''}`}>
                     <div className={`w-[18px] h-[18px] rounded-[5px] border-[1.5px] flex items-center justify-center shrink-0 ${isDone ? 'bg-gold/30 border-gold/40' : 'border-border-light'}`}>
                       {isDone && <Check size={11} className="text-gold" />}
                     </div>
-                    <span className={`flex-1 text-[14px] font-normal tracking-tight truncate ${isDone ? 'line-through text-text-light' : 'text-text-muted'}`}>{b.client} — {b.description}</span>
-                    <span className="text-[11px] text-text-light shrink-0">{b.startTime}–{b.endTime}</span>
+                    <span className={`flex-1 text-[14px] font-normal tracking-tight truncate ${isDone ? 'line-through text-text-light' : 'text-text-muted'}`}>{s.client_name || 'Session'} — {s.session_type}</span>
+                    <span className="text-[11px] text-text-light shrink-0">{s.session_date} · {hhmm(s.start_time)}–{hhmm(s.end_time)}</span>
                   </div>
                 )
               })
@@ -681,7 +746,7 @@ export default function BusinessHealth() {
               })
             )}
             {selectedStage !== 'workflow' && stageTasks.length === 0 && <p className="text-[13px] text-text-light text-center py-6">No tasks in this stage yet.</p>}
-            {selectedStage === 'workflow' && bookings.length === 0 && <p className="text-[13px] text-text-light text-center py-6">No bookings yet.</p>}
+            {selectedStage === 'workflow' && realSessions.length === 0 && <p className="text-[13px] text-text-light text-center py-6">No bookings yet.</p>}
           </div>
 
           {hasPending && (
@@ -782,7 +847,7 @@ export default function BusinessHealth() {
               <span className="text-xl font-bold tabular-nums text-text">{kpiTaskCount}</span>
             </div>
             <div className="flex items-center justify-between py-3 border-b border-border">
-              <span className="flex items-center gap-2 text-sm text-text-muted"><CheckSquare size={14} className="text-text-light" /> Studio Tasks</span>
+              <span className="flex items-center gap-2 text-sm text-text-muted"><CheckSquare size={14} className="text-text-light" /> Other Tasks</span>
               <span className="text-xl font-bold tabular-nums text-text">{studioTaskCount}</span>
             </div>
             <div className="flex items-center justify-between py-3">
@@ -806,7 +871,7 @@ export default function BusinessHealth() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <ChartEmptyState message="The donut will split across Deliver, Capture, Share, Attract, and Book as your team completes tasks tagged with KPI stages." />
+            <ChartEmptyState message="The donut will split across Discovery, Workflow, Production, Education, and Retention as your team completes tasks tagged with KPI stages." />
           )}
         </div>
       </div>
@@ -816,12 +881,12 @@ export default function BusinessHealth() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-bold">Monthly Trend</h2>
-            <p className="text-[13px] text-text-muted mt-0.5">Bookings, KPI tasks, and studio tasks — last 6 months.</p>
+            <p className="text-[13px] text-text-muted mt-0.5">Bookings, KPI tasks, and other tasks — last 6 months.</p>
           </div>
           <div className="flex items-center gap-4 text-xs">
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-400" /> Bookings</span>
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-400" /> KPI Tasks</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-violet-400" /> Studio Tasks</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-violet-400" /> Other Tasks</span>
           </div>
         </div>
         {hasTrendData ? (
@@ -834,7 +899,7 @@ export default function BusinessHealth() {
                 <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                 <Bar dataKey="bookings" name="Bookings"  fill="#34d399" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="tasks"    name="KPI Tasks" fill="#60a5fa" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="studio"   name="Studio"    fill="#a78bfa" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="studio"   name="Other"     fill="#a78bfa" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -850,7 +915,7 @@ export default function BusinessHealth() {
             <h2 className="text-lg font-bold">Bookings Trend</h2>
             <p className="text-[13px] text-text-muted mt-0.5">Confirmed sessions over the tracked period.</p>
           </div>
-          <p className="text-2xl font-bold text-emerald-400 tabular-nums">{totalBookingsInTrend || bookings.length}</p>
+          <p className="text-2xl font-bold text-emerald-400 tabular-nums">{totalBookingsInTrend || realSessions.length}</p>
         </div>
         {hasTrendData ? (
           <div className="h-56" aria-hidden="true">
@@ -874,11 +939,11 @@ export default function BusinessHealth() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-bold">Tasks by Employee</h2>
-            <p className="text-[13px] text-text-muted mt-0.5">KPI-assigned vs. studio (unassigned) work per person.</p>
+            <p className="text-[13px] text-text-muted mt-0.5">KPI-tagged vs. other (untagged) tasks per person.</p>
           </div>
           <div className="flex items-center gap-4 text-xs">
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-400" /> KPI</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-violet-400" /> Studio</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-violet-400" /> Other</span>
           </div>
         </div>
         {hasEmployeeData ? (
@@ -890,12 +955,12 @@ export default function BusinessHealth() {
                 <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#e2e2ea' }} axisLine={false} tickLine={false} width={120} />
                 <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                 <Bar dataKey="kpi"    name="KPI"    stackId="t" fill="#60a5fa" radius={[4, 0, 0, 4]} />
-                <Bar dataKey="studio" name="Studio" stackId="t" fill="#a78bfa" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="studio" name="Other" stackId="t" fill="#a78bfa" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <ChartEmptyState height="h-80" message="A stacked bar will show each employee's KPI and studio task counts once tasks start being completed." />
+          <ChartEmptyState height="h-80" message="A stacked bar will show each employee's KPI and other task counts once tasks start being assigned." />
         )}
       </div>
 
@@ -923,11 +988,11 @@ export default function BusinessHealth() {
             ))}
           </div>
         ) : (
-          <ChartEmptyState height="h-32" message="Each team member will list here with their KPI vs. studio task counts once work is logged." />
+          <ChartEmptyState height="h-32" message="Each team member will list here with their KPI vs. other task counts once work is assigned." />
         )}
         <p className="text-[11px] text-text-light mt-2 flex items-center gap-3">
           <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-blue-400" /> KPI</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-violet-400" /> Studio</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-violet-400" /> Other</span>
         </p>
 
         <div className="bg-surface-alt/50 rounded-xl py-2 px-3 mb-2 mt-5 text-center">
