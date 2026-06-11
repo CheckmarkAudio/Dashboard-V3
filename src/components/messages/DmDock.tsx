@@ -4,7 +4,7 @@
 // stay put as the user moves between pages. Each open thread is either an
 // expanded chat window or a collapsed "head" in the bottom-right corner.
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Minus, Send, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -12,7 +12,9 @@ import MemberAvatar from '../members/MemberAvatar'
 import LinkifiedText from '../forum/LinkifiedText'
 import MediaPicker from '../forum/MediaPicker'
 import AttachmentDisplay from '../forum/AttachmentDisplay'
+import { useToast } from '../Toast'
 import type { ChatAttachment } from '../../lib/forum/attachments'
+import { inferForumKind, uploadForumFile } from '../../lib/forum/upload'
 import { dmKeys, dmThreadLabel, markDmRead, type DmThread } from '../../lib/queries/dms'
 import { useDmDock } from './DmDockContext'
 import { useDmThreads } from './useDmThreads'
@@ -57,11 +59,84 @@ function DmChatWindow({
   onClose: () => void
 }) {
   const { profile } = useAuth()
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const { messages, loading, send } = useChannelChat(channelId)
   const [input, setInput] = useState('')
   const [pending, setPending] = useState<ChatAttachment[]>([])
+  const [dragDepth, setDragDepth] = useState(0)
   const endRef = useRef<HTMLDivElement>(null)
+
+  const uploadFiles = useCallback(
+    async (files: File[]) => {
+      if (!channelId || !profile?.id) return
+      const accepted: File[] = []
+      const skipped: string[] = []
+      for (const f of files) {
+        if (inferForumKind(f) === null) skipped.push(f.name)
+        else accepted.push(f)
+      }
+      if (skipped.length > 0) {
+        toast(
+          skipped.length === 1
+            ? `${skipped[0]} isn't an image, video, or audio file.`
+            : `${skipped.length} files weren't image / video / audio.`,
+          'error',
+        )
+      }
+      if (accepted.length === 0) return
+      await Promise.all(
+        accepted.map(async (file) => {
+          try {
+            const attachment = await uploadForumFile({ file, channelId, userId: profile.id })
+            setPending((prev) => [...prev, attachment])
+          } catch (err) {
+            toast(err instanceof Error ? err.message : 'Upload failed', 'error')
+          }
+        }),
+      )
+    },
+    [channelId, profile?.id, toast],
+  )
+
+  const dragHasFiles = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer?.types ?? []).includes('Files')
+  const onDragEnter = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return
+    e.preventDefault()
+    setDragDepth((d) => d + 1)
+  }
+  const onDragLeave = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return
+    e.preventDefault()
+    setDragDepth((d) => Math.max(0, d - 1))
+  }
+  const onDragOver = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+  const onDrop = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return
+    e.preventDefault()
+    setDragDepth(0)
+    const files = Array.from(e.dataTransfer?.files ?? [])
+    if (files.length > 0) void uploadFiles(files)
+  }
+
+  const onPaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+    const files: File[] = []
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (it?.kind === 'file') {
+        const f = it.getAsFile()
+        if (f) files.push(f)
+      }
+    }
+    if (files.length > 0) void uploadFiles(files)
+  }
 
   const label = thread ? dmThreadLabel(thread) : 'Conversation'
   const lead = thread?.members[0] ?? null
@@ -112,7 +187,20 @@ function DmChatWindow({
 
   // ── Expanded: full chat window ──
   return (
-    <div className="pointer-events-auto mb-0 w-[320px] max-w-[calc(100vw-2rem)] h-[440px] max-h-[calc(100vh-5rem)] flex flex-col bg-surface border border-border rounded-t-2xl shadow-2xl overflow-hidden animate-slide-up">
+    <div
+      className="pointer-events-auto relative mb-0 w-[320px] max-w-[calc(100vw-2rem)] h-[440px] max-h-[calc(100vh-5rem)] flex flex-col bg-surface border border-border rounded-t-2xl shadow-2xl overflow-hidden animate-slide-up"
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onPaste={onPaste}
+    >
+      {dragDepth > 0 && (
+        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-1 rounded-t-2xl border-2 border-dashed border-gold/70 bg-gold/10 backdrop-blur-sm">
+          <span className="text-gold font-semibold text-[13px]">Drop to attach</span>
+          <span className="text-gold/60 text-[11px]">image · video · audio</span>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border bg-surface-alt/40 shrink-0">
         <button
@@ -170,7 +258,7 @@ function DmChatWindow({
                   {m.content && <LinkifiedText text={m.content} />}
                   {Array.isArray(m.attachments) && m.attachments.length > 0 && (
                     <div className={m.content ? 'mt-1.5' : ''}>
-                      <AttachmentDisplay attachments={m.attachments} ownBubble={isMe} />
+                      <AttachmentDisplay attachments={m.attachments} ownBubble={isMe} lazy={false} />
                     </div>
                   )}
                   {m._status === 'failed' && <span className="block text-[10px] text-rose-400 mt-0.5">Failed — tap to retry</span>}

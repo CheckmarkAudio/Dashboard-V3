@@ -13,17 +13,21 @@ interface AttachmentDisplayProps {
   /** When true, slightly dim the embed background so it doesn't
    *  fight a gold-tinted "own" bubble. */
   ownBubble?: boolean
+  /** Pass false in fixed/floating containers (e.g. DM dock) where
+   *  lazy loading may never trigger due to the fixed scroll context. */
+  lazy?: boolean
 }
 
 export default function AttachmentDisplay({
   attachments,
   ownBubble = false,
+  lazy = true,
 }: AttachmentDisplayProps) {
   if (attachments.length === 0) return null
   return (
     <div className="space-y-2 mt-1.5">
       {attachments.map((a, idx) => (
-        <AttachmentItem key={`${a.kind}-${idx}-${a.url}`} attachment={a} ownBubble={ownBubble} />
+        <AttachmentItem key={`${a.kind}-${idx}-${a.url}`} attachment={a} ownBubble={ownBubble} lazy={lazy} />
       ))}
     </div>
   )
@@ -32,9 +36,11 @@ export default function AttachmentDisplay({
 function AttachmentItem({
   attachment,
   ownBubble,
+  lazy,
 }: {
   attachment: ChatAttachment
   ownBubble: boolean
+  lazy: boolean
 }) {
   if (attachment.kind === 'image') {
     return (
@@ -47,7 +53,7 @@ function AttachmentItem({
         <img
           src={attachment.url}
           alt={attachment.name ?? 'Attached image'}
-          loading="lazy"
+          loading={lazy ? 'lazy' : 'eager'}
           className="block w-full h-auto max-h-[320px] object-contain"
         />
       </a>
