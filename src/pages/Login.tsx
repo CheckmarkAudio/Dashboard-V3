@@ -39,6 +39,15 @@ function isVercelBranchPreview(): boolean {
   return host.includes('-git-')
 }
 
+function isInstalledAppContext(): boolean {
+  if (typeof window === 'undefined') return false
+  const standaloneMedia = window.matchMedia?.('(display-mode: standalone)').matches ?? false
+  const fullscreenMedia = window.matchMedia?.('(display-mode: fullscreen)').matches ?? false
+  // iOS Safari exposes `navigator.standalone` for home-screen apps.
+  const iOSStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  return standaloneMedia || fullscreenMedia || iOSStandalone
+}
+
 /**
  * Race a promise against a timeout so the user never stares at a
  * spinner forever. Used for both sign-in and password-reset calls.
@@ -179,12 +188,14 @@ export default function Login() {
   const previewAllowed = import.meta.env.VITE_PREVIEW_LOGIN_ALLOWED as string | undefined
   const previewBuild = deployEnv === 'preview'
   const previewHost = isVercelBranchPreview()
+  const installedAppContext = isInstalledAppContext()
   const previewReady =
     previewBuild &&
     Boolean(previewEmail) &&
     Boolean(previewPassword) &&
     previewAllowed === 'true' &&
-    previewHost
+    previewHost &&
+    !installedAppContext
   const [previewRunning, setPreviewRunning] = useState(previewReady)
   const previewFiredRef = useRef(false)
 
@@ -205,7 +216,15 @@ export default function Login() {
         { deployEnv, host: window.location.hostname, previewBuild, previewHost },
       )
     }
-  }, [deployEnv, previewAllowed, previewBuild, previewEmail, previewHost, previewPassword])
+    if (hasAnyPreviewVar && installedAppContext) {
+      // eslint-disable-next-line no-console
+      console.info(
+        '[Login] Preview auto-login disabled in installed app context. ' +
+          'Installed PWA QA must exercise real login/session behavior.',
+        { deployEnv, host: window.location.hostname },
+      )
+    }
+  }, [deployEnv, installedAppContext, previewAllowed, previewBuild, previewEmail, previewHost, previewPassword])
 
   // Phase 6.4 — surface the "not provisioned" message if the user was
   // rejected by AuthContext because no team_members row exists.

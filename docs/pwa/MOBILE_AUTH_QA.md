@@ -20,6 +20,7 @@ Test on mobile browser and installed app when possible:
 10. First-run app color-mode choice.
 11. Profile picture prompt for users missing a profile image.
 12. Banner image prompt for users missing a banner image.
+13. Preview auto-login disabled in installed app context.
 
 ## Mobile-Specific Risks
 
@@ -28,6 +29,7 @@ Test on mobile browser and installed app when possible:
 - Modals exceeding viewport height.
 - iOS Safari treating storage/session differently than desktop Chrome.
 - Installed app not sharing expected browser session.
+- Preview auto-login hiding the real login gate during installed-app QA.
 - Redirect URLs returning to the wrong route.
 - Logout not clearing local state visually.
 - Personalization prompts blocking urgent access.
@@ -45,6 +47,7 @@ Test on mobile browser and installed app when possible:
 | Temp password |  |  |  |  |  |  |
 | Recovery link |  |  |  |  |  |  |
 | Reopen app |  |  |  |  |  |  |
+| Preview auto-login disabled |  |  |  |  |  |  |
 | Choose app mode |  |  |  |  |  |  |
 | Add profile picture |  |  |  |  |  |  |
 | Add banner image |  |  |  |  |  |  |
@@ -60,6 +63,7 @@ Auth QA passes when:
 - password reset/setup does not dead-end
 - clock-out logout decision behaves as designed
 - installed app relaunch does not create a confusing auth state
+- installed preview app does not use preview auto-login; phone QA exercises real credentials or an existing real session
 - first-run personalization is skippable
 - app theme choice can differ from website theme choice
 - profile/banner media stays account-level across app and website
@@ -70,4 +74,20 @@ Auth QA passes when:
 - Do not cache auth-sensitive responses in the service worker.
 - Do not rely on private offline data.
 - Test auth on production preview/prod, not only localhost.
+- Treat preview auto-login as browser-preview convenience only. Installed app QA must not rely on it.
 - Do not make profile/banner setup mandatory before users can reach critical workflows.
+
+## Installed App Auth Test Steps
+
+Use these steps before any mobile layout polish PR merges:
+
+1. Open the Vercel preview in Safari/Chrome and install it to the home screen.
+2. Open the installed app.
+3. If it opens directly to the workspace, use the app's logout path.
+4. Fully close the installed app.
+5. Reopen the installed app.
+6. Confirm it lands on the sign-in screen.
+7. Sign in with a real provisioned user.
+8. Close and reopen again.
+9. Confirm the valid session persists.
+10. Log out again and confirm a final reopen returns to sign-in.
