@@ -33,6 +33,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    // Explicit: implicit flow keeps recovery tokens as `#type=recovery&access_token=…`
+    // hash fragments, which our index.html script catches before any JS loads.
+    // PKCE encodes them as `?code=…` query params, which breaks that detection.
+    flowType: 'implicit',
     lock: (_name, _acquireTimeout, fn) => fn(),
   },
 })

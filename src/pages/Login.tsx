@@ -40,6 +40,22 @@ function isVercelBranchPreview(): boolean {
 }
 
 /**
+ * Race a promise against a timeout so the user never stares at a
+ * spinner forever. Used for both sign-in and password-reset calls.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error('Request timed out — the server may be unavailable. Please try again.')),
+        ms,
+      ),
+    ),
+  ])
+}
+
+/**
  * Map raw Supabase auth errors to friendly, action-oriented copy.
  *
  * Supabase's defaults are honest but unhelpful for end-users
@@ -48,6 +64,30 @@ function isVercelBranchPreview(): boolean {
  * we don't recognize falls through verbatim so we don't accidentally
  * swallow a useful diagnostic.
  */
+/**
+ * Translate raw Supabase password-reset errors to user-friendly copy.
+ * resetPasswordForEmail never reveals whether the email exists (security
+ * best practice), so most real-world errors are rate-limits or network
+ * issues. Anything unrecognised falls through as-is.
+ */
+function friendlyResetError(raw: string | undefined): string {
+  if (!raw) return 'Something went wrong. Please try again.'
+  const lower = raw.toLowerCase()
+  if (lower.includes('rate limit') || lower.includes('too many') || lower.includes('email rate limit')) {
+    return 'Too many reset requests in a short time. Please wait a few minutes and try again.'
+  }
+  if (lower.includes('network') || lower.includes('failed to fetch')) {
+    return 'Network hiccup. Check your connection and try again.'
+  }
+  if (lower.includes('timed out') || lower.includes('timeout')) {
+    return 'The server took too long to respond. Check your connection and try again.'
+  }
+  if (lower.includes('invalid email') || lower.includes('unable to validate email')) {
+    return "That doesn't look like a valid email address. Please check and try again."
+  }
+  return raw
+}
+
 function friendlyAuthError(raw: string | undefined): string {
   if (!raw) return 'Something went wrong signing in. Please try again.'
   const lower = raw.toLowerCase()
@@ -109,19 +149,22 @@ export default function Login() {
     setResetError('')
     setResetLoading(true)
     try {
-      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(addr, {
-        // redirectTo must point back to /login so the inline
-        // <script> in index.html picks up #type=recovery before
-        // React mounts and RecoveryGate intercepts the route.
-        redirectTo: `${window.location.origin}/login`,
-      })
+      const { error: resetErr } = await withTimeout(
+        supabase.auth.resetPasswordForEmail(addr, {
+          // redirectTo must point back to /login so the inline
+          // <script> in index.html picks up #type=recovery before
+          // React mounts and RecoveryGate intercepts the route.
+          redirectTo: `${window.location.origin}/login`,
+        }),
+        10_000,
+      )
       if (resetErr) {
-        setResetError(resetErr.message)
+        setResetError(friendlyResetError(resetErr.message))
       } else {
         setMode('sent')
       }
     } catch (err) {
-      setResetError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+      setResetError(friendlyResetError(err instanceof Error ? err.message : undefined))
     } finally {
       setResetLoading(false)
     }
@@ -215,14 +258,6 @@ export default function Login() {
   }
 
   if (user) return <Navigate to="/" replace />
-
-  const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
-    Promise.race([
-      promise,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out — the server may be unavailable. Please try again.')), ms),
-      ),
-    ])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
