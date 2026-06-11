@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { Button, Input, Modal } from '../components/ui'
 import { OWNER_EMAIL } from '../domain/permissions'
-import { Eye, EyeOff, HelpCircle, LogIn, Music } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Eye, EyeOff, HelpCircle, KeyRound, LogIn, Mail, Music } from 'lucide-react'
 
 /**
  * Lean 2 — preview-login lockdown (runtime defense layer 2 / 4).
@@ -77,6 +78,54 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
+
+  // ── Forgot-password flow ──────────────────────────────────────────
+  // Three modes: 'login' (default) → 'reset' (enter email) → 'sent'
+  // (confirmation). User can jump back at any point.
+  type Mode = 'login' | 'reset' | 'sent'
+  const [mode, setMode] = useState<Mode>('login')
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetError, setResetError] = useState('')
+
+  const goToReset = () => {
+    // Pre-fill with whatever they typed in the login form.
+    setResetEmail(email)
+    setResetError('')
+    setMode('reset')
+  }
+  const backToLogin = () => {
+    setResetError('')
+    setMode('login')
+  }
+
+  const handleResetRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const addr = resetEmail.trim().toLowerCase()
+    if (!addr) {
+      setResetError('Please enter your email address.')
+      return
+    }
+    setResetError('')
+    setResetLoading(true)
+    try {
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(addr, {
+        // redirectTo must point back to /login so the inline
+        // <script> in index.html picks up #type=recovery before
+        // React mounts and RecoveryGate intercepts the route.
+        redirectTo: `${window.location.origin}/login`,
+      })
+      if (resetErr) {
+        setResetError(resetErr.message)
+      } else {
+        setMode('sent')
+      }
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+    } finally {
+      setResetLoading(false)
+    }
+  }
 
   // Preview auto-login: four independent guards must all pass before
   // we silently sign in. See `isVercelBranchPreview()` above + the
@@ -254,109 +303,221 @@ export default function Login() {
             <p className="text-gold font-semibold mt-1">Workspace</p>
           </div>
 
-          <div className="lg:mb-8 hidden lg:block">
-            <h1 className="text-2xl font-bold text-text">Welcome back</h1>
-            <p className="text-text-muted mt-1">Sign in to your account to continue</p>
-          </div>
+          {/* ── Mode: login ── */}
+          {mode === 'login' && (
+            <>
+              <div className="lg:mb-8 hidden lg:block">
+                <h1 className="text-2xl font-bold text-text">Welcome back</h1>
+                <p className="text-text-muted mt-1">Sign in to your account to continue</p>
+              </div>
 
-          <div className="bg-surface rounded-2xl border border-border p-7">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Input
-                id="login-email"
-                label="Email"
-                type="email"
-                placeholder="you@example.com"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-              />
-
-              {/* Password input + show/hide toggle. Implemented as a
-                  custom block (not the shared `<Input>`) because we
-                  need the trailing button to overlay the field and
-                  toggle the input `type` between 'password' and
-                  'text'. The button is keyboard-focusable + has an
-                  aria-label so screen readers know what flips. */}
-              <div className="space-y-1.5">
-                <label htmlFor="login-password" className="block text-[12px] font-medium text-text-muted">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    id="login-password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
+              <div className="bg-surface rounded-2xl border border-border p-7">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <Input
+                    id="login-email"
+                    label="Email"
+                    type="email"
+                    placeholder="you@example.com"
                     required
-                    minLength={6}
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    className="w-full pl-3 pr-10 py-2 rounded-lg border border-border bg-surface text-sm text-text placeholder:text-text-light focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
                   />
+
+                  {/* Password input + show/hide toggle + "Forgot password?" */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="login-password" className="block text-[12px] font-medium text-text-muted">
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={goToReset}
+                        className="text-[11px] text-text-light hover:text-gold transition-colors focus-ring rounded"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="login-password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        required
+                        minLength={6}
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        className="w-full pl-3 pr-10 py-2 rounded-lg border border-border bg-surface text-sm text-text placeholder:text-text-light focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(v => !v)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showPassword}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-text-muted hover:text-gold hover:bg-surface-hover transition-colors focus-ring"
+                        tabIndex={0}
+                      >
+                        {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3 animate-slide-up">
+                      {error}
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    block
+                    loading={loading}
+                    iconLeft={!loading ? <LogIn size={16} aria-hidden="true" /> : undefined}
+                  >
+                    Sign In
+                  </Button>
+
+                  <div className="flex items-center justify-center gap-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setHelpOpen(true)}
+                      className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-gold transition-colors focus-ring rounded"
+                    >
+                      <HelpCircle size={12} aria-hidden="true" />
+                      Need help signing in?
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-text-light text-center pt-1">
+                    Need access? Ask your admin to create your account.
+                  </p>
+                </form>
+              </div>
+            </>
+          )}
+
+          {/* ── Mode: reset (enter email) ── */}
+          {mode === 'reset' && (
+            <>
+              <div className="lg:mb-8 hidden lg:block">
+                <h1 className="text-2xl font-bold text-text">Reset your password</h1>
+                <p className="text-text-muted mt-1">We'll send a reset link to your email</p>
+              </div>
+
+              <div className="bg-surface rounded-2xl border border-border p-7">
+                <form onSubmit={handleResetRequest} className="space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-9 h-9 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">
+                      <KeyRound size={16} className="text-gold" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-text">Forgot your password?</p>
+                      <p className="text-[12px] text-text-muted">Enter your email and we'll send a link.</p>
+                    </div>
+                  </div>
+
+                  <Input
+                    id="reset-email"
+                    label="Email"
+                    type="email"
+                    placeholder="you@example.com"
+                    required
+                    autoFocus
+                    value={resetEmail}
+                    onChange={e => setResetEmail(e.target.value)}
+                  />
+
+                  {resetError && (
+                    <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                      {resetError}
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    block
+                    loading={resetLoading}
+                    iconLeft={!resetLoading ? <Mail size={15} aria-hidden="true" /> : undefined}
+                  >
+                    Send reset link
+                  </Button>
+
                   <button
                     type="button"
-                    onClick={() => setShowPassword(v => !v)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    aria-pressed={showPassword}
-                    title={showPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-text-muted hover:text-gold hover:bg-surface-hover transition-colors focus-ring"
-                    tabIndex={0}
+                    onClick={backToLogin}
+                    className="w-full inline-flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-gold transition-colors focus-ring rounded py-1"
                   >
-                    {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+                    <ArrowLeft size={12} aria-hidden="true" />
+                    Back to sign in
                   </button>
-                </div>
+                </form>
+              </div>
+            </>
+          )}
+
+          {/* ── Mode: sent (confirmation) ── */}
+          {mode === 'sent' && (
+            <>
+              <div className="lg:mb-8 hidden lg:block">
+                <h1 className="text-2xl font-bold text-text">Check your inbox</h1>
+                <p className="text-text-muted mt-1">Reset link on its way</p>
               </div>
 
-              {error && (
-                <div role="alert" className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3 animate-slide-up">
-                  {error}
+              <div className="bg-surface rounded-2xl border border-border p-7 space-y-5">
+                <div className="flex flex-col items-center text-center gap-3 py-2">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-400/20 flex items-center justify-center">
+                    <CheckCircle size={24} className="text-emerald-400" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-text">Reset link sent</p>
+                    <p className="text-[13px] text-text-muted mt-1">
+                      We sent a link to <span className="font-semibold text-text">{resetEmail}</span>.
+                      Click it to choose a new password.
+                    </p>
+                  </div>
                 </div>
-              )}
 
-              <Button
-                type="submit"
-                variant="primary"
-                block
-                loading={loading}
-                iconLeft={!loading ? <LogIn size={16} aria-hidden="true" /> : undefined}
-              >
-                Sign In
-              </Button>
+                <div className="rounded-xl bg-surface-alt/60 border border-border px-4 py-3 text-[12px] text-text-muted space-y-1.5">
+                  <p className="font-semibold text-text-light uppercase tracking-wide text-[10px]">Didn't get it?</p>
+                  <p>• Check your <span className="text-text font-medium">spam / junk</span> folder — it sometimes lands there.</p>
+                  <p>• The link expires in <span className="text-text font-medium">1 hour</span>.</p>
+                  <p>
+                    •{' '}
+                    <button
+                      type="button"
+                      onClick={() => { setMode('reset'); setResetError('') }}
+                      className="text-gold hover:underline focus-ring rounded"
+                    >
+                      Try again
+                    </button>
+                    {' '}with a different email, or ask your admin.
+                  </p>
+                </div>
 
-              {/* Need-help link. Opens a small modal explaining the
-                  current self-serve story (none — owner-mediated)
-                  and pre-fills a mailto to the owner. When SMTP +
-                  member-side reset land, this becomes a "Forgot
-                  password?" link that fires the recovery flow. */}
-              <div className="flex items-center justify-center gap-1 pt-1">
                 <button
                   type="button"
-                  onClick={() => setHelpOpen(true)}
-                  className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-gold transition-colors focus-ring rounded"
+                  onClick={backToLogin}
+                  className="w-full inline-flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-gold transition-colors focus-ring rounded py-1"
                 >
-                  <HelpCircle size={12} aria-hidden="true" />
-                  Need help signing in?
+                  <ArrowLeft size={12} aria-hidden="true" />
+                  Back to sign in
                 </button>
               </div>
-
-              <p className="text-xs text-text-light text-center pt-1">
-                Need access? Ask your admin to create your account.
-              </p>
-            </form>
-          </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Help modal — opened from the "Need help signing in?" link.
-          Self-serve email-link recovery is queued behind SMTP setup
-          (see Lean E in the auth roadmap), so for now the only
-          unblock is asking the owner to mint a temp password from
-          /admin/settings → Account Access. Pre-fills a mailto so
-          the member doesn't have to compose anything from scratch. */}
+      {/* Help modal — for issues beyond a forgotten password (wrong
+          email on file, account not yet created, locked out, etc).
+          Password resets are now self-serve via "Forgot password?". */}
       <Modal
         open={helpOpen}
         onClose={() => setHelpOpen(false)}
         title="Need help signing in?"
-        description="Self-serve password reset isn't available yet — for now your owner can set a temporary password for you in seconds."
+        description="For anything beyond a forgotten password, your admin can sort it out in seconds."
         size="sm"
         footer={
           <>
@@ -375,14 +536,14 @@ export default function Login() {
       >
         <div className="space-y-3 text-sm text-text-muted">
           <p>
-            Send a quick note to <span className="font-semibold text-text">{OWNER_EMAIL}</span> and
-            they'll reset your password and share a new one with you directly. Most resets take a
-            minute or two.
+            Use <span className="font-semibold text-text">Forgot password?</span> on the sign-in form
+            to reset your own password by email. For anything else, reach out to{' '}
+            <span className="font-semibold text-text">{OWNER_EMAIL}</span>.
           </p>
           <ul className="space-y-1.5 text-[13px]">
-            <li>• <span className="text-text">Forgot your password</span> — they'll mint a fresh temp password.</li>
-            <li>• <span className="text-text">Email not working / wrong email on file</span> — they'll fix it from the Members admin.</li>
-            <li>• <span className="text-text">Locked out / nothing seems to work</span> — they can investigate the account.</li>
+            <li>• <span className="text-text">Wrong email on file</span> — admin can correct it in Members settings.</li>
+            <li>• <span className="text-text">Account not created yet</span> — admin needs to add you first.</li>
+            <li>• <span className="text-text">Completely locked out</span> — admin can generate a direct setup link for you.</li>
           </ul>
           <p className="text-[12px] text-text-light pt-1">
             "Email the owner" opens your mail client with a draft already filled in.
