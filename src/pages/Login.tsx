@@ -3,9 +3,8 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
-import { Button, Input, Modal } from '../components/ui'
-import { OWNER_EMAIL } from '../domain/permissions'
-import { ArrowLeft, CheckCircle, Eye, EyeOff, HelpCircle, KeyRound, LogIn, Mail, Music } from 'lucide-react'
+import { Button, Input } from '../components/ui'
+import { ArrowLeft, CheckCircle, Eye, EyeOff, KeyRound, LogIn, Mail, Music } from 'lucide-react'
 
 /**
  * Lean 2 — preview-login lockdown (runtime defense layer 2 / 4).
@@ -117,7 +116,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [helpOpen, setHelpOpen] = useState(false)
 
   // ── Forgot-password flow ──────────────────────────────────────────
   // Three modes: 'login' (default) → 'reset' (enter email) → 'sent'
@@ -274,22 +272,6 @@ export default function Login() {
     }
   }
 
-  // Pre-fill the support email subject + body with whatever the
-  // member typed (best-effort — fine if `email` is empty). Encoding
-  // matters here because mail clients are picky about line breaks.
-  const supportSubject = encodeURIComponent('Help signing in to Checkmark')
-  const supportBody = encodeURIComponent(
-    [
-      "Hi — I'm having trouble signing in to the Checkmark workspace.",
-      '',
-      `Account email: ${email || '(please fill in)'}`,
-      'Issue (forgot password / email not working / other):',
-      '',
-      'Thanks!',
-    ].join('\n'),
-  )
-  const supportMailto = `mailto:${OWNER_EMAIL}?subject=${supportSubject}&body=${supportBody}`
-
   return (
     <div className="min-h-screen flex bg-bg">
       {/* Left branding panel */}
@@ -358,20 +340,11 @@ export default function Login() {
                     onChange={e => setEmail(e.target.value)}
                   />
 
-                  {/* Password input + show/hide toggle + "Forgot password?" */}
+                  {/* Password input + show/hide toggle */}
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="login-password" className="block text-[12px] font-medium text-text-muted">
-                        Password
-                      </label>
-                      <button
-                        type="button"
-                        onClick={goToReset}
-                        className="text-[11px] text-text-light hover:text-gold transition-colors focus-ring rounded"
-                      >
-                        Forgot password?
-                      </button>
-                    </div>
+                    <label htmlFor="login-password" className="block text-[12px] font-medium text-text-muted">
+                      Password
+                    </label>
                     <div className="relative">
                       <input
                         id="login-password"
@@ -413,20 +386,14 @@ export default function Login() {
                     Sign In
                   </Button>
 
-                  <div className="flex items-center justify-center gap-1 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setHelpOpen(true)}
-                      className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-gold transition-colors focus-ring rounded"
-                    >
-                      <HelpCircle size={12} aria-hidden="true" />
-                      Need help signing in?
-                    </button>
-                  </div>
-
-                  <p className="text-xs text-text-light text-center pt-1">
-                    Need access? Ask your admin to create your account.
-                  </p>
+                  <button
+                    type="button"
+                    onClick={goToReset}
+                    className="w-full inline-flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-gold transition-colors focus-ring rounded py-1"
+                  >
+                    <KeyRound size={12} aria-hidden="true" />
+                    Forgot password? Get a reset link
+                  </button>
                 </form>
               </div>
             </>
@@ -545,46 +512,6 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Help modal — for issues beyond a forgotten password (wrong
-          email on file, account not yet created, locked out, etc).
-          Password resets are now self-serve via "Forgot password?". */}
-      <Modal
-        open={helpOpen}
-        onClose={() => setHelpOpen(false)}
-        title="Need help signing in?"
-        description="For anything beyond a forgotten password, your admin can sort it out in seconds."
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setHelpOpen(false)}>Close</Button>
-            <Button
-              variant="primary"
-              iconLeft={<HelpCircle size={14} aria-hidden="true" />}
-              onClick={() => {
-                window.location.href = supportMailto
-              }}
-            >
-              Email the owner
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3 text-sm text-text-muted">
-          <p>
-            Use <span className="font-semibold text-text">Forgot password?</span> on the sign-in form
-            to reset your own password by email. For anything else, reach out to{' '}
-            <span className="font-semibold text-text">{OWNER_EMAIL}</span>.
-          </p>
-          <ul className="space-y-1.5 text-[13px]">
-            <li>• <span className="text-text">Wrong email on file</span> — admin can correct it in Members settings.</li>
-            <li>• <span className="text-text">Account not created yet</span> — admin needs to add you first.</li>
-            <li>• <span className="text-text">Completely locked out</span> — admin can generate a direct setup link for you.</li>
-          </ul>
-          <p className="text-[12px] text-text-light pt-1">
-            "Email the owner" opens your mail client with a draft already filled in.
-          </p>
-        </div>
-      </Modal>
     </div>
   )
 }
