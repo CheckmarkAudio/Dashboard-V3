@@ -23,6 +23,7 @@ import {
   PriorityToggle,
   SubmitBar,
   formatDueShort,
+  formatOverdueLabel,
   formatShortName,
   rolePositionFor,
 } from './shared'
@@ -563,8 +564,25 @@ function TeamTaskRow({
             </span>
           )}
         </div>
-        {/* PR #69 — `[role] · First L.` line; matches MyTasks. */}
+        {/* PR #69 — `[role] · First L.` line; matches MyTasks.
+            2026-05-19 — overdue badge prepended (rose dot + "Yesterday"
+            / "N days ago" / past date). Same treatment as MyTasksCard
+            so the missed-task signal is consistent across all three
+            task widgets (My Tasks · Studio Tasks · Team Tasks). */}
         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-light flex-wrap">
+          {(() => {
+            const overdue = !task.is_completed ? formatOverdueLabel(task.due_date) : null
+            if (!overdue) return null
+            return (
+              <>
+                <span className="inline-flex items-center gap-1 text-rose-400 font-semibold">
+                  <span className="w-1 h-1 rounded-full bg-rose-400" aria-hidden="true" />
+                  {overdue}
+                </span>
+                {(roleLabel || shortName) && <span aria-hidden="true">·</span>}
+              </>
+            )
+          })()}
           {roleLabel && <span className="lowercase">{roleLabel}</span>}
           {roleLabel && shortName && <span aria-hidden="true">·</span>}
           {shortName && <span>{shortName}</span>}

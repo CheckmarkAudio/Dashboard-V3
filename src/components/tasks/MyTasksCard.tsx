@@ -57,6 +57,7 @@ import {
   SourcePill,
   SubmitBar,
   formatDueShort,
+  formatOverdueLabel,
   formatShortName,
   rolePositionFor,
   isSelfAssigned,
@@ -1260,6 +1261,25 @@ function AssignedTaskRow({
           </div>
         ) : (
           <div className="flex items-center gap-2 mt-0.5 text-[10px] text-text-light flex-wrap">
+            {/* 2026-05-19 — overdue badge. Reads as the user's "missed
+                task" notifier (per the Apple-Reminders screenshot).
+                Renders ONLY when the task is incomplete AND past due
+                (formatOverdueLabel returns null otherwise). Rose color
+                + a small dot leads the meta line so the missed state
+                is unmissable without dominating the row. */}
+            {(() => {
+              const overdue = !task.is_completed ? formatOverdueLabel(task.due_date) : null
+              if (!overdue) return null
+              return (
+                <>
+                  <span className="inline-flex items-center gap-1 text-rose-400 font-semibold">
+                    <span className="w-1 h-1 rounded-full bg-rose-400" aria-hidden="true" />
+                    {overdue}
+                  </span>
+                  {(roleLabel || shortName) && <span aria-hidden="true">·</span>}
+                </>
+              )
+            })()}
             {roleLabel && <span className="lowercase">{roleLabel}</span>}
             {roleLabel && shortName && <span aria-hidden="true">·</span>}
             {shortName && <span>{shortName}</span>}
