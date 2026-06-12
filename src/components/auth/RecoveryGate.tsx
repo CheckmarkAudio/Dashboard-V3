@@ -84,6 +84,17 @@ export default function RecoveryGate({ children }: { children: ReactNode }) {
       setError(updateErr.message)
       return
     }
+    // If this member was pending (new invite), flip them to active now
+    // that they've completed account setup. Belt-and-suspenders: AuthContext
+    // also does this on fetchProfile, but doing it here is more immediate.
+    if (user?.id) {
+      await supabase
+        .from('team_members')
+        .update({ status: 'active' })
+        .eq('id', user.id)
+        .eq('status', 'pending') // only update if still pending; no-op otherwise
+        .catch(() => {/* non-fatal */})
+    }
     setNewPassword('')
     setConfirmPassword('')
     clearPasswordRecovery()

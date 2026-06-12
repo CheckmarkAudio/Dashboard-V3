@@ -7,24 +7,25 @@
     <title>Checkmark Workspace</title>
 
     <!--
-      Supabase password-recovery detection, FIRST THING after the
-      document loads. This runs before the JS bundle is parsed and
-      before the supabase-js client is constructed, so it reliably
-      catches `type=recovery` in the URL hash before supabase strips
-      it. The flag is read synchronously by AuthContext and drives
-      the top-level RecoveryGate.
+      Auth-link detection — runs BEFORE the JS bundle loads so the flag
+      is set before supabase-js strips the URL hash.
 
-      The earlier approach put this in main.tsx's body — that runs
-      AFTER all ES module imports resolve, which is AFTER supabase-js
-      has already started processing the URL. An inline head script
-      is the only place guaranteed to run before any bundle code.
+      Catches two Supabase link types:
+        type=recovery  — forgot-password reset link
+        type=invite    — new member account setup link (sent by admin)
+
+      Both are handled identically by RecoveryGate ("Set your password").
+      The flag is read synchronously by AuthContext on mount.
     -->
     <script>
       (function () {
         try {
           var hash = window.location.hash || ''
           var search = window.location.search || ''
-          if (hash.indexOf('type=recovery') !== -1 || search.indexOf('type=recovery') !== -1) {
+          if (
+            hash.indexOf('type=recovery') !== -1 || search.indexOf('type=recovery') !== -1 ||
+            hash.indexOf('type=invite')   !== -1 || search.indexOf('type=invite')   !== -1
+          ) {
             window.sessionStorage.setItem('pending_password_recovery', '1')
           }
         } catch (e) { /* private mode: rely on onAuthStateChange fallback */ }

@@ -182,7 +182,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // reject) prevents a transient blip from forcibly signing them out.
       return 'error'
     }
-    if (data) { setProfile(data); return 'found' }
+    if (data) {
+      // Auto-activate: a 'pending' member who successfully logs in has
+      // completed their account setup — flip to 'active' immediately.
+      if (data.status === 'pending') {
+        const { data: activated } = await supabase
+          .from('team_members')
+          .update({ status: 'active' })
+          .eq('id', data.id)
+          .select('*')
+          .maybeSingle()
+        setProfile((activated as typeof data) ?? data)
+      } else {
+        setProfile(data)
+      }
+      return 'found'
+    }
 
     // 2) Secondary lookup: an admin may have pre-seeded a row keyed by email
     //    before this user signed up (legacy TeamManager flow created rows
@@ -319,7 +334,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash ?? ''
       const search = window.location.search ?? ''
-      if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+      if (
+        hash.includes('type=recovery') || search.includes('type=recovery') ||
+        hash.includes('type=invite')   || search.includes('type=invite')
+      ) {
         setIsPasswordRecovery(true)
       }
     }
@@ -367,10 +385,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return
       if (event === 'INITIAL_SESSION' && sessionInitialized.current) return
 
-      // Supabase fires PASSWORD_RECOVERY when a user lands on the app
-      // via the recovery link in the password-reset email. Flip the
-      // flag so RecoveryGate renders the "Set your password" screen.
-      if (event === 'PASSWORD_RECOVERY') {
+      // PASSWORD_RECOVERY fires when a user clicks a password-reset link.
+      // USER_UPDATED fires when a user accepts an invite link.
+      // Both should show RecoveryGate ("Set your password").
+      if (event === 'PASSWORD_RECOVERY' || event === 'USER_UPDATED') {
         setIsPasswordRecovery(true)
       }
 

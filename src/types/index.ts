@@ -28,7 +28,8 @@ export interface TeamMember {
   phone?: string
   start_date?: string
   end_date?: string
-  status?: string
+  /** 'pending' = invited, hasn't set a password yet. Auto-flips to 'active' on first login. */
+  status?: 'active' | 'inactive' | 'pending' | string
   created_at?: string
   /** Auto-touched on every UPDATE via team_members_updated_at trigger. */
   updated_at?: string
