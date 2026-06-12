@@ -28,12 +28,17 @@ perfMark('app:bootstrap')
 if (typeof window !== 'undefined') {
   const hash = window.location.hash ?? ''
   const search = window.location.search ?? ''
-  if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+  // type=recovery → forgot-password reset link
+  // type=invite   → new member account setup link
+  if (
+    hash.includes('type=recovery') || search.includes('type=recovery') ||
+    hash.includes('type=invite')   || search.includes('type=invite')
+  ) {
     try {
       window.sessionStorage.setItem('pending_password_recovery', '1')
     } catch {
       // sessionStorage can throw in privacy-mode browsers; the
-      // onAuthStateChange PASSWORD_RECOVERY listener still catches it.
+      // onAuthStateChange listener still catches it.
     }
   }
 

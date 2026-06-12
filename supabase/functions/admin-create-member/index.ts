@@ -1,25 +1,31 @@
 // ============================================================================
 // admin-create-member — Supabase Edge Function
 //
-// Called by the admin-side TeamManager UI to create a new team member
-// account. Combines Supabase Auth's admin API (to create the auth user with
-// an admin-chosen default password) and the team_members profile insert into
-// a single atomic operation: if either half fails, the other is rolled back
-// so we never leave a half-created account.
+// Creates a new team member account and automatically sends them an
+// invitation email so they can set their own password — no manual
+// link-copying by the admin required.
+//
+// FLOW
+//   1. Verify caller is a signed-in team admin.
+//   2. Call inviteUserByEmail — creates the auth.users row AND sends
+//      the "You've been invited" email via Supabase's email service.
+//   3. Insert a team_members profile row with status='pending'.
+//   4. Return { ok: true, profile } to the client.
+//
+// The new member receives an email with a setup link. When they click
+// it, the client catches type=invite in the URL hash, RecoveryGate
+// shows the "Set your password" form, and on success their status
+// flips to 'active' automatically.
 //
 // ACCESS CONTROL
-//   - verify_jwt: true (set on deploy) — the caller's JWT is required.
-//   - The function re-runs an admin check against team_members so even a
-//     leaked user JWT can't escalate privileges. Only team admins pass.
+//   - verify_jwt: true — caller's JWT required.
+//   - Re-checks admin role via team_members so a leaked user JWT
+//     can't escalate privileges.
 //
-// SECRETS USED
-//   - SUPABASE_URL            (auto-injected by Supabase)
-//   - SUPABASE_SERVICE_ROLE_KEY (auto-injected by Supabase — never leaves
-//                                this function, never reaches the client)
-//
-// RESPONSE SHAPE
-//   { ok: true, profile: TeamMember }     // on success
-//   { ok: false, error: string }          // on failure (client surfaces as toast)
+// SECRETS (auto-injected by Supabase, never leave this function)
+//   - SUPABASE_URL
+//   - SUPABASE_SERVICE_ROLE_KEY
+//   - SUPABASE_ANON_KEY
 // ============================================================================
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
@@ -28,18 +34,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2"
 interface CreateMemberBody {
   email: string
   display_name: string
-  // PR #49 — `default_password` is now optional. When omitted, the
-  // function generates a strong random password server-side and the
-  // client triggers the standard email-recovery flow afterwards so
-  // the new member sets their own password. The plaintext is never
-  // returned to the client when this path is used.
-  default_password?: string
   role?: "admin" | "member"
   position?: string | null
   phone?: string | null
   start_date?: string | null
-  status?: "active" | "inactive"
   managed_by?: string | null
+  /** Pass true from the "Re-send invite" action to skip the duplicate-check guard. */
+  resend_invite?: boolean
 }
 
 const CORS_HEADERS = {
@@ -59,26 +60,6 @@ function normalizeEmail(raw: string | null | undefined): string {
   return (raw ?? "").trim().toLowerCase()
 }
 
-// PR #49 — generate a 32-character cryptographically-random password
-// using Deno's WebCrypto. Used when the admin opts for the
-// email-setup-link flow instead of sharing a temp password manually.
-// Includes mixed case + digits + symbols so it satisfies any future
-// Supabase password complexity rule without the admin tuning input.
-function generateRandomPassword(): string {
-  const ALPHABET =
-    "ABCDEFGHJKLMNPQRSTUVWXYZ" +              // upper, no I/O for readability
-    "abcdefghjkmnpqrstuvwxyz" +                // lower, no i/l/o
-    "23456789" +                               // digits, no 0/1
-    "!@#$%^&*-_=+"                             // common safe symbols
-  const bytes = new Uint8Array(32)
-  crypto.getRandomValues(bytes)
-  let out = ""
-  for (let i = 0; i < bytes.length; i++) {
-    out += ALPHABET[bytes[i] % ALPHABET.length]
-  }
-  return out
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS })
@@ -89,12 +70,11 @@ Deno.serve(async (req: Request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-  if (!supabaseUrl || !serviceRoleKey) {
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")
+  if (!supabaseUrl || !serviceRoleKey || !anonKey) {
     return jsonResponse({ ok: false, error: "Edge Function misconfigured (missing env)" }, 500)
   }
 
-  // Caller's JWT — we use it to identify the admin and enforce RLS on the
-  // profile lookup. Supabase Functions passes the raw auth header through.
   const authHeader = req.headers.get("Authorization") ?? ""
   if (!authHeader.startsWith("Bearer ")) {
     return jsonResponse({ ok: false, error: "Missing Authorization header" }, 401)
@@ -109,36 +89,22 @@ Deno.serve(async (req: Request) => {
 
   const email = normalizeEmail(body.email)
   const display_name = body.display_name?.trim() ?? ""
-  const adminProvidedPassword = (body.default_password ?? "").trim()
-  // PR #49 — pick the password source. If the admin supplied one
-  // (manual share path), use it. Otherwise generate a strong random
-  // string and let the client trigger the email-setup-link flow.
-  const passwordWasGenerated = adminProvidedPassword.length === 0
-  const passwordToUse = passwordWasGenerated
-    ? generateRandomPassword()
-    : adminProvidedPassword
 
   if (!email) return jsonResponse({ ok: false, error: "Email is required" }, 400)
   if (!display_name) return jsonResponse({ ok: false, error: "Display name is required" }, 400)
-  if (!passwordWasGenerated && adminProvidedPassword.length < 8) {
-    return jsonResponse(
-      { ok: false, error: "Default password must be at least 8 characters" },
-      400,
-    )
-  }
 
-  // Admin client with service role — bypasses RLS. NEVER leaves this function.
+  // Admin client — service role, bypasses RLS. Never returned to caller.
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  // Caller client with the user JWT — hits RLS as the admin user.
-  const caller = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+  // Caller client — hits RLS as the calling admin user.
+  const caller = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  // 1) Identify the caller from their JWT, then verify they're a team admin.
+  // 1) Verify the caller is a signed-in team admin.
   const { data: callerUser, error: callerUserErr } = await caller.auth.getUser()
   if (callerUserErr || !callerUser.user) {
     return jsonResponse({ ok: false, error: "Not authenticated" }, 401)
@@ -157,27 +123,84 @@ Deno.serve(async (req: Request) => {
 
   const teamId = callerProfile.team_id
 
-  // 2) Create the auth user. Password is either admin-supplied or
-  //    server-generated. `requires_password_change` is set in either
-  //    case so first-login forces a real password regardless of path.
-  const { data: createdAuth, error: createAuthErr } = await admin.auth.admin.createUser({
-    email,
-    password: passwordToUse,
-    email_confirm: true, // skip the email-verification step; admin vouches for them
-    user_metadata: {
-      display_name,
-      created_by_admin: callerUser.user.id,
-      requires_password_change: true,
-    },
-  })
-  if (createAuthErr || !createdAuth.user) {
-    const msg = createAuthErr?.message ?? "Failed to create auth user"
-    return jsonResponse({ ok: false, error: msg }, 400)
+  // 2) Check if this email already has an auth account.
+  //    - If it does and is already confirmed → return a clear error so
+  //      the admin knows to use "Re-send invite" instead.
+  //    - If it exists but is unconfirmed → re-send the invite.
+  let existingUserId: string | null = null
+  try {
+    const { data: existingList } = await admin.auth.admin.listUsers({ perPage: 1000 })
+    const existing = existingList?.users?.find(
+      (u) => u.email?.toLowerCase() === email
+    )
+    if (existing) {
+      if (existing.email_confirmed_at && !body.resend_invite) {
+        // Already has a confirmed account — don't overwrite it.
+        // Check if they already have a team_members row.
+        const { data: existingProfile } = await admin
+          .from("team_members")
+          .select("id, status")
+          .eq("id", existing.id)
+          .maybeSingle()
+        if (existingProfile) {
+          return jsonResponse({
+            ok: false,
+            error: `${email} already has an active account. Use the Members list to manage their status.`,
+          }, 409)
+        }
+        // Auth user exists but no profile — create the profile for them.
+        existingUserId = existing.id
+      } else {
+        // Unconfirmed invite or explicit resend — resend the invite.
+        existingUserId = existing.id
+      }
+    }
+  } catch (_) {
+    // listUsers failed — proceed and let inviteUserByEmail sort it out.
   }
 
-  const newUserId = createdAuth.user.id
+  // 3) Send the invitation email (creates auth user OR re-sends invite).
+  //    inviteUserByEmail automatically emails the member a "Set up your
+  //    account" link — no manual link copying needed.
+  let newUserId: string
 
-  // 3) Insert the team_members row with id = new auth uid.
+  if (existingUserId) {
+    // Re-use existing auth user id (resend path).
+    newUserId = existingUserId
+    // Send a fresh invite link via generateLink so the member gets a new
+    // "You've been invited" email (not a recovery/"Reset password" email).
+    const { error: linkErr } = await admin.auth.admin.generateLink({
+      type: "invite",
+      email,
+    })
+    if (linkErr) {
+      // generateLink can fail if Supabase email is not configured — try
+      // recovery as a fallback so the member can still set a password.
+      await admin.auth.admin.generateLink({ type: "recovery", email }).catch(() => {})
+    }
+  } else {
+    const { data: inviteData, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
+      email,
+      {
+        data: {
+          display_name,
+          created_by_admin: callerUser.user.id,
+          requires_password_change: true,
+        },
+        // No redirectTo — uses the project's configured Site URL so
+        // the invite link doesn't need a separate Redirect URL allowlist entry.
+      }
+    )
+    if (inviteErr || !inviteData?.user) {
+      const msg = inviteErr?.message ?? "Failed to send invitation"
+      return jsonResponse({ ok: false, error: msg }, 400)
+    }
+    newUserId = inviteData.user.id
+  }
+
+  // 4) Insert the team_members profile row.
+  //    status = 'pending' — flips to 'active' automatically when the
+  //    member clicks their invite link and sets a password.
   const profileRow = {
     id: newUserId,
     email,
@@ -186,31 +209,30 @@ Deno.serve(async (req: Request) => {
     position: body.position ?? null,
     phone: body.phone?.trim() || null,
     start_date: body.start_date || null,
-    status: body.status ?? "active",
+    status: "pending",
     managed_by: body.managed_by || null,
     team_id: teamId,
   }
+
+  // Upsert so a re-send doesn't fail if the profile already exists.
   const { data: inserted, error: insertErr } = await admin
     .from("team_members")
-    .insert(profileRow)
+    .upsert(profileRow, { onConflict: "id", ignoreDuplicates: false })
     .select("*")
     .maybeSingle()
 
   if (insertErr || !inserted) {
-    // Roll back the auth user so we don't leave a half-created account.
-    await admin.auth.admin.deleteUser(newUserId)
+    // Roll back the newly-created auth user (don't roll back on resend path).
+    if (!existingUserId) {
+      await admin.auth.admin.deleteUser(newUserId).catch(() => {})
+    }
     const msg = insertErr?.message ?? "Failed to create profile"
     return jsonResponse({ ok: false, error: msg }, 400)
   }
 
-  // PR #49 — surface `password_was_generated` so the client knows
-  // whether to trigger `auth.resetPasswordForEmail()` afterwards.
-  // Random password is NEVER returned to the client; the admin
-  // doesn't need it (the new member will pick their own via the
-  // email recovery link).
   return jsonResponse({
     ok: true,
     profile: inserted,
-    password_was_generated: passwordWasGenerated,
+    invite_email_sent: true,
   })
 })

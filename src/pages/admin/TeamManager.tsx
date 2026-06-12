@@ -3,13 +3,10 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { normalizeEmail } from '../../lib/email'
 import { extractEdgeFunctionError } from '../../lib/edgeFunctionError'
-import { generateTempPassword } from '../../lib/auth/tempPassword'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
 import ConfirmModal from '../../components/ConfirmModal'
-import TempPasswordReveal from '../../components/auth/TempPasswordReveal'
-import SetupLinkReveal from '../../components/auth/SetupLinkReveal'
 import {
   Button,
   Input,
@@ -36,7 +33,7 @@ import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
   Save, ChevronRight, ChevronLeft,
   MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
-  Activity, Link2, CalendarRange,
+  Activity, Mail, CalendarRange,
 } from 'lucide-react'
 // `Activity` icon kept as the lucide glyph for the new left-rail
 // "Activity" section (mirrors the user's mental model — Roster /
@@ -73,18 +70,11 @@ type MemberForm = {
   display_name: string; email: string; role: 'admin' | 'intern'
   position: string; phone: string; start_date: string; status: 'active' | 'inactive'
   managed_by: string
-  // Setup-link is the default onboarding path: it avoids flaky SMTP
-  // delivery while still letting the member choose their own password.
-  // Temp-password modes remain as a fallback for in-person handoff.
-  password_mode: 'setup_link' | 'auto' | 'manual'
-  manual_password: string
 }
 
 const EMPTY_MEMBER: MemberForm = {
   display_name: '', email: '', role: 'intern', position: 'intern',
   phone: '', start_date: '', status: 'active', managed_by: '',
-  password_mode: 'setup_link',
-  manual_password: '',
 }
 
 export default function TeamManager() {
@@ -97,7 +87,7 @@ export default function TeamManager() {
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [search, setSearch] = useState('')
   const [positionFilter, setPositionFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'pending'>('all')
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState<MemberForm>(EMPTY_MEMBER)
   const [customPosition, setCustomPosition] = useState('')
@@ -123,9 +113,7 @@ export default function TeamManager() {
   // admin hits "Done" → form closes + members list refreshes.
   const [createdMember, setCreatedMember] = useState<{
     profile: TeamMember
-    tempPassword?: string
-    setupLink?: string
-    setupLinkError?: string
+    inviteSent: boolean
   } | null>(null)
 
   // PR #58 — left-rail active section (Roster default; Clock Data is a
@@ -163,12 +151,6 @@ export default function TeamManager() {
     if (!editingMember) {
       const email = normalizeEmail(formData.email)
       if (!email) return 'Email is required'
-      // 2026-05-08 (Lean 1) — auto mode generates the password
-      // client-side at submit time, so no input to validate. Manual
-      // mode still requires a min-length check.
-      if (formData.password_mode === 'manual' && formData.manual_password.length < 8) {
-        return 'Temporary password must be at least 8 characters'
-      }
     }
     if (formData.position === 'custom' && !customPosition.trim()) {
       return 'Custom position name is required'
@@ -268,37 +250,19 @@ export default function TeamManager() {
     const position = formData.position === 'custom' ? customPosition : formData.position
     const email = normalizeEmail(formData.email)
 
-    // Default path: omit `default_password` so the edge function
-    // generates a server-side random password, then this UI asks the
-    // admin-only setup-link function for a recovery link the admin can
-    // copy/send directly. Temp-password modes remain available for
-    // in-person handoff.
-    const useSetupLink = formData.password_mode === 'setup_link'
-    const tempPassword = useSetupLink
-      ? undefined
-      : formData.password_mode === 'auto'
-        ? generateTempPassword()
-        : formData.manual_password
-
-    // 1) Create the auth user + team_members row atomically via the Edge Function.
+    // Create the auth user + send invite email + insert team_members row.
+    // The edge function uses inviteUserByEmail so the new member receives
+    // an email automatically — no manual link copying needed.
     const { data: result, error } = await supabase.functions.invoke<
-      {
-        ok: boolean
-        profile?: TeamMember
-        error?: string
-        where?: string
-        password_was_generated?: boolean
-      }
+      { ok: boolean; profile?: TeamMember; error?: string; invite_email_sent?: boolean }
     >('admin-create-member', {
       body: {
         email,
         display_name: formData.display_name.trim(),
-        ...(tempPassword ? { default_password: tempPassword } : {}),
         role: formData.role,
         position,
         phone: formData.phone.trim() || null,
         start_date: formData.start_date || null,
-        status: formData.status,
         managed_by: formData.managed_by || null,
       },
     })
@@ -359,34 +323,9 @@ export default function TeamManager() {
       // is fine.
     }
 
-    // 4) Success state — setup link by default, temp password as
-    //    fallback. If link generation fails, the member still exists
-    //    and the admin can retry from Settings → Account Access.
-    if (useSetupLink) {
-      const { data: linkResult, error: linkError } = await supabase.functions.invoke<{
-        ok: boolean
-        error?: string
-        setup_link?: string
-      }>('admin-generate-setup-link', {
-        body: {
-          user_id: newMember.id,
-          redirect_to: `${window.location.origin}/login`,
-        },
-      })
-
-      if (linkError || !linkResult?.ok || !linkResult.setup_link) {
-        const message = linkResult?.error || linkError?.message || 'Setup link generation failed'
-        console.error('[TeamManager] setup link generation failed:', message, linkError, linkResult)
-        setCreatedMember({ profile: newMember, setupLinkError: message })
-        toast(`${newMember.display_name} added, but setup link failed`, 'error')
-      } else {
-        setCreatedMember({ profile: newMember, setupLink: linkResult.setup_link })
-        toast(`${newMember.display_name} added — copy their setup link`, 'success')
-      }
-    } else {
-      setCreatedMember({ profile: newMember, tempPassword })
-      toast(`${newMember.display_name} added — share the temporary password`, 'success')
-    }
+    // 4) Success — invite email was sent automatically by the edge function.
+    setCreatedMember({ profile: newMember, inviteSent: true })
+    toast(`Invite sent to ${newMember.email}`, 'success')
     setSubmitting(false)
     loadMembers()
   }
@@ -455,12 +394,8 @@ export default function TeamManager() {
       position: knownPosition ? (member.position ?? 'intern') : 'custom',
       phone: member.phone ?? '',
       start_date: member.start_date ?? '',
-      status: (member.status ?? 'active') as 'active' | 'inactive',
+      status: (member.status === 'pending' ? 'active' : (member.status ?? 'active')) as 'active' | 'inactive',
       managed_by: member.managed_by ?? '',
-      // password fields are only meaningful for new-member creation;
-      // editing reuses the form schema with safe defaults.
-      password_mode: 'setup_link',
-      manual_password: '',
     })
     if (!knownPosition) setCustomPosition(member.position ?? '')
     setShowForm(true)
@@ -503,6 +438,31 @@ export default function TeamManager() {
     loadMembers()
   }
 
+  const resendInvite = async (member: TeamMember) => {
+    setOpenMenuId(null)
+    setActionLoadingId(member.id)
+    const { data: result, error } = await supabase.functions.invoke<{
+      ok: boolean; error?: string; invite_email_sent?: boolean
+    }>('admin-create-member', {
+      body: {
+        email: member.email,
+        display_name: member.display_name,
+        role: member.role,
+        position: member.position,
+        phone: member.phone ?? null,
+        start_date: member.start_date ?? null,
+        managed_by: member.managed_by ?? null,
+        resend_invite: true,
+      },
+    })
+    setActionLoadingId(null)
+    if (error || !result?.ok) {
+      toast(result?.error ?? 'Failed to re-send invite', 'error')
+    } else {
+      toast(`Invite re-sent to ${member.email}`, 'success')
+    }
+  }
+
   // Setup links are generated directly by the admin edge function and
   // copied/sent by the admin. We intentionally avoid Supabase SMTP here
   // because the project has seen non-owner delivery failures.
@@ -541,7 +501,8 @@ export default function TeamManager() {
   }, {})
 
   const activeCount = members.filter(m => m.status === 'active').length
-  const inactiveCount = members.length - activeCount
+  const pendingCount = members.filter(m => m.status === 'pending').length
+  const inactiveCount = members.filter(m => m.status === 'inactive').length
 
   // ─── Members table columns — single source of truth ───────────
   //
@@ -630,6 +591,14 @@ export default function TeamManager() {
       key: 'status',
       header: 'Status',
       render: (member) => {
+        if (member.status === 'pending') {
+          return (
+            <span className="flex items-center gap-1.5 text-[12px] text-amber-400">
+              <span className="w-2 h-2 rounded-full shrink-0 bg-amber-400" aria-hidden="true" />
+              Pending
+            </span>
+          )
+        }
         const isInactive = member.status === 'inactive'
         return (
           <span className="flex items-center gap-1.5 text-[12px] text-text-muted">
@@ -641,7 +610,7 @@ export default function TeamManager() {
           </span>
         )
       },
-      exportValue: (m) => (m.status === 'active' ? 'Active' : 'Inactive'),
+      exportValue: (m) => (m.status === 'pending' ? 'Pending' : m.status === 'active' ? 'Active' : 'Inactive'),
     },
     {
       key: 'access',
@@ -680,8 +649,15 @@ export default function TeamManager() {
               >
                 <Edit2 size={12} aria-hidden="true" /> Edit member
               </button>
-              {/* Setup links for existing members live at
-                  /admin/settings → Account Access. */}
+              {member.status === 'pending' && (
+                <button
+                  role="menuitem"
+                  onClick={() => resendInvite(member)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-surface-hover transition-colors"
+                >
+                  <Mail size={12} aria-hidden="true" /> Re-send invite email
+                </button>
+              )}
               <button
                 role="menuitem"
                 onClick={() => toggleRole(member)}
@@ -797,6 +773,7 @@ export default function TeamManager() {
             {([
               { key: 'all' as const, label: 'All', count: members.length },
               { key: 'active' as const, label: 'Active', count: activeCount },
+              { key: 'pending' as const, label: 'Pending', count: pendingCount },
               { key: 'inactive' as const, label: 'Inactive', count: inactiveCount },
             ]).map(opt => (
               <button key={opt.key} onClick={() => setStatusFilter(opt.key)}
@@ -1038,37 +1015,40 @@ export default function TeamManager() {
               <div className="p-6 space-y-5 flex-1">
                 {/* ─── Step 4 — Success ─── */}
                 {createdMember && (
-                  <div className="space-y-4">
-                    {createdMember.setupLink ? (
-                      <SetupLinkReveal
-                        email={createdMember.profile.email ?? ''}
-                        displayName={createdMember.profile.display_name}
-                        setupLink={createdMember.setupLink}
-                        headline={`${createdMember.profile.display_name} is ready to set a password`}
-                        subhead="Copy this setup link and send it directly. They will choose their own password."
-                      />
-                    ) : createdMember.tempPassword ? (
-                      <TempPasswordReveal
-                        email={createdMember.profile.email ?? ''}
-                        displayName={createdMember.profile.display_name}
-                        tempPassword={createdMember.tempPassword}
-                        headline={`${createdMember.profile.display_name} is ready to log in`}
-                        subhead="Hand off the temporary password below. They'll be required to choose their own on first sign-in."
-                      />
-                    ) : (
-                      <div role="alert" className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-200">
-                        Member created, but the setup link could not be generated: {createdMember.setupLinkError}
-                      </div>
-                    )}
+                  <div className="space-y-4 text-center py-4">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto">
+                      <Check size={26} className="text-emerald-400" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-semibold text-text">
+                        {createdMember.profile.display_name} added
+                      </h3>
+                      <p className="text-sm text-text-muted mt-1">
+                        An invite email was sent to{' '}
+                        <span className="font-medium text-text">{createdMember.profile.email}</span>.
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-surface-alt/50 p-4 text-left space-y-2">
+                      <p className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">What happens next</p>
+                      <ol className="space-y-1.5 text-sm text-text-muted list-none">
+                        <li className="flex items-start gap-2">
+                          <span className="shrink-0 w-5 h-5 rounded-full bg-gold/10 text-gold text-[10px] font-bold flex items-center justify-center mt-0.5">1</span>
+                          They click the link in the email to set their password.
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="shrink-0 w-5 h-5 rounded-full bg-gold/10 text-gold text-[10px] font-bold flex items-center justify-center mt-0.5">2</span>
+                          Their status automatically switches from Pending → Active on first sign-in.
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="shrink-0 w-5 h-5 rounded-full bg-gold/10 text-gold text-[10px] font-bold flex items-center justify-center mt-0.5">3</span>
+                          They can reset their password anytime using "Forgot password?" on the login page.
+                        </li>
+                      </ol>
+                    </div>
                     <p className="text-[11px] text-text-light">
-                      You can generate another setup link later from{' '}
-                      <Link
-                        to="/admin/settings"
-                        className="text-gold hover:underline"
-                      >
-                        Settings → Account Access
-                      </Link>
-                      .
+                      If they don't receive the email, use the{' '}
+                      <span className="font-medium text-text">Re-send invite</span>{' '}
+                      option in their action menu.
                     </p>
                   </div>
                 )}
@@ -1106,97 +1086,11 @@ export default function TeamManager() {
                 />
 
                 {!editingMember && (
-                  <div className="space-y-3">
-                    <fieldset className="rounded-xl border border-border bg-surface-alt/50 p-3 space-y-2">
-                      <legend className="px-1 text-[11px] font-semibold tracking-wider uppercase text-text-light">
-                        Account setup
-                      </legend>
-                      <label
-                        className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-surface-alt transition-colors"
-                        htmlFor="team-member-pw-mode-setup-link"
-                      >
-                        <input
-                          id="team-member-pw-mode-setup-link"
-                          type="radio"
-                          name="team-member-pw-mode"
-                          checked={formData.password_mode === 'setup_link'}
-                          onChange={() =>
-                            setFormData({ ...formData, password_mode: 'setup_link' })
-                          }
-                          className="mt-1 w-4 h-4 border-border accent-gold shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-text flex items-center gap-1.5">
-                            <Link2 size={13} className="text-gold shrink-0" aria-hidden="true" />
-                            Generate setup link (recommended)
-                          </p>
-                          <p className="text-[12px] text-text-muted mt-0.5">
-                            Copy a secure link after creation and send it directly. No SMTP delivery needed.
-                          </p>
-                        </div>
-                      </label>
-                      <label
-                        className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-surface-alt transition-colors"
-                        htmlFor="team-member-pw-mode-auto"
-                      >
-                        <input
-                          id="team-member-pw-mode-auto"
-                          type="radio"
-                          name="team-member-pw-mode"
-                          checked={formData.password_mode === 'auto'}
-                          onChange={() =>
-                            setFormData({ ...formData, password_mode: 'auto' })
-                          }
-                          className="mt-1 w-4 h-4 border-border accent-gold shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-text flex items-center gap-1.5">
-                            <KeyRound size={13} className="text-gold shrink-0" aria-hidden="true" />
-                            Auto-generate temporary password
-                          </p>
-                          <p className="text-[12px] text-text-muted mt-0.5">
-                            Strong 14-character password. Revealed after creation so you can copy it and hand it off.
-                          </p>
-                        </div>
-                      </label>
-                      <label
-                        className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer hover:bg-surface-alt transition-colors"
-                        htmlFor="team-member-pw-mode-manual"
-                      >
-                        <input
-                          id="team-member-pw-mode-manual"
-                          type="radio"
-                          name="team-member-pw-mode"
-                          checked={formData.password_mode === 'manual'}
-                          onChange={() =>
-                            setFormData({ ...formData, password_mode: 'manual' })
-                          }
-                          className="mt-1 w-4 h-4 border-border accent-gold shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-text">Set my own</p>
-                          <p className="text-[12px] text-text-muted mt-0.5">
-                            For memorable verbal handoff. They'll be forced to change it on first sign-in.
-                          </p>
-                        </div>
-                      </label>
-                    </fieldset>
-
-                    {formData.password_mode === 'manual' && (
-                      <Input
-                        id="team-member-manual-password"
-                        label="Temporary password"
-                        type="text"
-                        required
-                        minLength={8}
-                        placeholder="Min 8 characters"
-                        hint="Share this with the member. They'll be prompted to change it on first sign-in."
-                        value={formData.manual_password}
-                        onChange={e =>
-                          setFormData({ ...formData, manual_password: e.target.value })
-                        }
-                        />
-                      )}
+                  <div className="rounded-xl border border-border bg-surface-alt/50 px-4 py-3 flex items-start gap-3">
+                    <Mail size={15} className="text-gold shrink-0 mt-0.5" aria-hidden="true" />
+                    <p className="text-[13px] text-text-muted">
+                      An invite email will be sent automatically. The member clicks the link to set their password and their status activates on first sign-in.
+                    </p>
                   </div>
                 )}
 
@@ -1341,8 +1235,9 @@ export default function TeamManager() {
                         Review &amp; create
                       </h3>
                       <p className="text-xs text-text-muted mt-1">
-                        Confirm everything below. After creation you'll get the setup handoff for{' '}
-                        <span className="font-semibold text-text">{formData.display_name || 'the new member'}</span>.
+                        Confirm everything below. An invite email will be sent to{' '}
+                        <span className="font-semibold text-text">{formData.display_name || 'the new member'}</span>{' '}
+                        automatically.
                       </p>
                     </div>
 
@@ -1356,12 +1251,7 @@ export default function TeamManager() {
                         ['Manager', getManagerName(formData.managed_by) ?? 'None'],
                         ['Phone', formData.phone || '—'],
                         ['Start date', formData.start_date || '—'],
-                        ['Status', formData.status],
-                        formData.password_mode === 'setup_link'
-                          ? ['Setup', 'Secure link generated after create']
-                          : formData.password_mode === 'auto'
-                            ? ['Setup', 'Auto-generated temporary password']
-                            : ['Setup', formData.manual_password],
+                        ['Onboarding', 'Invite email sent automatically'],
                       ]}
                     />
 
@@ -1438,7 +1328,7 @@ export default function TeamManager() {
                           loading={submitting}
                           iconLeft={!submitting ? <Save size={16} aria-hidden="true" /> : undefined}
                         >
-                          {editingMember ? 'Update Member' : 'Create Account'}
+                          {editingMember ? 'Update Member' : 'Create & Send Invite'}
                         </Button>
                       )}
                     </div>
