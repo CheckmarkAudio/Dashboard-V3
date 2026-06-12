@@ -84,6 +84,9 @@ function friendlyResetError(raw: string | undefined): string {
   if (lower.includes('invalid email') || lower.includes('unable to validate email')) {
     return "That doesn't look like a valid email address. Please check and try again."
   }
+  if (lower.includes('error sending') || lower.includes('unable to send')) {
+    return "Couldn't send the email — the link may not be whitelisted in Supabase yet. Ask your admin to set the Site URL in the Supabase dashboard."
+  }
   return raw
 }
 
@@ -147,13 +150,15 @@ export default function Login() {
     setResetError('')
     setResetLoading(true)
     try {
+      // No redirectTo — we let Supabase use the Site URL configured in
+      // the project dashboard (Authentication → URL Configuration → Site URL).
+      // Passing a custom redirectTo requires that URL to be explicitly
+      // whitelisted in Supabase's Redirect URLs list; omitting it avoids
+      // that requirement entirely. The recovery hash (#type=recovery) lands
+      // on whatever the Site URL is, and our index.html inline script catches
+      // it before React mounts regardless of which path it lands on.
       const { error: resetErr } = await withTimeout(
-        supabase.auth.resetPasswordForEmail(addr, {
-          // redirectTo must point back to /login so the inline
-          // <script> in index.html picks up #type=recovery before
-          // React mounts and RecoveryGate intercepts the route.
-          redirectTo: `${window.location.origin}/login`,
-        }),
+        supabase.auth.resetPasswordForEmail(addr),
         10_000,
       )
       if (resetErr) {
