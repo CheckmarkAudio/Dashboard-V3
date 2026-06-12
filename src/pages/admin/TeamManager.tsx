@@ -32,7 +32,7 @@ import type { TeamMember, ReportTemplate } from '../../types'
 import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
   Save, ChevronRight, ChevronLeft,
-  MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
+  MoreVertical, UserPlus, Filter, Check, ClipboardList,
   Activity, Mail, CalendarRange,
 } from 'lucide-react'
 // `Activity` icon kept as the lucide glyph for the new left-rail
