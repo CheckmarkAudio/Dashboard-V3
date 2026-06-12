@@ -627,11 +627,11 @@ export default function TeamManager() {
       tdClassName: 'text-right relative',
       render: (member) => (
         <div className="flex items-center justify-end gap-1" ref={openMenuId === member.id ? menuRef : undefined}>
-          {/* Inline delete — visible on row hover so admins don't need to open a menu */}
+          {/* Inline delete — always visible so admins can find it on touch screens too */}
           <button
             type="button"
             onClick={() => requestDelete(member)}
-            className="p-1.5 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 focus-ring"
+            className="p-1.5 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-colors focus-ring"
             aria-label={`Delete ${member.display_name}`}
             title={`Delete ${member.display_name}`}
           >
