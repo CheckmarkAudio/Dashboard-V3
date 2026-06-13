@@ -32,7 +32,7 @@ import type { TeamMember, ReportTemplate } from '../../types'
 import {
   Users, X, Loader2, Edit2, Trash2, Search, Shield, UserCheck, Clock,
   Save, ChevronRight, ChevronLeft,
-  MoreVertical, UserPlus, Filter, Check, ClipboardList, KeyRound,
+  MoreVertical, UserPlus, Filter, Check, ClipboardList,
   Activity, Mail, CalendarRange,
 } from 'lucide-react'
 // `Activity` icon kept as the lucide glyph for the new left-rail
@@ -626,12 +626,25 @@ export default function TeamManager() {
       thClassName: 'text-right',
       tdClassName: 'text-right relative',
       render: (member) => (
-        <div className="relative inline-block" ref={openMenuId === member.id ? menuRef : undefined}>
+        <div className="flex items-center justify-end gap-1" ref={openMenuId === member.id ? menuRef : undefined}>
+          {/* Inline delete — always visible so admins can find it on touch screens too */}
+          <button
+            type="button"
+            onClick={() => requestDelete(member)}
+            className="p-1.5 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-colors focus-ring"
+            aria-label={`Delete ${member.display_name}`}
+            title={`Delete ${member.display_name}`}
+          >
+            <Trash2 size={14} aria-hidden="true" />
+          </button>
+
+          {/* Three-dot menu for the rest */}
+          <div className="relative inline-block">
           <button
             type="button"
             onClick={() => setOpenMenuId(openMenuId === member.id ? null : member.id)}
             className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text transition-colors opacity-60 group-hover:opacity-100 focus:opacity-100 focus-ring"
-            aria-label={`Actions for ${member.display_name}`}
+            aria-label={`More actions for ${member.display_name}`}
             aria-expanded={openMenuId === member.id}
             aria-haspopup="menu"
           >
@@ -684,6 +697,7 @@ export default function TeamManager() {
               </button>
             </div>
           )}
+          </div>
         </div>
       ),
     },

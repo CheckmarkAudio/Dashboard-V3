@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Check, Key, Loader2, Pencil, RotateCw, Shield, ShieldCheck, User as UserIcon, X } from 'lucide-react'
+import { AlertCircle, Check, Key, Loader2, Pencil, RotateCw, Shield, ShieldCheck, Trash2, User as UserIcon, X } from 'lucide-react'
 import { supabase, withSupabaseRetry } from '../../lib/supabase'
 import { extractEdgeFunctionError } from '../../lib/edgeFunctionError'
 import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
 import { Button, Modal } from '../ui'
+import ConfirmModal from '../ConfirmModal'
 import SetupLinkReveal from '../auth/SetupLinkReveal'
 import TempPasswordReveal from '../auth/TempPasswordReveal'
 import { generateTempPassword } from '../../lib/auth/tempPassword'
@@ -71,6 +72,7 @@ function UserRow({
   onToggle,
   onGenerateSetupLink,
   onUpdateEmail,
+  onDelete,
 }: {
   user: AccessUser
   canManageAccess: boolean
@@ -80,6 +82,7 @@ function UserRow({
   onToggle: (user: AccessUser) => void
   onGenerateSetupLink: (user: AccessUser) => void
   onUpdateEmail: (user: AccessUser, newEmail: string) => Promise<boolean>
+  onDelete?: (user: AccessUser) => void
 }) {
   const initial =
     user.display_name?.charAt(0)?.toUpperCase() ||
@@ -246,6 +249,20 @@ function UserRow({
           {busy ? '…' : user.role === 'admin' ? 'Admin' : 'Employee'}
         </span>
       </label>
+
+      {/* Delete — owner-only, never on the primary owner row */}
+      {canManageAccess && !isPrimaryOwner && onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(user)}
+          disabled={busy}
+          title={`Remove ${user.display_name}`}
+          aria-label={`Remove ${user.display_name}`}
+          className="shrink-0 p-1.5 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-colors focus-ring disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <Trash2 size={14} aria-hidden="true" />
+        </button>
+      )}
     </div>
   )
 }
@@ -263,6 +280,8 @@ export default function AccountAccessPanel() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; message: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<AccessUser | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   // Setup-link modal state.
   //
@@ -402,6 +421,31 @@ export default function AccountAccessPanel() {
     },
     [isOwnerViewer],
   )
+
+  const onDelete = useCallback((target: AccessUser) => {
+    if (!isOwnerViewer) return
+    if ((target.email ?? '').toLowerCase() === OWNER_EMAIL) return
+    setDeleteTarget(target)
+  }, [isOwnerViewer])
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return
+    setDeleteLoading(true)
+    const { error: delErr } = await supabase
+      .from('team_members')
+      .delete()
+      .eq('id', deleteTarget.id)
+    setDeleteLoading(false)
+    if (delErr) {
+      setToast({ kind: 'err', message: errorMessage(delErr, 'Failed to remove member') })
+      setTimeout(() => setToast(null), 5000)
+    } else {
+      setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id))
+      setToast({ kind: 'ok', message: `${deleteTarget.display_name} has been removed.` })
+      setTimeout(() => setToast(null), 4000)
+    }
+    setDeleteTarget(null)
+  }, [deleteTarget])
 
   const confirmReset = useCallback(async () => {
     if (!resetTarget) return
@@ -582,6 +626,7 @@ export default function AccountAccessPanel() {
                 onToggle={onToggle}
                 onGenerateSetupLink={onGenerateSetupLink}
                 onUpdateEmail={onUpdateEmail}
+                onDelete={onDelete}
               />
             ))
           )}
@@ -609,11 +654,24 @@ export default function AccountAccessPanel() {
                 onToggle={onToggle}
                 onGenerateSetupLink={onGenerateSetupLink}
                 onUpdateEmail={onUpdateEmail}
+                onDelete={onDelete}
               />
             ))
           )}
         </section>
       </div>
+
+      {/* ── Delete confirmation ── */}
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Remove Team Member"
+        message={`Are you sure you want to remove ${deleteTarget?.display_name ?? 'this member'}? This cannot be undone.`}
+        confirmLabel="Remove"
+        variant="danger"
+        loading={deleteLoading}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       {/* ── Setup link modal — direct-link handoff flow ── */}
       {resetTarget && (
