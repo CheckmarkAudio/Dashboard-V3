@@ -93,7 +93,7 @@ export default function RecoveryGate({ children }: { children: ReactNode }) {
           .from('team_members')
           .update({ status: 'active' })
           .eq('id', user.id)
-          .eq('status', 'pending')
+          .eq('status', 'pending') // only update if still pending; no-op otherwise
       } catch {/* non-fatal */}
     }
     setNewPassword('')
