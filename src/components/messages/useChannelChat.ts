@@ -85,6 +85,33 @@ export function useChannelChat(channelId: string | null) {
     return () => { void supabase.removeChannel(sub) }
   }, [channelId])
 
+  const deleteMessage = useCallback(
+    async (id: string) => {
+      // Optimistic: remove immediately so the UI feels instant.
+      setMessages((prev) => prev.filter((m) => m.id !== id))
+      await supabase.from('chat_messages').delete().eq('id', id)
+      // Realtime DELETE event will also fire but deduplication is harmless.
+    },
+    [],
+  )
+
+  const editMessage = useCallback(
+    async (id: string, newContent: string) => {
+      const trimmed = newContent.trim()
+      if (!trimmed) return
+      // Optimistic update.
+      setMessages((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, content: trimmed } : m)),
+      )
+      await supabase
+        .from('chat_messages')
+        .update({ content: trimmed })
+        .eq('id', id)
+      // Realtime UPDATE event reconciles any drift.
+    },
+    [],
+  )
+
   const send = useCallback(
     async (text: string, attachments: ChatAttachment[] = []) => {
       const trimmed = text.trim()
@@ -122,5 +149,5 @@ export function useChannelChat(channelId: string | null) {
     [channelId, profile],
   )
 
-  return { messages, loading, send }
+  return { messages, loading, send, deleteMessage, editMessage }
 }
