@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Minus, Send, X } from 'lucide-react'
+import { Check, Minus, Pencil, Send, Trash2, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import MemberAvatar from '../members/MemberAvatar'
 import LinkifiedText from '../forum/LinkifiedText'
@@ -61,10 +61,13 @@ function DmChatWindow({
   const { profile } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
-  const { messages, loading, send } = useChannelChat(channelId)
+  const { messages, loading, send, deleteMessage, editMessage } = useChannelChat(channelId)
   const [input, setInput] = useState('')
   const [pending, setPending] = useState<ChatAttachment[]>([])
   const [dragDepth, setDragDepth] = useState(0)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  const editInputRef = useRef<HTMLTextAreaElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
   const uploadFiles = useCallback(
@@ -165,6 +168,19 @@ function DmChatWindow({
     void send(t, atts)
   }
 
+  const startEdit = (m: { id: string; content: string }) => {
+    setEditingId(m.id)
+    setEditDraft(m.content)
+    // Focus the textarea after React renders it.
+    setTimeout(() => editInputRef.current?.focus(), 0)
+  }
+  const cancelEdit = () => { setEditingId(null); setEditDraft('') }
+  const saveEdit = () => {
+    if (!editingId || !editDraft.trim()) { cancelEdit(); return }
+    void editMessage(editingId, editDraft)
+    cancelEdit()
+  }
+
   // ── Minimized: a head with an unread dot ──
   if (minimized) {
     return (
@@ -241,10 +257,36 @@ function DmChatWindow({
         ) : (
           messages.map((m) => {
             const isMe = profile?.id === m.sender_id
+            const isEditing = editingId === m.id
             return (
-              <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} ${m._status === 'sending' ? 'opacity-70' : ''}`}>
+              <div
+                key={m.id}
+                className={`group/msg flex items-end gap-1 ${isMe ? 'justify-end' : 'justify-start'} ${m._status === 'sending' ? 'opacity-70' : ''}`}
+              >
+                {/* Edit/Delete actions — only on own messages, shown on hover */}
+                {isMe && !isEditing && (
+                  <div className="flex items-center gap-0.5 mb-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(m)}
+                      title="Edit message"
+                      className="p-1 rounded-md text-text-light hover:text-gold hover:bg-surface-hover transition-colors"
+                    >
+                      <Pencil size={12} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteMessage(m.id)}
+                      title="Delete message"
+                      className="p-1 rounded-md text-text-light hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 size={12} aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
+
                 <div
-                  className={`px-3 py-1.5 rounded-2xl text-[13px] leading-relaxed break-words whitespace-pre-wrap max-w-[80%] ${
+                  className={`px-3 py-1.5 rounded-2xl text-[13px] leading-relaxed break-words max-w-[80%] ${
                     isMe
                       ? 'bg-gold/15 text-text border border-gold/25 rounded-br-sm'
                       : 'bg-surface-alt text-text-muted border border-border rounded-bl-sm'
@@ -255,13 +297,41 @@ function DmChatWindow({
                   {!isMe && thread?.kind === 'group' && (
                     <span className="block text-[10px] font-semibold text-gold/80 mb-0.5">{m.sender_name}</span>
                   )}
-                  {m.content && <LinkifiedText text={m.content} />}
-                  {Array.isArray(m.attachments) && m.attachments.length > 0 && (
-                    <div className={m.content ? 'mt-1.5' : ''}>
-                      <AttachmentDisplay attachments={m.attachments} ownBubble={isMe} lazy={false} />
+
+                  {isEditing ? (
+                    /* Inline edit mode */
+                    <div className="space-y-1.5 min-w-[180px]">
+                      <textarea
+                        ref={editInputRef}
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit() }
+                          if (e.key === 'Escape') cancelEdit()
+                        }}
+                        rows={2}
+                        className="w-full bg-surface border border-gold/40 rounded-lg px-2 py-1 text-[13px] text-text resize-none focus:outline-none focus:border-gold"
+                      />
+                      <div className="flex items-center gap-1 justify-end">
+                        <button type="button" onClick={cancelEdit} className="p-1 rounded text-text-muted hover:text-text hover:bg-surface-hover transition-colors">
+                          <X size={12} />
+                        </button>
+                        <button type="button" onClick={saveEdit} className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+                          <Check size={12} />
+                        </button>
+                      </div>
                     </div>
+                  ) : (
+                    <>
+                      {m.content && <LinkifiedText text={m.content} />}
+                      {Array.isArray(m.attachments) && m.attachments.length > 0 && (
+                        <div className={m.content ? 'mt-1.5' : ''}>
+                          <AttachmentDisplay attachments={m.attachments} ownBubble={isMe} lazy={false} />
+                        </div>
+                      )}
+                      {m._status === 'failed' && <span className="block text-[10px] text-rose-400 mt-0.5">Failed — tap to retry</span>}
+                    </>
                   )}
-                  {m._status === 'failed' && <span className="block text-[10px] text-rose-400 mt-0.5">Failed — tap to retry</span>}
                 </div>
               </div>
             )
