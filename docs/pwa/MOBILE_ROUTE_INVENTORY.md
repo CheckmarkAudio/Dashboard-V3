@@ -4,6 +4,8 @@ Purpose: rank the routes that matter most for Checkmark Workspace as an installe
 
 This document prevents the vague task "make everything mobile friendly." Work from the highest-impact workflows first.
 
+Use `APP_EXPERIENCE_PLAYBOOK.md` for route-level interaction standards and the definition of app-quality mobile polish.
+
 ## Priority Levels
 
 - P0: must work before calling the app usable
@@ -69,6 +71,14 @@ Every P0 route should be checked for:
 - no hidden primary actions
 - route works after installed-app launch
 
+Every P0 route should also answer:
+
+- What is the route's one-sentence job?
+- What is the primary action?
+- What should be visible without scrolling?
+- What can move into a detail view or sheet?
+- Does the route still work if the user is interrupted and returns later?
+
 ## First Mobile Fix Batch
 
 Do not decide until after QA, but likely candidates:
@@ -79,3 +89,21 @@ Do not decide until after QA, but likely candidates:
 - task row tap/checkbox ergonomics
 - settings left rail collapse
 - booking modal date/time controls
+
+## Route Slice Template
+
+Use this before assigning a route to Claude or Codex.
+
+```text
+Route:
+Primary role:
+One-sentence job:
+Top three actions:
+Desktop behavior to preserve:
+Mobile blocker:
+Likely files:
+Backend/security risk:
+QA viewports:
+Dark/light mode required:
+Docs to update:
+```

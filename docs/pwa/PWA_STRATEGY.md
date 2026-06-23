@@ -2,6 +2,14 @@
 
 Purpose: turn Checkmark Workspace from a responsive website into an installable, app-like workspace for desktop, iPhone, and Android without creating a second codebase.
 
+Primary companion docs:
+
+- `APP_EXPERIENCE_PLAYBOOK.md`: product feel, route polish rules, mobile UI quality bar, and Claude handoff prompt.
+- `APP_BUILD_ROADMAP.md`: phased order of operations from PWA foundation to native-wrapper decision.
+- `MOBILE_ROUTE_INVENTORY.md`: route priority and mobile blockers.
+- `MOBILE_AUTH_QA.md`: auth/setup/recovery test plan.
+- `INSTALL_QA_CHECKLIST.md`: install behavior test plan.
+
 ## Product North Star
 
 Checkmark Workspace should feel like a modular studio operating surface:
@@ -142,6 +150,14 @@ App feel:
 - tasks, checkboxes, due items, alerts, and primary actions must not be hidden
 - optional customization should never be required for the default app to be useful
 
+Detailed visual and interaction standards live in `APP_EXPERIENCE_PLAYBOOK.md`.
+
+Build principle:
+
+- make the app more fluid through shared shell, shared tokens, and route-by-route polish
+- do not chase a one-shot redesign
+- keep each route's primary action obvious before adding secondary detail
+
 ## Architecture Principles
 
 - Keep one repo and one web app.
@@ -179,15 +195,30 @@ Claude should not touch:
 ## Build Sequence
 
 1. PWA strategy and app identity docs.
-2. Mobile route inventory for admin and employee workflows.
-3. App icon direction.
-4. Manifest + app metadata + iOS tags.
-5. Safe service worker with no private offline data.
-6. Install QA on desktop, Android, and iPhone.
-7. Mobile auth QA.
-8. Mobile route QA.
-9. Targeted mobile blocker fixes.
-10. Revisit native wrapper only after PWA behavior is stable.
+2. App experience playbook and route quality bar.
+3. App build roadmap.
+4. Mobile route inventory for admin and employee workflows.
+5. App icon direction.
+6. Manifest + app metadata + iOS tags.
+7. Safe service worker with no private offline data.
+8. Install QA on desktop, Android, and iPhone.
+9. Mobile auth QA.
+10. App shell/nav/clock mobile pass.
+11. Route-by-route mobile polish in priority order.
+12. Revisit native wrapper only after PWA behavior is stable.
+
+Recommended route polish order:
+
+1. Login/auth/setup/recovery.
+2. App shell/nav/clock state.
+3. Overview role-based home.
+4. Tasks and daily work.
+5. Calendar and booking details.
+6. Booking create/edit.
+7. Forum/messages.
+8. Members/account access.
+9. Settings.
+10. Accountant and finance module.
 
 ## Success Criteria
 
