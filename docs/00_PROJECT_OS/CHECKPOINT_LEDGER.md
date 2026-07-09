@@ -210,6 +210,36 @@ Token/source note:
 Signature:
 - CODEX:
 
+## 2026-07-09 06:11 MDT - CODEX - Clarified personal-first score block semantics
+
+Lane:
+- Codex: roadmap capture, metric-scope clarification, verification.
+
+Summary:
+- Recorded that Overview score blocks are personal-first by default.
+- Clarified that teamwide details should be a later toggle or drill-in, not the default worker view.
+- Clarified that `Tasks left` means the user's own incomplete active task list, not only daily tasks.
+- Clarified that `Message follow-up left` means personal unread/follow-up message notifications.
+- Clarified that `Media added` should use a monthly count so it feels meaningful.
+- Preserved the product goal: make the Overview feel fun, gratifying, and accomplishment-oriented while still tied to real data.
+
+Files changed:
+- `docs/pwa/WEB_INTERFACE_POLISH_ROADMAP.md`
+- `docs/ux/WORKER_OBVIOUSNESS_AUDIT.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- Docs-only update; `git diff --check` passed.
+
+Open gaps:
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: Later implementation still needs code-level review of exact message follow-up source and snapshot-table permissions.
+
+Token/source note:
+- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:
+
 ## 2026-07-09 05:02 MDT - CODEX - Tasks admin-sidebar formula alignment
 
 Lane:

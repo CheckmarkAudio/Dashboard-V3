@@ -213,14 +213,16 @@ Design direction:
 - Admin Dashboard uses a more operational Command View for requests, schedule, and alerts
 - Widget View remains available as the full legacy widget layout on both pages
 - The next Overview/Dashboard direction is numbered feature blocks, not extra explanatory subtext:
-  - Today's tasks left: linked to `Tasks`
+  - Tasks left: linked to `Tasks`
   - Message follow-up left: linked to `Forum` / DMs
   - Sessions left today: linked to `Booking`
-  - Media added today: linked to `Media`
-- Blocks should animate counts from 0 to the current daily value, but the animation must not invent or mask stale data.
+  - Media added this month: linked to `Media`
+- Overview metrics are personal-first. Teamwide details can come later as a toggle or drill-in, not as the default worker view.
+- Blocks should animate counts from 0 to the current value, but the animation must not invent or mask stale data.
 - The block labels should be short and action-oriented. Avoid added subtitles under the blocks unless a worker test proves the label is unclear.
 - Metrics must be connected to live app data already owned by each product area. Do not hardcode decorative numbers.
 - Daily score history should be stored as backend snapshots first, with CSV export generated from those snapshots. The browser should not be responsible for writing a persistent CSV file.
+- The emotional goal is a satisfying completion loop: workers can see what they did, what remains, and get a gratifying zero/complete state.
 
 Exit criteria:
 
@@ -241,16 +243,16 @@ Data contract draft:
 
 | Block | Worker Meaning | Source Direction | Link |
 |---|---|---|---|
-| Today's tasks left | How many personal tasks remain today | `assigned_tasks` / daily checklist state already surfaced by task widgets | `APP_ROUTES.member.tasks` |
-| Message follow-up left | How many DM/forum follow-ups need attention | Existing message/notification unread state, exact definition still needs review | `APP_ROUTES.member.content` |
-| Sessions left today | How many assigned or team sessions remain today | `sessions` rows / existing booking and calendar sources | `APP_ROUTES.member.booking` |
-| Media added today | How many media uploads were added today | `media_submissions.created_at` filtered to local day | `APP_ROUTES.member.addMedia` |
+| Tasks left | Personal incomplete tasks currently assigned to the user, not only daily tasks. Show remaining out of the user's active task list, such as `3 left / 10`. | `assigned_tasks` / task widget sources | `APP_ROUTES.member.tasks` |
+| Message follow-up left | Personal unread or follow-up message notifications that need the user to look or respond. | Existing message/notification unread state; exact DM vs forum split still needs code review. | `APP_ROUTES.member.content` |
+| Sessions left today | Personal sessions still remaining today for the user. Admin/teamwide details can come later behind a toggle. | `sessions` rows / existing booking and calendar sources | `APP_ROUTES.member.booking` |
+| Media added this month | Personal media uploads added this month so the box has enough volume to feel meaningful. Teamwide totals can be a later drill-in. | `media_submissions.created_at` filtered to current month | `APP_ROUTES.member.addMedia` |
 
 Logging direction:
 
 - Create a backend-owned daily metric snapshot when the metric definitions are approved.
 - Prefer a Supabase table such as `daily_workspace_metric_snapshots` over a repo or browser-written CSV.
-- Store `metric_date`, `team_id`, optional `member_id`, metric key, completed/remaining/total counts, source table/version, and timestamps.
+- Store `metric_date`, `team_id`, `member_id` for personal rows, metric key, completed/remaining/total counts, period type (`current`, `day`, `month`), source table/version, and timestamps.
 - Add CSV export from the admin history view later, similar to existing export patterns.
 - If a literal CSV file is still desired, generate it from the snapshot table on demand so it cannot drift from the database.
 

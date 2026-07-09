@@ -120,13 +120,19 @@ Page layout:
 - use widgets for overview, not for the primary worker task when a dedicated flow is better
 - Overview and Dashboard may use a main-vs-widget toggle when the main view is curated and the widget view preserves power-user density
 - Overview and Dashboard should avoid extra explanatory subtext. Prefer clear labels, counts, and direct links.
-- Numbered summary blocks can make the landing pages distinct if the numbers are real: tasks left, message follow-up left, sessions left today, and media added today.
+- Numbered summary blocks can make the landing pages distinct if the numbers are real: tasks left, message follow-up left, sessions left today, and media added this month.
+- Worker Overview metrics are personal-first. Teamwide details can come later as an optional toggle or drill-in, not as the default.
+- Tasks left means the worker's own incomplete task list, not only tasks due today.
+- Message follow-up left means personal unread/follow-up message notifications.
+- Media should use a monthly count so the block has enough meaningful movement.
 - Any animated count must be a presentation of current data, not a substitute for loading or verification.
+- The goal is a fun, gratifying completion loop: show what the worker did and what remains.
 
 Metric logging:
 
 - Daily score history should be backend-owned, not browser-owned.
 - Use a Supabase snapshot table first, then CSV export from the admin history view.
+- Snapshot rows should support personal worker metrics first and teamwide rollups later.
 - Do not implement CSV-only logging before metric definitions, team/member scope, and permissions are reviewed.
 
 Copy:
