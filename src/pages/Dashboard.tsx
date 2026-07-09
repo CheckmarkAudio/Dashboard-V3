@@ -1,6 +1,10 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import {
   CalendarDays,
+  ExternalLink,
+  FolderUp,
   LayoutDashboard,
   LayoutGrid,
   ListChecks,
@@ -8,50 +12,64 @@ import {
   Plus,
   Sparkles,
 } from 'lucide-react'
+import { APP_ROUTES } from '../app/routes'
 import { MemberOverviewProvider, useMemberOverviewContext } from '../contexts/MemberOverviewContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useAuth } from '../contexts/AuthContext'
 import WorkspacePanel from '../components/dashboard/WorkspacePanel'
+import OverviewScorePreview, { type OverviewScoreId } from '../components/dashboard/OverviewScorePreview'
+import OverviewPersonalScheduleCard from '../components/dashboard/OverviewPersonalScheduleCard'
 import { MEMBER_WIDGET_DEFINITIONS } from '../components/dashboard/widgetRegistry'
 import { Button, PageHeader } from '../components/ui'
 import MemberHighlights, { SocialStatsBar } from '../components/members/MemberHighlights'
 import CreateBookingModal from '../components/CreateBookingModal'
-import { AdminSectionNavItem, type AdminSection } from '../components/admin/AdminSectionNavItem'
+import { supabase } from '../lib/supabase'
 import type { MemberWidgetId } from '../domain/workspaces/types'
 
 const MEMBER_SCOPE = 'member_overview' as const
-type OverviewPaneId = 'today' | 'my_tasks' | 'calendar' | 'messages'
 type OverviewViewMode = 'main' | 'widgets'
-type OverviewPane = AdminSection<OverviewPaneId>
 
-const OVERVIEW_PANES: OverviewPane[] = [
+const OVERVIEW_STAGE_META: Record<
+  OverviewScoreId,
   {
-    key: 'today',
-    title: 'Today',
-    subtitle: 'Tasks, calendar, messages',
-    icon: Sparkles,
-  },
-  {
-    key: 'my_tasks',
+    title: string
+    icon: typeof ListChecks
+    route: string
+    widgetId?: MemberWidgetId
+  }
+> = {
+  tasks: {
     title: 'My Tasks',
-    subtitle: 'Your personal queue',
     icon: ListChecks,
+    route: APP_ROUTES.member.tasks,
+    widgetId: 'team_tasks',
   },
-  {
-    key: 'calendar',
-    title: 'Calendar',
-    subtitle: 'Today in the studio',
-    icon: CalendarDays,
-  },
-  {
-    key: 'messages',
-    title: 'Messages',
-    subtitle: 'Unread team updates',
+  messages: {
+    title: 'Notifications',
     icon: MessageSquareText,
+    route: APP_ROUTES.member.content,
+    widgetId: 'forum_notifications',
   },
-]
+  sessions: {
+    title: 'Sessions',
+    icon: CalendarDays,
+    route: APP_ROUTES.member.booking,
+    widgetId: 'today_calendar',
+  },
+  media: {
+    title: 'Media',
+    icon: FolderUp,
+    route: APP_ROUTES.member.addMedia,
+  },
+}
 
-const DEFAULT_OVERVIEW_PANE = OVERVIEW_PANES[0]!
+interface OverviewMediaSubmission {
+  id: string
+  original_filename: string
+  drive_view_url: string | null
+  created_at: string
+  submitter?: { display_name: string | null } | { display_name: string | null }[] | null
+}
 
 function BookButton() {
   const { refetch } = useMemberOverviewContext()
@@ -120,33 +138,178 @@ function OverviewWidgetCard({
   )
 }
 
-function renderOverviewPane(paneId: OverviewPaneId) {
-  switch (paneId) {
-    case 'my_tasks':
-      return <OverviewWidgetCard id="team_tasks" className="min-h-[560px]" />
-    case 'calendar':
-      return <OverviewWidgetCard id="today_calendar" className="min-h-[620px]" />
-    case 'messages':
-      return <OverviewWidgetCard id="forum_notifications" className="min-h-[620px]" />
-    case 'today':
-    default:
-      return (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <OverviewWidgetCard id="team_tasks" className="min-h-[420px]" />
-          <OverviewWidgetCard id="today_calendar" className="min-h-[420px]" />
-          <OverviewWidgetCard id="forum_notifications" className="min-h-[360px] xl:col-span-2" />
-        </div>
-      )
+function formatMediaDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function mediaSubmitterName(item: OverviewMediaSubmission): string | null {
+  if (Array.isArray(item.submitter)) return item.submitter[0]?.display_name ?? null
+  return item.submitter?.display_name ?? null
+}
+
+function OverviewMediaPanel() {
+  const { profile } = useAuth()
+  const mediaQuery = useQuery({
+    queryKey: ['overview-recent-media', profile?.id ?? 'none'],
+    enabled: Boolean(profile?.id),
+    queryFn: async (): Promise<OverviewMediaSubmission[]> => {
+      const { data, error } = await supabase
+        .from('media_submissions')
+        .select('id, original_filename, drive_view_url, created_at, submitter:team_members!media_submissions_member_id_fkey(display_name)')
+        .order('created_at', { ascending: false })
+        .limit(8)
+      if (error) throw error
+      return (data ?? []) as OverviewMediaSubmission[]
+    },
+    staleTime: 60_000,
+  })
+
+  if (mediaQuery.isLoading) {
+    return (
+      <div className="widget-card flex min-h-[650px] items-center justify-center text-text-light">
+        Loading media
+      </div>
+    )
   }
+
+  if (mediaQuery.isError) {
+    return (
+      <div className="widget-card flex min-h-[650px] items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-sm font-semibold text-amber-400">Could not load media.</p>
+          <Link
+            to={APP_ROUTES.member.addMedia}
+            className="inline-flex items-center justify-center rounded-xl bg-gold px-4 py-2 text-sm font-extrabold text-black shadow-[0_8px_18px_rgba(0,0,0,0.08)] transition-all hover:-translate-y-0.5 hover:bg-gold-muted focus-ring"
+          >
+            Add Media
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const media = mediaQuery.data ?? []
+
+  return (
+    <div className="widget-card flex min-h-[650px] flex-col">
+      <div className="flex-1 p-4">
+        {media.length === 0 ? (
+          <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl border border-dashed border-border bg-surface-alt/40">
+            <Link
+              to={APP_ROUTES.member.addMedia}
+              className="inline-flex items-center justify-center rounded-xl bg-gold px-4 py-2 text-sm font-extrabold text-black shadow-[0_8px_18px_rgba(0,0,0,0.08)] transition-all hover:-translate-y-0.5 hover:bg-gold-muted focus-ring"
+            >
+              Add Media
+            </Link>
+          </div>
+        ) : (
+          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface-alt/30">
+            {media.map((item) => {
+              const submitterName = mediaSubmitterName(item)
+              const content = (
+                <>
+                  <span className="min-w-0 truncate text-sm font-semibold text-text">
+                    {item.original_filename}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2 text-[12px] font-semibold text-text-muted">
+                    {submitterName && (
+                      <span className="hidden max-w-[120px] truncate sm:inline">
+                        {submitterName}
+                      </span>
+                    )}
+                    <span>{formatMediaDate(item.created_at)}</span>
+                  </span>
+                </>
+              )
+
+              if (!item.drive_view_url) {
+                return (
+                  <div key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    {content}
+                  </div>
+                )
+              }
+
+              return (
+                <a
+                  key={item.id}
+                  href={item.drive_view_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface-hover focus-ring"
+                >
+                  {content}
+                  <ExternalLink
+                    size={14}
+                    className="shrink-0 text-text-light transition-colors group-hover:text-gold"
+                    aria-hidden="true"
+                  />
+                </a>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function renderOverviewStage(scoreId: OverviewScoreId) {
+  if (scoreId === 'media') return <OverviewMediaPanel />
+  const widgetId = OVERVIEW_STAGE_META[scoreId].widgetId
+  if (!widgetId) return null
+  return <OverviewWidgetCard id={widgetId} className="min-h-[650px]" />
+}
+
+function OverviewMainStage({
+  activeScoreId,
+  onSelectScore,
+}: {
+  activeScoreId: OverviewScoreId
+  onSelectScore: (id: OverviewScoreId) => void
+}) {
+  const activeStage = OVERVIEW_STAGE_META[activeScoreId]
+  const ActiveIcon = activeStage.icon
+
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(430px,520px)_minmax(0,1fr)] lg:items-start">
+      <div className="space-y-4">
+        <OverviewScorePreview activeId={activeScoreId} onSelect={onSelectScore} />
+        <OverviewPersonalScheduleCard />
+      </div>
+
+      <section className="rounded-xl border border-border bg-gradient-to-br from-surface via-surface to-gold/5">
+        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold ring-1 ring-gold/25"
+              aria-hidden="true"
+            >
+              <ActiveIcon size={16} strokeWidth={2} />
+            </span>
+            <h2 className="truncate text-base font-bold text-text">{activeStage.title}</h2>
+          </div>
+          <Link
+            to={activeStage.route}
+            className="shrink-0 rounded-full border border-border bg-surface px-3 py-1.5 text-[12px] font-extrabold text-text-muted transition-all hover:-translate-y-0.5 hover:border-gold/40 hover:text-text focus-ring"
+          >
+            Open page
+          </Link>
+        </header>
+
+        <div key={activeScoreId} className="animate-fade-in p-3 sm:p-4">
+          {renderOverviewStage(activeScoreId)}
+        </div>
+      </section>
+    </div>
+  )
 }
 
 export default function Dashboard() {
   useDocumentTitle('Overview - Checkmark Workspace')
   const { profile, appRole } = useAuth()
   const [viewMode, setViewMode] = useState<OverviewViewMode>('main')
-  const [activePaneId, setActivePaneId] = useState<OverviewPaneId>('today')
-  const activePane = OVERVIEW_PANES.find((pane) => pane.key === activePaneId) ?? DEFAULT_OVERVIEW_PANE
-  const ActiveIcon = activePane.icon
+  const [activeScoreId, setActiveScoreId] = useState<OverviewScoreId>('tasks')
   const showingWidgetView = viewMode === 'widgets'
 
   return (
@@ -181,49 +344,7 @@ export default function Dashboard() {
             showControls={false}
           />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
-            <aside
-              className="bg-gradient-to-b from-gold/10 via-surface to-surface rounded-xl border border-gold/20 p-2 h-full flex flex-col"
-              aria-label="Overview sections"
-            >
-              <div className="space-y-1">
-                <p className="px-3 pt-3 pb-2 text-label">Home base</p>
-                {OVERVIEW_PANES.map((pane) => (
-                  <AdminSectionNavItem
-                    key={pane.key}
-                    section={pane}
-                    active={activePane.key === pane.key}
-                    onSelect={() => setActivePaneId(pane.key)}
-                  />
-                ))}
-              </div>
-            </aside>
-
-            <section className="bg-gradient-to-br from-surface via-surface to-gold/5 rounded-xl border border-border lg:min-h-[620px]">
-              <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-border">
-                <div className="min-w-0 flex items-center gap-3">
-                  <span
-                    className="shrink-0 w-9 h-9 rounded-lg bg-gold/10 ring-1 ring-gold/25 flex items-center justify-center text-gold"
-                    aria-hidden="true"
-                  >
-                    <ActiveIcon size={16} strokeWidth={2} />
-                  </span>
-                  <div className="min-w-0">
-                    <h2 className="text-base font-bold text-text truncate">{activePane.title}</h2>
-                    <p className="text-[12px] text-text-muted truncate">{activePane.subtitle}</p>
-                  </div>
-                </div>
-                <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-2.5 py-1 text-[11px] font-semibold text-gold">
-                  <Sparkles size={12} aria-hidden="true" />
-                  Personal view
-                </span>
-              </header>
-
-              <div className="p-3 sm:p-4 lg:min-h-[560px]">
-                {renderOverviewPane(activePane.key)}
-              </div>
-            </section>
-          </div>
+          <OverviewMainStage activeScoreId={activeScoreId} onSelectScore={setActiveScoreId} />
         )}
       </MemberOverviewProvider>
     </div>
