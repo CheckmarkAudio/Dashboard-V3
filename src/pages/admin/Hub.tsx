@@ -97,7 +97,7 @@ function AdminHubWidgetCard({
   if (!definition) return null
   const Widget = definition.component
   return (
-    <div className={['widget-card flex flex-col overflow-hidden', className].filter(Boolean).join(' ')}>
+    <div className={['widget-card flex flex-col', className].filter(Boolean).join(' ')}>
       {!definition.hideTitle && (
         <div className="px-4 py-3 widget-frame-head">
           <h3 className="text-[15px] font-bold tracking-tight text-text leading-tight">
@@ -105,7 +105,7 @@ function AdminHubWidgetCard({
           </h3>
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-auto p-4">
+      <div className="flex-1 min-h-0 p-4">
         <Widget />
       </div>
     </div>
@@ -225,7 +225,7 @@ export default function AdminHub() {
               ))}
             </aside>
 
-            <section className="bg-surface rounded-xl border border-border lg:min-h-[620px] overflow-hidden">
+            <section className="bg-surface rounded-xl border border-border lg:min-h-[620px]">
               <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-border">
                 <div className="min-w-0 flex items-center gap-3">
                   <span
@@ -245,7 +245,7 @@ export default function AdminHub() {
                 </span>
               </header>
 
-              <div className="p-3 sm:p-4 lg:min-h-[560px] lg:h-[calc(100vh-15rem)] lg:max-h-[900px] overflow-auto">
+              <div className="p-3 sm:p-4 lg:min-h-[560px]">
                 {renderDashboardPane(activePane.key)}
               </div>
             </section>
