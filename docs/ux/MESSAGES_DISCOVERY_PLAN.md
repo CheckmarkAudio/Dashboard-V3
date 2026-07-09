@@ -13,6 +13,27 @@ Gavin had trouble finding:
 
 This is a product signal. If one worker misses it, others will too.
 
+## Research Intake Influence
+
+`docs/ux/CHATGPT_TASK_FIRST_NAV_RESEARCH_PROPOSAL.md` reinforces this plan without replacing it.
+
+Accepted near-term ideas:
+
+- Messages should feel like a primary communication surface, not a hidden Forum behavior.
+- Forum should remain the home for shared channels, training discussion, announcements, ideas, and team culture.
+- Direct Messages should use explicit language where space allows.
+- Header access should not depend on an icon-only control when DMs are worker-critical.
+- Unread state should use count/text in addition to color.
+
+Deferred ideas:
+
+- adding a full global Messages nav route
+- moving the entire app to desktop sidebar navigation
+- adding mobile bottom tabs
+- connecting task threads to DMs at the data-model level
+
+Those belong to a later app-shell or data-contract pass.
+
 ## Known Current Implementation
 
 - `src/components/Layout.tsx` renders `MessagesBell` in the top-right header controls.
@@ -34,6 +55,7 @@ Header:
 - keep unread badge
 - make hover/title/focus text explicit
 - consider a stronger unread state than a small red badge alone
+- avoid color-only unread signals
 
 Forum:
 
@@ -74,6 +96,7 @@ Mobile:
 - Do not rewrite DM backend.
 - Do not change message storage or RLS in a discovery-only pass.
 - Do not remove the floating dock unless a separate UX decision is made.
+- Do not perform the full app-shell/sidebar/bottom-tab nav reform in this slice.
 
 ## Acceptance Criteria
 
@@ -88,4 +111,3 @@ Mobile:
 <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Test whether "Messages" or "Direct Messages" is clearer for employees.
 
 <span style="color:#d97706">NEEDS-DIRECTOR</span>: Decide whether DMs should feel like part of Forum or a separate top-level communication area.
-

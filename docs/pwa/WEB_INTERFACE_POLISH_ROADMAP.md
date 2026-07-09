@@ -32,6 +32,30 @@ This roadmap currently attaches to:
 
 This roadmap explicitly does not start Phase 5 Accountant.
 
+## Research Intake
+
+`docs/ux/CHATGPT_TASK_FIRST_NAV_RESEARCH_PROPOSAL.md` is a sanitized ChatGPT research intake file. It is useful context, not a source-of-truth roadmap.
+
+Durable ideas accepted from that research:
+
+- worker-critical routes should be visible without hunting
+- the top bar should behave more like a utility zone than an overloaded page list
+- a later global shell pass should consider desktop sidebar navigation and mobile bottom tabs
+- nav badges should mean action needed, not decorative activity
+- Messages and Forum need a clearer mental split
+- task pages should avoid visible category sprawl and keep detailed metadata out of default cards
+
+Deferred from that research:
+
+- full app-shell/nav redesign
+- default landing-page change from Overview to Tasks
+- task status/data-model changes
+- booking-generated task bundles
+- calendar/task/schema integration
+- proof-required task submission flows
+
+Those deferred items need Codex architecture/data review and director approval before implementation.
+
 ## Current Focus
 
 Website daily workflow clarity comes before Accountant.
@@ -45,6 +69,10 @@ Priority order:
 3. Schedule flow splits weekly schedule, one-time change, and vacation/time off.
 4. Dashboard keeps widgets but reduces first-screen overload.
 5. Admin/member surfaces reuse the same sidebar grammar where it makes work clearer.
+
+Later shell note:
+
+- A global sidebar/bottom-tab nav reform is plausible, but it should happen as a dedicated app-shell pass after route-level worker-obviousness work has clarified Tasks, Messages, and Schedule.
 
 ## Inspected Code Map
 

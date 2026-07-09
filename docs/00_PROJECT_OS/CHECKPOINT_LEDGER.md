@@ -172,3 +172,38 @@ Token/source note:
 
 Signature:
 - CODEX:
+
+## 2026-07-09 03:24 MDT - CODEX - ChatGPT nav research sanitized and integrated
+
+Lane:
+- Codex: documentation architecture, research intake guardrails, UX source-of-truth extraction.
+
+Summary:
+- Compressed two ChatGPT-generated navigation/task research drafts into one sanitized research proposal.
+- Removed raw draft files that contained overbroad "final" and direct implementation-prompt language.
+- Preserved useful source leads and product hypotheses while marking them as research intake, not roadmap truth.
+- Extracted durable ideas into the web polish roadmap, Messages discovery plan, and Tasks redesign plan.
+
+Files changed:
+- `docs/ux/CHATGPT_TASK_FIRST_NAV_RESEARCH_PROPOSAL.md`
+- `docs/ux/Dashboard-V3_Nav_Task_Research_Reports.md`
+- `docs/ux/Dashboard-V3_Task_First_Nav_Reform_Plan.md`
+- `docs/pwa/WEB_INTERFACE_POLISH_ROADMAP.md`
+- `docs/ux/MESSAGES_DISCOVERY_PLAN.md`
+- `docs/ux/TASKS_PAGE_REDESIGN_PLAN.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `git diff --check` passed after the docs update.
+- `rg` check confirmed no remaining raw "Gavin owner" or "Begin implementing Phase 1" handoff language in the UX/PWA docs; remaining matches are intentional warning/checkpoint text.
+
+Open gaps:
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: Later global shell decision remains open: keep Overview as logged-in landing, or make `/daily` the default once task UI is proven.
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Test whether employees find "Messages" or "Direct Messages" clearer.
+- <span style="color:#7c3aed">ASSUMPTION</span>: ChatGPT source links are preserved as research leads, not independently verified citations.
+
+Token/source note:
+- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:

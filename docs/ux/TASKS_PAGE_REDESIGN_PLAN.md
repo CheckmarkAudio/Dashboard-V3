@@ -46,6 +46,40 @@ Admin-only additions, if needed:
 
 Do not show every pane at once.
 
+## Research Intake Influence
+
+`docs/ux/CHATGPT_TASK_FIRST_NAV_RESEARCH_PROPOSAL.md` supports the current `/daily` direction: personal work first, secondary contexts behind a clear pane system, and no category sprawl.
+
+Accepted near-term ideas:
+
+- My Tasks stays the default.
+- Secondary task contexts should not visually compete with personal work.
+- Task cards should stay compact and action-focused.
+- Detailed metadata belongs in the existing detail modal or a future detail panel, not on every row.
+- Plain labels matter more than widget jargon.
+
+Candidate future vocabulary:
+
+- Today
+- Mine
+- Team
+- Checklist
+- Submitted
+- Done
+
+Those smart views are not yet approved as a data model or UI requirement. They are future vocabulary to test after the current My Tasks pane is worker-tested.
+
+Deferred ideas:
+
+- changing task statuses
+- adding backend tags
+- adding booking-generated task templates
+- making tasks appear on the calendar
+- requiring proof/media before task submission
+- making `/daily` the default logged-in landing page
+
+Those need Codex data/security review and director approval before implementation.
+
 ## Design Rules
 
 - My Tasks is the first load.
