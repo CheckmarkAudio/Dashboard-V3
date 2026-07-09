@@ -1,31 +1,44 @@
 // ============================================================================
 // admin-create-member — Supabase Edge Function
 //
-// Creates a new team member account and automatically sends them an
-// invitation email so they can set their own password — no manual
-// link-copying by the admin required.
+// Creates (or repairs, or reactivates) a team member account and returns a
+// guaranteed SETUP LINK the admin can hand to the member directly. Email
+// delivery on this project has proven unreliable (no custom SMTP), so the
+// link — not the email — is the canonical onboarding artifact. The client
+// shows it with a copy button right after creation.
 //
-// FLOW
-//   1. Verify caller is a signed-in team admin.
-//   2. Call inviteUserByEmail — creates the auth.users row AND sends
-//      the "You've been invited" email via Supabase's email service.
-//   3. Insert a team_members profile row with status='pending'.
-//   4. Return { ok: true, profile } to the client.
+// WHY NOT inviteUserByEmail
+//   inviteUserByEmail leaves the auth user unconfirmed until they click the
+//   emailed link, and recovery-link generation fails for unconfirmed users.
+//   If the email never arrives (the common case here), the account is
+//   stranded. createUser(email_confirm: true) + generateLink(recovery) is
+//   the pattern admin-generate-setup-link has used successfully since
+//   2026-05-14 — one consistent mechanism the RecoveryGate already handles.
 //
-// The new member receives an email with a setup link. When they click
-// it, the client catches type=invite in the URL hash, RecoveryGate
-// shows the "Set your password" form, and on success their status
-// flips to 'active' automatically.
+// SELF-HEALING (the "already been registered" fix)
+//   The email is looked up in auth.users first and every state is handled:
+//     - no auth user            → create it fresh
+//     - auth user, no profile   → ADOPT the orphan (deleting a member used
+//                                 to leave the auth account behind; this
+//                                 makes re-adding that email just work)
+//     - profile, archived       → REACTIVATE: unban login, refresh details,
+//                                 back to 'pending' with a fresh setup link
+//     - profile, active/pending → clear 409 telling the admin the person is
+//                                 already on the roster (resend_invite: true
+//                                 skips this guard and issues a fresh link)
+//
+// RESPONSE SHAPE
+//   { ok: true, profile, setup_link, action, link_warning? }
+//     action: "created" | "adopted" | "reactivated" | "resent"
+//   { ok: false, error }   // client surfaces as toast
 //
 // ACCESS CONTROL
 //   - verify_jwt: true — caller's JWT required.
-//   - Re-checks admin role via team_members so a leaked user JWT
-//     can't escalate privileges.
+//   - Re-checks admin role via team_members so a leaked user JWT can't
+//     escalate privileges. Any team admin may call this (not owner-only).
 //
 // SECRETS (auto-injected by Supabase, never leave this function)
-//   - SUPABASE_URL
-//   - SUPABASE_SERVICE_ROLE_KEY
-//   - SUPABASE_ANON_KEY
+//   - SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY
 // ============================================================================
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
@@ -34,14 +47,18 @@ import { createClient } from "jsr:@supabase/supabase-js@2"
 interface CreateMemberBody {
   email: string
   display_name: string
-  role?: "admin" | "member"
+  role?: "admin" | "intern" | "member"
   position?: string | null
   phone?: string | null
   start_date?: string | null
   managed_by?: string | null
-  /** Pass true from the "Re-send invite" action to skip the duplicate-check guard. */
+  /** Where the setup link should land after the password is set. */
+  redirect_to?: string
+  /** Pass true from the "New setup link" action to skip the duplicate guard. */
   resend_invite?: boolean
 }
+
+const DEFAULT_REDIRECT_TO = "https://dashboard-v3-dusky.vercel.app/login"
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -58,6 +75,43 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function normalizeEmail(raw: string | null | undefined): string {
   return (raw ?? "").trim().toLowerCase()
+}
+
+// 32-char cryptographically-random throwaway password. The member never
+// sees or types it — they set their own via the recovery-style setup link.
+function generateRandomPassword(): string {
+  const ALPHABET =
+    "ABCDEFGHJKLMNPQRSTUVWXYZ" +
+    "abcdefghjkmnpqrstuvwxyz" +
+    "23456789" +
+    "!@#$%^&*-_=+"
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  let out = ""
+  for (let i = 0; i < bytes.length; i++) {
+    out += ALPHABET[bytes[i] % ALPHABET.length]
+  }
+  return out
+}
+
+async function findAuthUserByEmail(
+  admin: ReturnType<typeof createClient>,
+  email: string,
+): Promise<{ id: string; email_confirmed: boolean } | null> {
+  try {
+    for (let page = 1; page <= 20; page++) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
+      if (error) break
+      const match = data.users.find((u) => normalizeEmail(u.email) === email)
+      if (match?.id) {
+        return { id: match.id, email_confirmed: Boolean(match.email_confirmed_at) }
+      }
+      if (data.users.length < 1000) break
+    }
+  } catch (_) {
+    // createUser below still returns a clear duplicate error if lookup fails.
+  }
+  return null
 }
 
 Deno.serve(async (req: Request) => {
@@ -89,6 +143,9 @@ Deno.serve(async (req: Request) => {
 
   const email = normalizeEmail(body.email)
   const display_name = body.display_name?.trim() ?? ""
+  const redirectTo = body.redirect_to?.trim() || DEFAULT_REDIRECT_TO
+  // The DB check constraint allows 'admin' | 'intern' (intern = member tier).
+  const role = body.role === "admin" ? "admin" : "intern"
 
   if (!email) return jsonResponse({ ok: false, error: "Email is required" }, 400)
   if (!display_name) return jsonResponse({ ok: false, error: "Display name is required" }, 400)
@@ -123,89 +180,104 @@ Deno.serve(async (req: Request) => {
 
   const teamId = callerProfile.team_id
 
-  // 2) Check if this email already has an auth account.
-  //    - If it does and is already confirmed → return a clear error so
-  //      the admin knows to use "Re-send invite" instead.
-  //    - If it exists but is unconfirmed → re-send the invite.
-  let existingUserId: string | null = null
-  try {
-    const { data: existingList } = await admin.auth.admin.listUsers({ perPage: 1000 })
-    const existing = existingList?.users?.find(
-      (u) => u.email?.toLowerCase() === email
-    )
-    if (existing) {
-      if (existing.email_confirmed_at && !body.resend_invite) {
-        // Already has a confirmed account — don't overwrite it.
-        // Check if they already have a team_members row.
-        const { data: existingProfile } = await admin
-          .from("team_members")
-          .select("id, status")
-          .eq("id", existing.id)
-          .maybeSingle()
-        if (existingProfile) {
-          return jsonResponse({
-            ok: false,
-            error: `${email} already has an active account. Use the Members list to manage their status.`,
-          }, 409)
-        }
-        // Auth user exists but no profile — create the profile for them.
-        existingUserId = existing.id
-      } else {
-        // Unconfirmed invite or explicit resend — resend the invite.
-        existingUserId = existing.id
-      }
-    }
-  } catch (_) {
-    // listUsers failed — proceed and let inviteUserByEmail sort it out.
+  // 2) Look up any existing auth account + profile for this email so every
+  //    prior state (orphan, archived, active) resolves instead of erroring.
+  const existingAuth = await findAuthUserByEmail(admin, email)
+  let existingProfile: { id: string; status: string | null; email: string | null } | null = null
+  if (existingAuth) {
+    const { data } = await admin
+      .from("team_members")
+      .select("id, status, email")
+      .eq("id", existingAuth.id)
+      .maybeSingle()
+    existingProfile = data ?? null
   }
 
-  // 3) Send the invitation email (creates auth user OR re-sends invite).
-  //    inviteUserByEmail automatically emails the member a "Set up your
-  //    account" link — no manual link copying needed.
-  let newUserId: string
+  let userId: string
+  let action: "created" | "adopted" | "reactivated" | "resent"
 
-  if (existingUserId) {
-    // Re-use existing auth user id (resend path).
-    newUserId = existingUserId
-    // Send a fresh invite link via generateLink so the member gets a new
-    // "You've been invited" email (not a recovery/"Reset password" email).
-    const { error: linkErr } = await admin.auth.admin.generateLink({
-      type: "invite",
+  if (!existingAuth) {
+    // ── Fresh create ──
+    const { data: createdAuth, error: createAuthErr } = await admin.auth.admin.createUser({
       email,
+      password: generateRandomPassword(),
+      email_confirm: true, // admin vouches; also required for recovery links
+      user_metadata: {
+        display_name,
+        created_by_admin: callerUser.user.id,
+        requires_password_change: true,
+      },
     })
-    if (linkErr) {
-      // generateLink can fail if Supabase email is not configured — try
-      // recovery as a fallback so the member can still set a password.
-      await admin.auth.admin.generateLink({ type: "recovery", email }).catch(() => {})
+    if (createAuthErr || !createdAuth.user) {
+      return jsonResponse(
+        { ok: false, error: createAuthErr?.message ?? "Failed to create auth user" },
+        400,
+      )
+    }
+    userId = createdAuth.user.id
+    action = "created"
+  } else if (!existingProfile) {
+    // ── Orphaned auth account (deleted member's leftover login) — adopt it ──
+    userId = existingAuth.id
+    action = "adopted"
+    const { error: repairErr } = await admin.auth.admin.updateUserById(userId, {
+      password: generateRandomPassword(), // invalidate any old password
+      email_confirm: true,
+      ban_duration: "none",
+      user_metadata: {
+        display_name,
+        created_by_admin: callerUser.user.id,
+        requires_password_change: true,
+      },
+    })
+    if (repairErr) {
+      return jsonResponse(
+        { ok: false, error: `Found an old login for ${email} but could not repair it: ${repairErr.message}` },
+        400,
+      )
+    }
+  } else if (
+    existingProfile.status === "inactive" ||
+    (body.resend_invite && existingProfile.status === "pending")
+  ) {
+    // ── Archived member being re-added, or a fresh link for a pending
+    //    member who never set a password. Never taken for ACTIVE members —
+    //    resetting their password here would lock them out; active members
+    //    get reset links via admin-generate-setup-link instead.
+    userId = existingAuth.id
+    action = existingProfile.status === "inactive" ? "reactivated" : "resent"
+    const { error: unbanErr } = await admin.auth.admin.updateUserById(userId, {
+      password: generateRandomPassword(),
+      email_confirm: true,
+      ban_duration: "none", // archive bans login; lift it
+      user_metadata: {
+        display_name,
+        created_by_admin: callerUser.user.id,
+        requires_password_change: true,
+      },
+    })
+    if (unbanErr) {
+      return jsonResponse(
+        { ok: false, error: `Could not re-enable login for ${email}: ${unbanErr.message}` },
+        400,
+      )
     }
   } else {
-    const { data: inviteData, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
-      email,
-      {
-        data: {
-          display_name,
-          created_by_admin: callerUser.user.id,
-          requires_password_change: true,
-        },
-        // No redirectTo — uses the project's configured Site URL so
-        // the invite link doesn't need a separate Redirect URL allowlist entry.
-      }
-    )
-    if (inviteErr || !inviteData?.user) {
-      const msg = inviteErr?.message ?? "Failed to send invitation"
-      return jsonResponse({ ok: false, error: msg }, 400)
-    }
-    newUserId = inviteData.user.id
+    // ── Genuinely already on the roster ──
+    return jsonResponse({
+      ok: false,
+      error: `${email} is already on the roster (status: ${existingProfile.status ?? "active"}). Edit them from the Members list, or use "New setup link" if they need to set a password.`,
+    }, 409)
   }
 
-  // 4) Insert the team_members profile row.
-  //    status = 'pending' — flips to 'active' automatically when the
-  //    member clicks their invite link and sets a password.
+  // 3) Upsert the team_members profile. status='pending' flips to 'active'
+  //    automatically when the member sets a password (RecoveryGate) or
+  //    signs in (AuthContext).
   const profileRow = {
-    id: newUserId,
+    id: userId,
     email,
     display_name,
-    role: body.role ?? "member",
+    role,
     position: body.position ?? null,
     phone: body.phone?.trim() || null,
     start_date: body.start_date || null,
@@ -213,26 +285,47 @@ Deno.serve(async (req: Request) => {
     managed_by: body.managed_by || null,
     team_id: teamId,
   }
-
-  // Upsert so a re-send doesn't fail if the profile already exists.
-  const { data: inserted, error: insertErr } = await admin
+  const { data: upserted, error: upsertErr } = await admin
     .from("team_members")
     .upsert(profileRow, { onConflict: "id", ignoreDuplicates: false })
     .select("*")
     .maybeSingle()
 
-  if (insertErr || !inserted) {
-    // Roll back the newly-created auth user (don't roll back on resend path).
-    if (!existingUserId) {
-      await admin.auth.admin.deleteUser(newUserId).catch(() => {})
+  if (upsertErr || !upserted) {
+    // Roll back only a freshly-created auth user; never delete a pre-existing one.
+    if (action === "created") {
+      await admin.auth.admin.deleteUser(userId).catch(() => {})
     }
-    const msg = insertErr?.message ?? "Failed to create profile"
-    return jsonResponse({ ok: false, error: msg }, 400)
+    return jsonResponse(
+      { ok: false, error: upsertErr?.message ?? "Failed to create profile" },
+      400,
+    )
+  }
+
+  // 4) Generate the setup link (recovery-style — RecoveryGate shows the
+  //    "Set your password" form and flips pending → active on success).
+  //    If this fails the member still exists; the admin can retry from
+  //    Settings → Account Access, so it degrades to a warning, not an error.
+  let setupLink: string | null = null
+  let linkWarning: string | null = null
+  const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo },
+  })
+  if (linkErr) {
+    linkWarning = linkErr.message
+  } else {
+    const properties = linkData?.properties as { action_link?: string } | undefined
+    setupLink = properties?.action_link ?? null
+    if (!setupLink) linkWarning = "Supabase did not return a setup link"
   }
 
   return jsonResponse({
     ok: true,
-    profile: inserted,
-    invite_email_sent: true,
+    profile: upserted,
+    action,
+    setup_link: setupLink,
+    ...(linkWarning ? { link_warning: linkWarning } : {}),
   })
 })

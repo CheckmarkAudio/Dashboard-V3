@@ -6,7 +6,14 @@ import { extractEdgeFunctionError } from '../../lib/edgeFunctionError'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useToast } from '../../components/Toast'
-import ConfirmModal from '../../components/ConfirmModal'
+import RemoveMemberModal from '../../components/admin/RemoveMemberModal'
+import SetupLinkModal from '../../components/admin/SetupLinkModal'
+import SetupLinkReveal from '../../components/auth/SetupLinkReveal'
+import {
+  archiveMember,
+  generateMemberSetupLink,
+  unarchiveMember,
+} from '../../lib/queries/memberLifecycle'
 import {
   Button,
   Input,
@@ -106,23 +113,35 @@ export default function TeamManager() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // 2026-05-08 (Lean 1) — when an Add Member create succeeds, the
-  // form swaps to a "Step 4" success view that reveals the temp
-  // password the admin needs to hand off. Holding profile + password
-  // here keeps the data flow simple: success → render reveal →
-  // admin hits "Done" → form closes + members list refreshes.
+  // When an Add Member create succeeds, the form swaps to a success view
+  // that reveals the SETUP LINK the admin hands to the member (copy /
+  // Gmail buttons). The link is guaranteed; email delivery is not (no
+  // custom SMTP on this project), so the link is the canonical handoff.
   const [createdMember, setCreatedMember] = useState<{
     profile: TeamMember
-    inviteSent: boolean
+    setupLink: string | null
+    linkWarning: string | null
+    action: string
+  } | null>(null)
+
+  // "New setup link" / "Password reset link" roster actions reveal the
+  // generated link in a small modal with the same copy/Gmail affordances.
+  const [linkModal, setLinkModal] = useState<{
+    email: string
+    displayName: string
+    setupLink: string
+    headline: string
+    subhead: string
   } | null>(null)
 
   // PR #58 — left-rail active section (Roster default; Clock Data is a
   // placeholder until PR #59 lands the shifts table).
   const [activeSection, setActiveSection] = useState<MembersSectionKey>('roster')
 
-  const [confirmState, setConfirmState] = useState<{
-    open: boolean; memberId: string; memberName: string; loading: boolean
-  }>({ open: false, memberId: '', memberName: '', loading: false })
+  // Member being removed — drives RemoveMemberModal (archive vs delete
+  // forever, both via the admin-remove-member edge function so the login
+  // account and profile can never drift apart).
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => { loadMembers() }, [])
 
@@ -250,12 +269,18 @@ export default function TeamManager() {
     const position = formData.position === 'custom' ? customPosition : formData.position
     const email = normalizeEmail(formData.email)
 
-    // Create the auth user + send invite email + insert team_members row.
-    // The edge function uses inviteUserByEmail so the new member receives
-    // an email automatically — no manual link copying needed.
-    const { data: result, error } = await supabase.functions.invoke<
-      { ok: boolean; profile?: TeamMember; error?: string; invite_email_sent?: boolean }
-    >('admin-create-member', {
+    // Create (or adopt/reactivate) the account + profile and get back a
+    // guaranteed setup link. The edge function self-heals every prior
+    // state for this email — orphaned login, archived member — so
+    // "delete then re-add" always works.
+    const { data: result, error } = await supabase.functions.invoke<{
+      ok: boolean
+      profile?: TeamMember
+      error?: string
+      action?: string
+      setup_link?: string | null
+      link_warning?: string
+    }>('admin-create-member', {
       body: {
         email,
         display_name: formData.display_name.trim(),
@@ -264,6 +289,7 @@ export default function TeamManager() {
         phone: formData.phone.trim() || null,
         start_date: formData.start_date || null,
         managed_by: formData.managed_by || null,
+        redirect_to: `${window.location.origin}/login`,
       },
     })
 
@@ -323,9 +349,20 @@ export default function TeamManager() {
       // is fine.
     }
 
-    // 4) Success — invite email was sent automatically by the edge function.
-    setCreatedMember({ profile: newMember, inviteSent: true })
-    toast(`Invite sent to ${newMember.email}`, 'success')
+    // 4) Success — reveal the setup link for the admin to send directly.
+    const action = result.action ?? 'created'
+    setCreatedMember({
+      profile: newMember,
+      setupLink: result.setup_link ?? null,
+      linkWarning: result.link_warning ?? null,
+      action,
+    })
+    toast(
+      action === 'reactivated'
+        ? `${newMember.display_name} reactivated — send them their new setup link`
+        : `${newMember.display_name} added — send them the setup link`,
+      'success',
+    )
     setSubmitting(false)
     loadMembers()
   }
@@ -404,25 +441,26 @@ export default function TeamManager() {
 
   const requestDelete = (member: TeamMember) => {
     setOpenMenuId(null)
-    setConfirmState({ open: true, memberId: member.id, memberName: member.display_name, loading: false })
+    setRemoveTarget({ id: member.id, name: member.display_name })
   }
 
-  const handleDelete = async () => {
-    setConfirmState(s => ({ ...s, loading: true }))
-    const { error } = await supabase.from('team_members').delete().eq('id', confirmState.memberId)
-    if (error) toast('Failed to remove member', 'error')
-    else toast('Member removed')
-    setConfirmState({ open: false, memberId: '', memberName: '', loading: false })
-    loadMembers()
-  }
-
+  // Activate/deactivate now go through admin-remove-member so the login
+  // is genuinely enabled/disabled too (a raw status flip left deactivated
+  // members able to sign in, and reactivated ones still banned).
   const toggleStatus = async (member: TeamMember) => {
     setOpenMenuId(null)
     setActionLoadingId(member.id)
-    const newStatus = member.status === 'active' ? 'inactive' : 'active'
-    const { error } = await supabase.from('team_members').update({ status: newStatus }).eq('id', member.id)
-    if (error) toast('Failed to update status', 'error')
-    else toast(`Member ${newStatus === 'active' ? 'activated' : 'deactivated'}`)
+    try {
+      if (member.status === 'active') {
+        await archiveMember(member.id)
+        toast(`${member.display_name} deactivated — login disabled`)
+      } else {
+        await unarchiveMember(member.id)
+        toast(`${member.display_name} activated — login re-enabled`)
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to update status', 'error')
+    }
     setActionLoadingId(null)
     loadMembers()
   }
@@ -438,11 +476,13 @@ export default function TeamManager() {
     loadMembers()
   }
 
+  // Pending member never set a password → issue a brand-new setup link
+  // (safe to rotate their throwaway password). Shown in a copy/Gmail modal.
   const resendInvite = async (member: TeamMember) => {
     setOpenMenuId(null)
     setActionLoadingId(member.id)
     const { data: result, error } = await supabase.functions.invoke<{
-      ok: boolean; error?: string; invite_email_sent?: boolean
+      ok: boolean; error?: string; setup_link?: string | null; link_warning?: string
     }>('admin-create-member', {
       body: {
         email: member.email,
@@ -452,15 +492,45 @@ export default function TeamManager() {
         phone: member.phone ?? null,
         start_date: member.start_date ?? null,
         managed_by: member.managed_by ?? null,
+        redirect_to: `${window.location.origin}/login`,
         resend_invite: true,
       },
     })
     setActionLoadingId(null)
-    if (error || !result?.ok) {
-      toast(result?.error ?? 'Failed to re-send invite', 'error')
+    if (error || !result?.ok || !result.setup_link) {
+      const msg = result?.error
+        ?? result?.link_warning
+        ?? (await extractEdgeFunctionError(error, 'Failed to generate a new setup link'))
+      toast(msg, 'error')
     } else {
-      toast(`Invite re-sent to ${member.email}`, 'success')
+      setLinkModal({
+        email: member.email ?? '',
+        displayName: member.display_name,
+        setupLink: result.setup_link,
+        headline: `New setup link for ${member.display_name}`,
+        subhead: 'Send it to them directly — text, DM, or the Gmail button below. Their old link no longer works.',
+      })
     }
+  }
+
+  // Active member locked out → password reset link that does NOT touch
+  // their current password until they use it.
+  const resetPasswordLink = async (member: TeamMember) => {
+    setOpenMenuId(null)
+    setActionLoadingId(member.id)
+    try {
+      const link = await generateMemberSetupLink(member.id)
+      setLinkModal({
+        email: member.email ?? '',
+        displayName: member.display_name,
+        setupLink: link,
+        headline: `Password reset link for ${member.display_name}`,
+        subhead: 'Send it to them directly. Their current password keeps working until they set a new one.',
+      })
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not generate reset link', 'error')
+    }
+    setActionLoadingId(null)
   }
 
   // Setup links are generated directly by the admin edge function and
@@ -662,15 +732,23 @@ export default function TeamManager() {
               >
                 <Edit2 size={12} aria-hidden="true" /> Edit member
               </button>
-              {member.status === 'pending' && (
+              {member.status === 'pending' ? (
                 <button
                   role="menuitem"
                   onClick={() => resendInvite(member)}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-surface-hover transition-colors"
                 >
-                  <Mail size={12} aria-hidden="true" /> Re-send invite email
+                  <Mail size={12} aria-hidden="true" /> New setup link
                 </button>
-              )}
+              ) : member.status === 'active' && member.position !== 'owner' ? (
+                <button
+                  role="menuitem"
+                  onClick={() => resetPasswordLink(member)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-surface-hover transition-colors"
+                >
+                  <Mail size={12} aria-hidden="true" /> Password reset link
+                </button>
+              ) : null}
               <button
                 role="menuitem"
                 onClick={() => toggleRole(member)}
@@ -1029,40 +1107,30 @@ export default function TeamManager() {
               <div className="p-6 space-y-5 flex-1">
                 {/* ─── Step 4 — Success ─── */}
                 {createdMember && (
-                  <div className="space-y-4 text-center py-4">
-                    <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto">
-                      <Check size={26} className="text-emerald-400" aria-hidden="true" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-semibold text-text">
-                        {createdMember.profile.display_name} added
-                      </h3>
-                      <p className="text-sm text-text-muted mt-1">
-                        An invite email was sent to{' '}
-                        <span className="font-medium text-text">{createdMember.profile.email}</span>.
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-surface-alt/50 p-4 text-left space-y-2">
-                      <p className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">What happens next</p>
-                      <ol className="space-y-1.5 text-sm text-text-muted list-none">
-                        <li className="flex items-start gap-2">
-                          <span className="shrink-0 w-5 h-5 rounded-full bg-gold/10 text-gold text-[10px] font-bold flex items-center justify-center mt-0.5">1</span>
-                          They click the link in the email to set their password.
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="shrink-0 w-5 h-5 rounded-full bg-gold/10 text-gold text-[10px] font-bold flex items-center justify-center mt-0.5">2</span>
-                          Their status automatically switches from Pending → Active on first sign-in.
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="shrink-0 w-5 h-5 rounded-full bg-gold/10 text-gold text-[10px] font-bold flex items-center justify-center mt-0.5">3</span>
-                          They can reset their password anytime using "Forgot password?" on the login page.
-                        </li>
-                      </ol>
-                    </div>
+                  <div className="space-y-4">
+                    {createdMember.setupLink ? (
+                      <SetupLinkReveal
+                        email={createdMember.profile.email ?? ''}
+                        displayName={createdMember.profile.display_name}
+                        setupLink={createdMember.setupLink}
+                        headline={
+                          createdMember.action === 'reactivated'
+                            ? `${createdMember.profile.display_name} is back on the roster`
+                            : `${createdMember.profile.display_name} added`
+                        }
+                        subhead="Send them this setup link — copy it into a text or DM, or use the Gmail button. They'll pick their own password and go Active on first sign-in."
+                      />
+                    ) : (
+                      <div role="alert" className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+                        {createdMember.profile.display_name} was added, but the setup link could not
+                        be generated{createdMember.linkWarning ? `: ${createdMember.linkWarning}` : ''}.
+                        Use <span className="font-semibold">New setup link</span> in their action menu to retry.
+                      </div>
+                    )}
                     <p className="text-[11px] text-text-light">
-                      If they don't receive the email, use the{' '}
-                      <span className="font-medium text-text">Re-send invite</span>{' '}
-                      option in their action menu.
+                      Need another one later? Every pending member has a{' '}
+                      <span className="font-medium text-text">New setup link</span> action in their menu,
+                      and active members have <span className="font-medium text-text">Password reset link</span>.
                     </p>
                   </div>
                 )}
@@ -1103,7 +1171,8 @@ export default function TeamManager() {
                   <div className="rounded-xl border border-border bg-surface-alt/50 px-4 py-3 flex items-start gap-3">
                     <Mail size={15} className="text-gold shrink-0 mt-0.5" aria-hidden="true" />
                     <p className="text-[13px] text-text-muted">
-                      An invite email will be sent automatically. The member clicks the link to set their password and their status activates on first sign-in.
+                      After you create them, you'll get a secure setup link to send them directly
+                      (text, DM, or email). They click it, pick their password, and go Active on first sign-in.
                     </p>
                   </div>
                 )}
@@ -1249,9 +1318,9 @@ export default function TeamManager() {
                         Review &amp; create
                       </h3>
                       <p className="text-xs text-text-muted mt-1">
-                        Confirm everything below. An invite email will be sent to{' '}
+                        Confirm everything below. You'll get a secure setup link to send to{' '}
                         <span className="font-semibold text-text">{formData.display_name || 'the new member'}</span>{' '}
-                        automatically.
+                        right after.
                       </p>
                     </div>
 
@@ -1265,7 +1334,7 @@ export default function TeamManager() {
                         ['Manager', getManagerName(formData.managed_by) ?? 'None'],
                         ['Phone', formData.phone || '—'],
                         ['Start date', formData.start_date || '—'],
-                        ['Onboarding', 'Invite email sent automatically'],
+                        ['Onboarding', 'Setup link generated for you to send'],
                       ]}
                     />
 
@@ -1342,7 +1411,7 @@ export default function TeamManager() {
                           loading={submitting}
                           iconLeft={!submitting ? <Save size={16} aria-hidden="true" /> : undefined}
                         >
-                          {editingMember ? 'Update Member' : 'Create & Send Invite'}
+                          {editingMember ? 'Update Member' : 'Create & Get Setup Link'}
                         </Button>
                       )}
                     </div>
@@ -1354,16 +1423,34 @@ export default function TeamManager() {
         </div>
       )}
 
-      <ConfirmModal
-        open={confirmState.open}
-        title="Remove Team Member"
-        message={`Are you sure you want to remove ${confirmState.memberName}? This action cannot be undone.`}
-        confirmLabel="Remove"
-        variant="danger"
-        loading={confirmState.loading}
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmState({ open: false, memberId: '', memberName: '', loading: false })}
-      />
+      {removeTarget && (
+        <RemoveMemberModal
+          memberId={removeTarget.id}
+          memberName={removeTarget.name}
+          onClose={() => setRemoveTarget(null)}
+          onDone={(action) => {
+            toast(
+              action === 'archived'
+                ? `${removeTarget.name} archived — history kept, login disabled`
+                : `${removeTarget.name} deleted — their email can be re-added anytime`,
+              'success',
+            )
+            setRemoveTarget(null)
+            loadMembers()
+          }}
+        />
+      )}
+
+      {linkModal && (
+        <SetupLinkModal
+          email={linkModal.email}
+          displayName={linkModal.displayName}
+          setupLink={linkModal.setupLink}
+          headline={linkModal.headline}
+          subhead={linkModal.subhead}
+          onClose={() => setLinkModal(null)}
+        />
+      )}
     </div>
   )
 }
