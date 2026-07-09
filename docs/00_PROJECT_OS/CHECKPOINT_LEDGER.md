@@ -83,36 +83,6 @@ Token/source note:
 Signature:
 - CODEX:
 
-## 2026-07-09 05:37 MDT - CODEX - Overview and Dashboard action/social rail polish
-
-Lane:
-- Codex: scoped landing-page UI refinement, worker-obviousness implementation, verification.
-
-Summary:
-- Moved the social media icon/count strip out of the crowded page-header action area on the main Overview and Dashboard views.
-- Put Overview's social strip plus `Book a Session` into a warmer `Home base` sidebar footer so the page reads more like a personal landing area.
-- Put Dashboard's `Quick Assign` and social strip into a neutral `Command` sidebar footer so admin action stays close without making the page feel identical to Tasks.
-- Kept the previous full widget layouts behind `Widget View`, with the primary action still available beside the member strip there.
-- Left data queries, Supabase behavior, routing, auth, widgets, and modal internals unchanged.
-
-Files changed:
-- `src/pages/Dashboard.tsx`
-- `src/pages/admin/Hub.tsx`
-- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
-
-Verification:
-- `npm run build` passed.
-
-Open gaps:
-- <span style="color:#2563eb">NEEDS-VISUAL-QA</span>: Browser automation timed out on the in-app browser connection, so final visual judgment should be checked manually in the running preview.
-- <span style="color:#7c3aed">ASSUMPTION</span>: Keeping social icons in the main-view side rails and keeping primary actions beside the member strip only in Widget View is the least-cluttered placement for this slice.
-
-Token/source note:
-- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
-
-Signature:
-- CODEX:
-
 ## 2026-07-09 05:23 MDT - CODEX - Overview and dashboard main-view shells
 
 Lane:
@@ -140,6 +110,67 @@ Verification:
 Open gaps:
 - <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Confirm whether Today View vs Widget View and Command View vs Widget View are obvious without explanation.
 - <span style="color:#7c3aed">ASSUMPTION</span>: Reusing existing widget components inside non-draggable cards is acceptable for this first hierarchy pass.
+
+Token/source note:
+- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:
+
+## 2026-07-09 05:37 MDT - CODEX - Overview and Dashboard action/social rail polish
+
+Lane:
+- Codex: scoped landing-page UI refinement, existing-widget reuse, verification.
+
+Summary:
+- Moved the social media icon/count strip out of the crowded page-header action area on the main Overview and Dashboard views.
+- Put Overview's social strip plus `Book a Session` into a warmer `Home base` sidebar footer so the page reads more like a personal landing area.
+- Put Dashboard's `Quick Assign` and social strip into a neutral `Command` sidebar footer so admin action stays close without making the page feel identical to Tasks.
+- Kept the previous full widget layouts behind `Widget View`, with the primary action still available beside the member strip there.
+- Left data queries, Supabase behavior, routing, auth, widgets, and modal internals unchanged.
+
+Files changed:
+- `src/pages/Dashboard.tsx`
+- `src/pages/admin/Hub.tsx`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `npm run build` passed.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-VISUAL-QA</span>: Browser automation timed out on the in-app browser connection, so final visual judgment should be checked manually in the running preview.
+- <span style="color:#7c3aed">ASSUMPTION</span>: Keeping social icons in the main-view side rails and keeping primary actions beside the member strip only in Widget View is the least-cluttered placement for this slice.
+
+Token/source note:
+- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:
+
+## 2026-07-09 05:46 MDT - CODEX - Stabilized top action strips for social and booking controls
+
+Lane:
+- Codex: scoped landing-page UI refinement, worker-obviousness implementation, verification.
+
+Summary:
+- Replaced the moving Overview/Dashboard rail-footer action clusters with stable top action strips beneath the member row.
+- Added a compact `SocialStatsBar` variant so social media links can render as slimmer professional pills instead of only large circular bubbles.
+- Kept `Book a Session` and `Quick Assign` visible near the top, but grouped them with the compact social strip in a cleaner horizontal layout.
+- Removed the height-dependent rail footer placement that made the controls appear to jump when selecting different sidebar panes.
+- Left data queries, social links/counts, modals, Supabase behavior, auth, routing, and widget rendering unchanged.
+
+Files changed:
+- `src/components/members/MemberHighlights.tsx`
+- `src/pages/Dashboard.tsx`
+- `src/pages/admin/Hub.tsx`
+- `src/components/Layout.tsx`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `npm run build` passed.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-VISUAL-QA</span>: User should review the running preview for final taste, spacing, and whether the compact social pills feel approachable enough.
 
 Token/source note:
 - Exact token total not visible in this repo file. Use the Codex app/session token meter if available.

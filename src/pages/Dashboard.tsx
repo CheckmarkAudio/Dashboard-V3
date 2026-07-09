@@ -78,18 +78,27 @@ function BookButton() {
   )
 }
 
-function OverviewRailFooter() {
+function OverviewActionStrip() {
   return (
-    <div className="mt-auto pt-3">
-      <div className="rounded-xl border border-gold/20 bg-gold/10 p-2 shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
-        <div className="px-1 pb-2">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
-            Studio pulse
-          </p>
+    <div className="rounded-xl border border-gold/20 bg-gradient-to-r from-gold/10 via-surface to-surface px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.04)]">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold ring-1 ring-gold/25"
+            aria-hidden="true"
+          >
+            <Sparkles size={16} strokeWidth={2.2} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[13px] font-extrabold text-text">Studio pulse</p>
+            <p className="text-[11px] font-medium text-text-muted">Social reach + booking</p>
+          </div>
         </div>
-        <div className="space-y-2">
-          <SocialStatsBar />
-          <BookButton />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <SocialStatsBar variant="compact" />
+          <div className="w-full sm:w-[190px]">
+            <BookButton />
+          </div>
         </div>
       </div>
     </div>
@@ -171,7 +180,8 @@ export default function Dashboard() {
             </Button>
           }
         />
-        <MemberHighlights actions={showingWidgetView ? <BookButton /> : undefined} />
+        <MemberHighlights />
+        <OverviewActionStrip />
         {showingWidgetView ? (
           <WorkspacePanel
             role={appRole}
@@ -198,7 +208,6 @@ export default function Dashboard() {
                   />
                 ))}
               </div>
-              <OverviewRailFooter />
             </aside>
 
             <section className="bg-gradient-to-br from-surface via-surface to-gold/5 rounded-xl border border-border lg:min-h-[620px]">

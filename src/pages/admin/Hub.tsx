@@ -74,21 +74,27 @@ function QuickAssignButton() {
   )
 }
 
-function AdminRailFooter() {
+function AdminActionStrip() {
   return (
-    <div className="mt-auto pt-3">
-      <div className="space-y-3 rounded-xl border border-border bg-surface-alt/50 p-2 shadow-[0_8px_20px_rgba(0,0,0,0.04)]">
-        <div>
-          <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
-            Fast lane
-          </p>
-          <QuickAssignButton />
+    <div className="rounded-xl border border-border bg-surface px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.035)]">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-alt text-gold ring-1 ring-border"
+            aria-hidden="true"
+          >
+            <Zap size={16} strokeWidth={2.2} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[13px] font-extrabold text-text">Fast lane</p>
+            <p className="text-[11px] font-medium text-text-muted">Assign + studio reach</p>
+          </div>
         </div>
-        <div className="border-t border-border pt-3">
-          <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
-            Studio reach
-          </p>
-          <SocialStatsBar />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <SocialStatsBar variant="compact" />
+          <div className="w-full sm:w-[190px]">
+            <QuickAssignButton />
+          </div>
         </div>
       </div>
     </div>
@@ -197,7 +203,8 @@ export default function AdminHub() {
         {/* Lean 7 (PR #78) — instagram-story-style member bubbles
             above the widget grid, mirroring the member Overview
             pattern from PR #61. Same component, same query cache. */}
-        <MemberHighlights actions={showingWidgetView ? <QuickAssignButton /> : undefined} />
+        <MemberHighlights />
+        <AdminActionStrip />
         {showingWidgetView ? (
           <WorkspacePanel
             role={appRole}
@@ -226,7 +233,6 @@ export default function AdminHub() {
                   />
                 ))}
               </div>
-              <AdminRailFooter />
             </aside>
 
             <section className="bg-surface rounded-xl border border-border lg:min-h-[620px]">

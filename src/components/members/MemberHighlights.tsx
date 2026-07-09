@@ -186,7 +186,35 @@ function MemberPill({ member }: { member: TeamMember }) {
  * ring with a gold hint for tactile feedback. The brand-colored
  * glyph inside provides per-platform identity.
  */
-function SocialStat({ channel }: { channel: SocialChannel }) {
+function SocialStat({
+  channel,
+  variant = 'bubble',
+}: {
+  channel: SocialChannel
+  variant?: 'bubble' | 'compact'
+}) {
+  if (variant === 'compact') {
+    return (
+      <a
+        href={channel.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group inline-flex shrink-0 rounded-full focus-ring"
+        aria-label={`${channel.label} — ${formatCount(channel.count)} followers`}
+        title={`${channel.label} — ${formatCount(channel.count)} followers`}
+      >
+        <span className="flex h-9 items-center justify-center gap-1.5 rounded-full bg-surface/90 px-2.5 ring-1 ring-border transition-colors group-hover:bg-surface-hover group-hover:ring-gold/40">
+          <span className={PLATFORM_COLOR[channel.platform]}>
+            <PlatformIcon platform={channel.platform} size={14} />
+          </span>
+          <span className="text-[11px] font-bold tabular-nums text-text">
+            {formatCount(channel.count)}
+          </span>
+        </span>
+      </a>
+    )
+  }
+
   return (
     <a
       href={channel.href}
@@ -212,25 +240,32 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
 //
 // 2026-05-06 — split: <MemberHighlights /> renders ONLY member pills
 // now (its own row beneath the page title). <SocialStatsBar /> is a
-// named export that renders the social tiles standalone — the
-// Dashboard / Hub page wires it into PageHeader's `actions` slot so
-// social sits right-justified on the title row.
+// named export that renders the social tiles standalone. Overview and
+// Hub use its compact variant in their stable top action strips.
 
 /**
- * SocialStatsBar — the four social media bubbles + counts as a
- * standalone bar. Used inside PageHeader's `actions` slot on
- * Dashboard + Hub so they read on the same row as the page title.
- * Self-contained: no props, queries nothing — just maps
+ * SocialStatsBar — the four social media links + counts as a
+ * standalone bar. Self-contained: no queries, just maps
  * SOCIAL_CHANNELS to <SocialStat /> rows.
  */
-export function SocialStatsBar() {
+export function SocialStatsBar({
+  variant = 'bubble',
+  className = '',
+}: {
+  variant?: 'bubble' | 'compact'
+  className?: string
+} = {}) {
   return (
     <div
-      className="flex items-center gap-2 shrink-0"
+      className={[
+        'flex items-center shrink-0',
+        variant === 'compact' ? 'gap-1.5 flex-wrap' : 'gap-2',
+        className,
+      ].filter(Boolean).join(' ')}
       aria-label="Checkmark Audio social media snapshot"
     >
       {SOCIAL_CHANNELS.map((channel) => (
-        <SocialStat key={channel.platform} channel={channel} />
+        <SocialStat key={channel.platform} channel={channel} variant={variant} />
       ))}
     </div>
   )
