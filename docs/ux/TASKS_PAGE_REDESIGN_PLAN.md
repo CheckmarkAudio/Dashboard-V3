@@ -35,8 +35,8 @@ Sidebar / tabs:
 
 - My Tasks
 - Team Tasks
-- Checklist
 - Studio Tasks
+- Widget View
 
 Admin-only additions, if needed:
 
@@ -88,13 +88,14 @@ Those need Codex data/security review and director approval before implementatio
 - Secondary counts can appear as small badges.
 - Drag/reorder behavior inside My Tasks should remain intact.
 - Do not break `MyTasksCard` behavior just to change the page shell.
+- Widget View may show the full legacy task-widget grid for users who need all contexts at once.
 
 ## Likely Implementation Path
 
 1. Create a Tasks page shell with a left rail and active pane state. Done in first slice.
 2. Render `MyTasksCard` directly as the default pane. Done in first slice.
-3. Render existing secondary task widgets as panes instead of simultaneous columns. Done for Checklist, Team Tasks, and Studio Tasks.
-4. Preserve `WorkspacePanel` as an optional "Widget View" only if it remains useful. Deferred; do not add until user requests it.
+3. Render existing secondary task widgets as panes instead of simultaneous columns. Done for Team Tasks and Studio Tasks.
+4. Preserve `WorkspacePanel` as an optional "Widget View" for the full task-widget layout. Done in priority fix slice.
 5. Verify existing task query keys and realtime invalidation still work.
 
 ## Likely Files
@@ -158,8 +159,24 @@ Codex follow-up:
 - hid the sidebar label on mobile
 - made the tall pane/content min-heights desktop-only
 
+### 2026-07-09 - Priority fix slice
+
+User direction:
+
+- keep task groups on one page each
+- primary sidebar choices should be My Tasks, Team Tasks, Studio Tasks, and Widget View
+- reduce busy task contexts before moving deeper into Messages reform
+
+Codex follow-up:
+
+- changed the `/daily` sidebar to My Tasks, Team Tasks, Studio Tasks, and Widget View
+- restored the old `WorkspacePanel` task grid behind Widget View only
+- kept task data, task completion, task queries, and Supabase behavior unchanged
+
+Verification:
+
+- `npm run build` passed
+
 ## Open Decisions
 
-<span style="color:#d97706">NEEDS-DIRECTOR</span>: Should the secondary view be called "Widget View", "Boards", or something else?
-
-<span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Confirm whether employees understand "Studio Tasks" vs "Team Tasks."
+<span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Confirm whether employees understand "Studio Tasks" vs "Team Tasks" and whether "Widget View" sounds like the right escape hatch for the full layout.

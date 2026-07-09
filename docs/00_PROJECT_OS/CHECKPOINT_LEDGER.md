@@ -238,3 +238,32 @@ Token/source note:
 
 Signature:
 - CODEX:
+
+## 2026-07-09 04:02 MDT - CODEX - Tasks sidebar widget-view priority fix
+
+Lane:
+- Codex: scoped `/daily` UI refinement, worker-obviousness implementation, verification.
+
+Summary:
+- Updated `/daily` to make the left sidebar match the requested task-group model: My Tasks, Team Tasks, Studio Tasks, and Widget View.
+- Removed Checklist as a primary task-group pane for this slice so the sidebar is less busy.
+- Restored the full task widget layout behind the Widget View option using the existing `WorkspacePanel` and `TASKS_WIDGET_DEFINITIONS`.
+- Kept task data, Supabase queries, task completion, and realtime behavior unchanged.
+
+Files changed:
+- `src/pages/DailyChecklist.tsx`
+- `docs/ux/TASKS_PAGE_REDESIGN_PLAN.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `git diff --check` passed before docs update.
+- `npm run build` passed.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Confirm whether "Widget View" is understandable to employees and whether Checklist being inside Widget View feels discoverable enough.
+
+Token/source note:
+- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:

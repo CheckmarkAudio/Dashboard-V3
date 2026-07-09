@@ -1,20 +1,22 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import {
-  ClipboardCheck,
   ClipboardList,
+  LayoutGrid,
   ListChecks,
   type LucideIcon,
   MonitorCog,
   Users,
 } from 'lucide-react'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
+import { useAuth } from '../contexts/AuthContext'
 import { PageHeader } from '../components/ui'
 import MyTasksCard from '../components/tasks/MyTasksCard'
 import {
   StudioAssignedTasksCard,
   TeamAssignedTasksCard,
 } from '../components/tasks/AssignedTaskBoards'
-import TeamChecklistWidget from '../components/checklist/TeamChecklistWidget'
+import WorkspacePanel from '../components/dashboard/WorkspacePanel'
+import { TASKS_WIDGET_DEFINITIONS } from '../components/dashboard/widgetRegistry'
 
 /**
  * Tasks page — `/daily`
@@ -27,14 +29,13 @@ import TeamChecklistWidget from '../components/checklist/TeamChecklistWidget'
  * File name stays `DailyChecklist` for backward compat with route
  * mapping; the page title stays 'Tasks'.
  */
-type TaskPaneId = 'my_tasks' | 'checklist' | 'team_tasks' | 'studio_tasks'
+type TaskPaneId = 'my_tasks' | 'team_tasks' | 'studio_tasks' | 'widget_view'
 
 interface TaskPane {
   id: TaskPaneId
   title: string
   subtitle: string
   icon: LucideIcon
-  render: () => ReactNode
 }
 
 const TASK_PANES: TaskPane[] = [
@@ -43,40 +44,66 @@ const TASK_PANES: TaskPane[] = [
     title: 'My Tasks',
     subtitle: 'Your personal queue',
     icon: ListChecks,
-    render: () => <MyTasksCard embedded />,
-  },
-  {
-    id: 'checklist',
-    title: 'Checklist',
-    subtitle: 'Team maintenance checks',
-    icon: ClipboardCheck,
-    render: () => <TeamChecklistWidget />,
   },
   {
     id: 'team_tasks',
     title: 'Team Tasks',
     subtitle: 'Shared member work',
     icon: Users,
-    render: () => <TeamAssignedTasksCard />,
   },
   {
     id: 'studio_tasks',
     title: 'Studio Tasks',
     subtitle: 'Room and studio work',
     icon: MonitorCog,
-    render: () => <StudioAssignedTasksCard />,
+  },
+  {
+    id: 'widget_view',
+    title: 'Widget View',
+    subtitle: 'All task widgets',
+    icon: LayoutGrid,
   },
 ]
 const DEFAULT_TASK_PANE = TASK_PANES[0]!
 
+function renderTaskPane(
+  paneId: TaskPaneId,
+  appRole: ReturnType<typeof useAuth>['appRole'],
+  userId: string,
+): ReactNode {
+  switch (paneId) {
+    case 'team_tasks':
+      return <TeamAssignedTasksCard />
+    case 'studio_tasks':
+      return <StudioAssignedTasksCard />
+    case 'widget_view':
+      return (
+        <WorkspacePanel
+          role={appRole}
+          userId={userId}
+          scope="member_tasks"
+          definitions={TASKS_WIDGET_DEFINITIONS}
+          controlsDescription=""
+          showControls={false}
+        />
+      )
+    case 'my_tasks':
+    default:
+      return <MyTasksCard embedded />
+  }
+}
+
 export default function DailyChecklist() {
   useDocumentTitle('Tasks - Checkmark Workspace')
+  const { profile, appRole } = useAuth()
   const [activePaneId, setActivePaneId] = useState<TaskPaneId>('my_tasks')
   const activePane = useMemo(
     () => TASK_PANES.find((pane) => pane.id === activePaneId) ?? DEFAULT_TASK_PANE,
     [activePaneId],
   )
   const ActiveIcon = activePane.icon
+  const activePaneBody = renderTaskPane(activePane.id, appRole, profile?.id ?? 'guest')
+  const activeBadge = activePane.id === 'widget_view' ? 'Widget view' : 'One group'
 
   return (
     <div className="max-w-[1440px] mx-auto animate-fade-in space-y-5">
@@ -141,12 +168,12 @@ export default function DailyChecklist() {
             </div>
             <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-2.5 py-1 text-[11px] font-semibold text-gold">
               <ClipboardList size={12} aria-hidden="true" />
-              Focus view
+              {activeBadge}
             </span>
           </header>
 
           <div className="p-3 sm:p-4 lg:min-h-[560px] lg:h-[calc(100vh-15rem)] lg:max-h-[860px]">
-            {activePane.render()}
+            {activePaneBody}
           </div>
         </section>
       </div>
