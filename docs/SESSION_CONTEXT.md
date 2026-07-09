@@ -1,6 +1,6 @@
 # Session Context — Checkmark Audio Dashboard
 
-> **New Claude session? Read this FIRST, before writing or editing anything.**
+> **New Claude session? Read `docs/00_PROJECT_OS/README.md` FIRST, then this file, before writing or editing anything.**
 >
 > This doc is the handoff briefing. It exists so that any API error,
 > token limit, or fresh conversation doesn't cost the user hours of
@@ -11,7 +11,7 @@
 
 ## How to use this doc
 
-1. On session start, read this file end-to-end plus `docs/PROJECT_STATE.md`.
+1. On session start, read `docs/00_PROJECT_OS/README.md`, this file end-to-end, and `docs/PROJECT_STATE.md`.
 2. Before starting real work, ask the user 1–3 tight questions ONLY if
    a genuinely needed detail is missing. Don't re-interrogate — this
    doc exists precisely so you don't have to.
@@ -717,6 +717,18 @@ Instrumentation points live in: `main.tsx` (`app:bootstrap`),
 ---
 
 ## Recent + next
+
+### 2026-07-08 Session wrap - Project OS + worker-obvious `/daily` proof point
+
+**`CODEX:`** User clarified the core vision: Tasks is the first tactical UI/UX proof point, not the full project mission. The broader mission is a beautiful, refined, easy, stable, worker-magnetic Checkmark operating system with a safe, reliable, documented backend and traceable AI/human history.
+
+- Added `docs/00_PROJECT_OS/` as the project brain/heart front door: vision and purpose, shared language/keys, laws and safety, roles/accountability, history/learning, art/design system, and `CHECKPOINT_LEDGER.md`.
+- Added `.claude/skills/project-os/SKILL.md` and wired Project OS into `.claude/commands/start-session.md`, `.claude/commands/drift-audit.md`, `docs/AI_CODERS_READ_THIS_FIRST.md`, `docs/claude-web-dev-guardrails.md`, and the UI/worker skills.
+- Preserved `docs/pwa/APP_BUILD_ROADMAP.md` as the master phase order and explicitly made Project OS the parent mission layer, not a competing roadmap.
+- `/daily` first implementation slice: `src/pages/DailyChecklist.tsx` now opens on My Tasks and moves Checklist, Team Tasks, and Studio Tasks behind a sidebar/pane system instead of a default three-column wall.
+- Verification: `git diff --check` clean; `npm run build` passed after the Project OS wiring and `/daily` change.
+- Next safe move: worker-test `/daily` with Gavin or another employee, then continue the daily workflow rescue in order: Messages/DM discovery, Schedule/vacation clarity, Dashboard hierarchy.
+- Open decisions: vacation/time-off final term and data model need `NEEDS-DIRECTOR` before backend work; secondary Tasks pane naming and Studio Tasks vs Team Tasks language need worker validation.
 
 ### 2026-05-24 Session wrap — Scheduler series + Task Tweaks + Studio Hours + Checklist revamp + drag-overlay fix
 

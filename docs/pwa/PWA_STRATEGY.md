@@ -4,8 +4,11 @@ Purpose: turn Checkmark Workspace from a responsive website into an installable,
 
 Primary companion docs:
 
+- `../00_PROJECT_OS/README.md`: broad project mission, shared language, safety laws, roles, history, and design memory.
+- `../AI_CODERS_READ_THIS_FIRST.md`: AI coder roles, phase ownership, shortcuts, uncertainty labels, and handoff rules.
 - `APP_EXPERIENCE_PLAYBOOK.md`: product feel, route polish rules, mobile UI quality bar, and Claude handoff prompt.
 - `APP_BUILD_ROADMAP.md`: phased order of operations from PWA foundation to native-wrapper decision.
+- `WEB_INTERFACE_POLISH_ROADMAP.md`: website clarity roadmap for Tasks, Messages, Schedule, and dashboard hierarchy.
 - `MOBILE_ROUTE_INVENTORY.md`: route priority and mobile blockers.
 - `MOBILE_AUTH_QA.md`: auth/setup/recovery test plan.
 - `INSTALL_QA_CHECKLIST.md`: install behavior test plan.

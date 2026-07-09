@@ -11,10 +11,11 @@ Use this skill whenever the task touches visual web development.
 
 Read these before editing:
 
-1. `docs/ui-standards.md`
-2. `docs/claude-web-dev-guardrails.md`
-3. `docs/CANONICAL-MOCKUPS.md` when the task touches a page with a canonical mockup
-4. `docs/assign-engine-spec-2026-05-03.md` when the task touches Assign, Tasks, requests, approvals, or related RPCs
+1. `docs/00_PROJECT_OS/06_ART_AND_DESIGN_SYSTEM.md`
+2. `docs/ui-standards.md`
+3. `docs/claude-web-dev-guardrails.md`
+4. `docs/CANONICAL-MOCKUPS.md` when the task touches a page with a canonical mockup
+5. `docs/assign-engine-spec-2026-05-03.md` when the task touches Assign, Tasks, requests, approvals, or related RPCs
 
 ## Operating Rule
 

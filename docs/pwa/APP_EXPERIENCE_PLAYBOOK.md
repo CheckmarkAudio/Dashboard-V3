@@ -4,6 +4,8 @@ Purpose: define how Checkmark Workspace should feel and behave as an installed a
 
 This document turns the app vision into buildable standards. Use it alongside `PWA_STRATEGY.md`, `MOBILE_ROUTE_INVENTORY.md`, and `MOBILE_AUTH_QA.md`.
 
+For the broader project mission, shared language, operating laws, roles, history protocol, and design memory, start with `docs/00_PROJECT_OS/README.md`.
+
 ## Experience North Star
 
 Checkmark Workspace should feel like a professional studio control surface:
