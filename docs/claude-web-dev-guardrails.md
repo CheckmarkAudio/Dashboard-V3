@@ -6,6 +6,7 @@ Use this before and during Claude Code web-development sessions. The goal is to 
 
 These guardrails support the project cornerstones:
 
+- beautiful, refined, worker-magnetic Checkmark operating system
 - clean and DRY code
 - performance-conscious UI
 - accessible interactions
@@ -16,9 +17,15 @@ These guardrails support the project cornerstones:
 Before editing files:
 
 - For a fresh session, run `.claude/commands/start-session.md` before coding.
+- Read `docs/00_PROJECT_OS/README.md`.
+- Read `docs/00_PROJECT_OS/01_VISION_AND_PURPOSE.md` when the request affects vision, roadmap, file organization, or broad UI/UX direction.
+- Read `docs/AI_CODERS_READ_THIS_FIRST.md`.
 - Read `docs/SESSION_CONTEXT.md`.
 - Read `docs/PROJECT_STATE.md`.
+- Read `docs/pwa/APP_BUILD_ROADMAP.md` when the request affects app/web phase order.
 - For UI, layout, theme, widget chrome, spacing, borders, typography, or visual polish, use the repo-local Claude skill at `.claude/skills/ui-consistency/SKILL.md`.
+- For broad planning, repo organization, roadmap sequencing, role lanes, accountability, or "where were we" work, use `.claude/skills/project-os/SKILL.md`.
+- For worker-facing Tasks, Schedule, Messages, Forum, Dashboard widgets, or navigation clarity, use `.claude/skills/worker-obviousness/SKILL.md`.
 - For visual standards, read `docs/ui-standards.md`.
 - For Assign, Tasks, task requests, approvals, or related RPCs, read `docs/assign-engine-spec-2026-05-03.md`.
 - For merge readiness, use `docs/pr-acceptance-checklist.md`.
@@ -31,6 +38,8 @@ If the user asks for a visual change, identify whether it is:
 - a page layout change
 - a behavior change
 - a backend/data change hidden behind UI
+- a worker-obviousness change that needs a focused UX plan
+- a Project OS/source-of-truth change that needs history or role-lane updates
 
 Do not silently turn one category into another.
 

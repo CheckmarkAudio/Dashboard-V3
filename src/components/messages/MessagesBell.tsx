@@ -99,15 +99,16 @@ export default function MessagesBell() {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label={`Messages${unread > 0 ? `, ${unread} unread` : ''}`}
+        aria-label={`Open messages${unread > 0 ? `, ${unread} unread` : ''}`}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`relative shrink-0 p-2 rounded-lg text-text-muted hover:bg-surface-hover hover:text-gold transition-colors focus-ring ${
+        className={`relative shrink-0 inline-flex h-10 items-center gap-2 px-2.5 rounded-xl text-text-muted hover:bg-surface-hover hover:text-gold transition-colors focus-ring ${
           open ? 'text-gold bg-white/[0.04] ring-1 ring-white/10' : ''
         }`}
         title="Messages"
       >
         <MessageSquare size={16} aria-hidden="true" />
+        <span className="hidden xl:inline text-[12px] font-bold tracking-tight">Messages</span>
         {unread > 0 && (
           <span
             className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums ring-2 ring-bg"
@@ -138,7 +139,10 @@ export default function MessagesBell() {
           className="w-[360px] max-w-[calc(100vw-32px)] bg-surface/95 backdrop-blur-xl border border-white/[0.06] rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.18),0_8px_24px_rgba(0,0,0,0.32),0_16px_48px_rgba(0,0,0,0.4)] flex flex-col overflow-hidden focus:outline-none"
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.05]">
-            <p className="text-[13px] font-bold text-text">Messages</p>
+            <div>
+              <p className="text-[13px] font-bold text-text">Messages</p>
+              <p className="text-[11px] text-text-light">Direct chats with teammates</p>
+            </div>
             <div className="flex items-center gap-1">
               <button
                 type="button"
@@ -197,6 +201,7 @@ export default function MessagesBell() {
 function ThreadRow({ thread, onOpen }: { thread: DmThread; onOpen: () => void }) {
   const label = dmThreadLabel(thread)
   const unread = thread.unread_count > 0
+  const unreadLabel = thread.unread_count > 9 ? '9+' : String(thread.unread_count)
   const lead = thread.members[0] ?? null
   const preview = thread.latest_content?.trim() || 'No messages yet'
   const senderPrefix =
@@ -208,6 +213,7 @@ function ThreadRow({ thread, onOpen }: { thread: DmThread; onOpen: () => void })
     <button
       type="button"
       onClick={onOpen}
+      aria-label={`Open message thread with ${label}${unread ? `, ${thread.unread_count} unread` : ''}`}
       className="w-full flex items-center gap-3 px-2 py-2 rounded-xl text-left hover:bg-surface-hover transition-colors focus-ring"
     >
       <span className="relative shrink-0">
@@ -229,6 +235,11 @@ function ThreadRow({ thread, onOpen }: { thread: DmThread; onOpen: () => void })
           {senderPrefix}{preview}
         </span>
       </span>
+      {unread && (
+        <span className="shrink-0 inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full bg-rose-500/15 border border-rose-400/30 text-[10px] font-bold text-rose-400 tabular-nums">
+          {unreadLabel} new
+        </span>
+      )}
     </button>
   )
 }

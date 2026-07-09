@@ -602,8 +602,9 @@ export default function Layout() {
                 TikTok / YouTube icons that were here as frontend-only
                 stubs) removed per user direction "remove the small
                 social media icons in the very top of the website." The
-                live follower-count SocialStatsBar on Overview/Hub stays —
-                that's a separate component with real counts. */}
+                live follower-count SocialStatsBar used by Overview/Hub stays —
+                that's a separate component with real counts and compact route
+                action-strip variants. */}
 
             {/* Theme toggle — light/dark. System preference stays accessible
                 via ThemeContext for anyone who wants a future Settings UI. */}

@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
 import type { TeamMember } from '../../types'
 
@@ -168,6 +169,37 @@ function MemberPill({ member }: { member: TeamMember }) {
   )
 }
 
+function useMemberCarouselSize(): number {
+  const [size, setSize] = useState(6)
+
+  useEffect(() => {
+    const queries = [
+      { media: '(min-width: 1280px)', size: 7 },
+      { media: '(min-width: 1024px)', size: 6 },
+      { media: '(min-width: 768px)', size: 5 },
+      { media: '(min-width: 520px)', size: 3 },
+    ]
+
+    const update = () => {
+      const match = queries.find((query) => window.matchMedia(query.media).matches)
+      setSize(match?.size ?? 2)
+    }
+
+    update()
+    const listeners = queries.map((query) => {
+      const media = window.matchMedia(query.media)
+      media.addEventListener('change', update)
+      return media
+    })
+
+    return () => {
+      listeners.forEach((media) => media.removeEventListener('change', update))
+    }
+  }, [])
+
+  return size
+}
+
 // ─── Social pill ────────────────────────────────────────────────────
 
 /**
@@ -186,7 +218,35 @@ function MemberPill({ member }: { member: TeamMember }) {
  * ring with a gold hint for tactile feedback. The brand-colored
  * glyph inside provides per-platform identity.
  */
-function SocialStat({ channel }: { channel: SocialChannel }) {
+function SocialStat({
+  channel,
+  variant = 'bubble',
+}: {
+  channel: SocialChannel
+  variant?: 'bubble' | 'compact'
+}) {
+  if (variant === 'compact') {
+    return (
+      <a
+        href={channel.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group inline-flex shrink-0 rounded-full focus-ring"
+        aria-label={`${channel.label} — ${formatCount(channel.count)} followers`}
+        title={`${channel.label} — ${formatCount(channel.count)} followers`}
+      >
+        <span className="flex h-9 items-center justify-center gap-1.5 rounded-full bg-surface/90 px-2.5 ring-1 ring-border transition-colors group-hover:bg-surface-hover group-hover:ring-gold/40">
+          <span className={PLATFORM_COLOR[channel.platform]}>
+            <PlatformIcon platform={channel.platform} size={14} />
+          </span>
+          <span className="text-[11px] font-bold tabular-nums text-text">
+            {formatCount(channel.count)}
+          </span>
+        </span>
+      </a>
+    )
+  }
+
   return (
     <a
       href={channel.href}
@@ -212,25 +272,32 @@ function SocialStat({ channel }: { channel: SocialChannel }) {
 //
 // 2026-05-06 — split: <MemberHighlights /> renders ONLY member pills
 // now (its own row beneath the page title). <SocialStatsBar /> is a
-// named export that renders the social tiles standalone — the
-// Dashboard / Hub page wires it into PageHeader's `actions` slot so
-// social sits right-justified on the title row.
+// named export that renders the social tiles standalone. Overview and
+// Hub use its compact variant in their stable top action strips.
 
 /**
- * SocialStatsBar — the four social media bubbles + counts as a
- * standalone bar. Used inside PageHeader's `actions` slot on
- * Dashboard + Hub so they read on the same row as the page title.
- * Self-contained: no props, queries nothing — just maps
+ * SocialStatsBar — the four social media links + counts as a
+ * standalone bar. Self-contained: no queries, just maps
  * SOCIAL_CHANNELS to <SocialStat /> rows.
  */
-export function SocialStatsBar() {
+export function SocialStatsBar({
+  variant = 'bubble',
+  className = '',
+}: {
+  variant?: 'bubble' | 'compact'
+  className?: string
+} = {}) {
   return (
     <div
-      className="flex items-center gap-2 shrink-0"
+      className={[
+        'flex items-center shrink-0',
+        variant === 'compact' ? 'gap-1.5 flex-wrap' : 'gap-2',
+        className,
+      ].filter(Boolean).join(' ')}
       aria-label="Checkmark Audio social media snapshot"
     >
       {SOCIAL_CHANNELS.map((channel) => (
-        <SocialStat key={channel.platform} channel={channel} />
+        <SocialStat key={channel.platform} channel={channel} variant={variant} />
       ))}
     </div>
   )
@@ -247,6 +314,8 @@ export function SocialStatsBar() {
  * with `gap-3` between, leaving the rest of the row free.
  */
 export default function MemberHighlights({ actions }: { actions?: ReactNode } = {}) {
+  const [page, setPage] = useState(0)
+  const pageSize = useMemberCarouselSize()
   const { data: members = [] } = useQuery({
     queryKey: teamMemberKeys.list(),
     queryFn: fetchTeamMembers,
@@ -254,22 +323,54 @@ export default function MemberHighlights({ actions }: { actions?: ReactNode } = 
   })
 
   const active = members.filter((m) => (m.status ?? 'active') === 'active')
+  const pageCount = Math.max(1, Math.ceil(active.length / pageSize))
+  const visibleMembers = useMemo(() => {
+    const start = page * pageSize
+    return active.slice(start, start + pageSize)
+  }, [active, page, pageSize])
+  const showCarouselControls = active.length > pageSize
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount - 1))
+  }, [pageCount])
+
   if (active.length === 0 && !actions) return null
 
   // Skin pass 2026-05-06 — outer flex container so the bordered
   // member panel auto-sizes to its content (members), and the
   // optional `actions` slot is RIGHT-justified to the far edge
-  // of the row via `ml-auto`. `min-w-0` on the panel still allows
-  // it to shrink (with internal overflow-x-auto handling many
-  // members) before the actions get crowded off-row.
+  // of the row via `ml-auto`. Carousel controls page through the
+  // team without turning the strip into a sideways scroll area.
   return (
     <div className="flex items-center gap-3">
-      <div className="rounded-xl border border-border bg-surface px-2 py-1.5 min-w-0">
-        <div className="flex gap-1 overflow-x-auto [scrollbar-width:thin]">
-          {active.map((member) => (
+      <div className="flex min-w-0 items-center gap-1.5 rounded-xl border border-border bg-surface px-2 py-1.5">
+        {showCarouselControls && (
+          <button
+            type="button"
+            onClick={() => setPage((current) => (current === 0 ? pageCount - 1 : current - 1))}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text focus-ring"
+            aria-label="Previous team members"
+          >
+            <ChevronLeft size={16} strokeWidth={2.2} aria-hidden="true" />
+          </button>
+        )}
+
+        <div className="grid min-w-0 grid-cols-2 gap-1 min-[520px]:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">
+          {visibleMembers.map((member) => (
             <MemberPill key={member.id} member={member} />
           ))}
         </div>
+
+        {showCarouselControls && (
+          <button
+            type="button"
+            onClick={() => setPage((current) => (current + 1) % pageCount)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text focus-ring"
+            aria-label="Next team members"
+          >
+            <ChevronRight size={16} strokeWidth={2.2} aria-hidden="true" />
+          </button>
+        )}
       </div>
       {actions && <div className="shrink-0 ml-auto">{actions}</div>}
     </div>

@@ -22,7 +22,7 @@ import { inferForumKind, uploadForumFile } from '../lib/forum/upload'
 import { useToast } from '../components/Toast'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
-import { AlertCircle, Check, Clock, Edit2, Hash, MoreHorizontal, Pin, PinOff, Plus, Send, Trash2, Users } from 'lucide-react'
+import { AlertCircle, Check, Clock, Edit2, Hash, MessageSquare, MoreHorizontal, Pin, PinOff, Plus, Send, Trash2, Users } from 'lucide-react'
 import type { TeamMember } from '../types'
 
 type Channel = {
@@ -781,30 +781,50 @@ export default function Content() {
               (dmThreadLabel). "+ New" opens the member picker. */}
           <div className="px-3 pt-3 pb-2 border-t border-border/50">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-semibold text-text-light uppercase tracking-wider">Direct Messages</p>
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-[10px] font-bold text-text uppercase tracking-wider">
+                  <MessageSquare size={11} className="text-gold" aria-hidden="true" />
+                  Direct Messages
+                </p>
+                <p className="text-[10px] text-text-light mt-0.5">Private teammate chats</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowNewMessage(true)}
                 aria-label="New direct message"
                 title="New direct message"
-                className="inline-flex items-center justify-center w-5 h-5 rounded-md text-text-light hover:text-gold hover:bg-gold/10 transition-colors focus-ring"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-gold hover:bg-gold/10 transition-colors focus-ring"
               >
                 <Plus size={12} strokeWidth={2.5} aria-hidden="true" />
+                New
               </button>
             </div>
             <div className="space-y-0.5">
               {dmThreads.length === 0 && !dmThreadsQuery.isLoading && (
-                <p className="text-[11px] text-text-light italic px-1 py-1">No conversations yet</p>
+                <div className="rounded-xl border border-border/70 bg-surface-alt/35 px-2.5 py-2">
+                  <p className="text-[11px] font-semibold text-text">No direct messages yet.</p>
+                  <p className="mt-0.5 text-[10px] text-text-light">Start a private chat with a teammate.</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewMessage(true)}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-gold px-2.5 py-1.5 text-[11px] font-bold text-black hover:bg-gold-muted transition-colors focus-ring"
+                  >
+                    <Plus size={11} strokeWidth={2.5} aria-hidden="true" />
+                    Start a message
+                  </button>
+                </div>
               )}
               {dmThreads.map((t) => {
                 const label = dmThreadLabel(t)
                 const lead = t.members[0] ?? null
                 const isActive = activeChannel?.id === t.channel_id
                 const unread = t.unread_count > 0
+                const unreadLabel = t.unread_count > 9 ? '9+' : String(t.unread_count)
                 return (
                   <button
                     key={t.channel_id}
                     onClick={() => goToDm(t.channel_id)}
+                    aria-label={`Open direct message with ${label}${unread ? `, ${t.unread_count} unread` : ''}`}
                     className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all ${
                       isActive ? 'bg-gold/10 text-gold' : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
                     }`}
@@ -818,6 +838,11 @@ export default function Content() {
                     <span className={`text-[12px] tracking-tight truncate ${unread && !isActive ? 'font-bold text-text' : 'font-medium'}`}>
                       {label}
                     </span>
+                    {unread && !isActive && (
+                      <span className="ml-auto shrink-0 inline-flex items-center justify-center min-w-[20px] h-[16px] px-1 rounded-full bg-rose-500/15 border border-rose-400/30 text-[9px] font-bold text-rose-400 tabular-nums">
+                        {unreadLabel}
+                      </span>
+                    )}
                   </button>
                 )
               })}

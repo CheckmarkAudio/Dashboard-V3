@@ -22,6 +22,15 @@ bash .claude/hooks/check-drift.sh
 
 If output is non-empty, parse it and surface each `[N/4]` line as its own finding. Cross-check against `feedback_docs_drift_session_start.md` memory.
 
+Also verify the Project OS front door still exists and is referenced by the main startup docs:
+
+- `docs/00_PROJECT_OS/README.md`
+- `docs/AI_CODERS_READ_THIS_FIRST.md`
+- `.claude/commands/start-session.md`
+- `docs/pwa/APP_BUILD_ROADMAP.md`
+
+Flag drift if any of those files stop pointing to the Project OS layer or if another doc claims to own master phase order instead of `docs/pwa/APP_BUILD_ROADMAP.md`.
+
 ## 2. Memory pointer staleness
 
 For every memory file under `~/.claude/projects/-Users-bridges-GITHUB-Dashboard-V3/memory/`, scan for references to:

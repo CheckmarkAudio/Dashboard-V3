@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checkmark Worker Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #15151b;
+      --shell: #15151b;
+      --surface: #1e1e25;
+      --surface-2: #26262d;
+      --hover: #2e2e36;
+      --border: #34343d;
+      --border-light: #4d4d57;
+      --text: #e2e2ea;
+      --muted: #bcbcc6;
+      --dim: #7e7e88;
+      --gold: #C9A84C;
+      --gold-muted: #A8893D;
+      --gold-soft: rgba(201, 168, 76, 0.13);
+      --purple: #a78bfa;
+      --green: #34d399;
+      --rose: #fb7185;
+      --blue: #38bdf8;
+      --radius: 14px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body { padding: 16px; }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .app-shell {
+      min-height: calc(100vh - 32px);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: var(--shell);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.32);
+    }
+
+    .sidebar {
+      display: none;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 5px 8px 20px;
+    }
+
+    .logo {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: var(--gold);
+      color: #050506;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 22px;
+    }
+
+    .brand strong { display: block; font-size: 15px; }
+    .brand span { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+
+    .nav-label {
+      margin: 14px 10px 8px;
+      color: var(--dim);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      font-weight: 800;
+    }
+
+    .nav {
+      display: grid;
+      gap: 5px;
+    }
+
+    .nav button {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: transparent;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      transition: background 160ms ease, color 160ms ease;
+    }
+
+    .nav button:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+    .nav button.active { background: var(--gold-soft); color: var(--gold); box-shadow: inset 3px 0 0 var(--gold); }
+    .nav .icon { width: 20px; text-align: center; }
+
+    .main {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      flex: 1;
+    }
+
+    .topbar {
+      min-height: 56px;
+      border-bottom: 1px solid rgba(52,52,61,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 8px 24px;
+      background: rgba(30,30,37,0.72);
+      backdrop-filter: blur(12px);
+      position: relative;
+    }
+
+    .brand-live {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-live img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      flex: 0 0 auto;
+    }
+
+    .brand-live strong {
+      display: block;
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-live span {
+      display: block;
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .topnav {
+      min-height: 48px;
+      border-bottom: 1px solid rgba(52,52,61,0.6);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0 22px;
+      background: rgba(30,30,37,0.52);
+      overflow-x: auto;
+    }
+
+    .topnav button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      height: 40px;
+      padding: 0 14px;
+      border-radius: 22px;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 14px;
+      font-weight: 750;
+      white-space: nowrap;
+      transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .topnav button:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.035);
+    }
+
+    .topnav button.active {
+      color: var(--gold);
+      background: linear-gradient(180deg, rgba(201,168,76,0.18), rgba(201,168,76,0.08));
+      box-shadow: inset 0 0 0 1px rgba(201,168,76,0.22);
+    }
+
+    .title-line { min-width: 0; margin-bottom: 18px; }
+    .eyebrow { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+    h1 { margin: 3px 0 0; font-size: 26px; letter-spacing: -0.02em; }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .pill, .icon-btn {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--text);
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 13px;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .icon-btn {
+      width: 42px;
+      padding: 0;
+      position: relative;
+    }
+
+    .dot {
+      position: absolute;
+      top: -4px;
+      right: -3px;
+      min-width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: var(--rose);
+      color: #13050a;
+      font-size: 11px;
+      font-weight: 900;
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--shell);
+    }
+
+    .avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--gold), var(--purple));
+      display: grid;
+      place-items: center;
+      color: #050506;
+      font-weight: 900;
+    }
+
+    .content {
+      min-width: 0;
+      padding: 24px 32px 32px;
+      overflow: auto;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .overview-grid {
+      grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.85fr);
+      align-items: start;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .card-head {
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .card-title { font-weight: 900; font-size: 15px; }
+    .card-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .card-body { padding: 14px; }
+
+    .row-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .row {
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.03);
+      border-radius: 12px;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .check {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 2px solid var(--gold);
+      margin-top: 1px;
+    }
+
+    .row strong { display: block; font-size: 13px; }
+    .meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .tag { border-radius: 999px; background: rgba(255,255,255,0.06); color: var(--muted); padding: 4px 8px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+    .tag.gold { color: var(--gold); background: var(--gold-soft); }
+    .tag.green { color: var(--green); background: rgba(52,211,153,0.12); }
+    .tag.blue { color: var(--blue); background: rgba(56,189,248,0.12); }
+    .tag.rose { color: var(--rose); background: rgba(251,113,133,0.12); }
+
+    .primary {
+      border: 0;
+      border-radius: 16px;
+      background: var(--gold);
+      color: #050506;
+      min-height: 38px;
+      padding: 0 14px;
+      font-weight: 900;
+    }
+
+    .secondary {
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      background: var(--surface-2);
+      color: var(--text);
+      min-height: 38px;
+      padding: 0 14px;
+      font-weight: 800;
+    }
+
+    .task-layout {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .pane-nav {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px;
+      display: grid;
+      gap: 6px;
+      position: sticky;
+      top: 14px;
+    }
+
+    .pane-nav button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 12px;
+      padding: 11px;
+      text-align: left;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 9px;
+      align-items: center;
+    }
+
+    .pane-nav button.active { background: var(--surface-2); color: var(--text); outline: 1px solid var(--border-light); }
+    .pane-nav small { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }
+
+    .chat-layout, .schedule-layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .channel {
+      border: 0;
+      width: 100%;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--muted);
+      text-align: left;
+      padding: 10px 11px;
+      font-weight: 750;
+    }
+    .channel:hover, .channel.active { color: var(--text); background: var(--surface-2); }
+
+    .message {
+      display: flex;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .mini-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      display: grid;
+      place-items: center;
+      color: var(--gold);
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+
+    .message p { margin: 3px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+    .schedule-options {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .option {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      padding: 16px;
+      min-height: 160px;
+      text-align: left;
+    }
+
+    .option:hover { background: var(--hover); border-color: var(--border-light); }
+    .option .big { font-size: 22px; margin-bottom: 10px; }
+    .option strong { display: block; font-size: 16px; margin-bottom: 6px; }
+    .option span { color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+    .drawer {
+      position: fixed;
+      inset: 0 0 0 auto;
+      width: min(390px, 100%);
+      background: #101015;
+      border-left: 1px solid var(--border);
+      box-shadow: -24px 0 60px rgba(0,0,0,0.45);
+      transform: translateX(105%);
+      transition: transform 180ms ease;
+      z-index: 20;
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto minmax(0,1fr) auto;
+      gap: 12px;
+    }
+    .drawer.open { transform: translateX(0); }
+    .drawer h2 { margin: 0; font-size: 20px; }
+
+    .composer {
+      display: flex;
+      gap: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 8px;
+    }
+    .composer input {
+      flex: 1;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      min-width: 0;
+    }
+
+    .fake-banner {
+      position: fixed;
+      left: 50%;
+      bottom: 10px;
+      transform: translateX(-50%);
+      border: 1px solid rgba(255,214,10,0.35);
+      background: rgba(5,5,6,0.85);
+      color: var(--gold);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      z-index: 30;
+      pointer-events: none;
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 980px) {
+      body { padding: 0; }
+      .app-shell { min-height: 100vh; border-radius: 0; }
+      .sidebar { display: none; }
+      .overview-grid, .task-layout, .chat-layout, .schedule-layout { grid-template-columns: 1fr; }
+      .pane-nav { position: static; grid-auto-flow: column; grid-auto-columns: minmax(190px, 1fr); overflow-x: auto; }
+      .schedule-options { grid-template-columns: 1fr; }
+      .topbar { padding: 8px 14px; }
+      .topnav { padding: 0 12px; }
+      .content { padding: 18px 14px 28px; }
+      h1 { font-size: 22px; }
+      .pill { display: none; }
+      .brand-live span { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">✓</div>
+        <div>
+          <strong>Checkmark Audio</strong>
+          <span>workspace</span>
+        </div>
+      </div>
+
+      <div class="nav-label">Main</div>
+      <nav class="nav" aria-label="Preview navigation">
+        <button class="active" data-route="overview"><span class="icon">▦</span>Overview</button>
+        <button data-route="tasks"><span class="icon">☑</span>Tasks</button>
+        <button data-route="calendar"><span class="icon">◷</span>Calendar</button>
+        <button data-route="booking"><span class="icon">◼</span>Booking</button>
+        <button data-route="forum"><span class="icon">◌</span>Forum</button>
+      </nav>
+
+      <div class="nav-label">Worker</div>
+      <nav class="nav" aria-label="Worker shortcuts">
+        <button data-route="schedule"><span class="icon">⏱</span>Schedule</button>
+        <button data-route="profile"><span class="icon">◎</span>Profile</button>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="brand-live">
+          <img src="/icons/app-icon-192.png" alt="Checkmark Audio logo" />
+          <div>
+            <strong>Checkmark Audio</strong>
+            <span>Workspace</span>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button class="pill" data-route="tasks">☑ My Tasks</button>
+          <button class="icon-btn" id="messages-button" aria-label="Messages">
+            ✉
+            <span class="dot">3</span>
+          </button>
+          <div class="avatar" title="Alex Rivera">AR</div>
+        </div>
+      </header>
+
+      <nav class="topnav" aria-label="Main navigation">
+        <button class="active" data-route="overview">▦ Overview</button>
+        <button data-route="tasks">☑ Tasks</button>
+        <button data-route="calendar">◷ Calendar</button>
+        <button data-route="booking">◼ Booking</button>
+        <button data-route="forum">◌ Forum</button>
+        <button data-route="schedule">⏱ Schedule</button>
+      </nav>
+
+      <section class="content">
+        <div class="title-line">
+          <div class="eyebrow" id="eyebrow">Today</div>
+          <h1 id="page-title">Overview</h1>
+        </div>
+
+        <section class="route" id="route-overview">
+          <div class="grid overview-grid">
+            <div class="grid">
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <div class="card-title">Good morning, Alex</div>
+                    <div class="card-sub">Your studio work for today</div>
+                  </div>
+                  <button class="primary" data-route="tasks">Start tasks</button>
+                </div>
+                <div class="card-body row-list">
+                  <div class="row">
+                    <span class="check"></span>
+                    <div>
+                      <strong>Prep Studio A before 2:00 session</strong>
+                      <div class="meta">Due today · Assigned to you</div>
+                    </div>
+                    <span class="tag gold">Next</span>
+                  </div>
+                  <div class="row">
+                    <span class="check"></span>
+                    <div>
+                      <strong>Upload client bounce to shared drive</strong>
+                      <div class="meta">From Bridget · Capture</div>
+                    </div>
+                    <span class="tag">Task</span>
+                  </div>
+                  <div class="row">
+                    <span class="check"></span>
+                    <div>
+                      <strong>Check vocal booth headphones</strong>
+                      <div class="meta">Maintenance checklist</div>
+                    </div>
+                    <span class="tag blue">Checklist</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <div class="card-title">Schedule</div>
+                    <div class="card-sub">Today: 11:00 AM - 5:00 PM</div>
+                  </div>
+                  <button class="secondary" data-route="schedule">Request change</button>
+                </div>
+                <div class="card-body">
+                  <div class="row">
+                    <span class="tag green">On shift</span>
+                    <div>
+                      <strong>Studio coverage</strong>
+                      <div class="meta">You are scheduled today. Gavin joins at 1:00 PM.</div>
+                    </div>
+                    <span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <div class="card-title">Messages</div>
+                    <div class="card-sub">3 unread updates</div>
+                  </div>
+                  <button class="secondary" id="open-messages-secondary">Open</button>
+                </div>
+                <div class="card-body row-list">
+                  <div class="message">
+                    <div class="mini-avatar">B</div>
+                    <div>
+                      <strong>Bridget</strong>
+                      <p>Can you check if the lyric video files are ready?</p>
+                    </div>
+                  </div>
+                  <div class="message">
+                    <div class="mini-avatar">G</div>
+                    <div>
+                      <strong>Gavin</strong>
+                      <p>I moved the session notes into the client folder.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <div class="card-title">Next booking</div>
+                    <div class="card-sub">2:00 PM · Studio A</div>
+                  </div>
+                  <button class="secondary" data-route="booking">Details</button>
+                </div>
+                <div class="card-body">
+                  <strong>Vocal tracking - Marisol</strong>
+                  <div class="meta">Engineer: Gavin · Assistant: Alex</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="route hidden" id="route-tasks">
+          <div class="task-layout">
+            <aside class="pane-nav" aria-label="Task sections">
+              <button class="active" data-pane="my">
+                <span>☑</span><span><strong>My Tasks</strong><small>Your personal queue</small></span><span class="tag gold">4</span>
+              </button>
+              <button data-pane="checklist">
+                <span>✓</span><span><strong>Checklist</strong><small>Team maintenance checks</small></span><span class="tag">6</span>
+              </button>
+              <button data-pane="team">
+                <span>◉</span><span><strong>Team Tasks</strong><small>Shared member work</small></span><span class="tag">9</span>
+              </button>
+              <button data-pane="studio">
+                <span>▣</span><span><strong>Studio Tasks</strong><small>Room and studio work</small></span><span class="tag">7</span>
+              </button>
+            </aside>
+
+            <div class="card task-pane" id="pane-my">
+              <div class="card-head">
+                <div><div class="card-title">My Tasks</div><div class="card-sub">What you personally need to do now</div></div>
+                <button class="primary">+ New task</button>
+              </div>
+              <div class="card-body row-list">
+                <div class="row"><span class="check"></span><div><strong>Prep Studio A before 2:00 session</strong><div class="meta">Due today · Deliver</div></div><span class="tag gold">Priority</span></div>
+                <div class="row"><span class="check"></span><div><strong>Upload bounce for Bridget</strong><div class="meta">Due today · Capture</div></div><span class="tag">Assigned</span></div>
+                <div class="row"><span class="check"></span><div><strong>Write down mic chain for Marisol</strong><div class="meta">No due date</div></div><span class="tag">Self</span></div>
+                <div class="row"><span class="check"></span><div><strong>Confirm headphones are working</strong><div class="meta">Checklist-related</div></div><span class="tag blue">Today</span></div>
+              </div>
+            </div>
+
+            <div class="card task-pane hidden" id="pane-checklist">
+              <div class="card-head"><div><div class="card-title">Checklist</div><div class="card-sub">Maintenance checks the team verifies</div></div><span class="tag green">3 of 6 done</span></div>
+              <div class="card-body row-list">
+                <div class="row"><span class="check"></span><div><strong>Console wiped down</strong><div class="meta">Daily · anyone can verify</div></div><span class="tag">Daily</span></div>
+                <div class="row"><span class="check"></span><div><strong>Cables coiled and labeled</strong><div class="meta">Daily · checked by Gavin yesterday</div></div><span class="tag">Daily</span></div>
+                <div class="row"><span class="check"></span><div><strong>Mic locker inventory spot check</strong><div class="meta">Weekly · all members</div></div><span class="tag blue">Weekly</span></div>
+              </div>
+            </div>
+
+            <div class="card task-pane hidden" id="pane-team">
+              <div class="card-head"><div><div class="card-title">Team Tasks</div><div class="card-sub">Work assigned across people</div></div><button class="secondary">Priority only</button></div>
+              <div class="card-body row-list">
+                <div class="row"><span class="check"></span><div><strong>Gavin - edit drum stem notes</strong><div class="meta">Assigned to Gavin</div></div><span class="tag">Take?</span></div>
+                <div class="row"><span class="check"></span><div><strong>Bridget - post studio clip</strong><div class="meta">Assigned to Bridget</div></div><span class="tag">Share</span></div>
+              </div>
+            </div>
+
+            <div class="card task-pane hidden" id="pane-studio">
+              <div class="card-head"><div><div class="card-title">Studio Tasks</div><div class="card-sub">Room and studio work</div></div><span class="tag">By room</span></div>
+              <div class="card-body row-list">
+                <div class="tag gold">Control Room</div>
+                <div class="row"><span class="check"></span><div><strong>Back up current session drive</strong><div class="meta">Control Room</div></div><span class="tag">Studio</span></div>
+                <div class="tag gold">Studio A</div>
+                <div class="row"><span class="check"></span><div><strong>Replace music stand batteries</strong><div class="meta">Studio A</div></div><span class="tag">Studio</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="route hidden" id="route-forum">
+          <div class="chat-layout">
+            <aside class="card">
+              <div class="card-head"><div><div class="card-title">Forum</div><div class="card-sub">Channels and team updates</div></div></div>
+              <div class="card-body">
+                <button class="channel active"># general</button>
+                <button class="channel"># sessions</button>
+                <button class="channel"># media</button>
+                <button class="channel"># ideas</button>
+                <button class="channel">New message...</button>
+              </div>
+            </aside>
+            <section class="card">
+              <div class="card-head"><div><div class="card-title"># general</div><div class="card-sub">Team conversation</div></div><button class="secondary" id="forum-new-message">New message</button></div>
+              <div class="card-body">
+                <div class="message"><div class="mini-avatar">G</div><div><strong>Gavin</strong><p>I could not find the direct messages at first. I checked Forum and then the top right.</p></div></div>
+                <div class="message"><div class="mini-avatar">B</div><div><strong>Bridget</strong><p>Can someone make sure the booking room labels match the calendar?</p></div></div>
+                <div class="message"><div class="mini-avatar">A</div><div><strong>Alex</strong><p>Studio A is ready for the afternoon session.</p></div></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="route hidden" id="route-schedule">
+          <div class="grid">
+            <div class="card">
+              <div class="card-head">
+                <div><div class="card-title">Schedule</div><div class="card-sub">Choose the kind of schedule help you need</div></div>
+              </div>
+              <div class="card-body schedule-options">
+                <button class="option">
+                  <div class="big">↻</div>
+                  <strong>Set weekly schedule</strong>
+                  <span>Use this when your normal weekly availability changes.</span>
+                </button>
+                <button class="option">
+                  <div class="big">◷</div>
+                  <strong>Request one-time change</strong>
+                  <span>Use this for one specific day or one shift change.</span>
+                </button>
+                <button class="option">
+                  <div class="big">☀</div>
+                  <strong>Request time off</strong>
+                  <span>Use this when you will be away, unavailable, or on vacation.</span>
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><div><div class="card-title">This week</div><div class="card-sub">Fake preview schedule</div></div></div>
+              <div class="card-body row-list">
+                <div class="row"><span class="tag green">Today</span><div><strong>Wednesday · 11:00 AM - 5:00 PM</strong><div class="meta">Studio coverage</div></div><span></span></div>
+                <div class="row"><span class="tag">Thu</span><div><strong>Thursday · 12:00 PM - 6:00 PM</strong><div class="meta">Pending one-time change</div></div><span class="tag gold">Pending</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="route hidden" id="route-calendar">
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Calendar</div><div class="card-sub">Bookings and who is on shift</div></div><button class="secondary" data-route="schedule">Request schedule</button></div>
+            <div class="card-body row-list">
+              <div class="row"><span class="tag blue">11 AM</span><div><strong>Alex on shift</strong><div class="meta">Schedule overlay</div></div><span></span></div>
+              <div class="row"><span class="tag gold">2 PM</span><div><strong>Vocal tracking - Marisol</strong><div class="meta">Studio A · Gavin engineer</div></div><span></span></div>
+              <div class="row"><span class="tag">5 PM</span><div><strong>Mix review call</strong><div class="meta">Control Room</div></div><span></span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="route hidden" id="route-booking">
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Booking</div><div class="card-sub">Sessions, clients, and booking work</div></div><button class="primary">+ Book a session</button></div>
+            <div class="card-body row-list">
+              <div class="row"><span class="tag gold">Today</span><div><strong>Vocal tracking - Marisol</strong><div class="meta">2:00 PM · Studio A</div></div><span></span></div>
+              <div class="row"><span class="tag">Fri</span><div><strong>Band demo prep</strong><div class="meta">6:00 PM · Control Room</div></div><span></span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="route hidden" id="route-profile">
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Profile</div><div class="card-sub">Your worker profile</div></div></div>
+            <div class="card-body row-list">
+              <div class="row"><span class="avatar">AR</span><div><strong>Alex Rivera</strong><div class="meta">Engineer assistant · member</div></div><span></span></div>
+              <div class="row"><span class="tag">Schedule</span><div><strong>Normal weekly schedule</strong><div class="meta">Tue-Sat, varies by bookings</div></div><button class="secondary" data-route="schedule">Change</button></div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <aside class="drawer" id="messages-drawer" aria-label="Messages drawer">
+    <div>
+      <button class="secondary" id="close-drawer" style="float:right">Close</button>
+      <h2>Messages</h2>
+      <div class="meta">Direct messages and team chats</div>
+    </div>
+    <div class="row-list" style="overflow:auto">
+      <div class="message"><div class="mini-avatar">B</div><div><strong>Bridget</strong><p>Can you check if the lyric video files are ready?</p></div></div>
+      <div class="message"><div class="mini-avatar">G</div><div><strong>Gavin</strong><p>I moved the session notes into the client folder.</p></div></div>
+      <div class="message"><div class="mini-avatar">M</div><div><strong>Matthan</strong><p>What time should I come in tomorrow?</p></div></div>
+    </div>
+    <div class="composer">
+      <input placeholder="Message the team..." aria-label="Message composer" />
+      <button class="primary">Send</button>
+    </div>
+  </aside>
+
+  <div class="fake-banner">Fake data · AI worker usability preview · no login or database</div>
+
+  <script>
+    const routes = {
+      overview: ['Today', 'Overview'],
+      tasks: ['Daily work', 'Tasks'],
+      calendar: ['Schedule and bookings', 'Calendar'],
+      booking: ['Studio sessions', 'Booking'],
+      forum: ['Team communication', 'Forum'],
+      schedule: ['Availability', 'Schedule'],
+      profile: ['Account', 'Profile']
+    };
+
+    function setRoute(route) {
+      const key = routes[route] ? route : 'overview';
+      document.querySelectorAll('.route').forEach((el) => el.classList.add('hidden'));
+      document.getElementById('route-' + key).classList.remove('hidden');
+      document.querySelectorAll('[data-route]').forEach((btn) => btn.classList.toggle('active', btn.dataset.route === key));
+      document.getElementById('eyebrow').textContent = routes[key][0];
+      document.getElementById('page-title').textContent = routes[key][1];
+      window.location.hash = key;
+    }
+
+    document.querySelectorAll('[data-route]').forEach((btn) => {
+      btn.addEventListener('click', () => setRoute(btn.dataset.route));
+    });
+
+    document.querySelectorAll('[data-pane]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const pane = btn.dataset.pane;
+        document.querySelectorAll('[data-pane]').forEach((b) => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.task-pane').forEach((el) => el.classList.add('hidden'));
+        document.getElementById('pane-' + pane).classList.remove('hidden');
+      });
+    });
+
+    const drawer = document.getElementById('messages-drawer');
+    function openMessages() { drawer.classList.add('open'); }
+    function closeMessages() { drawer.classList.remove('open'); }
+    document.getElementById('messages-button').addEventListener('click', openMessages);
+    document.getElementById('open-messages-secondary').addEventListener('click', openMessages);
+    document.getElementById('forum-new-message').addEventListener('click', openMessages);
+    document.getElementById('close-drawer').addEventListener('click', closeMessages);
+
+    const initial = window.location.hash.replace('#', '') || 'overview';
+    setRoute(initial);
+  </script>
+</body>
+</html>
