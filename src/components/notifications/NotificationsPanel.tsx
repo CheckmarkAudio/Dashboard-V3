@@ -229,7 +229,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
 
   const assignmentsQuery = useQuery({
     queryKey: ['overview-assignment-notifications', profile?.id],
-    queryFn: () => fetchAssignmentNotifications(profile!.id, { unreadOnly: false, limit: 20 }),
+    queryFn: () => fetchAssignmentNotifications(profile!.id, { unreadOnly: true, limit: 20 }),
     enabled: Boolean(profile?.id),
     refetchInterval: 60_000,
   })
@@ -288,19 +288,8 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     staleTime: 60_000,
   })
 
-  // Skin pass 2026-05-06 — "High Priority" filter. Currently aliased
-  // to "unread": for channels = `unread_count > 0`, for assignments =
-  // `!is_read`. When a real `priority` field gets added to either
-  // table, swap the predicate here. Filter UI is the toggle button
-  // in the panel header (next to "Mark all read"). Default OFF so
-  // the panel still shows the full list on first render.
-  const [highPriorityOnly, setHighPriorityOnly] = useState(false)
-  const visibleChannels = highPriorityOnly
-    ? channels.filter((c) => c.unread_count > 0)
-    : channels
-  const visibleAssignments = highPriorityOnly
-    ? assignments.filter((n) => !n.is_read)
-    : assignments
+  const visibleChannels = channels.filter((c) => c.unread_count > 0)
+  const visibleAssignments = assignments.filter((n) => !n.is_read)
   const totalUnread = channelUnread + assignmentUnread
 
   const handleMarkAllRead = () => {
@@ -405,23 +394,6 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
       <div className="flex items-center justify-between mb-2 shrink-0 px-1">
         {eyebrow ?? <span />}
         <div className="flex items-center gap-1.5">
-          {/* Skin pass 2026-05-06 — High Priority filter. Toggles
-              `highPriorityOnly`; currently aliased to "unread only"
-              for both channels and assignments. The pill flips to a
-              rose-tinted active state when on. */}
-          <button
-            type="button"
-            onClick={() => setHighPriorityOnly((v) => !v)}
-            aria-pressed={highPriorityOnly}
-            title={highPriorityOnly ? 'Showing high-priority only — click to show all' : 'Show high-priority only'}
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase ring-1 transition-colors focus-ring ${
-              highPriorityOnly
-                ? 'bg-rose-500/15 ring-rose-500/40 text-rose-400'
-                : 'bg-surface ring-border text-text-muted hover:text-rose-400 hover:ring-rose-500/40'
-            }`}
-          >
-            High Priority
-          </button>
           {totalUnread > 0 && (
             <button
               type="button"
@@ -461,15 +433,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             <AlertCircle size={16} className="shrink-0" />
             <span className="truncate">Could not load notifications</span>
           </div>
-        ) : visibleChannels.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center px-4 py-6">
-            <div className="icon-tile-gold w-10 h-10 mb-2">
-              <MessageSquare size={18} className="text-gold" aria-hidden="true" />
-            </div>
-            <p className="text-[14px] font-medium text-text">No channels yet</p>
-            <p className="text-[12px] text-text-light mt-0.5">Create one in the Forum.</p>
-          </div>
-        ) : (
+        ) : visibleChannels.length === 0 ? null : (
           <>
             {/* Skin pass 2026-05-06 — section header band for FORUMS,
                 mirrors the ASSIGNMENTS treatment below. No `border-t`
@@ -881,7 +845,7 @@ export function useTotalUnreadCount(): number {
   })
   const assignmentsQuery = useQuery({
     queryKey: ['overview-assignment-notifications', profile?.id],
-    queryFn: () => fetchAssignmentNotifications(profile!.id, { unreadOnly: false, limit: 20 }),
+    queryFn: () => fetchAssignmentNotifications(profile!.id, { unreadOnly: true, limit: 20 }),
     enabled: Boolean(profile?.id),
     refetchInterval: 60_000,
   })
