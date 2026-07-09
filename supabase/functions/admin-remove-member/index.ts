@@ -73,19 +73,15 @@ async function countRows(
     .select(column, { count: "exact", head: true })
     .eq(column, memberId)
   if (error) {
-    // Some historical tables/columns only exist in older/newer environments.
-    // If the table or column itself is absent, it cannot contain rows linking
-    // this member in the currently deployed schema.
-    const msg = `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`.toLowerCase()
-    if (
-      error.code === "PGRST204" ||
-      error.code === "PGRST205" ||
-      msg.includes("could not find") ||
-      msg.includes("does not exist")
-    ) {
-      return 0
-    }
-    throw new Error(`Could not inspect ${table}.${column}: ${error.message}`)
+    // Count as zero on ANY error. The check list spans tables/columns that
+    // may not exist in the deployed schema (e.g. team_schedule_blocks has no
+    // created_by), and head:true responses carry no body, so those errors
+    // often arrive with an empty message that can't be pattern-matched.
+    // These counts are advisory UI hints — the DB's own FK constraints are
+    // what actually block deleting a member with history, so undercounting
+    // here can never destroy attributed records.
+    console.warn(`[admin-remove-member] count skipped for ${table}.${column}:`, error.code, error.message)
+    return 0
   }
   return count ?? 0
 }
@@ -341,9 +337,16 @@ Deno.serve(async (req: Request) => {
     }, 409)
   }
 
+  // Deleting the auth user cascades into team_members; if the member has
+  // history the DB's NO ACTION foreign keys abort the whole thing atomically.
+  // That constraint violation is the real safety net behind the advisory
+  // counts above — translate it instead of leaking "Database error".
   const { error: deleteAuthErr } = await admin.auth.admin.deleteUser(memberId)
   if (deleteAuthErr && !/not found/i.test(deleteAuthErr.message)) {
-    return jsonResponse({ ok: false, error: deleteAuthErr.message }, 400)
+    const msg = /foreign key|violates|constraint/i.test(deleteAuthErr.message)
+      ? "This member still has linked history (tasks, bookings, or records that carry their name), so they can't be deleted outright. Archive them instead."
+      : deleteAuthErr.message
+    return jsonResponse({ ok: false, error: msg }, 400)
   }
 
   const { error: deleteProfileErr } = await admin

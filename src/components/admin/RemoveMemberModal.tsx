@@ -126,10 +126,13 @@ export default function RemoveMemberModal({
             </p>
           </div>
 
-          {/* Activity summary drives which option is safest */}
+          {/* Activity summary drives which option is safest. If the check
+              itself fails, Archive stays available (it never needs the
+              counts) — only Delete forever requires a clean answer. */}
           {inspectError ? (
-            <div role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-400">
-              {inspectError}
+            <div role="alert" className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+              Couldn't check their history right now — Archive still works. Delete forever
+              is disabled until the check succeeds.
             </div>
           ) : !inspect ? (
             <div className="flex items-center gap-2 text-sm text-text-muted py-2" role="status">
@@ -161,7 +164,7 @@ export default function RemoveMemberModal({
             <button
               type="button"
               onClick={handleArchive}
-              disabled={busy !== null || !inspect}
+              disabled={busy !== null || (!inspect && !inspectError)}
               className="w-full flex items-start gap-3 p-4 rounded-xl border border-amber-400/40 bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-left focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {busy === 'archive'
@@ -196,7 +199,9 @@ export default function RemoveMemberModal({
                 <span className="block text-sm text-text-muted mt-0.5">
                   {canDelete
                     ? 'Removes their account and login completely. Cannot be undone.'
-                    : 'Not available — they have history that would lose its name. Use Archive instead.'}
+                    : inspectError
+                      ? 'Not available — the history check failed. Archive works, or reopen this dialog to retry.'
+                      : 'Not available — they have history that would lose its name. Use Archive instead.'}
                 </span>
               </span>
             </button>
