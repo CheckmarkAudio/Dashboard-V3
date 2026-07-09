@@ -5,7 +5,7 @@ import { extractEdgeFunctionError } from '../../lib/edgeFunctionError'
 import { useAuth } from '../../contexts/AuthContext'
 import { OWNER_EMAIL } from '../../domain/permissions'
 import { Button, Modal } from '../ui'
-import ConfirmModal from '../ConfirmModal'
+import RemoveMemberModal from './RemoveMemberModal'
 import SetupLinkReveal from '../auth/SetupLinkReveal'
 import TempPasswordReveal from '../auth/TempPasswordReveal'
 import { generateTempPassword } from '../../lib/auth/tempPassword'
@@ -281,7 +281,6 @@ export default function AccountAccessPanel() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; message: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AccessUser | null>(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
 
   // Setup-link modal state.
   //
@@ -428,24 +427,24 @@ export default function AccountAccessPanel() {
     setDeleteTarget(target)
   }, [isOwnerViewer])
 
-  const confirmDelete = useCallback(async () => {
+  // Removal goes through the admin-remove-member edge function (via the
+  // shared RemoveMemberModal) so the login account is archived/deleted
+  // alongside the profile. The old raw `team_members` row delete left the
+  // auth account behind — the source of the recurring "A user with this
+  // email address has already been registered" failures on re-add.
+  const onRemoveDone = useCallback((action: 'archived' | 'deleted') => {
     if (!deleteTarget) return
-    setDeleteLoading(true)
-    const { error: delErr } = await supabase
-      .from('team_members')
-      .delete()
-      .eq('id', deleteTarget.id)
-    setDeleteLoading(false)
-    if (delErr) {
-      setToast({ kind: 'err', message: errorMessage(delErr, 'Failed to remove member') })
-      setTimeout(() => setToast(null), 5000)
-    } else {
-      setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id))
-      setToast({ kind: 'ok', message: `${deleteTarget.display_name} has been removed.` })
-      setTimeout(() => setToast(null), 4000)
-    }
+    setToast({
+      kind: 'ok',
+      message:
+        action === 'archived'
+          ? `${deleteTarget.display_name} archived — history kept, login disabled.`
+          : `${deleteTarget.display_name} deleted — their email can be re-added anytime.`,
+    })
+    setTimeout(() => setToast(null), 4000)
     setDeleteTarget(null)
-  }, [deleteTarget])
+    void refetch()
+  }, [deleteTarget, refetch])
 
   const confirmReset = useCallback(async () => {
     if (!resetTarget) return
@@ -661,17 +660,15 @@ export default function AccountAccessPanel() {
         </section>
       </div>
 
-      {/* ── Delete confirmation ── */}
-      <ConfirmModal
-        open={!!deleteTarget}
-        title="Remove Team Member"
-        message={`Are you sure you want to remove ${deleteTarget?.display_name ?? 'this member'}? This cannot be undone.`}
-        confirmLabel="Remove"
-        variant="danger"
-        loading={deleteLoading}
-        onConfirm={() => void confirmDelete()}
-        onCancel={() => setDeleteTarget(null)}
-      />
+      {/* ── Delete / archive — shared modal backed by admin-remove-member ── */}
+      {deleteTarget && (
+        <RemoveMemberModal
+          memberId={deleteTarget.id}
+          memberName={deleteTarget.display_name}
+          onClose={() => setDeleteTarget(null)}
+          onDone={onRemoveDone}
+        />
+      )}
 
       {/* ── Setup link modal — direct-link handoff flow ── */}
       {resetTarget && (
