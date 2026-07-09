@@ -80,25 +80,14 @@ function BookButton() {
 
 function OverviewActionStrip() {
   return (
-    <div className="rounded-xl border border-gold/20 bg-gradient-to-r from-gold/10 via-surface to-surface px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.04)]">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold ring-1 ring-gold/25"
-            aria-hidden="true"
-          >
-            <Sparkles size={16} strokeWidth={2.2} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[13px] font-extrabold text-text">Studio pulse</p>
-            <p className="text-[11px] font-medium text-text-muted">Social reach + booking</p>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <SocialStatsBar variant="compact" />
-          <div className="w-full sm:w-[190px]">
-            <BookButton />
-          </div>
+    <div
+      className="rounded-xl border border-gold/20 bg-gradient-to-r from-gold/10 via-surface to-surface p-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.04)]"
+      aria-label="Overview quick actions"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <SocialStatsBar variant="compact" />
+        <div className="w-full sm:w-[190px]">
+          <BookButton />
         </div>
       </div>
     </div>

@@ -178,6 +178,38 @@ Token/source note:
 Signature:
 - CODEX:
 
+## 2026-07-09 06:02 MDT - CODEX - Removed action-strip subtext and captured score-block direction
+
+Lane:
+- Codex: scoped landing-page UI correction, roadmap capture, verification.
+
+Summary:
+- Removed the recently-added visible "Studio pulse", "Social reach + booking", "Fast lane", and "Assign + studio reach" subtext from Overview and Dashboard.
+- Kept the compact social links plus `Book a Session` / `Quick Assign` actions in stable top action strips.
+- Captured the next Overview/Dashboard direction as real numbered feature blocks: tasks left, message follow-up left, sessions left today, and media added today.
+- Documented that those blocks must use live product data and link back to Tasks, Forum/DMs, Booking, and Media.
+- Documented that daily score history should be backend snapshot data with CSV export, not a browser-written CSV file.
+
+Files changed:
+- `src/pages/Dashboard.tsx`
+- `src/pages/admin/Hub.tsx`
+- `docs/pwa/WEB_INTERFACE_POLISH_ROADMAP.md`
+- `docs/ux/WORKER_OBVIOUSNESS_AUDIT.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `npm run build` passed.
+
+Open gaps:
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: Define exact metric semantics before implementation: message follow-up, sessions left, team vs personal scope, and media count scope.
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: Approve backend snapshot table/export design before any automatic daily CSV-style logging work.
+
+Token/source note:
+- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:
+
 ## 2026-07-09 05:02 MDT - CODEX - Tasks admin-sidebar formula alignment
 
 Lane:

@@ -76,25 +76,14 @@ function QuickAssignButton() {
 
 function AdminActionStrip() {
   return (
-    <div className="rounded-xl border border-border bg-surface px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.035)]">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-alt text-gold ring-1 ring-border"
-            aria-hidden="true"
-          >
-            <Zap size={16} strokeWidth={2.2} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[13px] font-extrabold text-text">Fast lane</p>
-            <p className="text-[11px] font-medium text-text-muted">Assign + studio reach</p>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <SocialStatsBar variant="compact" />
-          <div className="w-full sm:w-[190px]">
-            <QuickAssignButton />
-          </div>
+    <div
+      className="rounded-xl border border-border bg-surface p-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.035)]"
+      aria-label="Dashboard quick actions"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <SocialStatsBar variant="compact" />
+        <div className="w-full sm:w-[190px]">
+          <QuickAssignButton />
         </div>
       </div>
     </div>

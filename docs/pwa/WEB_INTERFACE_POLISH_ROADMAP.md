@@ -212,17 +212,47 @@ Design direction:
 - Overview uses a softer Today View for personal daily orientation
 - Admin Dashboard uses a more operational Command View for requests, schedule, and alerts
 - Widget View remains available as the full legacy widget layout on both pages
+- The next Overview/Dashboard direction is numbered feature blocks, not extra explanatory subtext:
+  - Today's tasks left: linked to `Tasks`
+  - Message follow-up left: linked to `Forum` / DMs
+  - Sessions left today: linked to `Booking`
+  - Media added today: linked to `Media`
+- Blocks should animate counts from 0 to the current daily value, but the animation must not invent or mask stale data.
+- The block labels should be short and action-oriented. Avoid added subtitles under the blocks unless a worker test proves the label is unclear.
+- Metrics must be connected to live app data already owned by each product area. Do not hardcode decorative numbers.
+- Daily score history should be stored as backend snapshots first, with CSV export generated from those snapshots. The browser should not be responsible for writing a persistent CSV file.
 
 Exit criteria:
 
 - Overview helps users decide where to go
 - daily work pages do the heavy interaction work
+- score blocks link to the source page for the metric
+- score blocks have clear empty/loading/error states
+- daily metric snapshots can later power an admin history view similar to historic clocking data
 
 Status:
 
 - First shell pass started on 2026-07-09 in `src/pages/Dashboard.tsx` and `src/pages/admin/Hub.tsx`.
 - Both pages keep existing widgets behind Widget View.
 - Main views reuse existing widget components and data sources; no Supabase/data behavior changed.
+- 2026-07-09 director feedback: remove "Studio pulse" / "Fast lane" style subtext and move toward real numbered blocks.
+
+Data contract draft:
+
+| Block | Worker Meaning | Source Direction | Link |
+|---|---|---|---|
+| Today's tasks left | How many personal tasks remain today | `assigned_tasks` / daily checklist state already surfaced by task widgets | `APP_ROUTES.member.tasks` |
+| Message follow-up left | How many DM/forum follow-ups need attention | Existing message/notification unread state, exact definition still needs review | `APP_ROUTES.member.content` |
+| Sessions left today | How many assigned or team sessions remain today | `sessions` rows / existing booking and calendar sources | `APP_ROUTES.member.booking` |
+| Media added today | How many media uploads were added today | `media_submissions.created_at` filtered to local day | `APP_ROUTES.member.addMedia` |
+
+Logging direction:
+
+- Create a backend-owned daily metric snapshot when the metric definitions are approved.
+- Prefer a Supabase table such as `daily_workspace_metric_snapshots` over a repo or browser-written CSV.
+- Store `metric_date`, `team_id`, optional `member_id`, metric key, completed/remaining/total counts, source table/version, and timestamps.
+- Add CSV export from the admin history view later, similar to existing export patterns.
+- If a literal CSV file is still desired, generate it from the snapshot table on demand so it cannot drift from the database.
 
 ## Phase W6: Verification And Handoff
 
