@@ -31,12 +31,16 @@ Default pane:
 
 - My Tasks
 
-Sidebar / tabs:
+Main-view sidebar:
 
 - My Tasks
 - Team Tasks
 - Studio Tasks
-- Widget View
+
+Page-level toggle:
+
+- Widget View returns to the full-width legacy task-widget layout.
+- Main View returns to the focused sidebar/pane layout.
 
 Admin-only additions, if needed:
 
@@ -83,19 +87,19 @@ Those need Codex data/security review and director approval before implementatio
 ## Design Rules
 
 - My Tasks is the first load.
-- The sidebar uses plain labels, not widget jargon.
+- The sidebar uses plain task-group labels, not widget jargon.
 - The active pane has one primary action.
 - Secondary counts can appear as small badges.
 - Drag/reorder behavior inside My Tasks should remain intact.
 - Do not break `MyTasksCard` behavior just to change the page shell.
-- Widget View may show the full legacy task-widget grid for users who need all contexts at once.
+- Widget View should be a page-level mode, not a nested sidebar section.
 
 ## Likely Implementation Path
 
 1. Create a Tasks page shell with a left rail and active pane state. Done in first slice.
 2. Render `MyTasksCard` directly as the default pane. Done in first slice.
 3. Render existing secondary task widgets as panes instead of simultaneous columns. Done for Team Tasks and Studio Tasks.
-4. Preserve `WorkspacePanel` as an optional "Widget View" for the full task-widget layout. Done in priority fix slice.
+4. Preserve `WorkspacePanel` as an optional "Widget View" for the full task-widget layout. Done as a page-header toggle in the correction slice.
 5. Verify existing task query keys and realtime invalidation still work.
 
 ## Likely Files
@@ -173,6 +177,10 @@ Codex follow-up:
 - restored the old `WorkspacePanel` task grid behind Widget View only
 - kept task data, task completion, task queries, and Supabase behavior unchanged
 
+Superseded by correction below:
+
+- Widget View moved out of the sidebar and became a page-header toggle back to the full-width widget layout.
+
 Verification:
 
 - `npm run build` passed
@@ -190,10 +198,34 @@ Codex follow-up:
 - aligned `/daily` to the Settings/Members two-pane grid and sidebar classes
 - removed the temporary mobile horizontal task strip behavior from this page
 
+Correction:
+
+- Widget View was later moved out of the sidebar and into a page-level toggle.
+
+Verification:
+
+- `npm run build` passed
+
+### 2026-07-09 - Main view vs widget view correction
+
+User direction:
+
+- the task sidebar should stretch down to match the right content panel
+- Widget View should not be nested in the sidebar
+- workers should be able to toggle between the focused main view and the previous full-page widget formatting
+
+Codex follow-up:
+
+- removed Widget View from the task sidebar
+- added a page-header toggle between Main View and Widget View
+- kept My Tasks, Team Tasks, and Studio Tasks as the focused main-view sidebar choices
+- restored Widget View as the full-width `WorkspacePanel` layout instead of a nested right-pane option
+- changed the main task grid to `items-stretch` and made the sidebar `h-full` so it matches the content panel height
+
 Verification:
 
 - `npm run build` passed
 
 ## Open Decisions
 
-<span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Confirm whether employees understand "Studio Tasks" vs "Team Tasks" and whether "Widget View" sounds like the right escape hatch for the full layout.
+<span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Confirm whether employees understand "Studio Tasks" vs "Team Tasks" and whether the Main View / Widget View toggle feels obvious.

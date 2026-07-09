@@ -112,6 +112,36 @@ Token/source note:
 Signature:
 - CODEX:
 
+## 2026-07-09 05:08 MDT - CODEX - Tasks main-widget view split correction
+
+Lane:
+- Codex: scoped `/daily` UI correction, existing design-pattern alignment, verification.
+
+Summary:
+- Moved Widget View out of the `/daily` sidebar and made it a page-header toggle.
+- Restored Widget View as the full-width task `WorkspacePanel` layout instead of a nested right-pane option.
+- Kept the focused main-view sidebar limited to My Tasks, Team Tasks, and Studio Tasks.
+- Changed the main task grid to stretch the sidebar down to match the content panel height.
+- Preserved task data, Supabase behavior, completion, reorder, filter, and detail-modal behavior.
+
+Files changed:
+- `src/pages/DailyChecklist.tsx`
+- `docs/ux/TASKS_PAGE_REDESIGN_PLAN.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `git diff --check` passed.
+- `npm run build` passed.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Confirm the Main View / Widget View toggle feels obvious to employees.
+
+Token/source note:
+- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:
+
 ## 2026-07-08 21:58 MDT - CODEX - Public-safe AI worker preview harness
 
 Lane:
