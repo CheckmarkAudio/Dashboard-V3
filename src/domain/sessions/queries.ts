@@ -6,13 +6,13 @@ import { localDateKey } from '../../lib/dates'
  * Session category labels surfaced on the Sessions page filter tabs.
  * The DB `session_type` enum is narrower (`recording`, `mixing`, `lesson`,
  * `meeting`) than the business categories a studio admin thinks in
- * (Engineer / Consult / Trailing / Music Lesson / Education), so we map
+ * (Engineer / Consult / Training / Music Lesson / Education), so we map
  * here and keep the UI labels stable even as the DB enum grows.
  */
 export type SessionCategory =
   | 'Engineer'
   | 'Consult'
-  | 'Trailing'
+  | 'Training'
   | 'Music Lesson'
   | 'Education'
 

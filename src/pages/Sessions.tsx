@@ -21,7 +21,7 @@ const HIGHLIGHT_DURATION_MS = 1600
 
 /* ── Booking categories ── */
 const CATEGORIES: readonly ('All' | SessionCategory)[] = [
-  'All', 'Engineer', 'Consult', 'Trailing', 'Music Lesson', 'Education',
+  'All', 'Engineer', 'Consult', 'Training', 'Music Lesson', 'Education',
 ] as const
 type CategoryTab = typeof CATEGORIES[number]
 
