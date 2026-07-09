@@ -177,6 +177,23 @@ Verification:
 
 - `npm run build` passed
 
+### 2026-07-09 - Admin-sidebar formula alignment
+
+User direction:
+
+- make the `/daily` task selector a left sidebar like Settings and Members
+- follow the existing sidebar formula instead of inventing a separate task-only rail
+
+Codex follow-up:
+
+- reused `AdminSectionNavItem` for My Tasks, Team Tasks, Studio Tasks, and Widget View
+- aligned `/daily` to the Settings/Members two-pane grid and sidebar classes
+- removed the temporary mobile horizontal task strip behavior from this page
+
+Verification:
+
+- `npm run build` passed
+
 ## Open Decisions
 
 <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Confirm whether employees understand "Studio Tasks" vs "Team Tasks" and whether "Widget View" sounds like the right escape hatch for the full layout.

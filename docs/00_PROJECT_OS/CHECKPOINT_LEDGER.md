@@ -83,6 +83,35 @@ Token/source note:
 Signature:
 - CODEX:
 
+## 2026-07-09 05:02 MDT - CODEX - Tasks admin-sidebar formula alignment
+
+Lane:
+- Codex: scoped `/daily` UI refinement, existing design-pattern alignment, verification.
+
+Summary:
+- Changed `/daily` from a temporary custom task rail to the same `AdminSectionNavItem` sidebar pattern used by Settings and Members.
+- Kept the task choices as My Tasks, Team Tasks, Studio Tasks, and Widget View.
+- Preserved task data, Supabase behavior, completion, reorder, filter, and detail-modal behavior.
+
+Files changed:
+- `src/pages/DailyChecklist.tsx`
+- `docs/ux/TASKS_PAGE_REDESIGN_PLAN.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `npm run build` passed.
+- In-app browser check confirmed `/daily` has the shared task-section sidebar and opens on My Tasks.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Confirm the sidebar label names feel obvious to employees.
+- <span style="color:#7c3aed">ASSUMPTION</span>: The responsive behavior should match Settings/Members, including stacking below the desktop breakpoint.
+
+Token/source note:
+- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:
+
 ## 2026-07-08 21:58 MDT - CODEX - Public-safe AI worker preview harness
 
 Lane:

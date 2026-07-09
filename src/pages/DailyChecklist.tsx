@@ -3,7 +3,6 @@ import {
   ClipboardList,
   LayoutGrid,
   ListChecks,
-  type LucideIcon,
   MonitorCog,
   Users,
 } from 'lucide-react'
@@ -17,6 +16,7 @@ import {
 } from '../components/tasks/AssignedTaskBoards'
 import WorkspacePanel from '../components/dashboard/WorkspacePanel'
 import { TASKS_WIDGET_DEFINITIONS } from '../components/dashboard/widgetRegistry'
+import { AdminSectionNavItem, type AdminSection } from '../components/admin/AdminSectionNavItem'
 
 /**
  * Tasks page — `/daily`
@@ -31,34 +31,29 @@ import { TASKS_WIDGET_DEFINITIONS } from '../components/dashboard/widgetRegistry
  */
 type TaskPaneId = 'my_tasks' | 'team_tasks' | 'studio_tasks' | 'widget_view'
 
-interface TaskPane {
-  id: TaskPaneId
-  title: string
-  subtitle: string
-  icon: LucideIcon
-}
+type TaskPane = AdminSection<TaskPaneId>
 
 const TASK_PANES: TaskPane[] = [
   {
-    id: 'my_tasks',
+    key: 'my_tasks',
     title: 'My Tasks',
     subtitle: 'Your personal queue',
     icon: ListChecks,
   },
   {
-    id: 'team_tasks',
+    key: 'team_tasks',
     title: 'Team Tasks',
     subtitle: 'Shared member work',
     icon: Users,
   },
   {
-    id: 'studio_tasks',
+    key: 'studio_tasks',
     title: 'Studio Tasks',
     subtitle: 'Room and studio work',
     icon: MonitorCog,
   },
   {
-    id: 'widget_view',
+    key: 'widget_view',
     title: 'Widget View',
     subtitle: 'All task widgets',
     icon: LayoutGrid,
@@ -98,12 +93,12 @@ export default function DailyChecklist() {
   const { profile, appRole } = useAuth()
   const [activePaneId, setActivePaneId] = useState<TaskPaneId>('my_tasks')
   const activePane = useMemo(
-    () => TASK_PANES.find((pane) => pane.id === activePaneId) ?? DEFAULT_TASK_PANE,
+    () => TASK_PANES.find((pane) => pane.key === activePaneId) ?? DEFAULT_TASK_PANE,
     [activePaneId],
   )
   const ActiveIcon = activePane.icon
-  const activePaneBody = renderTaskPane(activePane.id, appRole, profile?.id ?? 'guest')
-  const activeBadge = activePane.id === 'widget_view' ? 'Widget view' : 'One group'
+  const activePaneBody = renderTaskPane(activePane.key, appRole, profile?.id ?? 'guest')
+  const activeBadge = activePane.key === 'widget_view' ? 'Widget view' : 'One group'
 
   return (
     <div className="max-w-[1440px] mx-auto animate-fade-in space-y-5">
@@ -112,44 +107,20 @@ export default function DailyChecklist() {
         title="Tasks"
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4 lg:gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
         <aside
-          className="bg-surface rounded-xl border border-border p-2 space-y-1 lg:sticky lg:top-28"
+          className="bg-surface rounded-xl border border-border p-2 space-y-1"
           aria-label="Task sections"
         >
-          <p className="hidden lg:block px-3 pt-3 pb-2 text-label">Tasks</p>
-          <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
-            {TASK_PANES.map((pane) => {
-              const Icon = pane.icon
-              const active = activePane.id === pane.id
-              return (
-                <button
-                  key={pane.id}
-                  type="button"
-                  onClick={() => setActivePaneId(pane.id)}
-                  aria-current={active ? 'page' : undefined}
-                  className={[
-                    'min-w-[180px] lg:min-w-0 w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 focus-ring',
-                    active ? 'bg-surface-alt ring-1 ring-border-light' : 'hover:bg-surface-hover',
-                  ].join(' ')}
-                >
-                  <span
-                    className={[
-                      'shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-surface',
-                      active ? 'text-gold' : 'text-text-muted',
-                    ].join(' ')}
-                    aria-hidden="true"
-                  >
-                    <Icon size={16} strokeWidth={2} />
-                  </span>
-                  <span className="min-w-0 leading-tight">
-                    <span className="block text-sm font-semibold text-text">{pane.title}</span>
-                    <span className="block text-[12px] text-text-muted truncate">{pane.subtitle}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          <p className="px-3 pt-3 pb-2 text-label">Tasks</p>
+          {TASK_PANES.map((pane) => (
+            <AdminSectionNavItem
+              key={pane.key}
+              section={pane}
+              active={activePane.key === pane.key}
+              onSelect={() => setActivePaneId(pane.key)}
+            />
+          ))}
         </aside>
 
         <section className="bg-surface rounded-xl border border-border lg:min-h-[620px] overflow-hidden">
