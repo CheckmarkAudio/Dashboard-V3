@@ -163,7 +163,7 @@ export default function NotificationsBell() {
             {/* `scroll-smooth` smooths jumps when the user marks-all-read
                 and the list re-orders. `max-h-[min(540px,70vh)]` keeps
                 the panel from running off the viewport. */}
-            <div className="p-3 max-h-[min(540px,70vh)] overflow-y-auto scroll-smooth">
+            <div className="p-3 max-h-[min(420px,calc(100vh-5rem))] overflow-y-auto scroll-smooth">
               <NotificationsPanel compact />
             </div>
           </div>,
