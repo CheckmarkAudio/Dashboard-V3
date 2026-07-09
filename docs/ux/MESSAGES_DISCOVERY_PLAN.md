@@ -106,6 +106,23 @@ Mobile:
 - unread state is visible and not color-only
 - keyboard users can open messages and start a new message
 
+## Validation Notes
+
+### 2026-07-09 - First discovery slice
+
+Implemented:
+
+- header Messages trigger now shows the word "Messages" on wider desktop screens
+- header dropdown explains that Messages are direct teammate chats
+- unread rows include text/count in addition to the rose dot
+- Forum Direct Messages section has a stronger header, subtitle, and labeled New button
+- empty DM state offers a clear "Start a message" action
+
+Verification:
+
+- `npm run build` passed
+- no DM query, storage, RLS, RPC, or schema behavior changed
+
 ## Open Decisions
 
 <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Test whether "Messages" or "Direct Messages" is clearer for employees.

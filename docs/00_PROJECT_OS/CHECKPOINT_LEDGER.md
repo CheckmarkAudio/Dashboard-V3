@@ -207,3 +207,34 @@ Token/source note:
 
 Signature:
 - CODEX:
+
+## 2026-07-09 03:34 MDT - CODEX - Messages discovery first UI slice
+
+Lane:
+- Codex: scoped worker-obviousness implementation, UI-only Messages/Forum discovery pass, verification.
+
+Summary:
+- Made the header Messages entry more discoverable by adding a visible label on wider desktop screens.
+- Clarified the Messages dropdown as direct teammate chats.
+- Strengthened unread states with text/counts, not only color dots.
+- Made the Forum Direct Messages section more visible with a stronger header, subtitle, labeled New button, and a clear empty-state action.
+
+Files changed:
+- `src/components/messages/MessagesBell.tsx`
+- `src/pages/Content.tsx`
+- `docs/ux/MESSAGES_DISCOVERY_PLAN.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `git diff --check` passed before the build.
+- `npm run build` passed.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Have Gavin or another worker try to find and start a DM without coaching.
+- <span style="color:#7c3aed">ASSUMPTION</span>: This first slice improves discovery without needing the later full app-shell/sidebar nav reform.
+
+Token/source note:
+- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:
