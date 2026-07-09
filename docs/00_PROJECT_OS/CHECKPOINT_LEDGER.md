@@ -83,6 +83,40 @@ Token/source note:
 Signature:
 - CODEX:
 
+## 2026-07-09 05:23 MDT - CODEX - Overview and dashboard main-view shells
+
+Lane:
+- Codex: scoped landing-page UI refinement, existing-widget reuse, verification.
+
+Summary:
+- Added a Today View / Widget View toggle to the member Overview page.
+- Added a Command View / Widget View toggle to the admin Dashboard page.
+- Added left sidebars on both pages using the same `AdminSectionNavItem` formula as Tasks, Settings, and Members.
+- Kept Overview aesthetically softer and personal with Today, My Tasks, Calendar, and Messages panes.
+- Kept Dashboard more operational with Command, Requests, Schedule, and Alerts panes.
+- Preserved the existing full `WorkspacePanel` widget layout behind Widget View on both pages.
+- Reused existing widget components and data sources; no Supabase or query behavior changed.
+
+Files changed:
+- `src/pages/Dashboard.tsx`
+- `src/pages/admin/Hub.tsx`
+- `docs/pwa/WEB_INTERFACE_POLISH_ROADMAP.md`
+- `docs/ux/WORKER_OBVIOUSNESS_AUDIT.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `npm run build` passed.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Confirm whether Today View vs Widget View and Command View vs Widget View are obvious without explanation.
+- <span style="color:#7c3aed">ASSUMPTION</span>: Reusing existing widget components inside non-draggable cards is acceptable for this first hierarchy pass.
+
+Token/source note:
+- Exact token total not visible in this repo file. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:
+
 ## 2026-07-09 05:02 MDT - CODEX - Tasks admin-sidebar formula alignment
 
 Lane:

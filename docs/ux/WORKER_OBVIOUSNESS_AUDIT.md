@@ -118,6 +118,7 @@ Page layout:
 - daily workflow pages should not default to three-column information walls
 - use a sidebar or tabs when the user is choosing among contexts
 - use widgets for overview, not for the primary worker task when a dedicated flow is better
+- Overview and Dashboard may use a main-vs-widget toggle when the main view is curated and the widget view preserves power-user density
 
 Copy:
 

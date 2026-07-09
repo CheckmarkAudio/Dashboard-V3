@@ -209,11 +209,20 @@ Design direction:
 - dashboard stays an overview
 - daily work gets direct links to the clearer dedicated pages
 - widget density should not hide the next best action
+- Overview uses a softer Today View for personal daily orientation
+- Admin Dashboard uses a more operational Command View for requests, schedule, and alerts
+- Widget View remains available as the full legacy widget layout on both pages
 
 Exit criteria:
 
 - Overview helps users decide where to go
 - daily work pages do the heavy interaction work
+
+Status:
+
+- First shell pass started on 2026-07-09 in `src/pages/Dashboard.tsx` and `src/pages/admin/Hub.tsx`.
+- Both pages keep existing widgets behind Widget View.
+- Main views reuse existing widget components and data sources; no Supabase/data behavior changed.
 
 ## Phase W6: Verification And Handoff
 
