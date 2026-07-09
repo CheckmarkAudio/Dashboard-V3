@@ -53,13 +53,6 @@ const OVERVIEW_PANES: OverviewPane[] = [
 
 const DEFAULT_OVERVIEW_PANE = OVERVIEW_PANES[0]!
 
-/**
- * BookButton — local CTA pill rendered to the right of the member
- * panel via MemberHighlights' `actions` slot. Same gold pill chrome
- * as the Sessions page Book a Session button so the action looks
- * consistent across surfaces. Refetches the member-overview context
- * on close so any newly-created booking lights up its widget.
- */
 function BookButton() {
   const { refetch } = useMemberOverviewContext()
   const [showBooking, setShowBooking] = useState(false)
@@ -68,10 +61,7 @@ function BookButton() {
       <button
         type="button"
         onClick={() => setShowBooking(true)}
-        // 2026-05-06 — width fixed to 248px (= 4×w-14 bubbles + 3×gap-2)
-        // so the CTA spans the exact same length as the SocialStatsBar
-        // sitting beneath it. Sitewide treatment per user direction.
-        className="inline-flex items-center justify-center gap-2 h-10 px-4 w-[248px] rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight ring-1 ring-gold-muted hover:bg-gold-muted hover:ring-gold-dim transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
+        className="inline-flex items-center justify-center gap-2 h-10 px-4 w-full min-w-[180px] rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight ring-1 ring-gold-muted hover:bg-gold-muted hover:ring-gold-dim transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
       >
         <Plus size={14} strokeWidth={2.4} aria-hidden="true" />
         Book a Session
@@ -85,6 +75,24 @@ function BookButton() {
         />
       )}
     </>
+  )
+}
+
+function OverviewRailFooter() {
+  return (
+    <div className="mt-auto pt-3">
+      <div className="rounded-xl border border-gold/20 bg-gold/10 p-2 shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
+        <div className="px-1 pb-2">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
+            Studio pulse
+          </p>
+        </div>
+        <div className="space-y-2">
+          <SocialStatsBar />
+          <BookButton />
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -146,33 +154,24 @@ export default function Dashboard() {
   return (
     <div className="max-w-[1440px] mx-auto animate-fade-in space-y-5">
       <MemberOverviewProvider>
-        {/* Skin pass 2026-05-06 (rev2) — re-swapped per user direction:
-            SocialStatsBar moves BACK UP to the PageHeader actions slot
-            (top-right next to the title); Book a Session moves DOWN
-            beside the member panel. Width parity is preserved — Book a
-            Session is w-[248px] which matches the SocialStatsBar's
-            cluster width exactly, so neither slot looks cramped. */}
         <PageHeader
           icon={LayoutDashboard}
           title="Overview"
           actions={
-            <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-              <SocialStatsBar />
-              <Button
-                variant="secondary"
-                onClick={() => setViewMode(showingWidgetView ? 'main' : 'widgets')}
-                iconLeft={
-                  showingWidgetView
-                    ? <Sparkles size={16} aria-hidden="true" />
-                    : <LayoutGrid size={16} aria-hidden="true" />
-                }
-              >
-                {showingWidgetView ? 'Today View' : 'Widget View'}
-              </Button>
-            </div>
+            <Button
+              variant="secondary"
+              onClick={() => setViewMode(showingWidgetView ? 'main' : 'widgets')}
+              iconLeft={
+                showingWidgetView
+                  ? <Sparkles size={16} aria-hidden="true" />
+                  : <LayoutGrid size={16} aria-hidden="true" />
+              }
+            >
+              {showingWidgetView ? 'Today View' : 'Widget View'}
+            </Button>
           }
         />
-        <MemberHighlights actions={<BookButton />} />
+        <MemberHighlights actions={showingWidgetView ? <BookButton /> : undefined} />
         {showingWidgetView ? (
           <WorkspacePanel
             role={appRole}
@@ -185,18 +184,21 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
             <aside
-              className="bg-gradient-to-b from-surface to-gold/5 rounded-xl border border-border p-2 space-y-1 h-full"
+              className="bg-gradient-to-b from-gold/10 via-surface to-surface rounded-xl border border-gold/20 p-2 h-full flex flex-col"
               aria-label="Overview sections"
             >
-              <p className="px-3 pt-3 pb-2 text-label">Overview</p>
-              {OVERVIEW_PANES.map((pane) => (
-                <AdminSectionNavItem
-                  key={pane.key}
-                  section={pane}
-                  active={activePane.key === pane.key}
-                  onSelect={() => setActivePaneId(pane.key)}
-                />
-              ))}
+              <div className="space-y-1">
+                <p className="px-3 pt-3 pb-2 text-label">Home base</p>
+                {OVERVIEW_PANES.map((pane) => (
+                  <AdminSectionNavItem
+                    key={pane.key}
+                    section={pane}
+                    active={activePane.key === pane.key}
+                    onSelect={() => setActivePaneId(pane.key)}
+                  />
+                ))}
+              </div>
+              <OverviewRailFooter />
             </aside>
 
             <section className="bg-gradient-to-br from-surface via-surface to-gold/5 rounded-xl border border-border lg:min-h-[620px]">

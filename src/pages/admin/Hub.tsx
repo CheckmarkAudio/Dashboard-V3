@@ -52,15 +52,6 @@ const DASHBOARD_PANES: DashboardPane[] = [
 
 const DEFAULT_DASHBOARD_PANE = DASHBOARD_PANES[0]!
 
-/**
- * QuickAssignButton — gold pill bubble in the Dashboard's PageHeader
- * actions slot. Mirrors the BookButton pattern on the Overview page
- * (same chrome, same spot) so the two surfaces feel like siblings.
- *
- * Hover/focus shakes the lightning bolt (`.icon-shake-on-hover` →
- * `.icon-shake-target` keyframe in index.css) — the only ornamental
- * detail; the rest of the bubble matches Book a Session exactly.
- */
 function QuickAssignButton() {
   const [open, setOpen] = useState(false)
   return (
@@ -68,10 +59,7 @@ function QuickAssignButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        // 2026-05-06 — width matched to BookButton (248px = 4×w-14
-        // social bubbles + 3×gap-2) so the two CTAs read as siblings
-        // across Overview + Hub.
-        className="icon-shake-on-hover inline-flex items-center justify-center gap-2 h-10 px-4 w-[248px] rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight ring-1 ring-gold-muted hover:bg-gold-muted hover:ring-gold-dim transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
+        className="icon-shake-on-hover inline-flex items-center justify-center gap-2 h-10 px-4 w-full min-w-[180px] rounded-xl bg-gold text-black text-[13px] font-extrabold tracking-tight ring-1 ring-gold-muted hover:bg-gold-muted hover:ring-gold-dim transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring"
       >
         <Zap
           size={14}
@@ -83,6 +71,27 @@ function QuickAssignButton() {
       </button>
       {open && <QuickAssignModal onClose={() => setOpen(false)} />}
     </>
+  )
+}
+
+function AdminRailFooter() {
+  return (
+    <div className="mt-auto pt-3">
+      <div className="space-y-3 rounded-xl border border-border bg-surface-alt/50 p-2 shadow-[0_8px_20px_rgba(0,0,0,0.04)]">
+        <div>
+          <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
+            Fast lane
+          </p>
+          <QuickAssignButton />
+        </div>
+        <div className="border-t border-border pt-3">
+          <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
+            Studio reach
+          </p>
+          <SocialStatsBar />
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -168,35 +177,27 @@ export default function AdminHub() {
   return (
     <AdminOverviewProvider>
       <div className="max-w-[1440px] mx-auto space-y-3 animate-fade-in">
-        {/* Skin pass 2026-05-06 (rev2) — re-swapped per user direction:
-            SocialStatsBar moves BACK UP to the PageHeader actions slot;
-            Quick Assign moves DOWN beside the member panel. Quick Assign
-            is now w-[248px] (matched to BookButton + the social bubble
-            cluster) so the swap doesn't shrink the affordance. */}
         <PageHeader
           icon={UsersRound}
           title="Dashboard"
           actions={
-            <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-              <SocialStatsBar />
-              <Button
-                variant="secondary"
-                onClick={() => setViewMode(showingWidgetView ? 'command' : 'widgets')}
-                iconLeft={
-                  showingWidgetView
-                    ? <Zap size={16} aria-hidden="true" />
-                    : <LayoutGrid size={16} aria-hidden="true" />
-                }
-              >
-                {showingWidgetView ? 'Command View' : 'Widget View'}
-              </Button>
-            </div>
+            <Button
+              variant="secondary"
+              onClick={() => setViewMode(showingWidgetView ? 'command' : 'widgets')}
+              iconLeft={
+                showingWidgetView
+                  ? <Zap size={16} aria-hidden="true" />
+                  : <LayoutGrid size={16} aria-hidden="true" />
+              }
+            >
+              {showingWidgetView ? 'Command View' : 'Widget View'}
+            </Button>
           }
         />
         {/* Lean 7 (PR #78) — instagram-story-style member bubbles
             above the widget grid, mirroring the member Overview
             pattern from PR #61. Same component, same query cache. */}
-        <MemberHighlights actions={<QuickAssignButton />} />
+        <MemberHighlights actions={showingWidgetView ? <QuickAssignButton /> : undefined} />
         {showingWidgetView ? (
           <WorkspacePanel
             role={appRole}
@@ -211,18 +212,21 @@ export default function AdminHub() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
             <aside
-              className="bg-surface rounded-xl border border-border p-2 space-y-1 h-full"
+              className="bg-surface rounded-xl border border-border p-2 h-full flex flex-col"
               aria-label="Dashboard sections"
             >
-              <p className="px-3 pt-3 pb-2 text-label">Dashboard</p>
-              {DASHBOARD_PANES.map((pane) => (
-                <AdminSectionNavItem
-                  key={pane.key}
-                  section={pane}
-                  active={activePane.key === pane.key}
-                  onSelect={() => setActivePaneId(pane.key)}
-                />
-              ))}
+              <div className="space-y-1">
+                <p className="px-3 pt-3 pb-2 text-label">Command</p>
+                {DASHBOARD_PANES.map((pane) => (
+                  <AdminSectionNavItem
+                    key={pane.key}
+                    section={pane}
+                    active={activePane.key === pane.key}
+                    onSelect={() => setActivePaneId(pane.key)}
+                  />
+                ))}
+              </div>
+              <AdminRailFooter />
             </aside>
 
             <section className="bg-surface rounded-xl border border-border lg:min-h-[620px]">
