@@ -523,6 +523,120 @@ export type Database = {
           },
         ]
       }
+      chat_message_mentions: {
+        Row: {
+          channel_id: string
+          created_at: string
+          id: string
+          mentioned_by: string
+          mentioned_by_name: string
+          mentioned_user_id: string
+          message_id: string
+          token: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          id?: string
+          mentioned_by: string
+          mentioned_by_name: string
+          mentioned_user_id: string
+          message_id: string
+          token: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          id?: string
+          mentioned_by?: string
+          mentioned_by_name?: string
+          mentioned_user_id?: string
+          message_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_message_mentions_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_message_mentions_mentioned_by_fkey"
+            columns: ["mentioned_by"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_message_mentions_mentioned_user_id_fkey"
+            columns: ["mentioned_user_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_message_mentions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_message_reactions: {
+        Row: {
+          channel_id: string
+          created_at: string
+          emoji: string
+          id: string
+          message_id: string
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          emoji: string
+          id?: string
+          message_id: string
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          emoji?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_message_reactions_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_message_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_reviews: {
         Row: {
           body: string | null
@@ -4057,6 +4171,10 @@ export type Database = {
           p_title_override?: string
         }
         Returns: Json
+      }
+      add_chat_message_mentions: {
+        Args: { p_mentioned_user_ids: string[]; p_message_id: string }
+        Returns: number
       }
       cancel_my_task_reassignment: {
         Args: { p_request_id: string }

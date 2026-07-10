@@ -33,7 +33,24 @@ export default function LinkifiedText({ text }: LinkifiedTextProps) {
             </a>
           )
         }
-        return <Fragment key={i}>{seg.value}</Fragment>
+        const parts = seg.value.split(/(@\[[^\]]+\])/g)
+        return (
+          <Fragment key={i}>
+            {parts.map((part, partIndex) => {
+              if (/^@\[([^\]]+)\]$/.test(part)) {
+                return (
+                  <span
+                    key={partIndex}
+                    className="inline-flex items-center rounded-full bg-gold/12 border border-gold/25 px-1.5 py-0.5 text-gold font-semibold whitespace-nowrap"
+                  >
+                    {part}
+                  </span>
+                )
+              }
+              return <Fragment key={partIndex}>{part}</Fragment>
+            })}
+          </Fragment>
+        )
       })}
     </>
   )

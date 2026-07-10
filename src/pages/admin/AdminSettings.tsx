@@ -31,6 +31,12 @@ import {
   type SiteBannerFit,
   type TeamSiteBranding,
 } from '../../lib/queries/teamSiteBranding'
+import { setUserPreference } from '../../lib/preferences'
+import {
+  COMMUNICATION_SOUND_OPTIONS,
+  getCommunicationSoundPreference,
+  type CommunicationSound,
+} from '../../lib/communicationSound'
 
 /**
  * Settings section nav model. Each section renders its own right-pane
@@ -103,7 +109,7 @@ function isGoogleTokenRevoked(message: string | null | undefined): boolean {
 
 export default function AdminSettings() {
   useDocumentTitle('Settings - Checkmark Workspace')
-  const { profile } = useAuth()
+  const { profile, refreshProfile } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [activeSection, setActiveSection] = useState<SectionKey>('account-access')
@@ -116,6 +122,7 @@ export default function AdminSettings() {
   const [notifyOnSubmission, setNotifyOnSubmission] = useState(true)
   const [notifyOnLeadUpdate, setNotifyOnLeadUpdate] = useState(true)
   const [requireDailyNotes, setRequireDailyNotes] = useState(false)
+  const [communicationSound, setCommunicationSound] = useState<CommunicationSound>('checkmark_chime')
 
   // Theme state
   const [introVideo, setIntroVideo] = useState(false)
@@ -159,6 +166,10 @@ export default function AdminSettings() {
     setHeaderFit(branding.site_banner_fit)
     setHeaderOpacity(branding.site_banner_opacity)
   }, [siteBrandingQuery.data])
+
+  useEffect(() => {
+    setCommunicationSound(getCommunicationSoundPreference(profile?.preferences))
+  }, [profile?.preferences])
 
   const loadGoogleCalendar = async () => {
     setGoogleCalendarLoading(true)
@@ -268,6 +279,9 @@ export default function AdminSettings() {
           site_banner_fit: headerFit,
           site_banner_opacity: headerOpacity,
         })
+      } else if (activeSection === 'notifications' && profile?.id) {
+        await setUserPreference(profile.id, 'communication_sound', communicationSound)
+        await refreshProfile()
       } else {
         // Remaining settings sections still keep their existing local-save
         // behavior until their persistence tables are wired.
@@ -599,6 +613,22 @@ export default function AdminSettings() {
                 <p className="text-[13px] text-text-muted mt-0.5">Control when and how the dashboard alerts the team.</p>
               </header>
               <div className="space-y-3">
+                <div className="flex items-center justify-between gap-4 p-3 rounded-lg border border-border hover:bg-surface-hover">
+                  <div>
+                    <p className="text-sm font-medium">Communication sound</p>
+                    <p className="text-xs text-text-muted">Used for DMs, reactions, and @pings.</p>
+                  </div>
+                  <select
+                    value={communicationSound}
+                    onChange={e => setCommunicationSound(e.target.value as CommunicationSound)}
+                    className="min-w-[180px] px-3 py-2 rounded-lg border border-border bg-surface-alt text-sm"
+                    aria-label="Communication notification sound"
+                  >
+                    {COMMUNICATION_SOUND_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <label htmlFor="admin-settings-notify-daily-notes" className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-surface-hover cursor-pointer">
                   <div>
                     <p className="text-sm font-medium">Daily note submissions</p>

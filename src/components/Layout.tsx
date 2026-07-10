@@ -12,6 +12,7 @@ import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
 import NotificationsBell from './notifications/NotificationsBell'
 import MessagesBell from './messages/MessagesBell'
+import CommunicationNotifier from './communication/CommunicationNotifier'
 import { DmDockProvider } from './messages/DmDockContext'
 import DmDock from './messages/DmDock'
 import FlywheelDemoBadge from './flywheel/FlywheelDemoBadge'
@@ -824,6 +825,7 @@ export default function Layout() {
 
       {/* "DEMO DATA" badge — only renders when ?flywheel-demo=1 is active. */}
       <FlywheelDemoBadge />
+      <CommunicationNotifier />
     </div>
     </DmDockProvider>
   )

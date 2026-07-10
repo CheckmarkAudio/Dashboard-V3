@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
@@ -19,10 +19,20 @@ import { detectLinkEmbed } from '../lib/forum/attachments'
 import { extractUrls } from '../lib/forum/linkify'
 import { unfurlLink } from '../lib/forum/unfurl'
 import { inferForumKind, uploadForumFile } from '../lib/forum/upload'
+import {
+  QUICK_REACTIONS,
+  addChatMessageMentions,
+  extractMentionedMemberIds,
+  fetchChatReactions,
+  mentionToken,
+  summarizeReactions,
+  toggleChatReaction,
+  type ChatReaction,
+} from '../lib/queries/chatInteractions'
 import { useToast } from '../components/Toast'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
-import { AlertCircle, Check, Clock, Edit2, Hash, MessageSquare, MoreHorizontal, Pin, PinOff, Plus, Send, Trash2, Users } from 'lucide-react'
+import { AlertCircle, AtSign, Check, Clock, Edit2, Hash, MessageSquare, MoreHorizontal, Pin, PinOff, Plus, Send, Smile, Trash2, Users } from 'lucide-react'
 import type { TeamMember } from '../types'
 
 type Channel = {
@@ -90,6 +100,7 @@ export default function Content() {
   const [renamingChannelId, setRenamingChannelId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
+  const [reactions, setReactions] = useState<ChatReaction[]>([])
   const [input, setInput] = useState('')
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([])
   const [sending, setSending] = useState(false)
@@ -465,6 +476,13 @@ export default function Content() {
           ),
         )
 
+        const mentionedUserIds = extractMentionedMemberIds(trimmed, activeMembers)
+        if (mentionedUserIds.length > 0) {
+          void addChatMessageMentions(row.id, mentionedUserIds).catch((err) => {
+            console.warn('[Content] add mentions failed:', err)
+          })
+        }
+
         // Background unfurl. We don't block the user on this — it's
         // a separate write that lands a beat after the message
         // itself. Realtime UPDATE sub picks it up + the bubble
@@ -615,16 +633,94 @@ export default function Content() {
     } catch { return '' }
   }
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-6 w-6 border-2 border-gold/20 border-t-gold" /></div>
-  }
-
   // Lookup helper for messages — avatar/profile photo + presence
   // dot need the full TeamMember row, not just sender_name on the
   // chat row.
   const memberById = new Map(activeMembers.map((m) => [m.id, m]))
+  const messageIdsKey = useMemo(
+    () => messages.filter((m) => !m._optimistic).map((m) => m.id).join(','),
+    [messages],
+  )
+  const reactionsByMessage = useMemo(() => {
+    const grouped = new Map<string, ChatReaction[]>()
+    for (const reaction of reactions) {
+      const list = grouped.get(reaction.message_id) ?? []
+      list.push(reaction)
+      grouped.set(reaction.message_id, list)
+    }
+    return grouped
+  }, [reactions])
+  const mentionMatch = input.match(/(?:^|\s)@([A-Za-z0-9_. -]{0,32})$/)
+  const mentionQuery = mentionMatch?.[1]?.trim().toLowerCase() ?? null
+  const mentionSuggestions = mentionMatch
+    ? activeMembers
+        .filter((member) => member.id !== profile?.id)
+        .filter((member) => {
+          if (!mentionQuery) return true
+          return member.display_name.toLowerCase().includes(mentionQuery)
+        })
+        .slice(0, 5)
+    : []
+
+  const refreshReactions = useCallback(async () => {
+    const ids = messageIdsKey ? messageIdsKey.split(',').filter(Boolean) : []
+    if (ids.length === 0) {
+      setReactions([])
+      return
+    }
+    try {
+      setReactions(await fetchChatReactions(ids))
+    } catch (err) {
+      console.warn('[Content] reactions fetch failed:', err)
+    }
+  }, [messageIdsKey])
+
+  useEffect(() => {
+    void refreshReactions()
+  }, [refreshReactions])
+
+  useEffect(() => {
+    if (!activeChannel) return
+    const sub = supabase
+      .channel(`message-reactions-${activeChannel.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'chat_message_reactions', filter: `channel_id=eq.${activeChannel.id}` },
+        () => void refreshReactions(),
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(sub) }
+  }, [activeChannel, refreshReactions])
+
+  const insertMention = useCallback((member: TeamMember) => {
+    setInput((prev) => prev.replace(/(^|\s)@([A-Za-z0-9_. -]{0,32})$/, (_match, prefix: string) => `${prefix}${mentionToken(member)} `))
+  }, [])
+
+  const handleReact = useCallback(
+    async (message: Message, emoji: string, existingMine: boolean) => {
+      if (!profile?.id || message._optimistic) return
+      try {
+        await toggleChatReaction({
+          messageId: message.id,
+          channelId: message.channel_id,
+          emoji,
+          userId: profile.id,
+          userName: profile.display_name ?? 'Someone',
+          existingMine,
+        })
+        await refreshReactions()
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Reaction failed', 'error')
+      }
+    },
+    [profile?.display_name, profile?.id, refreshReactions, toast],
+  )
 
   const canSend = (input.trim().length > 0 || pendingAttachments.length > 0) && !sending
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-6 w-6 border-2 border-gold/20 border-t-gold" /></div>
+  }
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in flex flex-col">
@@ -931,6 +1027,9 @@ export default function Content() {
                   time={formatTime(msg.created_at)}
                   canEdit={isMe}
                   canDelete={isMe || isAdmin}
+                  reactions={reactionsByMessage.get(msg.id) ?? []}
+                  currentUserId={profile?.id ?? null}
+                  onReact={handleReact}
                 />
               )
             })}
@@ -953,6 +1052,27 @@ export default function Content() {
                 }
                 disabled={sending}
               />
+              {mentionSuggestions.length > 0 && (
+                <div className="rounded-xl border border-border bg-surface-alt/90 p-2 shadow-lg animate-fade-in">
+                  <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-text-light flex items-center gap-1.5">
+                    <AtSign size={11} className="text-gold" aria-hidden="true" />
+                    Ping teammate
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {mentionSuggestions.map((member) => (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => insertMention(member)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[12px] font-semibold text-text-muted hover:border-gold/40 hover:text-gold hover:bg-gold/8 transition-colors focus-ring"
+                      >
+                        <MemberAvatar member={member} size="xs" />
+                        {member.display_name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -1035,6 +1155,9 @@ function ChatBubble({
   time,
   canEdit,
   canDelete,
+  reactions,
+  currentUserId,
+  onReact,
 }: {
   message: Message
   member: TeamMember | undefined
@@ -1045,6 +1168,9 @@ function ChatBubble({
   /** Sender OR admin — owns the Delete affordance. RLS enforces
    *  the actual write. */
   canDelete: boolean
+  reactions: ChatReaction[]
+  currentUserId: string | null
+  onReact: (message: Message, emoji: string, existingMine: boolean) => void
 }) {
   // Per-member chat color. Override comes from the member's own
   // preferences when we have the row; falls back to a deterministic
@@ -1131,9 +1257,12 @@ function ChatBubble({
   // sendMessage callback swap _status as the server confirms.
   const isSending = message._status === 'sending'
   const isFailed = message._status === 'failed'
+  const reactionSummaries = summarizeReactions(reactions, currentUserId)
+  const canReact = Boolean(currentUserId) && !message._optimistic
 
   return (
     <div
+      id={`message-${message.id}`}
       className={`group/msg flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'} ${
         isSending ? 'opacity-70' : ''
       }`}
@@ -1239,6 +1368,52 @@ function ChatBubble({
             )}
             {attachments.length > 0 && (
               <AttachmentDisplay attachments={attachments} ownBubble={isMe} />
+            )}
+
+            {canReact && (
+              <div
+                className={`mt-1.5 flex flex-wrap items-center gap-1.5 ${
+                  isMe ? 'justify-end' : 'justify-start'
+                }`}
+              >
+                {reactionSummaries.map((reaction) => (
+                  <button
+                    key={reaction.emoji}
+                    type="button"
+                    onClick={() => onReact(message, reaction.emoji, reaction.mine)}
+                    title={reaction.names.join(', ')}
+                    aria-pressed={reaction.mine}
+                    className={[
+                      'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold transition-colors focus-ring',
+                      reaction.mine
+                        ? 'border-gold/45 bg-gold/14 text-gold'
+                        : 'border-border bg-surface-alt/70 text-text-muted hover:border-gold/35 hover:text-gold',
+                    ].join(' ')}
+                  >
+                    <span aria-hidden="true">{reaction.emoji}</span>
+                    <span className="tabular-nums">{reaction.count}</span>
+                  </button>
+                ))}
+                <div className="inline-flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity">
+                  {QUICK_REACTIONS.map((emoji) => {
+                    const mine = reactionSummaries.some((reaction) => reaction.emoji === emoji && reaction.mine)
+                    return (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => onReact(message, emoji, mine)}
+                        aria-label={`React ${emoji}`}
+                        aria-pressed={mine}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface text-[12px] hover:border-gold/40 hover:bg-gold/10 transition-colors focus-ring"
+                      >
+                        {emoji}
+                      </button>
+                    )
+                  })}
+                  <span className="sr-only">Add reaction</span>
+                  <Smile size={12} className="text-text-light" aria-hidden="true" />
+                </div>
+              </div>
             )}
 
             {/* 2026-05-20 — Per-bubble actions. Hover-revealed …

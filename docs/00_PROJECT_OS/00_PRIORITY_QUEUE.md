@@ -38,7 +38,7 @@ You can also just tell an AI coder "add this to the priority queue" and it will 
 <!-- ACTIVE:START -->
 <!-- Add priority items below this line as `- [ ] ...`. The session-start hook reads everything between the ACTIVE markers. Keep finished items OUT of here — move them to Done. -->
 
-- [ ] Add communication reactions, @pings, and sound cues for Forum + DMs — Requested by: Gavin · Added: 2026-07-10 · ASAP: yes · Notes: Next priority after the site-wide banner. Scope: add simple reactions for Forum posts and DMs; add @[username] ping ability in Forum and DMs; play a standard notification sound when a DM is sent, a reaction is made, or an @ping is sent in Forum; later add per-account sound customization in Settings with dropdown choices. Reaction notices should not become Overview personal notifications: show a small temporary clickable bubble with the emoji, actor, and tiny message identifier, then fade away and deep-link to the reacted message.
+_(No active priority tasks right now.)_
 
 <!-- ACTIVE:END -->
 
@@ -47,6 +47,8 @@ You can also just tell an AI coder "add this to the priority queue" and it will 
 ## Done
 
 Completed priority items, most recent first. Kept as a record — do not delete.
+
+- [x] Add communication reactions, @pings, and sound cues for Forum + DMs — Requested by: Gavin · Added: 2026-07-10 · Done: 2026-07-10 · Notes: Added chat_message_reactions and chat_message_mentions, Forum/DM reaction buttons, @[Name] mention picker, Checkmark Chime/Soft Pop/Silent preference, and global clickable sound bubbles for DMs, reactions, and pings.
 
 - [x] Wire site-wide dashboard banner/header from Settings Branding — Requested by: Gavin · Added: 2026-07-10 · Done: 2026-07-10 · Notes: Global header is larger, reads a team-wide banner through RPC, and Settings Branding uploads/removes the shared banner via member-media storage.
 
