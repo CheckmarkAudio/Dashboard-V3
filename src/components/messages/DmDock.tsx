@@ -19,6 +19,7 @@ import { dmKeys, dmThreadLabel, markDmRead, type DmThread } from '../../lib/quer
 import { useDmDock } from './DmDockContext'
 import { useDmThreads } from './useDmThreads'
 import { useChannelChat } from './useChannelChat'
+import { notificationWorkflowKey, useNotificationWorkflow } from '../notifications/notificationWorkflow'
 
 export default function DmDock() {
   const { profile } = useAuth()
@@ -61,6 +62,7 @@ function DmChatWindow({
   const { profile } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const workflow = useNotificationWorkflow()
   const { messages, loading, send, deleteMessage, editMessage } = useChannelChat(channelId)
   const [input, setInput] = useState('')
   const [pending, setPending] = useState<ChatAttachment[]>([])
@@ -150,7 +152,7 @@ function DmChatWindow({
     if (!minimized) endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, minimized])
 
-  const resolveThread = useCallback(() => {
+  const markThreadRead = useCallback(() => {
     queryClient.setQueryData<DmThread[]>(dmKeys.list(), (prev) =>
       prev?.map((row) =>
         row.channel_id === channelId
@@ -163,6 +165,16 @@ function DmChatWindow({
       .catch(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
   }, [channelId, queryClient])
 
+  const markStarted = useCallback(() => {
+    workflow.setStarted(notificationWorkflowKey('dm', channelId))
+    markThreadRead()
+  }, [channelId, markThreadRead, workflow])
+
+  const markReplied = useCallback(() => {
+    workflow.setReplied(notificationWorkflowKey('dm', channelId))
+    markThreadRead()
+  }, [channelId, markThreadRead, workflow])
+
   const canSend = input.trim().length > 0 || pending.length > 0
   const submit = () => {
     if (!canSend) return
@@ -170,7 +182,7 @@ function DmChatWindow({
     const atts = pending
     setInput('')
     setPending([])
-    void send(t, atts).then(resolveThread)
+    void send(t, atts).then(markReplied)
   }
 
   const startEdit = (m: { id: string; content: string }) => {
@@ -244,13 +256,13 @@ function DmChatWindow({
         {unread > 0 && (
           <button
             type="button"
-            onClick={resolveThread}
+            onClick={markStarted}
             aria-label={`Mark conversation with ${label} read`}
-            title="Mark read"
+            title="Mark started"
             className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
           >
             <Check size={13} strokeWidth={2.8} aria-hidden="true" />
-            Read
+            Start
           </button>
         )}
         <button

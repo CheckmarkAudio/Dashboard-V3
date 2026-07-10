@@ -20,6 +20,7 @@ import { extractUrls } from '../lib/forum/linkify'
 import { unfurlLink } from '../lib/forum/unfurl'
 import { inferForumKind, uploadForumFile } from '../lib/forum/upload'
 import { useToast } from '../components/Toast'
+import { notificationWorkflowKey, useNotificationWorkflow } from '../components/notifications/notificationWorkflow'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
 import { AlertCircle, Check, Clock, Edit2, Hash, MessageSquare, MoreHorizontal, Pin, PinOff, Plus, Send, Trash2, Users } from 'lucide-react'
@@ -102,6 +103,7 @@ export default function Content() {
   // "is anything still being dragged over us" signal.
   const [dragDepth, setDragDepth] = useState(0)
   const { toast } = useToast()
+  const workflow = useNotificationWorkflow()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Team members for the sidebar. Shares cache with other pages via
@@ -213,7 +215,7 @@ export default function Content() {
     ? dmThreads.find((t) => t.channel_id === activeChannel.id)
     : undefined
   const activeDmUnread = activeDmThread?.unread_count ?? 0
-  const resolveActiveDm = useCallback(() => {
+  const markActiveDmRead = useCallback(() => {
     if (!activeChannel || !activeIsDm) return
     const nowIso = new Date().toISOString()
     queryClient.setQueryData<DmThread[]>(dmKeys.list(), (prev) =>
@@ -227,6 +229,18 @@ export default function Content() {
       .then(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
       .catch(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
   }, [activeChannel, activeIsDm, queryClient])
+
+  const markActiveDmStarted = useCallback(() => {
+    if (!activeChannel || !activeIsDm) return
+    workflow.setStarted(notificationWorkflowKey('dm', activeChannel.id))
+    markActiveDmRead()
+  }, [activeChannel, activeIsDm, markActiveDmRead, workflow])
+
+  const markActiveDmReplied = useCallback(() => {
+    if (!activeChannel || !activeIsDm) return
+    workflow.setReplied(notificationWorkflowKey('dm', activeChannel.id))
+    markActiveDmRead()
+  }, [activeChannel, activeIsDm, markActiveDmRead, workflow])
 
   // 2026-05-24 — close the admin channel context menu on outside
   // click / Escape. Mirrors the calendar booking context-menu pattern.
@@ -473,7 +487,7 @@ export default function Content() {
               : m,
           ),
         )
-        if (activeIsDm) resolveActiveDm()
+        if (activeIsDm) markActiveDmReplied()
 
         // Background unfurl. We don't block the user on this — it's
         // a separate write that lands a beat after the message
@@ -925,11 +939,11 @@ export default function Content() {
               {activeIsDm && activeDmUnread > 0 && (
                 <button
                   type="button"
-                  onClick={resolveActiveDm}
+                  onClick={markActiveDmStarted}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-300 text-[11px] font-bold hover:bg-emerald-500/20 transition-colors focus-ring"
                 >
                   <Check size={12} strokeWidth={2.8} aria-hidden="true" />
-                  Mark read
+                  Start
                 </button>
               )}
               <span className="text-[10px] text-text-light">{messages.length} messages</span>

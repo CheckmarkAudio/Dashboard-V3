@@ -13,6 +13,7 @@ import { fetchMemberAssignedTasks } from '../../lib/queries/assignments'
 import { supabase } from '../../lib/supabase'
 import type { AssignedTask } from '../../types/assignments'
 import { useDmThreads } from '../messages/useDmThreads'
+import { notificationWorkflowKey, useNotificationWorkflow } from '../notifications/notificationWorkflow'
 
 export type OverviewScoreId = 'tasks' | 'messages' | 'sessions' | 'media'
 
@@ -39,6 +40,7 @@ function AnimatedNumber({ value }: { value: number }) {
 }
 
 type ScoreTone = 'gold' | 'violet' | 'sky' | 'emerald'
+const MESSAGE_COUNTER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
 const SCORE_TONE_CLASSES: Record<
   ScoreTone,
@@ -99,7 +101,7 @@ function OverviewScoreCard({
 }) {
   const toneClasses = SCORE_TONE_CLASSES[tone]
   const percent = total && total > 0
-    ? Math.max(0, Math.min(100, ((total - value) / total) * 100))
+    ? Math.max(0, Math.min(100, (value / total) * 100))
     : value > 0
       ? 100
       : 0
@@ -178,6 +180,11 @@ function completedToday(task: AssignedTask, todayKey: string): boolean {
   return Boolean(task.completed_at && localDateKey(new Date(task.completed_at)) === todayKey)
 }
 
+function recentMessageThread(latestCreatedAt: string | null): boolean {
+  if (!latestCreatedAt) return false
+  return Date.now() - new Date(latestCreatedAt).getTime() <= MESSAGE_COUNTER_WINDOW_MS
+}
+
 export default function OverviewScorePreview({
   activeId,
   onSelect,
@@ -187,6 +194,7 @@ export default function OverviewScorePreview({
 }) {
   const { profile } = useAuth()
   const { todaySessions, loading: overviewLoading, error: overviewError } = useMemberOverviewContext()
+  const workflow = useNotificationWorkflow()
   const dmThreadsQuery = useDmThreads()
   const todayKey = localDateKey()
   const now = new Date()
@@ -223,14 +231,20 @@ export default function OverviewScorePreview({
   const taskLoopTotal = tasksLeft + tasksCompletedToday
 
   const dmThreads = dmThreadsQuery.data ?? []
-  const messageThreadsLeft = dmThreads.filter((thread) => (thread.unread_count ?? 0) > 0).length
-  const messageThreadTotal = dmThreads.length
+  const visibleMessageThreads = dmThreads.filter((thread) => {
+    const workflowRecord = workflow.getRecord(notificationWorkflowKey('dm', thread.channel_id))
+    return (thread.unread_count ?? 0) > 0 || recentMessageThread(thread.latest_created_at) || workflowRecord
+  })
+  const messageThreadsResolved = visibleMessageThreads.filter((thread) => {
+    return workflow.getRecord(notificationWorkflowKey('dm', thread.channel_id))?.status === 'resolved'
+  }).length
+  const messageThreadTotal = visibleMessageThreads.length
 
   const activeSessions = todaySessions.filter((session) => {
     const status = session.status.toLowerCase()
     return status !== 'cancelled' && status !== 'canceled'
   })
-  const sessionsLeft = activeSessions.filter((session) => toMinutes(session.end_time) >= nowMinutes).length
+  const sessionsDone = activeSessions.filter((session) => toMinutes(session.end_time) < nowMinutes).length
 
   return (
     <div
@@ -240,8 +254,8 @@ export default function OverviewScorePreview({
       <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
         <OverviewScoreCard
           id="tasks"
-          label="Tasks left"
-          value={tasksLeft}
+          label="Tasks done"
+          value={tasksCompletedToday}
           total={taskLoopTotal}
           active={activeId === 'tasks'}
           onSelect={onSelect}
@@ -252,8 +266,8 @@ export default function OverviewScorePreview({
         />
         <OverviewScoreCard
           id="messages"
-          label="Message follow-up"
-          value={messageThreadsLeft}
+          label="Messages resolved"
+          value={messageThreadsResolved}
           total={messageThreadTotal}
           active={activeId === 'messages'}
           onSelect={onSelect}
@@ -264,8 +278,8 @@ export default function OverviewScorePreview({
         />
         <OverviewScoreCard
           id="sessions"
-          label="Sessions left today"
-          value={sessionsLeft}
+          label="Sessions done"
+          value={sessionsDone}
           total={activeSessions.length}
           active={activeId === 'sessions'}
           onSelect={onSelect}

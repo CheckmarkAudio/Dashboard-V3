@@ -17,9 +17,41 @@ import { useDmDock } from './DmDockContext'
 import NewMessageDialog from './NewMessageDialog'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
+import {
+  notificationWorkflowKey,
+  useNotificationWorkflow,
+  type NotificationWorkflowStatus,
+} from '../notifications/notificationWorkflow'
 
 const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)'
 const RECENT_THREAD_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+type ThreadDisplayStatus = 'new' | NotificationWorkflowStatus
+
+const STATUS_RANK: Record<ThreadDisplayStatus, number> = {
+  new: 0,
+  started: 1,
+  replied: 1,
+  resolved: 2,
+}
+
+const STATUS_STYLES: Record<ThreadDisplayStatus, string> = {
+  new: 'bg-rose-500/15 border-rose-400/30 text-rose-400',
+  started: 'bg-lime-500/15 border-lime-400/30 text-lime-300',
+  replied: 'bg-lime-500/15 border-lime-400/30 text-lime-300',
+  resolved: 'bg-surface-alt border-border text-text-light',
+}
+
+function StatusBadge({ status, count }: { status: ThreadDisplayStatus; count: number }) {
+  const label = status === 'new' ? `${count > 9 ? '9+' : count} new` : status
+  return (
+    <span
+      className={`inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full border text-[10px] font-bold tabular-nums capitalize ${STATUS_STYLES[status]}`}
+    >
+      {label}
+    </span>
+  )
+}
 
 function relativeTime(iso: string | null): string {
   if (!iso) return ''
@@ -41,6 +73,7 @@ function isRecentThread(thread: DmThread): boolean {
 export default function MessagesBell() {
   const queryClient = useQueryClient()
   const { profile } = useAuth()
+  const workflow = useNotificationWorkflow()
   const { openThread: openInDock } = useDmDock()
   const unread = useDmUnreadCount()
   const { data: threads = [] } = useDmThreads()
@@ -48,12 +81,22 @@ export default function MessagesBell() {
   const [entered, setEntered] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [expandedThreadId, setExpandedThreadId] = useState<string | null>(null)
+  const [confirmingResolveId, setConfirmingResolveId] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
   const [replyBusy, setReplyBusy] = useState(false)
   const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
   const buttonRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
-  const visibleThreads = threads.filter((thread) => thread.unread_count > 0 || isRecentThread(thread))
+  const getThreadKey = (thread: DmThread) => notificationWorkflowKey('dm', thread.channel_id)
+  const getThreadStatus = (thread: DmThread): ThreadDisplayStatus =>
+    workflow.getRecord(getThreadKey(thread))?.status ?? (thread.unread_count > 0 ? 'new' : 'started')
+  const visibleThreads = [...threads]
+    .filter((thread) => thread.unread_count > 0 || isRecentThread(thread) || workflow.getRecord(getThreadKey(thread)))
+    .sort((a, b) => {
+      const rankDelta = STATUS_RANK[getThreadStatus(a)] - STATUS_RANK[getThreadStatus(b)]
+      if (rankDelta !== 0) return rankDelta
+      return new Date(b.latest_created_at ?? 0).getTime() - new Date(a.latest_created_at ?? 0).getTime()
+    })
 
   useLayoutEffect(() => {
     if (!open) return
@@ -101,7 +144,7 @@ export default function MessagesBell() {
     openInDock(channelId)
   }
 
-  const resolveThread = (channelId: string) => {
+  const markThreadRead = (channelId: string) => {
     const nowIso = new Date().toISOString()
     queryClient.setQueryData<DmThread[]>(dmKeys.list(), (prev) =>
       prev?.map((thread) =>
@@ -115,12 +158,35 @@ export default function MessagesBell() {
       .catch(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
   }
 
-  const togglePreview = (channelId: string) => {
+  const startThread = (thread: DmThread) => {
+    const current = workflow.getRecord(getThreadKey(thread))?.status
+    if (current !== 'resolved' && current !== 'replied') workflow.setStarted(getThreadKey(thread))
+    if (thread.unread_count > 0) markThreadRead(thread.channel_id)
+  }
+
+  const resolveThread = (thread: DmThread) => {
+    workflow.setResolved(getThreadKey(thread))
+    markThreadRead(thread.channel_id)
+    setConfirmingResolveId(null)
+  }
+
+  const togglePreview = (thread: DmThread) => {
+    const channelId = thread.channel_id
     setExpandedThreadId((current) => {
       const next = current === channelId ? null : channelId
       if (next !== channelId) setReplyText('')
+      if (next === channelId) startThread(thread)
+      setConfirmingResolveId(null)
       return next
     })
+  }
+
+  const handleResolveClick = (thread: DmThread) => {
+    if (confirmingResolveId === thread.channel_id) {
+      resolveThread(thread)
+      return
+    }
+    setConfirmingResolveId(thread.channel_id)
   }
 
   const sendQuickReply = async (thread: DmThread) => {
@@ -138,7 +204,8 @@ export default function MessagesBell() {
       })
       if (error) throw error
       setReplyText('')
-      resolveThread(thread.channel_id)
+      workflow.setReplied(getThreadKey(thread))
+      markThreadRead(thread.channel_id)
       void queryClient.invalidateQueries({ queryKey: dmKeys.list() })
     } catch {
       void queryClient.invalidateQueries({ queryKey: dmKeys.list() })
@@ -244,13 +311,18 @@ export default function MessagesBell() {
                   <ThreadRow
                     key={t.channel_id}
                     thread={t}
+                    status={getThreadStatus(t)}
                     expanded={expandedThreadId === t.channel_id}
+                    confirmingResolve={confirmingResolveId === t.channel_id}
                     replyText={expandedThreadId === t.channel_id ? replyText : ''}
                     replyBusy={replyBusy && expandedThreadId === t.channel_id}
-                    onTogglePreview={() => togglePreview(t.channel_id)}
-                    onOpen={() => openThread(t.channel_id)}
+                    onTogglePreview={() => togglePreview(t)}
+                    onOpen={() => {
+                      startThread(t)
+                      openThread(t.channel_id)
+                    }}
                     onReplyChange={setReplyText}
-                    onMarkRead={() => resolveThread(t.channel_id)}
+                    onResolveClick={() => handleResolveClick(t)}
                     onSendReply={() => void sendQuickReply(t)}
                   />
                 ))}
@@ -270,28 +342,31 @@ export default function MessagesBell() {
 
 function ThreadRow({
   thread,
+  status,
   expanded,
+  confirmingResolve,
   replyText,
   replyBusy,
   onTogglePreview,
   onOpen,
   onReplyChange,
-  onMarkRead,
+  onResolveClick,
   onSendReply,
 }: {
   thread: DmThread
+  status: ThreadDisplayStatus
   expanded: boolean
+  confirmingResolve: boolean
   replyText: string
   replyBusy: boolean
   onTogglePreview: () => void
   onOpen: () => void
   onReplyChange: (value: string) => void
-  onMarkRead: () => void
+  onResolveClick: () => void
   onSendReply: () => void
 }) {
   const label = dmThreadLabel(thread)
   const unread = thread.unread_count > 0
-  const unreadLabel = thread.unread_count > 9 ? '9+' : String(thread.unread_count)
   const lead = thread.members[0] ?? null
   const preview = thread.latest_content?.trim() || 'No messages yet'
   const senderPrefix =
@@ -300,7 +375,7 @@ function ThreadRow({
       : ''
 
   return (
-    <div className={`transition-colors ${expanded ? 'bg-violet-500/10' : unread ? 'bg-gold/8' : 'hover:bg-surface-hover'}`}>
+    <div className={`transition-colors ${status === 'resolved' ? 'bg-surface-alt/30 opacity-75' : expanded ? 'bg-violet-500/10' : status === 'new' ? 'bg-gold/8' : 'hover:bg-surface-hover'}`}>
       <div className="flex items-start gap-3 px-2 py-2">
         <button
           type="button"
@@ -333,15 +408,7 @@ function ThreadRow({
           </span>
         </button>
         <div className="shrink-0 flex flex-col items-end gap-1">
-          {unread ? (
-            <span className="inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full bg-rose-500/15 border border-rose-400/30 text-[10px] font-bold text-rose-400 tabular-nums">
-              {unreadLabel} new
-            </span>
-          ) : (
-            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-300/70">
-              Read
-            </span>
-          )}
+          <StatusBadge status={status} count={thread.unread_count} />
           <button
             type="button"
             onClick={onOpen}
@@ -381,18 +448,18 @@ function ThreadRow({
             className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-violet-500/25 text-[12px] text-text placeholder:text-text-light focus:border-violet-400/60 focus:outline-none resize-none min-h-[54px]"
           />
           <div className="flex items-center justify-between gap-2">
-            {unread ? (
+            {status !== 'resolved' ? (
               <button
                 type="button"
-                onClick={onMarkRead}
+                onClick={onResolveClick}
                 className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
               >
                 <Check size={11} strokeWidth={2.8} aria-hidden="true" />
-                Mark read
+                {confirmingResolve ? 'Finish' : 'Resolve'}
               </button>
             ) : (
               <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/70">
-                Resolved this week
+                Resolved
               </span>
             )}
             <button
@@ -405,7 +472,12 @@ function ThreadRow({
               {replyBusy ? 'Sending...' : 'Send'}
             </button>
           </div>
-          <p className="text-[10px] text-text-light/70">Cmd/Ctrl + Enter to send. Read items stay here for 7 days.</p>
+          {confirmingResolve && (
+            <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200">
+              Notification resolved? Click Finish to complete.
+            </div>
+          )}
+          <p className="text-[10px] text-text-light/70">Cmd/Ctrl + Enter to send. Resolved items move to the bottom for 7 days.</p>
         </div>
       )}
     </div>

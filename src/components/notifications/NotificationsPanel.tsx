@@ -21,6 +21,11 @@ import LinkifiedText from '../forum/LinkifiedText'
 import { useToast } from '../Toast'
 import type { AssignmentNotification } from '../../types/assignments'
 import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
+import {
+  notificationWorkflowKey,
+  useNotificationWorkflow,
+  type NotificationWorkflowStatus,
+} from './notificationWorkflow'
 
 /**
  * NotificationsPanel — the actual notification list, lifted out of
@@ -103,6 +108,37 @@ type ExpandedChannelMessage = {
 }
 
 const RECENT_RESOLVED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+type ChannelDisplayStatus = 'new' | NotificationWorkflowStatus
+
+const STATUS_RANK: Record<ChannelDisplayStatus, number> = {
+  new: 0,
+  started: 1,
+  replied: 1,
+  resolved: 2,
+}
+
+const STATUS_STYLES: Record<ChannelDisplayStatus, string> = {
+  new: 'bg-rose-500 text-white',
+  started: 'bg-lime-500/15 border border-lime-400/30 text-lime-300',
+  replied: 'bg-lime-500/15 border border-lime-400/30 text-lime-300',
+  resolved: 'bg-surface-alt border border-border text-text-light',
+}
+
+function StatusPill({ status, count }: { status: ChannelDisplayStatus; count: number }) {
+  const label =
+    status === 'new'
+      ? count > 1
+        ? `${count > 9 ? '9+' : count} new`
+        : 'new'
+      : status
+  return (
+    <span
+      className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold leading-none tabular-nums capitalize whitespace-nowrap ${STATUS_STYLES[status]}`}
+    >
+      {label}
+    </span>
+  )
+}
 
 function isRecentChannel(c: ChannelNotification): boolean {
   if (!c.latest_created_at) return false
@@ -211,6 +247,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   const { profile } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
+  const workflow = useNotificationWorkflow()
   // PR #161 — `NotificationsPanel` mounts in TWO places at once: the
   // top-bar bell dropdown AND the historical Overview widget on `/`.
   // Supabase Realtime returns the SAME channel instance for the same
@@ -225,6 +262,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   // it to reveal a textarea + Send. Stays open until the user clears it
   // or sends, so the expanded state survives a refetch.
   const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null)
+  const [confirmingResolveId, setConfirmingResolveId] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
   const [replyBusy, setReplyBusy] = useState(false)
 
@@ -295,7 +333,16 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     staleTime: 60_000,
   })
 
-  const visibleChannels = channels.filter((c) => c.unread_count > 0 || isRecentChannel(c))
+  const getChannelKey = (c: ChannelNotification) => notificationWorkflowKey('forum', c.channel_id)
+  const getChannelStatus = (c: ChannelNotification): ChannelDisplayStatus =>
+    workflow.getRecord(getChannelKey(c))?.status ?? (c.unread_count > 0 ? 'new' : 'started')
+  const visibleChannels = [...channels]
+    .filter((c) => c.unread_count > 0 || isRecentChannel(c) || workflow.getRecord(getChannelKey(c)))
+    .sort((a, b) => {
+      const rankDelta = STATUS_RANK[getChannelStatus(a)] - STATUS_RANK[getChannelStatus(b)]
+      if (rankDelta !== 0) return rankDelta
+      return new Date(b.latest_created_at ?? 0).getTime() - new Date(a.latest_created_at ?? 0).getTime()
+    })
   const visibleAssignments = assignments.filter((n) => !n.is_read)
   const totalUnread = channelUnread + assignmentUnread
 
@@ -331,6 +378,32 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
       void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
     })
     onItemClick?.()
+  }
+
+  const markChannelStarted = (c: ChannelNotification) => {
+    const key = getChannelKey(c)
+    const current = workflow.getRecord(key)?.status
+    if (current !== 'resolved' && current !== 'replied') workflow.setStarted(key)
+    if (c.unread_count > 0) handleMarkChannelRead(c.channel_id)
+  }
+
+  const markChannelReplied = (c: ChannelNotification) => {
+    workflow.setReplied(getChannelKey(c))
+    handleMarkChannelRead(c.channel_id)
+  }
+
+  const resolveChannel = (c: ChannelNotification) => {
+    workflow.setResolved(getChannelKey(c))
+    handleMarkChannelRead(c.channel_id)
+    setConfirmingResolveId(null)
+  }
+
+  const handleResolveChannelClick = (c: ChannelNotification) => {
+    if (confirmingResolveId === c.channel_id) {
+      resolveChannel(c)
+      return
+    }
+    setConfirmingResolveId(c.channel_id)
   }
 
   const handleAssignmentClick = (n: AssignmentNotification) => {
@@ -460,7 +533,10 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             {visibleChannels.map((c) => {
             const hasMessage = !!c.latest_id
             const unread = c.unread_count > 0
+            const channelStatus = getChannelStatus(c)
+            const isResolved = channelStatus === 'resolved'
             const isExpanded = expandedChannelId === c.channel_id
+            const confirmingResolve = confirmingResolveId === c.channel_id
             const expandedMessage =
               isExpanded && expandedMessageQuery.data?.id === c.latest_id
                 ? expandedMessageQuery.data
@@ -475,7 +551,9 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
               } else {
                 setExpandedChannelId(c.channel_id)
                 setReplyText('')
+                markChannelStarted(c)
               }
+              setConfirmingResolveId(null)
             }
 
             const submitReply = async () => {
@@ -500,7 +578,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 // this, the realtime INSERT triggers a refetch that counts
                 // the just-sent message as unread for everyone, including
                 // the sender.
-                handleMarkChannelRead(c.channel_id)
+                markChannelReplied(c)
                 void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
               } catch (err) {
                 toast(err instanceof Error ? err.message : 'Send failed', 'error')
@@ -516,11 +594,13 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             // State (unread / expanded / hover) communicated by bg
             // tint alone now that the divide-theme line provides the
             // separation. Forum violet still tints the expanded row.
-            const stateBg = isExpanded
-              ? 'bg-violet-500/10'
-              : unread
-                ? 'bg-gold/8 hover:bg-gold/12'
-                : 'hover:bg-surface-hover'
+            const stateBg = isResolved
+              ? 'bg-surface-alt/30 opacity-75'
+              : isExpanded
+                ? 'bg-violet-500/10'
+                : channelStatus === 'new'
+                  ? 'bg-gold/8 hover:bg-gold/12'
+                  : 'hover:bg-surface-hover'
 
             return (
               <div
@@ -568,6 +648,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         does + invites the click. */}
                     <Link
                       to={channelHref}
+                      onClick={() => markChannelStarted(c)}
                       aria-label={`Open #${c.channel_name} in forum`}
                       title="Open in forum"
                       className="inline-flex items-center gap-1 h-7 px-2 rounded-full ring-1 bg-violet-500/15 ring-violet-500/30 text-violet-200 text-[10px] font-bold uppercase tracking-wider hover:bg-violet-500/30 hover:ring-violet-400/60 hover:text-white hover:shadow-[0_0_0_3px_rgba(167,139,250,0.18)] transition-all duration-150 active:scale-95 focus-ring"
@@ -575,17 +656,6 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       <ExternalLink size={11} strokeWidth={2.6} aria-hidden="true" />
                       Open
                     </Link>
-                    {unread && (
-                      <button
-                        type="button"
-                        onClick={() => handleMarkChannelRead(c.channel_id)}
-                        aria-label={`Mark #${c.channel_name} read`}
-                        title="Mark read"
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 bg-emerald-500/15 ring-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 hover:ring-emerald-400/50 transition-all duration-150 active:scale-95 focus-ring"
-                      >
-                        <Check size={12} strokeWidth={2.8} aria-hidden="true" />
-                      </button>
-                    )}
                   </div>
 
                   {/* Title + preview = also a quick-reply trigger (same
@@ -649,11 +719,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         {relativeTime(c.latest_created_at)}
                       </span>
                     )}
-                    {unread && (
-                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums">
-                        {c.unread_count > 9 ? '9+' : c.unread_count}
-                      </span>
-                    )}
+                    <StatusPill status={channelStatus} count={c.unread_count} />
                   </div>
                 </div>
 
@@ -733,18 +799,18 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         header (visible in both collapsed AND
                         expanded states) replaces it. */}
                     <div className="flex items-center justify-between gap-1.5">
-                      {unread ? (
+                      {!isResolved ? (
                         <button
                           type="button"
-                          onClick={() => handleMarkChannelRead(c.channel_id)}
+                          onClick={() => handleResolveChannelClick(c)}
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
                         >
                           <Check size={11} strokeWidth={2.8} aria-hidden="true" />
-                          Mark read
+                          {confirmingResolve ? 'Finish' : 'Resolve'}
                         </button>
                       ) : (
                         <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/70">
-                          Resolved this week
+                          Resolved
                         </span>
                       )}
                       <div className="flex items-center justify-end gap-1.5">
@@ -769,6 +835,11 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       </button>
                       </div>
                     </div>
+                    {confirmingResolve && (
+                      <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200">
+                        Notification resolved? Click Finish to complete.
+                      </div>
+                    )}
                     <p className="text-[10px] text-text-light/70">⌘/Ctrl + Enter to send · Esc to cancel</p>
                   </div>
                 )}
@@ -836,11 +907,14 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       doesn't compete with the title for vertical space.
                       Uses `n.created_at` which is when the notification
                       (= assignment) was created. */}
-                  <span
-                    className="shrink-0 text-[10px] text-text-light tabular-nums whitespace-nowrap mt-0.5"
-                    title={new Date(n.created_at).toLocaleString()}
-                  >
-                    {relativeTime(n.created_at)}
+                  <span className="shrink-0 flex flex-col items-end gap-1 mt-0.5">
+                    <span
+                      className="text-[10px] text-text-light tabular-nums whitespace-nowrap"
+                      title={new Date(n.created_at).toLocaleString()}
+                    >
+                      {relativeTime(n.created_at)}
+                    </span>
+                    <StatusPill status="new" count={1} />
                   </span>
                 </button>
               )
