@@ -114,6 +114,7 @@ export default function Content() {
   const [dragDepth, setDragDepth] = useState(0)
   const { toast } = useToast()
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesScrollRef = useRef<HTMLDivElement>(null)
 
   // Team members for the sidebar. Shares cache with other pages via
   // teamMemberKeys.list() so reloading the Forum doesn't re-fetch.
@@ -358,9 +359,13 @@ export default function Content() {
     return () => { supabase.removeChannel(sub) }
   }, [activeChannel])
 
-  // Auto-scroll
+  // Auto-scroll the message pane only. `scrollIntoView()` can move
+  // the entire page under the taller site banner, which makes the
+  // Forum header and sidebar look like they disappeared.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = messagesScrollRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages])
 
   // Reset pending attachments when switching channels — they were
@@ -1011,7 +1016,7 @@ export default function Content() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
+          <div ref={messagesScrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
             {messages.length === 0 && (
               <p className="text-[13px] text-text-light text-center py-8">No messages yet. Start the conversation!</p>
             )}
