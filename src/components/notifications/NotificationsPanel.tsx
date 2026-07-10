@@ -172,6 +172,20 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+function messageMentionsName(content: string | null, name: string | null | undefined): boolean {
+  const trimmedName = name?.trim()
+  if (!content || !trimmedName) return false
+  const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const bracketed = new RegExp(`@\\[\\s*${escapedName}\\s*\\]`, 'i')
+  const plain = new RegExp(`(^|\\s)@${escapedName}(?=\\s|$|[.,!?;:])`, 'i')
+  return bracketed.test(content) || plain.test(content)
+}
+
+function pingLabel(sender: string | null): string {
+  const firstName = sender?.trim().split(/\s+/)[0]
+  return `${firstName || 'Someone'} pinged you!`
+}
+
 async function fetchChannelNotifications(): Promise<ChannelNotification[]> {
   const { data, error } = await supabase.rpc('get_channel_notifications')
   if (error) throw error
@@ -558,6 +572,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 : null
             const expandedContent = expandedMessage?.content ?? c.latest_content ?? ''
             const expandedAttachments = expandedMessage?.attachments ?? []
+            const isPing = messageMentionsName(c.latest_content, profile?.display_name)
 
             const toggleExpand = () => {
               if (isExpanded) {
@@ -671,6 +686,11 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       <ExternalLink size={11} strokeWidth={2.6} aria-hidden="true" />
                       Open
                     </Link>
+                    {isPing && (
+                      <span className="inline-flex h-7 items-center rounded-full border border-gold/35 bg-gold/12 px-2 text-[10px] font-bold text-gold whitespace-nowrap">
+                        {pingLabel(c.latest_sender)}
+                      </span>
+                    )}
                   </div>
 
                   {/* Title + preview = also a quick-reply trigger (same
@@ -774,7 +794,11 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                           <>
                             {expandedContent && (
                               <div className="text-text whitespace-pre-wrap break-words line-clamp-4 leading-snug">
-                                <LinkifiedText text={expandedContent} />
+                                <LinkifiedText
+                                  text={expandedContent}
+                                  mentionNames={profile?.display_name ? [profile.display_name] : undefined}
+                                  mentionHref={profile?.id ? () => `/profile/${profile.id}` : undefined}
+                                />
                               </div>
                             )}
                             {expandedAttachments.length > 0 && (

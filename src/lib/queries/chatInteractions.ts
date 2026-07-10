@@ -32,20 +32,18 @@ export type ReactionSummary = {
 export const QUICK_REACTIONS = ['👍', '❤️', '✅', '😂', '👀'] as const
 
 export function mentionToken(member: Pick<TeamMember, 'display_name'>): string {
-  return `@[${member.display_name}]`
+  return `@${member.display_name}`
 }
 
 export function extractMentionedMemberIds(content: string, members: Pick<TeamMember, 'id' | 'display_name'>[]): string[] {
-  const labels = new Set<string>()
-  for (const match of content.matchAll(/@\[([^\]]+)\]/g)) {
-    const label = match[1]?.trim().toLowerCase()
-    if (label) labels.add(label)
-  }
-  if (labels.size === 0) return []
-
   const ids = new Set<string>()
   for (const member of members) {
-    if (labels.has(member.display_name.trim().toLowerCase())) {
+    const name = member.display_name.trim()
+    if (!name) continue
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const bracketed = new RegExp(`@\\[\\s*${escapedName}\\s*\\]`, 'i')
+    const plain = new RegExp(`(^|\\s)@${escapedName}(?=\\s|$|[.,!?;:])`, 'i')
+    if (bracketed.test(content) || plain.test(content)) {
       ids.add(member.id)
     }
   }

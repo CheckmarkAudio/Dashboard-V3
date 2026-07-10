@@ -642,6 +642,11 @@ export default function Content() {
   // dot need the full TeamMember row, not just sender_name on the
   // chat row.
   const memberById = new Map(activeMembers.map((m) => [m.id, m]))
+  const mentionNames = activeMembers.map((m) => m.display_name)
+  const profileHrefByMentionName = (name: string) => {
+    const member = activeMembers.find((m) => m.display_name.trim().toLowerCase() === name.trim().toLowerCase())
+    return member ? `/profile/${member.id}` : undefined
+  }
   const messageIdsKey = useMemo(
     () => messages.filter((m) => !m._optimistic).map((m) => m.id).join(','),
     [messages],
@@ -1035,6 +1040,8 @@ export default function Content() {
                   reactions={reactionsByMessage.get(msg.id) ?? []}
                   currentUserId={profile?.id ?? null}
                   onReact={handleReact}
+                  mentionNames={mentionNames}
+                  mentionHref={profileHrefByMentionName}
                 />
               )
             })}
@@ -1163,6 +1170,8 @@ function ChatBubble({
   reactions,
   currentUserId,
   onReact,
+  mentionNames,
+  mentionHref,
 }: {
   message: Message
   member: TeamMember | undefined
@@ -1176,6 +1185,8 @@ function ChatBubble({
   reactions: ChatReaction[]
   currentUserId: string | null
   onReact: (message: Message, emoji: string, existingMine: boolean) => void
+  mentionNames: string[]
+  mentionHref: (name: string) => string | undefined
 }) {
   // Per-member chat color. Override comes from the member's own
   // preferences when we have the row; falls back to a deterministic
@@ -1367,7 +1378,7 @@ function ChatBubble({
                       : 'bg-surface-alt text-text-muted border border-border rounded-bl-sm'
                   }`}
                 >
-                  <LinkifiedText text={message.content} />
+                  <LinkifiedText text={message.content} mentionNames={mentionNames} mentionHref={mentionHref} />
                 </div>
               </div>
             )}
