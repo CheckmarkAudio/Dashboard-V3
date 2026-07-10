@@ -39,7 +39,7 @@ const STATUS_STYLES: Record<ThreadDisplayStatus, string> = {
   new: 'bg-rose-500/15 border-rose-400/30 text-rose-400',
   started: 'bg-lime-500/15 border-lime-400/30 text-lime-300',
   replied: 'bg-lime-500/15 border-lime-400/30 text-lime-300',
-  resolved: 'bg-surface-alt border-border text-text-light',
+  resolved: 'bg-emerald-500/15 border-emerald-400/35 text-emerald-300',
 }
 
 function StatusBadge({ status, count }: { status: ThreadDisplayStatus; count: number }) {

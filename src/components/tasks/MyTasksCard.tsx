@@ -75,6 +75,14 @@ interface MyTasksCardProps {
 
 const HIGHLIGHT_EVENT = 'highlight-task'
 const HIGHLIGHT_DURATION_MS = 1600
+const NEW_ASSIGNMENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+function isFreshAssignedTask(task: AssignedTask): boolean {
+  if (task.is_completed || isSelfAssigned(task)) return false
+  const assignedAt = task.batch?.created_at ?? task.created_at
+  if (!assignedAt) return false
+  return Date.now() - new Date(assignedAt).getTime() <= NEW_ASSIGNMENT_WINDOW_MS
+}
 
 // 2026-05-02 — pending-state shape per task id. A task can have
 // EITHER a pending transfer offer (caller wants to hand off) OR a
@@ -1043,6 +1051,7 @@ function AssignedTaskRow({
   dragHandle?: React.ReactNode
 }) {
   const done = task.is_completed
+  const freshAssignedTask = !pendingMeta && isFreshAssignedTask(task)
   // Checkbox shows the pending-but-not-submitted state distinctly so
   // the user knows what they've queued. `checkVisual` is the visual
   // truth: true when either completed OR pending, false otherwise.
@@ -1131,6 +1140,8 @@ function AssignedTaskRow({
             ? 'bg-surface-alt/40 hover:bg-surface-hover'
             : done
               ? 'bg-surface-alt/30 opacity-60 hover:opacity-80'
+              : freshAssignedTask
+                ? 'bg-gold/10 shadow-[inset_3px_0_0_rgba(201,168,76,0.72)] hover:bg-gold/14'
               : 'hover:bg-surface-hover'
       }`}
     >
@@ -1171,10 +1182,11 @@ function AssignedTaskRow({
           >
             {task.title}
           </p>
-          {/* PR #70 — `New` + `Required` tags retired. The new-row gold
-              background tint already signals freshness; required-task
-              context lives in the detail modal. Studio scope still
-              gets a tag since it's a meaningful row-type distinction. */}
+          {freshAssignedTask && (
+            <span className="shrink-0 rounded-full bg-gold/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-gold ring-1 ring-gold/30">
+              New
+            </span>
+          )}
           {task.scope === 'studio' && !done && (
             <span className="shrink-0 text-[10px] uppercase tracking-wider text-cyan-300 font-bold">Studio</span>
           )}

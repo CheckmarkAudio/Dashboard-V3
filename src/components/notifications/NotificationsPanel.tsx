@@ -121,8 +121,14 @@ const STATUS_STYLES: Record<ChannelDisplayStatus, string> = {
   new: 'bg-rose-500 text-white',
   started: 'bg-lime-500/15 border border-lime-400/30 text-lime-300',
   replied: 'bg-lime-500/15 border border-lime-400/30 text-lime-300',
-  resolved: 'bg-surface-alt border border-border text-text-light',
+  resolved: 'bg-emerald-500/15 border border-emerald-400/35 text-emerald-300',
 }
+
+const TASK_LIST_NOTIFICATION_TYPES = new Set([
+  'task_assigned',
+  'template_assigned',
+  'partial_template_assigned',
+])
 
 function StatusPill({ status, count }: { status: ChannelDisplayStatus; count: number }) {
   const label =
@@ -143,6 +149,10 @@ function StatusPill({ status, count }: { status: ChannelDisplayStatus; count: nu
 function isRecentChannel(c: ChannelNotification): boolean {
   if (!c.latest_created_at) return false
   return Date.now() - new Date(c.latest_created_at).getTime() <= RECENT_RESOLVED_WINDOW_MS
+}
+
+function routesToTaskList(n: AssignmentNotification): boolean {
+  return TASK_LIST_NOTIFICATION_TYPES.has(n.notification_type)
 }
 
 function relativeTime(iso: string): string {
@@ -323,7 +333,8 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   const channels = notifQuery.data ?? []
   const channelUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
   const assignments = assignmentsQuery.data ?? []
-  const assignmentUnread = assignments.filter((n) => !n.is_read).length
+  const visibleAssignments = assignments.filter((n) => !n.is_read && !routesToTaskList(n))
+  const assignmentUnread = visibleAssignments.length
   const expandedLatestId =
     channels.find((c) => c.channel_id === expandedChannelId)?.latest_id ?? null
   const expandedMessageQuery = useQuery({
@@ -343,7 +354,6 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
       if (rankDelta !== 0) return rankDelta
       return new Date(b.latest_created_at ?? 0).getTime() - new Date(a.latest_created_at ?? 0).getTime()
     })
-  const visibleAssignments = assignments.filter((n) => !n.is_read)
   const totalUnread = channelUnread + assignmentUnread
 
   const handleMarkAllRead = () => {
@@ -960,6 +970,6 @@ export function useTotalUnreadCount(): number {
   const assignments = assignmentsQuery.data ?? []
   return (
     channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0) +
-    assignments.filter((n) => !n.is_read).length
+    assignments.filter((n) => !n.is_read && !routesToTaskList(n)).length
   )
 }
