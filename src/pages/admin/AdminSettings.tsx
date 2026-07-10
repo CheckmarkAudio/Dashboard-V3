@@ -15,10 +15,11 @@ import {
   type GoogleCalendarConnectionStatus,
 } from '../../lib/googleCalendar'
 import {
-  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid, Clock, MessageSquareText,
+  Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid, Clock, MessageSquareText, Archive,
 } from 'lucide-react'
 import StudioHoursPanel from '../../components/admin/StudioHoursPanel'
 import FeedbackReportsPanel from '../../components/admin/FeedbackReportsPanel'
+import ArchivedMembersPanel from '../../components/admin/ArchivedMembersPanel'
 
 /**
  * Settings section nav model. Each section renders its own right-pane
@@ -27,6 +28,7 @@ import FeedbackReportsPanel from '../../components/admin/FeedbackReportsPanel'
  */
 type SectionKey =
   | 'account-access'
+  | 'archive'
   | 'widgets'
   | 'theme'
   | 'branding'
@@ -41,6 +43,7 @@ type Section = AdminSection<SectionKey>
 
 const SECTIONS: Section[] = [
   { key: 'account-access', icon: Shield,      title: 'Account Access', subtitle: 'Admin vs employee permissions' },
+  { key: 'archive',        icon: Archive,     title: 'Archive',        subtitle: 'Restore or delete removed members' },
   { key: 'widgets',        icon: LayoutGrid,  title: 'Widgets',        subtitle: 'Toggle widgets on Overview + Hub' },
   { key: 'theme',          icon: Sun,         title: 'Theme',          subtitle: 'Colors and appearance' },
   { key: 'branding',       icon: ImageIcon,   title: 'Branding',       subtitle: 'Logos and header' },
@@ -263,6 +266,7 @@ export default function AdminSettings() {
         {/* ── Right: active section content ── */}
         <section className="bg-surface rounded-xl border border-border p-6 min-h-[320px]">
           {activeSection === 'account-access' && <AccountAccessPanel />}
+          {activeSection === 'archive' && <ArchivedMembersPanel />}
           {activeSection === 'feedback' && <FeedbackReportsPanel />}
           {activeSection === 'widgets' && <WidgetBank />}
 
@@ -694,9 +698,9 @@ export default function AdminSettings() {
         </section>
       </div>
 
-      {/* ── Save bar (global to most sections; hidden on Account Access
-            since that panel commits every toggle inline via RPC). ── */}
-      {activeSection !== 'account-access' && (
+      {/* ── Save bar (global to most sections; hidden on panels that
+            commit inline: Account Access, Archive, Feedback). ── */}
+      {activeSection !== 'account-access' && activeSection !== 'archive' && activeSection !== 'feedback' && (
         <div className="flex items-center justify-end gap-3 mt-6">
           {saved && (
             <span className="text-sm text-emerald-400 font-medium" role="status" aria-live="polite">
