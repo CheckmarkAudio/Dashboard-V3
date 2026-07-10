@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertCircle, Bell, Calendar, CheckCheck, ClipboardList, ExternalLink,
+  AlertCircle, Bell, Calendar, Check, CheckCheck, ClipboardList, ExternalLink,
   Inbox, Loader2, MessageSquare, Send,
 } from 'lucide-react'
 import { APP_ROUTES } from '../../app/routes'
@@ -21,6 +21,11 @@ import LinkifiedText from '../forum/LinkifiedText'
 import { useToast } from '../Toast'
 import type { AssignmentNotification } from '../../types/assignments'
 import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
+import {
+  notificationWorkflowKey,
+  useNotificationWorkflow,
+  type NotificationWorkflowStatus,
+} from './notificationWorkflow'
 
 /**
  * NotificationsPanel — the actual notification list, lifted out of
@@ -100,6 +105,56 @@ type ExpandedChannelMessage = {
   id: string
   content: string
   attachments: ChatAttachment[]
+}
+
+const RECENT_REMINDER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+type ChannelDisplayStatus = 'new' | NotificationWorkflowStatus
+
+const STATUS_RANK: Record<ChannelDisplayStatus, number> = {
+  new: 0,
+  started: 1,
+  replied: 1,
+  resolved: 2,
+}
+
+const STATUS_STYLES: Record<ChannelDisplayStatus, string> = {
+  new: 'bg-rose-500 text-white',
+  started: 'bg-lime-500/15 border border-lime-400/30 text-lime-300',
+  replied: 'bg-lime-500/15 border border-lime-400/30 text-lime-300',
+  resolved: 'bg-emerald-500/15 border border-emerald-400/35 text-emerald-300',
+}
+
+const TASK_LIST_NOTIFICATION_TYPES = new Set([
+  'task_assigned',
+  'template_assigned',
+  'partial_template_assigned',
+])
+
+function StatusPill({ status, count }: { status: ChannelDisplayStatus; count: number }) {
+  const label =
+    status === 'new'
+      ? count > 1
+        ? `${count > 9 ? '9+' : count} new`
+        : 'new'
+      : status === 'resolved'
+        ? 'completed'
+        : status
+  return (
+    <span
+      className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold leading-none tabular-nums capitalize whitespace-nowrap ${STATUS_STYLES[status]}`}
+    >
+      {label}
+    </span>
+  )
+}
+
+function isRecentChannel(c: ChannelNotification): boolean {
+  if (!c.latest_created_at) return false
+  return Date.now() - new Date(c.latest_created_at).getTime() <= RECENT_REMINDER_WINDOW_MS
+}
+
+function routesToTaskList(n: AssignmentNotification): boolean {
+  return TASK_LIST_NOTIFICATION_TYPES.has(n.notification_type)
 }
 
 function relativeTime(iso: string): string {
@@ -204,6 +259,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   const { profile } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
+  const workflow = useNotificationWorkflow()
   // PR #161 — `NotificationsPanel` mounts in TWO places at once: the
   // top-bar bell dropdown AND the historical Overview widget on `/`.
   // Supabase Realtime returns the SAME channel instance for the same
@@ -218,6 +274,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   // it to reveal a textarea + Send. Stays open until the user clears it
   // or sends, so the expanded state survives a refetch.
   const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null)
+  const [confirmingResolveId, setConfirmingResolveId] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
   const [replyBusy, setReplyBusy] = useState(false)
 
@@ -278,7 +335,8 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   const channels = notifQuery.data ?? []
   const channelUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
   const assignments = assignmentsQuery.data ?? []
-  const assignmentUnread = assignments.filter((n) => !n.is_read).length
+  const visibleAssignments = assignments.filter((n) => !n.is_read && !routesToTaskList(n))
+  const assignmentUnread = visibleAssignments.length
   const expandedLatestId =
     channels.find((c) => c.channel_id === expandedChannelId)?.latest_id ?? null
   const expandedMessageQuery = useQuery({
@@ -288,14 +346,25 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     staleTime: 60_000,
   })
 
-  const visibleChannels = channels.filter((c) => c.unread_count > 0)
-  const visibleAssignments = assignments.filter((n) => !n.is_read)
+  const getChannelKey = (c: ChannelNotification) => notificationWorkflowKey('forum', c.channel_id)
+  const getChannelStatus = (c: ChannelNotification): ChannelDisplayStatus =>
+    workflow.getRecord(getChannelKey(c))?.status ?? (c.unread_count > 0 ? 'new' : 'started')
+  const visibleChannels = [...channels]
+    .filter((c) => c.unread_count > 0 || isRecentChannel(c) || workflow.getRecord(getChannelKey(c)))
+    .sort((a, b) => {
+      const rankDelta = STATUS_RANK[getChannelStatus(a)] - STATUS_RANK[getChannelStatus(b)]
+      if (rankDelta !== 0) return rankDelta
+      return new Date(b.latest_created_at ?? 0).getTime() - new Date(a.latest_created_at ?? 0).getTime()
+    })
   const totalUnread = channelUnread + assignmentUnread
 
   const handleMarkAllRead = () => {
     if (totalUnread === 0) return
     const assignmentsCacheKey = ['overview-assignment-notifications', profile?.id] as const
     const nowIso = new Date().toISOString()
+    channels.forEach((c) => {
+      if (c.unread_count > 0) workflow.setStarted(getChannelKey(c))
+    })
     queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) =>
       prev?.map((c) => ({ ...c, unread_count: 0, last_read_at: nowIso })) ?? prev,
     )
@@ -311,7 +380,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     })
   }
 
-  const handleChannelClick = (channelId: string) => {
+  const handleMarkChannelRead = (channelId: string) => {
     queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) => {
       if (!prev) return prev
       return prev.map((c) =>
@@ -324,6 +393,32 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
       void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
     })
     onItemClick?.()
+  }
+
+  const markChannelStarted = (c: ChannelNotification) => {
+    const key = getChannelKey(c)
+    const current = workflow.getRecord(key)?.status
+    if (current !== 'resolved' && current !== 'replied') workflow.setStarted(key)
+    if (c.unread_count > 0) handleMarkChannelRead(c.channel_id)
+  }
+
+  const markChannelReplied = (c: ChannelNotification) => {
+    workflow.setReplied(getChannelKey(c))
+    handleMarkChannelRead(c.channel_id)
+  }
+
+  const completeChannel = (c: ChannelNotification) => {
+    workflow.setResolved(getChannelKey(c))
+    handleMarkChannelRead(c.channel_id)
+    setConfirmingResolveId(null)
+  }
+
+  const handleCompleteChannelClick = (c: ChannelNotification) => {
+    if (confirmingResolveId === c.channel_id) {
+      completeChannel(c)
+      return
+    }
+    setConfirmingResolveId(c.channel_id)
   }
 
   const handleAssignmentClick = (n: AssignmentNotification) => {
@@ -453,7 +548,10 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             {visibleChannels.map((c) => {
             const hasMessage = !!c.latest_id
             const unread = c.unread_count > 0
+            const channelStatus = getChannelStatus(c)
+            const isCompleted = channelStatus === 'resolved'
             const isExpanded = expandedChannelId === c.channel_id
+            const confirmingComplete = confirmingResolveId === c.channel_id
             const expandedMessage =
               isExpanded && expandedMessageQuery.data?.id === c.latest_id
                 ? expandedMessageQuery.data
@@ -468,8 +566,9 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
               } else {
                 setExpandedChannelId(c.channel_id)
                 setReplyText('')
-                handleChannelClick(c.channel_id)
+                markChannelStarted(c)
               }
+              setConfirmingResolveId(null)
             }
 
             const submitReply = async () => {
@@ -494,7 +593,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 // this, the realtime INSERT triggers a refetch that counts
                 // the just-sent message as unread for everyone, including
                 // the sender.
-                void markChannelRead(c.channel_id).catch(() => { /* noop */ })
+                markChannelReplied(c)
                 void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
               } catch (err) {
                 toast(err instanceof Error ? err.message : 'Send failed', 'error')
@@ -510,11 +609,13 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             // State (unread / expanded / hover) communicated by bg
             // tint alone now that the divide-theme line provides the
             // separation. Forum violet still tints the expanded row.
-            const stateBg = isExpanded
-              ? 'bg-violet-500/10'
-              : unread
-                ? 'bg-gold/8 hover:bg-gold/12'
-                : 'hover:bg-surface-hover'
+            const stateBg = isCompleted
+              ? 'bg-surface-alt/30 opacity-75'
+              : isExpanded
+                ? 'bg-violet-500/10'
+                : channelStatus === 'new'
+                  ? 'bg-gold/8 hover:bg-gold/12'
+                  : 'hover:bg-surface-hover'
 
             return (
               <div
@@ -562,6 +663,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         does + invites the click. */}
                     <Link
                       to={channelHref}
+                      onClick={() => markChannelStarted(c)}
                       aria-label={`Open #${c.channel_name} in forum`}
                       title="Open in forum"
                       className="inline-flex items-center gap-1 h-7 px-2 rounded-full ring-1 bg-violet-500/15 ring-violet-500/30 text-violet-200 text-[10px] font-bold uppercase tracking-wider hover:bg-violet-500/30 hover:ring-violet-400/60 hover:text-white hover:shadow-[0_0_0_3px_rgba(167,139,250,0.18)] transition-all duration-150 active:scale-95 focus-ring"
@@ -632,11 +734,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         {relativeTime(c.latest_created_at)}
                       </span>
                     )}
-                    {unread && (
-                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none tabular-nums">
-                        {c.unread_count > 9 ? '9+' : c.unread_count}
-                      </span>
-                    )}
+                    <StatusPill status={channelStatus} count={c.unread_count} />
                   </div>
                 </div>
 
@@ -715,7 +813,22 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         The new prominent "Open" pill in the row
                         header (visible in both collapsed AND
                         expanded states) replaces it. */}
-                    <div className="flex items-center justify-end gap-1.5">
+                    <div className="flex items-center justify-between gap-1.5">
+                      {!isCompleted ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCompleteChannelClick(c)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
+                        >
+                          <Check size={11} strokeWidth={2.8} aria-hidden="true" />
+                          {confirmingComplete ? 'Finish' : 'Complete'}
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/70">
+                          Completed
+                        </span>
+                      )}
+                      <div className="flex items-center justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => {
@@ -735,8 +848,14 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         <Send size={11} aria-hidden="true" />
                         {replyBusy ? 'Sending…' : 'Send'}
                       </button>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-text-light/70">⌘/Ctrl + Enter to send · Esc to cancel</p>
+                    {confirmingComplete && (
+                      <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200">
+                        Notification resolved? Click Finish to complete.
+                      </div>
+                    )}
+                    <p className="text-[10px] text-text-light/70">Cmd/Ctrl + Enter to send. Completed reminders stay visible at the bottom for 7 days.</p>
                   </div>
                 )}
               </div>
@@ -853,6 +972,6 @@ export function useTotalUnreadCount(): number {
   const assignments = assignmentsQuery.data ?? []
   return (
     channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0) +
-    assignments.filter((n) => !n.is_read).length
+    assignments.filter((n) => !n.is_read && !routesToTaskList(n)).length
   )
 }
