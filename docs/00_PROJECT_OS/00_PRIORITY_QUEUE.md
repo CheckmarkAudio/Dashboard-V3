@@ -38,7 +38,7 @@ You can also just tell an AI coder "add this to the priority queue" and it will 
 <!-- ACTIVE:START -->
 <!-- Add priority items below this line as `- [ ] ...`. The session-start hook reads everything between the ACTIVE markers. Keep finished items OUT of here — move them to Done. -->
 
-- [ ] Add reactions for Forum posts and DMs — Requested by: Gavin · Added: 2026-07-10 · ASAP: yes · Notes: Next priority after the site-wide banner. Add a simple, obvious reaction mechanic for both Forum and Direct Messages without making messages disappear or disrupting notification status behavior.
+- [ ] Add communication reactions, @pings, and sound cues for Forum + DMs — Requested by: Gavin · Added: 2026-07-10 · ASAP: yes · Notes: Next priority after the site-wide banner. Scope: add simple reactions for Forum posts and DMs; add @[username] ping ability in Forum and DMs; play a standard notification sound when a DM is sent, a reaction is made, or an @ping is sent in Forum; later add per-account sound customization in Settings with dropdown choices. Reaction notices should not become Overview personal notifications: show a small temporary clickable bubble with the emoji, actor, and tiny message identifier, then fade away and deep-link to the reacted message.
 
 <!-- ACTIVE:END -->
 
