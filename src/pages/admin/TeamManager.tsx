@@ -557,7 +557,10 @@ export default function TeamManager() {
 
   const filtered = members
     .filter(m => positionFilter === 'all' || m.position === positionFilter)
-    .filter(m => statusFilter === 'all' || m.status === statusFilter)
+    // Default "All" hides archived (inactive) members so the roster stays
+    // clean automatically — they're managed in Settings → Archive, or
+    // viewed here explicitly via the Inactive pill.
+    .filter(m => statusFilter === 'all' ? m.status !== 'inactive' : m.status === statusFilter)
     .filter(m => {
       if (!search) return true
       const s = search.toLowerCase()
@@ -863,7 +866,7 @@ export default function TeamManager() {
           </div>
           <div className="flex items-center gap-1 bg-surface-alt rounded-lg p-0.5">
             {([
-              { key: 'all' as const, label: 'All', count: members.length },
+              { key: 'all' as const, label: 'All', count: members.length - inactiveCount },
               { key: 'active' as const, label: 'Active', count: activeCount },
               { key: 'pending' as const, label: 'Pending', count: pendingCount },
               { key: 'inactive' as const, label: 'Inactive', count: inactiveCount },
