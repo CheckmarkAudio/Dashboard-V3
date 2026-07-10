@@ -30,6 +30,23 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 
 warnings=()
 
+# ── Check 0: PRIORITY QUEUE ──────────────────────────────────────────────────
+# The top of the task hierarchy. Surfaced FIRST so no session can miss an
+# ASAP ask from the director/Gavin. Reads unchecked `- [ ]` lines between the
+# ACTIVE markers in the priority queue and instructs the coder to state them.
+pq_file="${REPO_ROOT}/docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md"
+if [ -f "$pq_file" ]; then
+  pq_items=$(awk '
+    /<!-- ACTIVE:START -->/ {active=1; next}
+    /<!-- ACTIVE:END -->/   {active=0}
+    active && /^- \[ \]/    {sub(/^- \[ \] */, ""); print "  - " $0}
+  ' "$pq_file")
+  if [ -n "$pq_items" ]; then
+    count=$(printf '%s\n' "$pq_items" | grep -c '^  - ')
+    warnings+=("[PRIORITY QUEUE] ${count} active priority task(s) outrank all other work. STATE these to the user at the start of your reply, then ask which to start (or begin the top one if already told to go):"$'\n'"${pq_items}"$'\n'"Source: docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md")
+  fi
+fi
+
 # ── Check 1: docs drift ───────────────────────────────────────────────────────
 last_docs=$(git log -1 --format=%h origin/main -- docs/PROJECT_STATE.md docs/SESSION_CONTEXT.md 2>/dev/null)
 if [ -n "$last_docs" ]; then

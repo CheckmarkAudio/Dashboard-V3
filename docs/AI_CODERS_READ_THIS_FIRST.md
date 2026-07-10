@@ -10,6 +10,7 @@ Full mission, language, laws, roles, learning, and design memory live in `docs/0
 
 Read these in order before making product or code decisions:
 
+0. `docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md` — **the top of the task hierarchy.** Check it first every session; state any Active priority items back to the user before anything else.
 1. `docs/00_PROJECT_OS/README.md`
 2. `docs/00_PROJECT_OS/01_VISION_AND_PURPOSE.md`
 3. `docs/00_PROJECT_OS/02_LANGUAGE_AND_KEYS.md`

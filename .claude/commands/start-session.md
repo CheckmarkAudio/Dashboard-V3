@@ -17,6 +17,7 @@ Do not edit code yet. First run the startup/context pass below. The goal is to u
 
 Read these files in order:
 
+0. `docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md` — **top of the task hierarchy; read first.** State any Active priority items to the user before the rest of the summary.
 1. `docs/00_PROJECT_OS/README.md`
 2. `docs/00_PROJECT_OS/01_VISION_AND_PURPOSE.md`
 3. `docs/00_PROJECT_OS/02_LANGUAGE_AND_KEYS.md`
@@ -118,6 +119,7 @@ Do not make the user re-explain rules that are already in these docs.
 
 Before coding, respond with:
 
+0. **Priority queue first** — if `docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md` has Active items, list them as a numbered queue and ask which to start (or start the top one if already told to go). If empty, say "no priority tasks queued."
 1. Current branch/state
 2. Open PRs and conflict risks
 3. North star and current proof point in 2-3 bullets
