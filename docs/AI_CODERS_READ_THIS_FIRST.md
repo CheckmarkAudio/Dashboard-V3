@@ -6,6 +6,18 @@ This file is mandatory reading for Codex, Claude/Fable, and any ChatGPT-assisted
 
 Full mission, language, laws, roles, learning, and design memory live in `docs/00_PROJECT_OS/`.
 
+## Session Start Contract (every session — not optional)
+
+At the start of **every** session — a fresh chat, a "where were we", or an "awaken phase" — orient before touching anything. The SessionStart hook (`.claude/hooks/check-drift.sh`) prints this reminder automatically; do it even if you skip the full `/start-session` ritual:
+
+1. Read this file — the front door / how to operate here.
+2. Read `docs/00_PROJECT_OS/01_VISION_AND_PURPOSE.md` — the north-star vision (Checkmark **operating system**, not a dashboard). Every choice serves it.
+3. Read `docs/PROJECT_STATE.md` + `docs/SESSION_CONTEXT.md` — what's live, what's in flight, and where we left off.
+4. Check `docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md` and state any Active items to the user first.
+5. Note the drift warnings the hook surfaces and resolve/flag them before new work.
+
+If a request would pull the product off that north star, say so before building.
+
 ## Start Here
 
 Read these in order before making product or code decisions:
