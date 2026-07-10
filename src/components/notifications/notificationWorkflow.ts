@@ -44,10 +44,10 @@ export function notificationWorkflowKey(kind: 'dm' | 'forum' | 'assignment', id:
 }
 
 export function useNotificationWorkflow() {
-  const [, setVersion] = useState(0)
+  const [records, setRecords] = useState<Record<string, NotificationWorkflowRecord>>(() => readStore())
 
   useEffect(() => {
-    const bump = () => setVersion((current) => current + 1)
+    const bump = () => setRecords(readStore())
     window.addEventListener(CHANGE_EVENT, bump)
     window.addEventListener('storage', bump)
     return () => {
@@ -57,18 +57,21 @@ export function useNotificationWorkflow() {
   }, [])
 
   const getRecord = useCallback((key: string): NotificationWorkflowRecord | null => {
-    return readStore()[key] ?? null
-  }, [])
+    return records[key] ?? null
+  }, [records])
 
   const setStatus = useCallback((key: string, status: NotificationWorkflowStatus) => {
     const current = readStore()
-    writeStore({
+    const next = {
       ...current,
       [key]: { status, updatedAt: new Date().toISOString() },
-    })
+    }
+    setRecords(next)
+    writeStore(next)
   }, [])
 
   return {
+    records,
     getRecord,
     setStarted: (key: string) => setStatus(key, 'started'),
     setReplied: (key: string) => setStatus(key, 'replied'),

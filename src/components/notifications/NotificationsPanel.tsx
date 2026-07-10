@@ -12,6 +12,7 @@ import {
   markAllAssignmentNotificationsRead,
   markAssignmentNotificationRead,
 } from '../../lib/queries/assignments'
+import { dmKeys, dmThreadLabel, markDmRead, type DmThread } from '../../lib/queries/dms'
 import { supabase } from '../../lib/supabase'
 import { detectLinkEmbed, type ChatAttachment } from '../../lib/forum/attachments'
 import { extractUrls } from '../../lib/forum/linkify'
@@ -21,6 +22,7 @@ import LinkifiedText from '../forum/LinkifiedText'
 import { useToast } from '../Toast'
 import type { AssignmentNotification } from '../../types/assignments'
 import TaskReassignRequestModal from '../tasks/TaskReassignRequestModal'
+import { useDmThreads } from '../messages/useDmThreads'
 import {
   notificationWorkflowKey,
   useNotificationWorkflow,
@@ -136,6 +138,8 @@ function StatusPill({ status, count }: { status: ChannelDisplayStatus; count: nu
       ? count > 1
         ? `${count > 9 ? '9+' : count} new`
         : 'new'
+      : status === 'resolved'
+        ? 'completed'
       : status
   return (
     <span
@@ -149,6 +153,11 @@ function StatusPill({ status, count }: { status: ChannelDisplayStatus; count: nu
 function isRecentChannel(c: ChannelNotification): boolean {
   if (!c.latest_created_at) return false
   return Date.now() - new Date(c.latest_created_at).getTime() <= RECENT_RESOLVED_WINDOW_MS
+}
+
+function isRecentDmThread(thread: DmThread): boolean {
+  if (!thread.latest_created_at) return false
+  return Date.now() - new Date(thread.latest_created_at).getTime() <= RECENT_RESOLVED_WINDOW_MS
 }
 
 function routesToTaskList(n: AssignmentNotification): boolean {
@@ -272,9 +281,12 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   // it to reveal a textarea + Send. Stays open until the user clears it
   // or sends, so the expanded state survives a refetch.
   const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null)
+  const [expandedDmId, setExpandedDmId] = useState<string | null>(null)
   const [confirmingResolveId, setConfirmingResolveId] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
+  const [dmReplyText, setDmReplyText] = useState('')
   const [replyBusy, setReplyBusy] = useState(false)
+  const [dmReplyBusy, setDmReplyBusy] = useState(false)
 
   const notifQuery = useQuery({
     queryKey: ['overview-notifications'],
@@ -288,6 +300,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     enabled: Boolean(profile?.id),
     refetchInterval: 60_000,
   })
+  const dmThreadsQuery = useDmThreads()
 
   // Realtime — chat_messages anywhere triggers a refetch of channel unread.
   // Channel name suffixed with `instanceId` so the bell-dropdown mount
@@ -332,6 +345,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
 
   const channels = notifQuery.data ?? []
   const channelUnread = channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0)
+  const dmThreads = dmThreadsQuery.data ?? []
   const assignments = assignmentsQuery.data ?? []
   const visibleAssignments = assignments.filter((n) => !n.is_read && !routesToTaskList(n))
   const assignmentUnread = visibleAssignments.length
@@ -347,6 +361,17 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   const getChannelKey = (c: ChannelNotification) => notificationWorkflowKey('forum', c.channel_id)
   const getChannelStatus = (c: ChannelNotification): ChannelDisplayStatus =>
     workflow.getRecord(getChannelKey(c))?.status ?? (c.unread_count > 0 ? 'new' : 'started')
+  const getDmKey = (thread: DmThread) => notificationWorkflowKey('dm', thread.channel_id)
+  const getDmStatus = (thread: DmThread): ChannelDisplayStatus =>
+    workflow.getRecord(getDmKey(thread))?.status ?? (thread.unread_count > 0 ? 'new' : 'started')
+  const visibleDmThreads = [...dmThreads]
+    .filter((thread) => thread.unread_count > 0 || isRecentDmThread(thread) || workflow.getRecord(getDmKey(thread)))
+    .sort((a, b) => {
+      const rankDelta = STATUS_RANK[getDmStatus(a)] - STATUS_RANK[getDmStatus(b)]
+      if (rankDelta !== 0) return rankDelta
+      return new Date(b.latest_created_at ?? 0).getTime() - new Date(a.latest_created_at ?? 0).getTime()
+    })
+  const dmUnread = visibleDmThreads.reduce((acc, thread) => acc + (thread.unread_count ?? 0), 0)
   const visibleChannels = [...channels]
     .filter((c) => c.unread_count > 0 || isRecentChannel(c) || workflow.getRecord(getChannelKey(c)))
     .sort((a, b) => {
@@ -354,14 +379,23 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
       if (rankDelta !== 0) return rankDelta
       return new Date(b.latest_created_at ?? 0).getTime() - new Date(a.latest_created_at ?? 0).getTime()
     })
-  const totalUnread = channelUnread + assignmentUnread
+  const totalUnread = dmUnread + channelUnread + assignmentUnread
 
   const handleMarkAllRead = () => {
     if (totalUnread === 0) return
     const assignmentsCacheKey = ['overview-assignment-notifications', profile?.id] as const
     const nowIso = new Date().toISOString()
+    channels.forEach((c) => {
+      if (c.unread_count > 0) workflow.setStarted(getChannelKey(c))
+    })
+    visibleDmThreads.forEach((thread) => {
+      if (thread.unread_count > 0) workflow.setStarted(getDmKey(thread))
+    })
     queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) =>
       prev?.map((c) => ({ ...c, unread_count: 0, last_read_at: nowIso })) ?? prev,
+    )
+    queryClient.setQueryData<DmThread[]>(dmKeys.list(), (prev) =>
+      prev?.map((thread) => ({ ...thread, unread_count: 0, last_read_at: nowIso })) ?? prev,
     )
     queryClient.setQueryData<AssignmentNotification[]>([...assignmentsCacheKey], (prev) =>
       prev?.map((row) => ({ ...row, is_read: true, read_at: row.read_at ?? nowIso })) ?? prev,
@@ -369,9 +403,11 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     void Promise.all([
       markAllChannelsRead(),
       markAllAssignmentNotificationsRead(),
+      ...visibleDmThreads.filter((thread) => thread.unread_count > 0).map((thread) => markDmRead(thread.channel_id)),
     ]).catch(() => {
       void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
       void queryClient.invalidateQueries({ queryKey: assignmentsCacheKey })
+      void queryClient.invalidateQueries({ queryKey: dmKeys.list() })
     })
   }
 
@@ -414,6 +450,46 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
       return
     }
     setConfirmingResolveId(c.channel_id)
+  }
+
+  const handleMarkDmRead = (channelId: string) => {
+    queryClient.setQueryData<DmThread[]>(dmKeys.list(), (prev) =>
+      prev?.map((thread) =>
+        thread.channel_id === channelId
+          ? { ...thread, unread_count: 0, last_read_at: new Date().toISOString() }
+          : thread,
+      ) ?? prev,
+    )
+    void markDmRead(channelId)
+      .then(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
+      .catch(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
+    onItemClick?.()
+  }
+
+  const markDmStarted = (thread: DmThread) => {
+    const key = getDmKey(thread)
+    const current = workflow.getRecord(key)?.status
+    if (current !== 'resolved' && current !== 'replied') workflow.setStarted(key)
+    if (thread.unread_count > 0) handleMarkDmRead(thread.channel_id)
+  }
+
+  const markDmReplied = (thread: DmThread) => {
+    workflow.setReplied(getDmKey(thread))
+    handleMarkDmRead(thread.channel_id)
+  }
+
+  const completeDm = (thread: DmThread) => {
+    workflow.setResolved(getDmKey(thread))
+    handleMarkDmRead(thread.channel_id)
+    setConfirmingResolveId(null)
+  }
+
+  const handleCompleteDmClick = (thread: DmThread) => {
+    if (confirmingResolveId === thread.channel_id) {
+      completeDm(thread)
+      return
+    }
+    setConfirmingResolveId(thread.channel_id)
   }
 
   const handleAssignmentClick = (n: AssignmentNotification) => {
@@ -514,16 +590,229 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
           `overflow:hidden` doesn't fight `overflow-auto`. */}
       <div className="flex-1 min-h-0 inset-panel">
         <div className="h-full overflow-auto">
-        {notifQuery.isLoading ? (
+        {notifQuery.isLoading || dmThreadsQuery.isLoading ? (
           <div className="h-full flex items-center justify-center text-text-light py-6">
             <Loader2 size={18} className="animate-spin" />
           </div>
-        ) : notifQuery.error ? (
+        ) : notifQuery.error || dmThreadsQuery.error ? (
           <div className="flex items-center gap-2 text-sm text-amber-300 px-2 py-3">
             <AlertCircle size={16} className="shrink-0" />
             <span className="truncate">Could not load notifications</span>
           </div>
-        ) : visibleChannels.length === 0 ? null : (
+        ) : (
+          <>
+          {visibleDmThreads.length > 0 && (
+          <>
+            <div className="px-3 py-2 flex items-center gap-2 bg-surface-alt/40">
+              <MessageSquare size={11} className="text-gold/70" aria-hidden="true" />
+              <p className="text-[11px] font-semibold tracking-[0.06em] text-gold/70">
+                DIRECT MESSAGES
+              </p>
+            </div>
+            <div className="divide-y divide-theme">
+            {visibleDmThreads.map((thread) => {
+              const status = getDmStatus(thread)
+              const isCompleted = status === 'resolved'
+              const isExpanded = expandedDmId === thread.channel_id
+              const confirmingComplete = confirmingResolveId === thread.channel_id
+              const label = dmThreadLabel(thread)
+              const preview = thread.latest_content?.trim() || 'No messages yet'
+              const href = `${APP_ROUTES.member.content}?dm=${thread.channel_id}`
+
+              const toggleDm = () => {
+                if (isExpanded) {
+                  setExpandedDmId(null)
+                  setDmReplyText('')
+                } else {
+                  setExpandedDmId(thread.channel_id)
+                  setExpandedChannelId(null)
+                  setDmReplyText('')
+                  markDmStarted(thread)
+                }
+                setConfirmingResolveId(null)
+              }
+
+              const submitDmReply = async () => {
+                const text = dmReplyText.trim()
+                if (!text || !profile || dmReplyBusy) return
+                setDmReplyBusy(true)
+                try {
+                  const name = profile.display_name ?? 'Member'
+                  const { error } = await supabase.from('chat_messages').insert({
+                    channel_id: thread.channel_id,
+                    sender_name: name,
+                    sender_id: profile.id,
+                    sender_initial: name.charAt(0).toUpperCase(),
+                    content: text,
+                  })
+                  if (error) throw error
+                  toast(`Sent to ${label}`, 'success')
+                  setDmReplyText('')
+                  setExpandedDmId(null)
+                  markDmReplied(thread)
+                  void queryClient.invalidateQueries({ queryKey: dmKeys.list() })
+                } catch (err) {
+                  toast(err instanceof Error ? err.message : 'Send failed', 'error')
+                } finally {
+                  setDmReplyBusy(false)
+                }
+              }
+
+              return (
+                <div
+                  key={thread.channel_id}
+                  className={`relative transition-[background-color] duration-150 ease-out ${
+                    isCompleted
+                      ? 'bg-surface-alt/30 opacity-75'
+                      : isExpanded
+                        ? 'bg-violet-500/10'
+                        : status === 'new'
+                          ? 'bg-gold/8 hover:bg-gold/12'
+                          : 'hover:bg-surface-hover'
+                  }`}
+                >
+                  <div className={`flex items-start gap-2 ${rowPad}`}>
+                    <div className="shrink-0 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={toggleDm}
+                        aria-expanded={isExpanded}
+                        aria-label={isExpanded ? `Close reply to ${label}` : `Reply to ${label}`}
+                        title={isExpanded ? 'Close' : 'Quick reply'}
+                        className={`inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 transition-all duration-150 active:scale-95 focus-ring ${
+                          isExpanded
+                            ? 'bg-violet-500/30 ring-violet-400/60 text-violet-200 shadow-[0_0_0_3px_rgba(167,139,250,0.18)]'
+                            : 'bg-violet-500/15 ring-violet-500/30 text-violet-300 hover:bg-violet-500/25 hover:ring-violet-400/50 hover:shadow-[0_0_0_3px_rgba(167,139,250,0.12)]'
+                        }`}
+                      >
+                        <MessageSquare size={13} aria-hidden="true" />
+                      </button>
+                      <Link
+                        to={href}
+                        onClick={() => markDmStarted(thread)}
+                        aria-label={`Open ${label} in messages`}
+                        title="Open in messages"
+                        className="inline-flex items-center gap-1 h-7 px-2 rounded-full ring-1 bg-violet-500/15 ring-violet-500/30 text-violet-200 text-[10px] font-bold uppercase tracking-wider hover:bg-violet-500/30 hover:ring-violet-400/60 hover:text-white hover:shadow-[0_0_0_3px_rgba(167,139,250,0.18)] transition-all duration-150 active:scale-95 focus-ring"
+                      >
+                        <ExternalLink size={11} strokeWidth={2.6} aria-hidden="true" />
+                        Open
+                      </Link>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={toggleDm}
+                      aria-expanded={isExpanded}
+                      className="flex-1 min-w-0 text-left -my-1 py-1 rounded-md hover:bg-surface-hover transition-colors focus-ring"
+                    >
+                      <div className="flex items-center gap-2">
+                        {thread.unread_count > 0 && (
+                          <span className="shrink-0 w-2 h-2 rounded-full bg-rose-500" aria-label="New messages" />
+                        )}
+                        <p className={`text-[13px] truncate ${thread.unread_count > 0 ? 'font-bold text-text' : 'font-semibold text-text-muted'}`}>
+                          {label}
+                        </p>
+                      </div>
+                      <p className={`text-[12px] truncate mt-0.5 ${thread.unread_count > 0 ? 'text-text' : 'text-text-light'}`}>
+                        {thread.latest_sender ? `${thread.latest_sender.split(' ')[0]}: ` : ''}{preview}
+                      </p>
+                    </button>
+
+                    <div className="shrink-0 flex flex-col items-end gap-1 mt-0.5">
+                      {thread.latest_created_at && (
+                        <span
+                          className="text-[10px] text-text-light tabular-nums whitespace-nowrap"
+                          title={new Date(thread.latest_created_at).toLocaleString()}
+                        >
+                          {relativeTime(thread.latest_created_at)}
+                        </span>
+                      )}
+                      <StatusPill status={status} count={thread.unread_count} />
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="px-3 pb-3 pt-1 space-y-2" style={{ animation: 'fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1)' }}>
+                      <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.06] px-2.5 py-2 text-[12px]">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-violet-300/80 mb-1">
+                          {thread.latest_sender ?? label}
+                        </p>
+                        <p className="text-text whitespace-pre-wrap break-words line-clamp-4 leading-snug">
+                          {preview}
+                        </p>
+                      </div>
+                      <textarea
+                        autoFocus
+                        rows={1}
+                        value={dmReplyText}
+                        onChange={(e) => setDmReplyText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                            e.preventDefault()
+                            void submitDmReply()
+                          }
+                          if (e.key === 'Escape') {
+                            e.preventDefault()
+                            setExpandedDmId(null)
+                            setDmReplyText('')
+                          }
+                        }}
+                        placeholder={`Reply to ${label}...`}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-violet-500/25 text-[12px] text-text placeholder:text-text-light focus:border-violet-400/60 focus:outline-none resize-none min-h-[34px]"
+                      />
+                      <div className="flex items-center justify-between gap-1.5">
+                        {!isCompleted ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCompleteDmClick(thread)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
+                          >
+                            <Check size={11} strokeWidth={2.8} aria-hidden="true" />
+                            {confirmingComplete ? 'Finish' : 'Complete'}
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/70">
+                            Completed
+                          </span>
+                        )}
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpandedDmId(null)
+                              setDmReplyText('')
+                            }}
+                            className="px-2 py-1 rounded-md text-[11px] font-medium text-text-light hover:text-text transition-colors focus-ring"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void submitDmReply()}
+                            disabled={!dmReplyText.trim() || dmReplyBusy}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-violet-500 text-white text-[11px] font-bold hover:bg-violet-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring"
+                          >
+                            <Send size={11} aria-hidden="true" />
+                            {dmReplyBusy ? 'Sending...' : 'Send'}
+                          </button>
+                        </div>
+                      </div>
+                      {confirmingComplete && (
+                        <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200">
+                          Notification resolved? Click Finish to complete.
+                        </div>
+                      )}
+                      <p className="text-[10px] text-text-light/70">Cmd/Ctrl + Enter to send. Completed reminders stay visible at the bottom for 7 days.</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            </div>
+          </>
+          )}
+
+          {visibleChannels.length > 0 && (
           <>
             {/* Skin pass 2026-05-06 — section header band for FORUMS,
                 mirrors the ASSIGNMENTS treatment below. No `border-t`
@@ -816,11 +1105,11 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
                         >
                           <Check size={11} strokeWidth={2.8} aria-hidden="true" />
-                          {confirmingResolve ? 'Finish' : 'Resolve'}
+                          {confirmingResolve ? 'Finish' : 'Complete'}
                         </button>
                       ) : (
                         <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/70">
-                          Resolved
+                          Completed
                         </span>
                       )}
                       <div className="flex items-center justify-end gap-1.5">
@@ -850,13 +1139,15 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         Notification resolved? Click Finish to complete.
                       </div>
                     )}
-                    <p className="text-[10px] text-text-light/70">⌘/Ctrl + Enter to send · Esc to cancel</p>
+                    <p className="text-[10px] text-text-light/70">⌘/Ctrl + Enter to send. Completed reminders stay visible at the bottom for 7 days.</p>
                   </div>
                 )}
               </div>
             )
           })}
           </div>
+          </>
+          )}
           </>
         )}
 
@@ -933,7 +1224,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
           </>
         )}
 
-        {visibleChannels.length === 0 && visibleAssignments.length === 0 && !notifQuery.isLoading && !notifQuery.error && (
+        {visibleDmThreads.length === 0 && visibleChannels.length === 0 && visibleAssignments.length === 0 && !notifQuery.isLoading && !dmThreadsQuery.isLoading && !notifQuery.error && !dmThreadsQuery.error && (
           <div className="flex flex-col items-center justify-center text-center px-4 py-8 text-text-light">
             <Inbox size={20} className="mb-2" aria-hidden="true" />
             <p className="text-[12px]">All caught up.</p>
@@ -960,6 +1251,7 @@ export function useTotalUnreadCount(): number {
     queryFn: fetchChannelNotifications,
     refetchInterval: 60_000,
   })
+  const dmThreadsQuery = useDmThreads()
   const assignmentsQuery = useQuery({
     queryKey: ['overview-assignment-notifications', profile?.id],
     queryFn: () => fetchAssignmentNotifications(profile!.id, { unreadOnly: true, limit: 20 }),
@@ -967,8 +1259,10 @@ export function useTotalUnreadCount(): number {
     refetchInterval: 60_000,
   })
   const channels = channelsQuery.data ?? []
+  const dmThreads = dmThreadsQuery.data ?? []
   const assignments = assignmentsQuery.data ?? []
   return (
+    dmThreads.reduce((acc, thread) => acc + (thread.unread_count ?? 0), 0) +
     channels.reduce((acc, c) => acc + (c.unread_count ?? 0), 0) +
     assignments.filter((n) => !n.is_read && !routesToTaskList(n)).length
   )

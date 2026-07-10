@@ -43,7 +43,12 @@ const STATUS_STYLES: Record<ThreadDisplayStatus, string> = {
 }
 
 function StatusBadge({ status, count }: { status: ThreadDisplayStatus; count: number }) {
-  const label = status === 'new' ? `${count > 9 ? '9+' : count} new` : status
+  const label =
+    status === 'new'
+      ? `${count > 9 ? '9+' : count} new`
+      : status === 'resolved'
+        ? 'completed'
+        : status
   return (
     <span
       className={`inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full border text-[10px] font-bold tabular-nums capitalize ${STATUS_STYLES[status]}`}
@@ -455,11 +460,11 @@ function ThreadRow({
                 className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
               >
                 <Check size={11} strokeWidth={2.8} aria-hidden="true" />
-                {confirmingResolve ? 'Finish' : 'Resolve'}
+                {confirmingResolve ? 'Finish' : 'Complete'}
               </button>
             ) : (
               <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/70">
-                Resolved
+                Completed
               </span>
             )}
             <button
@@ -477,7 +482,7 @@ function ThreadRow({
               Notification resolved? Click Finish to complete.
             </div>
           )}
-          <p className="text-[10px] text-text-light/70">Cmd/Ctrl + Enter to send. Resolved items move to the bottom for 7 days.</p>
+          <p className="text-[10px] text-text-light/70">Cmd/Ctrl + Enter to send. Completed reminders stay visible at the bottom for 7 days.</p>
         </div>
       )}
     </div>
