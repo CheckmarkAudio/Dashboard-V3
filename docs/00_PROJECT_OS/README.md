@@ -8,6 +8,7 @@ This is the project brain and heart. It does not replace the roadmap or the hist
 
 Read these before product, design, database, or code decisions:
 
+0. `docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md` — **top of the task hierarchy.** Active items here outrank the roadmap and any in-flight work. State them to the user at session start.
 1. `docs/00_PROJECT_OS/README.md`
 2. `docs/00_PROJECT_OS/01_VISION_AND_PURPOSE.md`
 3. `docs/00_PROJECT_OS/02_LANGUAGE_AND_KEYS.md`
@@ -24,6 +25,7 @@ Then read the focused docs for the active task.
 
 | Part | File | Job |
 |---|---|---|
+| Now | `00_PRIORITY_QUEUE.md` | Top of the task hierarchy — ASAP asks that outrank the roadmap. Read + state at every session start. |
 | Heart | `01_VISION_AND_PURPOSE.md` | Preserve the zoomed-out mission and product standard. |
 | Language | `02_LANGUAGE_AND_KEYS.md` | Keep shorthand, labels, and decision markers consistent. |
 | Spine | `03_LAWS_AND_SAFETY.md` | Prevent guessing, data drift, unsafe backend work, and destructive cleanup. |
