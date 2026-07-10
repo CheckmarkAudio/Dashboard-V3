@@ -48,6 +48,8 @@ _(No active priority tasks right now.)_
 
 Completed priority items, most recent first. Kept as a record — do not delete.
 
+- [x] Wire site-wide dashboard banner/header from Settings Branding — Requested by: Gavin · Added: 2026-07-10 · Done: 2026-07-10 · Notes: Global header is larger, reads a team-wide banner through RPC, and Settings Branding uploads/removes the shared banner via member-media storage.
+
 <!-- Example:
 - [x] Fix member archive not hiding on overview — Requested by: Gavin · Added: 2026-07-10 · Done: 2026-07-10
 -->

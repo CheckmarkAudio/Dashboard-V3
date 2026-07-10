@@ -2997,16 +2997,25 @@ export type Database = {
           created_at: string | null
           id: string
           name: string
+          site_banner_fit: string
+          site_banner_opacity: number
+          site_banner_url: string | null
         }
         Insert: {
           created_at?: string | null
           id?: string
           name: string
+          site_banner_fit?: string
+          site_banner_opacity?: number
+          site_banner_url?: string | null
         }
         Update: {
           created_at?: string | null
           id?: string
           name?: string
+          site_banner_fit?: string
+          site_banner_opacity?: number
+          site_banner_url?: string | null
         }
         Relationships: []
       }
@@ -4248,6 +4257,14 @@ export type Database = {
       get_my_outgoing_pending_reassign_requests: { Args: never; Returns: Json }
       get_my_task_requests: { Args: { p_limit?: number }; Returns: Json }
       get_my_team_id: { Args: never; Returns: string }
+      get_team_site_branding: {
+        Args: never
+        Returns: {
+          site_banner_fit: string
+          site_banner_opacity: number
+          site_banner_url: string | null
+        }[]
+      }
       get_pending_task_requests: { Args: never; Returns: Json }
       get_studio_assigned_tasks: {
         Args: { p_include_completed?: boolean; p_user_id: string }
@@ -4273,6 +4290,18 @@ export type Database = {
       is_channel_member: {
         Args: { p_channel: string; p_uid?: string }
         Returns: boolean
+      }
+      update_team_site_branding: {
+        Args: {
+          p_site_banner_fit?: string
+          p_site_banner_opacity?: number
+          p_site_banner_url: string | null
+        }
+        Returns: {
+          site_banner_fit: string
+          site_banner_opacity: number
+          site_banner_url: string | null
+        }[]
       }
       is_private_channel: { Args: { p_channel: string }; Returns: boolean }
       is_team_admin: { Args: never; Returns: boolean }

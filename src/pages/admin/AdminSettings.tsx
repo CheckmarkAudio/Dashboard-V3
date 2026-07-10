@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { useQuickKeys } from '../../hooks/useQuickKeys'
@@ -16,10 +17,20 @@ import {
 } from '../../lib/googleCalendar'
 import {
   Save, Loader2, Database, Globe, Bell, Sun, Image as ImageIcon, Keyboard, Shield, LayoutGrid, Clock, MessageSquareText, Archive,
+  Trash2,
 } from 'lucide-react'
 import StudioHoursPanel from '../../components/admin/StudioHoursPanel'
 import FeedbackReportsPanel from '../../components/admin/FeedbackReportsPanel'
 import ArchivedMembersPanel from '../../components/admin/ArchivedMembersPanel'
+import {
+  fetchTeamSiteBranding,
+  removeTeamSiteBanner,
+  teamSiteBrandingKeys,
+  updateTeamSiteBranding,
+  uploadTeamSiteBanner,
+  type SiteBannerFit,
+  type TeamSiteBranding,
+} from '../../lib/queries/teamSiteBranding'
 
 /**
  * Settings section nav model. Each section renders its own right-pane
@@ -94,6 +105,7 @@ export default function AdminSettings() {
   useDocumentTitle('Settings - Checkmark Workspace')
   const { profile } = useAuth()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [activeSection, setActiveSection] = useState<SectionKey>('account-access')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -109,12 +121,14 @@ export default function AdminSettings() {
   const [introVideo, setIntroVideo] = useState(false)
   const [theme, setTheme] = useState<'dark'>('dark')
 
-  // Branding state (UI-only — no backend wiring yet)
+  // Branding state. The header image is persisted as a team-wide
+  // banner and rendered by the global Layout header for every member.
   const [logoLight, setLogoLight] = useState<File | null>(null)
   const [logoDark, setLogoDark] = useState<File | null>(null)
   const [headerImage, setHeaderImage] = useState<string | null>(null)
   const [headerOpacity, setHeaderOpacity] = useState(100)
-  const [headerFit, setHeaderFit] = useState<'original' | 'cover' | 'contain'>('original')
+  const [headerFit, setHeaderFit] = useState<SiteBannerFit>('cover')
+  const [uploadingHeader, setUploadingHeader] = useState(false)
   const [googleCalendarLoading, setGoogleCalendarLoading] = useState(true)
   const [googleCalendarConnecting, setGoogleCalendarConnecting] = useState(false)
   const [googleCalendarDisconnecting, setGoogleCalendarDisconnecting] = useState(false)
@@ -124,6 +138,27 @@ export default function AdminSettings() {
 
   // Quick keys
   const { actions, bindings, setBinding, resetDefaults } = useQuickKeys()
+  const siteBrandingQuery = useQuery({
+    queryKey: teamSiteBrandingKeys.current(),
+    queryFn: fetchTeamSiteBranding,
+    enabled: Boolean(profile?.id),
+    staleTime: 5 * 60_000,
+  })
+  const updateBrandingMutation = useMutation({
+    mutationFn: updateTeamSiteBranding,
+    onSuccess: (branding) => {
+      queryClient.setQueryData(teamSiteBrandingKeys.current(), branding)
+      void queryClient.invalidateQueries({ queryKey: teamSiteBrandingKeys.all })
+    },
+  })
+
+  useEffect(() => {
+    const branding = siteBrandingQuery.data
+    if (!branding) return
+    setHeaderImage(branding.site_banner_url)
+    setHeaderFit(branding.site_banner_fit)
+    setHeaderOpacity(branding.site_banner_opacity)
+  }, [siteBrandingQuery.data])
 
   const loadGoogleCalendar = async () => {
     setGoogleCalendarLoading(true)
@@ -226,19 +261,72 @@ export default function AdminSettings() {
 
   const handleSave = async () => {
     setSaving(true)
-    // Settings would be persisted to a settings table in Supabase
-    await new Promise(r => setTimeout(r, 500))
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    try {
+      if (activeSection === 'branding') {
+        await updateBrandingMutation.mutateAsync({
+          site_banner_url: headerImage,
+          site_banner_fit: headerFit,
+          site_banner_opacity: headerOpacity,
+        })
+      } else {
+        // Remaining settings sections still keep their existing local-save
+        // behavior until their persistence tables are wired.
+        await new Promise(r => setTimeout(r, 500))
+      }
+      setSaved(true)
+      toast('Settings saved.', 'success')
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to save settings', 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleHeaderImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleHeaderImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => setHeaderImage(typeof reader.result === 'string' ? reader.result : null)
-    reader.readAsDataURL(file)
+    setUploadingHeader(true)
+    try {
+      const publicUrl = await uploadTeamSiteBanner(file, headerImage)
+      const next: TeamSiteBranding = {
+        site_banner_url: publicUrl,
+        site_banner_fit: headerFit,
+        site_banner_opacity: headerOpacity,
+      }
+      const savedBranding = await updateBrandingMutation.mutateAsync(next)
+      setHeaderImage(savedBranding.site_banner_url)
+      setHeaderFit(savedBranding.site_banner_fit)
+      setHeaderOpacity(savedBranding.site_banner_opacity)
+      setSaved(true)
+      toast('Header banner uploaded.', 'success')
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Header upload failed', 'error')
+    } finally {
+      setUploadingHeader(false)
+    }
+  }
+
+  const handleRemoveHeaderImage = async () => {
+    setSaving(true)
+    try {
+      await removeTeamSiteBanner(headerImage)
+      const savedBranding = await updateBrandingMutation.mutateAsync({
+        site_banner_url: null,
+        site_banner_fit: headerFit,
+        site_banner_opacity: headerOpacity,
+      })
+      setHeaderImage(savedBranding.site_banner_url)
+      setSaved(true)
+      toast('Header banner removed.', 'success')
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to remove header banner', 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -357,7 +445,14 @@ export default function AdminSettings() {
                     accept="image/*"
                     onChange={handleHeaderImageChange}
                     className="text-sm text-text-muted"
+                    disabled={uploadingHeader}
                   />
+                  {uploadingHeader && (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-gold font-semibold mt-2">
+                      <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                      Uploading banner…
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -369,7 +464,10 @@ export default function AdminSettings() {
                       src={headerImage}
                       alt="Header preview"
                       style={{ opacity: headerOpacity / 100 }}
-                      className="w-full h-full object-cover"
+                      className={[
+                        'w-full h-full',
+                        headerFit === 'contain' ? 'object-contain' : headerFit === 'original' ? 'object-none object-center' : 'object-cover',
+                      ].join(' ')}
                     />
                   </div>
                   <div className="w-20 flex flex-col items-center gap-2">
@@ -402,6 +500,18 @@ export default function AdminSettings() {
                   <option value="contain">Contain</option>
                 </select>
               </div>
+
+              {headerImage && (
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveHeaderImage()}
+                  disabled={saving || uploadingHeader}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-semibold text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-50 focus-ring"
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                  Remove Header Banner
+                </button>
+              )}
             </div>
           )}
 
@@ -709,7 +819,7 @@ export default function AdminSettings() {
           )}
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || uploadingHeader}
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gold hover:bg-gold-muted text-black font-semibold text-sm disabled:opacity-50"
           >
             {saving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}

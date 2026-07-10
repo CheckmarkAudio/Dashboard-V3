@@ -26,6 +26,7 @@ import {
   fetchMyOpenClockEntry,
   timeClockKeys,
 } from '../lib/queries/timeClock'
+import { fetchTeamSiteBranding, teamSiteBrandingKeys } from '../lib/queries/teamSiteBranding'
 import type { LucideProps } from 'lucide-react'
 import {
   LayoutDashboard, Users, Calendar, Settings, Gauge,
@@ -98,9 +99,9 @@ function TopNavItem({ link }: { link: NavLinkDef }) {
       end={link.to === '/' || link.to === '/admin'}
       className={({ isActive }) =>
         [
-          // Mockup spec: 22px rounded, 16px vertical padding equivalent
-          // (h-10 reads ~40px), 14px font, gap-2.5 between icon + label.
-          'inline-flex items-center gap-2.5 h-10 px-3.5 rounded-[22px] text-[14px] font-semibold transition-all duration-200 focus-ring whitespace-nowrap',
+          // Slightly larger than the original compact nav so top-level
+          // routes read as tappable controls, not just text labels.
+          'inline-flex items-center gap-2.5 h-11 px-4 rounded-[22px] text-[14px] font-semibold transition-all duration-200 focus-ring whitespace-nowrap',
           isActive
             ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
             : 'text-text-muted hover:text-text hover:bg-white/[0.03]',
@@ -195,7 +196,7 @@ function MoreDropdown({ entries }: { entries: TopNavEntry[] }) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`inline-flex items-center gap-1.5 h-10 px-3 rounded-[22px] text-[14px] font-semibold transition-all duration-200 focus-ring ${triggerClass}`}
+        className={`inline-flex items-center gap-1.5 h-11 px-3.5 rounded-[22px] text-[14px] font-semibold transition-all duration-200 focus-ring ${triggerClass}`}
       >
         <MoreHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
         More
@@ -313,7 +314,7 @@ function ResponsiveTopNav({ entries }: { entries: TopNavEntry[] }) {
   return (
     <nav
       ref={containerRef}
-      className="hidden lg:flex items-center gap-1 px-4 lg:px-6 h-11 border-t border-border/60 relative overflow-hidden"
+      className="hidden lg:flex items-center gap-1 px-4 lg:px-6 h-12 border-t border-border/50 relative overflow-hidden"
       aria-label="Primary navigation"
     >
       {/* Hidden measurement row — absolute + invisible so it doesn't
@@ -336,7 +337,7 @@ function ResponsiveTopNav({ entries }: { entries: TopNavEntry[] }) {
         aria-hidden="true"
         className="absolute left-0 top-0 invisible pointer-events-none"
       >
-        <div className="inline-flex items-center gap-1.5 h-10 px-3 rounded-[22px] text-[14px] font-semibold">
+        <div className="inline-flex items-center gap-1.5 h-11 px-3.5 rounded-[22px] text-[14px] font-semibold">
           <MoreHorizontal size={16} strokeWidth={1.8} />
           More
         </div>
@@ -435,7 +436,14 @@ export default function Layout() {
     // Refetch on focus so a clock-out done in another tab shows up.
     refetchOnWindowFocus: true,
   })
+  const siteBrandingQuery = useQuery({
+    queryKey: teamSiteBrandingKeys.current(),
+    queryFn: fetchTeamSiteBranding,
+    enabled: Boolean(profile?.id),
+    staleTime: 5 * 60_000,
+  })
   const openShift = openShiftQuery.data ?? null
+  const siteBranding = siteBrandingQuery.data
   const clockedIn = Boolean(openShift)
   const clockInTime = openShift
     ? new Date(openShift.clocked_in_at).toLocaleTimeString('en-US', {
@@ -568,9 +576,33 @@ export default function Layout() {
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
       {/* ── Top header (two-row: logo/controls + horizontal nav) ── */}
-      <header className="border-b border-border/60 shrink-0 z-40 sticky top-0 backdrop-blur-md bg-surface/70">
+      <header className="relative overflow-hidden border-b border-border/60 shrink-0 z-40 sticky top-0 backdrop-blur-md bg-surface/78">
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          {siteBranding?.site_banner_url ? (
+            <>
+              <img
+                src={siteBranding.site_banner_url}
+                alt=""
+                className={[
+                  'absolute inset-0 h-full w-full',
+                  siteBranding.site_banner_fit === 'contain'
+                    ? 'object-contain'
+                    : siteBranding.site_banner_fit === 'original'
+                      ? 'object-none object-center'
+                      : 'object-cover',
+                ].join(' ')}
+                style={{ opacity: siteBranding.site_banner_opacity / 100 }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-bg/94 via-bg/74 to-bg/88" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_0%,rgba(212,170,74,0.18),transparent_34%),radial-gradient(circle_at_78%_20%,rgba(124,58,237,0.12),transparent_30%)]" />
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(212,170,74,0.10),transparent_32%),linear-gradient(90deg,rgba(255,255,255,0.03),transparent_42%,rgba(212,170,74,0.05))]" />
+          )}
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-gold/28 to-transparent" />
+        </div>
         {/* Row 1: logo · (mobile hamburger) · right-aligned controls */}
-        <div className="h-14 flex items-center px-4 lg:px-6">
+        <div className="relative z-10 h-16 flex items-center px-4 lg:px-6">
           {/* Mobile hamburger */}
           <button
             onClick={() => setSidebarOpen(true)}
