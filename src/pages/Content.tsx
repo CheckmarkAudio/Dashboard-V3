@@ -13,7 +13,7 @@ import LinkifiedText from '../components/forum/LinkifiedText'
 import CreateChannelDialog from '../components/forum/CreateChannelDialog'
 import NewMessageDialog from '../components/messages/NewMessageDialog'
 import { useDmThreads } from '../components/messages/useDmThreads'
-import { dmKeys, dmThreadLabel, markDmRead } from '../lib/queries/dms'
+import { dmKeys, dmThreadLabel, markDmRead, type DmThread } from '../lib/queries/dms'
 import { chatColorTokens, resolveChatColorKey } from '../lib/forum/chatColor'
 import { detectLinkEmbed } from '../lib/forum/attachments'
 import { extractUrls } from '../lib/forum/linkify'
@@ -208,16 +208,25 @@ export default function Content() {
     })
   }, [requestedDm, dmThreads, activeChannel?.id])
 
-  // Mark the DM read once per open (fires when `?dm=` changes), then
-  // refresh the thread list so the header badge clears.
-  useEffect(() => {
-    if (!requestedDm) return
-    void markDmRead(requestedDm)
-      .then(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
-      .catch(() => {})
-  }, [requestedDm, queryClient])
-
   const activeIsDm = Boolean(activeChannel) && dmThreads.some((t) => t.channel_id === activeChannel?.id)
+  const activeDmThread = activeChannel
+    ? dmThreads.find((t) => t.channel_id === activeChannel.id)
+    : undefined
+  const activeDmUnread = activeDmThread?.unread_count ?? 0
+  const resolveActiveDm = useCallback(() => {
+    if (!activeChannel || !activeIsDm) return
+    const nowIso = new Date().toISOString()
+    queryClient.setQueryData<DmThread[]>(dmKeys.list(), (prev) =>
+      prev?.map((row) =>
+        row.channel_id === activeChannel.id
+          ? { ...row, unread_count: 0, last_read_at: nowIso }
+          : row,
+      ) ?? prev,
+    )
+    void markDmRead(activeChannel.id)
+      .then(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
+      .catch(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
+  }, [activeChannel, activeIsDm, queryClient])
 
   // 2026-05-24 — close the admin channel context menu on outside
   // click / Escape. Mirrors the calendar booking context-menu pattern.
@@ -464,6 +473,7 @@ export default function Content() {
               : m,
           ),
         )
+        if (activeIsDm) resolveActiveDm()
 
         // Background unfurl. We don't block the user on this — it's
         // a separate write that lands a beat after the message
@@ -911,7 +921,19 @@ export default function Content() {
                 <p className="text-[11px] text-text-light mt-0.5">{activeChannel.description}</p>
               )}
             </div>
-            <span className="text-[10px] text-text-light">{messages.length} messages</span>
+            <div className="flex items-center gap-2">
+              {activeIsDm && activeDmUnread > 0 && (
+                <button
+                  type="button"
+                  onClick={resolveActiveDm}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-300 text-[11px] font-bold hover:bg-emerald-500/20 transition-colors focus-ring"
+                >
+                  <Check size={12} strokeWidth={2.8} aria-hidden="true" />
+                  Mark read
+                </button>
+              )}
+              <span className="text-[10px] text-text-light">{messages.length} messages</span>
+            </div>
           </div>
 
           {/* Messages */}

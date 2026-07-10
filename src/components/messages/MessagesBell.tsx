@@ -9,14 +9,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { MessageSquare, Plus, X } from 'lucide-react'
+import { Check, ExternalLink, MessageSquare, Plus, Send, X } from 'lucide-react'
 import MemberAvatar from '../members/MemberAvatar'
-import { dmKeys, dmThreadLabel, type DmThread } from '../../lib/queries/dms'
+import { dmKeys, dmThreadLabel, markDmRead, type DmThread } from '../../lib/queries/dms'
 import { useDmThreads, useDmUnreadCount } from './useDmThreads'
 import { useDmDock } from './DmDockContext'
 import NewMessageDialog from './NewMessageDialog'
+import { useAuth } from '../../contexts/AuthContext'
+import { supabase } from '../../lib/supabase'
 
 const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)'
+const RECENT_THREAD_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
 function relativeTime(iso: string | null): string {
   if (!iso) return ''
@@ -30,17 +33,27 @@ function relativeTime(iso: string | null): string {
   return `${d}d`
 }
 
+function isRecentThread(thread: DmThread): boolean {
+  if (!thread.latest_created_at) return false
+  return Date.now() - new Date(thread.latest_created_at).getTime() <= RECENT_THREAD_WINDOW_MS
+}
+
 export default function MessagesBell() {
   const queryClient = useQueryClient()
+  const { profile } = useAuth()
   const { openThread: openInDock } = useDmDock()
   const unread = useDmUnreadCount()
   const { data: threads = [] } = useDmThreads()
   const [open, setOpen] = useState(false)
   const [entered, setEntered] = useState(false)
   const [showNew, setShowNew] = useState(false)
+  const [expandedThreadId, setExpandedThreadId] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState('')
+  const [replyBusy, setReplyBusy] = useState(false)
   const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
   const buttonRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const visibleThreads = threads.filter((thread) => thread.unread_count > 0 || isRecentThread(thread))
 
   useLayoutEffect(() => {
     if (!open) return
@@ -86,6 +99,52 @@ export default function MessagesBell() {
     // Pop the conversation into the floating dock so it follows the
     // user across pages (Messenger-style), rather than navigating away.
     openInDock(channelId)
+  }
+
+  const resolveThread = (channelId: string) => {
+    const nowIso = new Date().toISOString()
+    queryClient.setQueryData<DmThread[]>(dmKeys.list(), (prev) =>
+      prev?.map((thread) =>
+        thread.channel_id === channelId
+          ? { ...thread, unread_count: 0, last_read_at: nowIso }
+          : thread,
+      ) ?? prev,
+    )
+    void markDmRead(channelId)
+      .then(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
+      .catch(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
+  }
+
+  const togglePreview = (channelId: string) => {
+    setExpandedThreadId((current) => {
+      const next = current === channelId ? null : channelId
+      if (next !== channelId) setReplyText('')
+      return next
+    })
+  }
+
+  const sendQuickReply = async (thread: DmThread) => {
+    const text = replyText.trim()
+    if (!text || !profile || replyBusy) return
+    setReplyBusy(true)
+    try {
+      const name = profile.display_name ?? 'Member'
+      const { error } = await supabase.from('chat_messages').insert({
+        channel_id: thread.channel_id,
+        sender_name: name,
+        sender_id: profile.id,
+        sender_initial: name.charAt(0).toUpperCase(),
+        content: text,
+      })
+      if (error) throw error
+      setReplyText('')
+      resolveThread(thread.channel_id)
+      void queryClient.invalidateQueries({ queryKey: dmKeys.list() })
+    } catch {
+      void queryClient.invalidateQueries({ queryKey: dmKeys.list() })
+    } finally {
+      setReplyBusy(false)
+    }
   }
 
   const onCreated = (channelId: string) => {
@@ -166,10 +225,10 @@ export default function MessagesBell() {
           </div>
 
           <div className="p-2 max-h-[min(480px,70vh)] overflow-y-auto scroll-smooth">
-            {threads.length === 0 ? (
+            {visibleThreads.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center px-4 py-8 text-text-light">
                 <MessageSquare size={20} className="mb-2" aria-hidden="true" />
-                <p className="text-[12px]">No conversations yet.</p>
+                <p className="text-[12px]">No message follow-ups right now.</p>
                 <button
                   type="button"
                   onClick={() => setShowNew(true)}
@@ -180,9 +239,20 @@ export default function MessagesBell() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-0.5">
-                {threads.map((t) => (
-                  <ThreadRow key={t.channel_id} thread={t} onOpen={() => openThread(t.channel_id)} />
+              <div className="divide-y divide-theme overflow-hidden rounded-xl border border-border bg-surface-alt/20">
+                {visibleThreads.map((t) => (
+                  <ThreadRow
+                    key={t.channel_id}
+                    thread={t}
+                    expanded={expandedThreadId === t.channel_id}
+                    replyText={expandedThreadId === t.channel_id ? replyText : ''}
+                    replyBusy={replyBusy && expandedThreadId === t.channel_id}
+                    onTogglePreview={() => togglePreview(t.channel_id)}
+                    onOpen={() => openThread(t.channel_id)}
+                    onReplyChange={setReplyText}
+                    onMarkRead={() => resolveThread(t.channel_id)}
+                    onSendReply={() => void sendQuickReply(t)}
+                  />
                 ))}
               </div>
             )}
@@ -198,7 +268,27 @@ export default function MessagesBell() {
   )
 }
 
-function ThreadRow({ thread, onOpen }: { thread: DmThread; onOpen: () => void }) {
+function ThreadRow({
+  thread,
+  expanded,
+  replyText,
+  replyBusy,
+  onTogglePreview,
+  onOpen,
+  onReplyChange,
+  onMarkRead,
+  onSendReply,
+}: {
+  thread: DmThread
+  expanded: boolean
+  replyText: string
+  replyBusy: boolean
+  onTogglePreview: () => void
+  onOpen: () => void
+  onReplyChange: (value: string) => void
+  onMarkRead: () => void
+  onSendReply: () => void
+}) {
   const label = dmThreadLabel(thread)
   const unread = thread.unread_count > 0
   const unreadLabel = thread.unread_count > 9 ? '9+' : String(thread.unread_count)
@@ -210,36 +300,114 @@ function ThreadRow({ thread, onOpen }: { thread: DmThread; onOpen: () => void })
       : ''
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`Open message thread with ${label}${unread ? `, ${thread.unread_count} unread` : ''}`}
-      className="w-full flex items-center gap-3 px-2 py-2 rounded-xl text-left hover:bg-surface-hover transition-colors focus-ring"
-    >
-      <span className="relative shrink-0">
-        <MemberAvatar member={lead} displayName={label} size="sm" />
-        {unread && (
-          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-surface" aria-hidden="true" />
-        )}
-      </span>
-      <span className="flex-1 min-w-0">
-        <span className="flex items-center justify-between gap-2">
-          <span className={`text-[13px] truncate ${unread ? 'font-bold text-text' : 'font-semibold text-text-muted'}`}>
-            {label}
+    <div className={`transition-colors ${expanded ? 'bg-violet-500/10' : unread ? 'bg-gold/8' : 'hover:bg-surface-hover'}`}>
+      <div className="flex items-start gap-3 px-2 py-2">
+        <button
+          type="button"
+          onClick={onTogglePreview}
+          aria-expanded={expanded}
+          aria-label={`Preview message thread with ${label}${unread ? `, ${thread.unread_count} unread` : ''}`}
+          className="relative shrink-0 rounded-full focus-ring"
+        >
+          <MemberAvatar member={lead} displayName={label} size="sm" />
+          {unread && (
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-surface" aria-hidden="true" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onTogglePreview}
+          aria-expanded={expanded}
+          className="flex-1 min-w-0 text-left rounded-lg -my-1 py-1 focus-ring"
+        >
+          <span className="flex items-center justify-between gap-2">
+            <span className={`text-[13px] truncate ${unread ? 'font-bold text-text' : 'font-semibold text-text-muted'}`}>
+              {label}
+            </span>
+            <span className="shrink-0 text-[10px] text-text-light tabular-nums">
+              {relativeTime(thread.latest_created_at)}
+            </span>
           </span>
-          <span className="shrink-0 text-[10px] text-text-light tabular-nums">
-            {relativeTime(thread.latest_created_at)}
+          <span className={`block text-[12px] truncate mt-0.5 ${unread ? 'text-text' : 'text-text-light'}`}>
+            {senderPrefix}{preview}
           </span>
-        </span>
-        <span className={`block text-[12px] truncate mt-0.5 ${unread ? 'text-text' : 'text-text-light'}`}>
-          {senderPrefix}{preview}
-        </span>
-      </span>
-      {unread && (
-        <span className="shrink-0 inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full bg-rose-500/15 border border-rose-400/30 text-[10px] font-bold text-rose-400 tabular-nums">
-          {unreadLabel} new
-        </span>
+        </button>
+        <div className="shrink-0 flex flex-col items-end gap-1">
+          {unread ? (
+            <span className="inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full bg-rose-500/15 border border-rose-400/30 text-[10px] font-bold text-rose-400 tabular-nums">
+              {unreadLabel} new
+            </span>
+          ) : (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-300/70">
+              Read
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onOpen}
+            className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-violet-500/15 text-violet-200 text-[10px] font-bold hover:bg-violet-500/25 transition-colors focus-ring"
+          >
+            <ExternalLink size={10} strokeWidth={2.6} aria-hidden="true" />
+            Open
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 space-y-2 animate-fade-in">
+          <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.06] px-2.5 py-2">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-violet-300/80 mb-1">
+              {thread.latest_sender ?? label}
+            </p>
+            <p className="text-[12px] text-text whitespace-pre-wrap break-words line-clamp-4 leading-snug">
+              {preview}
+            </p>
+          </div>
+          <textarea
+            rows={2}
+            value={replyText}
+            onChange={(e) => onReplyChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                onSendReply()
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                onTogglePreview()
+              }
+            }}
+            placeholder={`Reply to ${label}...`}
+            className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-violet-500/25 text-[12px] text-text placeholder:text-text-light focus:border-violet-400/60 focus:outline-none resize-none min-h-[54px]"
+          />
+          <div className="flex items-center justify-between gap-2">
+            {unread ? (
+              <button
+                type="button"
+                onClick={onMarkRead}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
+              >
+                <Check size={11} strokeWidth={2.8} aria-hidden="true" />
+                Mark read
+              </button>
+            ) : (
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/70">
+                Resolved this week
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={onSendReply}
+              disabled={!replyText.trim() || replyBusy}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-violet-500 text-white text-[11px] font-bold hover:bg-violet-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-ring"
+            >
+              <Send size={11} aria-hidden="true" />
+              {replyBusy ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+          <p className="text-[10px] text-text-light/70">Cmd/Ctrl + Enter to send. Read items stay here for 7 days.</p>
+        </div>
       )}
-    </button>
+    </div>
   )
 }

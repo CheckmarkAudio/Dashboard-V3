@@ -150,13 +150,18 @@ function DmChatWindow({
     if (!minimized) endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, minimized])
 
-  // Mark read while the window is open + expanded (clears the bell badge).
-  useEffect(() => {
-    if (minimized || loading) return
+  const resolveThread = useCallback(() => {
+    queryClient.setQueryData<DmThread[]>(dmKeys.list(), (prev) =>
+      prev?.map((row) =>
+        row.channel_id === channelId
+          ? { ...row, unread_count: 0, last_read_at: new Date().toISOString() }
+          : row,
+      ) ?? prev,
+    )
     void markDmRead(channelId)
       .then(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
-      .catch(() => {})
-  }, [channelId, minimized, loading, messages.length, queryClient])
+      .catch(() => queryClient.invalidateQueries({ queryKey: dmKeys.list() }))
+  }, [channelId, queryClient])
 
   const canSend = input.trim().length > 0 || pending.length > 0
   const submit = () => {
@@ -165,7 +170,7 @@ function DmChatWindow({
     const atts = pending
     setInput('')
     setPending([])
-    void send(t, atts)
+    void send(t, atts).then(resolveThread)
   }
 
   const startEdit = (m: { id: string; content: string }) => {
@@ -236,6 +241,18 @@ function DmChatWindow({
         >
           <Minus size={15} aria-hidden="true" />
         </button>
+        {unread > 0 && (
+          <button
+            type="button"
+            onClick={resolveThread}
+            aria-label={`Mark conversation with ${label} read`}
+            title="Mark read"
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
+          >
+            <Check size={13} strokeWidth={2.8} aria-hidden="true" />
+            Read
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
@@ -380,4 +397,3 @@ function DmChatWindow({
     </div>
   )
 }
-

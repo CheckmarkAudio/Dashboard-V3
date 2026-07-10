@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertCircle, Bell, Calendar, CheckCheck, ClipboardList, ExternalLink,
+  AlertCircle, Bell, Calendar, Check, CheckCheck, ClipboardList, ExternalLink,
   Inbox, Loader2, MessageSquare, Send,
 } from 'lucide-react'
 import { APP_ROUTES } from '../../app/routes'
@@ -100,6 +100,13 @@ type ExpandedChannelMessage = {
   id: string
   content: string
   attachments: ChatAttachment[]
+}
+
+const RECENT_RESOLVED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+function isRecentChannel(c: ChannelNotification): boolean {
+  if (!c.latest_created_at) return false
+  return Date.now() - new Date(c.latest_created_at).getTime() <= RECENT_RESOLVED_WINDOW_MS
 }
 
 function relativeTime(iso: string): string {
@@ -288,7 +295,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     staleTime: 60_000,
   })
 
-  const visibleChannels = channels.filter((c) => c.unread_count > 0)
+  const visibleChannels = channels.filter((c) => c.unread_count > 0 || isRecentChannel(c))
   const visibleAssignments = assignments.filter((n) => !n.is_read)
   const totalUnread = channelUnread + assignmentUnread
 
@@ -311,7 +318,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     })
   }
 
-  const handleChannelClick = (channelId: string) => {
+  const handleMarkChannelRead = (channelId: string) => {
     queryClient.setQueryData<ChannelNotification[]>(['overview-notifications'], (prev) => {
       if (!prev) return prev
       return prev.map((c) =>
@@ -468,7 +475,6 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
               } else {
                 setExpandedChannelId(c.channel_id)
                 setReplyText('')
-                handleChannelClick(c.channel_id)
               }
             }
 
@@ -494,7 +500,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 // this, the realtime INSERT triggers a refetch that counts
                 // the just-sent message as unread for everyone, including
                 // the sender.
-                void markChannelRead(c.channel_id).catch(() => { /* noop */ })
+                handleMarkChannelRead(c.channel_id)
                 void queryClient.invalidateQueries({ queryKey: ['overview-notifications'] })
               } catch (err) {
                 toast(err instanceof Error ? err.message : 'Send failed', 'error')
@@ -569,6 +575,17 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       <ExternalLink size={11} strokeWidth={2.6} aria-hidden="true" />
                       Open
                     </Link>
+                    {unread && (
+                      <button
+                        type="button"
+                        onClick={() => handleMarkChannelRead(c.channel_id)}
+                        aria-label={`Mark #${c.channel_name} read`}
+                        title="Mark read"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-full ring-1 bg-emerald-500/15 ring-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 hover:ring-emerald-400/50 transition-all duration-150 active:scale-95 focus-ring"
+                      >
+                        <Check size={12} strokeWidth={2.8} aria-hidden="true" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Title + preview = also a quick-reply trigger (same
@@ -715,7 +732,22 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         The new prominent "Open" pill in the row
                         header (visible in both collapsed AND
                         expanded states) replaces it. */}
-                    <div className="flex items-center justify-end gap-1.5">
+                    <div className="flex items-center justify-between gap-1.5">
+                      {unread ? (
+                        <button
+                          type="button"
+                          onClick={() => handleMarkChannelRead(c.channel_id)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
+                        >
+                          <Check size={11} strokeWidth={2.8} aria-hidden="true" />
+                          Mark read
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/70">
+                          Resolved this week
+                        </span>
+                      )}
+                      <div className="flex items-center justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => {
@@ -735,6 +767,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         <Send size={11} aria-hidden="true" />
                         {replyBusy ? 'Sending…' : 'Send'}
                       </button>
+                      </div>
                     </div>
                     <p className="text-[10px] text-text-light/70">⌘/Ctrl + Enter to send · Esc to cancel</p>
                   </div>
