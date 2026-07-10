@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
+  ArrowUpRight,
   BriefcaseBusiness,
   CheckSquare,
   FolderUp,
@@ -111,8 +112,8 @@ function OverviewScoreCard({
       onClick={() => onSelect(id)}
       aria-pressed={active}
       className={[
-        'group relative overflow-hidden rounded-xl border bg-surface p-3 text-left transition-all duration-200 ease-out',
-        'hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(0,0,0,0.08)] hover:ring-2 active:translate-y-0 focus-ring',
+        'group relative cursor-pointer overflow-hidden rounded-xl border bg-surface p-3 text-left transition-all duration-200 ease-out',
+        'hover:-translate-y-1 hover:bg-surface-alt/55 hover:shadow-[0_14px_30px_rgba(0,0,0,0.12)] hover:ring-2 active:translate-y-0 active:scale-[0.985] focus-ring',
         active
           ? `-translate-y-1 scale-[1.01] shadow-[0_16px_34px_rgba(0,0,0,0.12)] ring-2 ${toneClasses.active}`
           : 'border-border',
@@ -127,6 +128,12 @@ function OverviewScoreCard({
         ].join(' ')}
         aria-hidden="true"
       />
+      <span
+        className="pointer-events-none absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface/80 text-text-light opacity-0 shadow-sm transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100 group-focus-visible:opacity-100"
+        aria-hidden="true"
+      >
+        <ArrowUpRight size={12} strokeWidth={2.6} />
+      </span>
       <div className="relative flex min-h-[112px] flex-col justify-between gap-4">
         <div className="flex items-center justify-between gap-3">
           <span className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-text-muted">
@@ -134,7 +141,7 @@ function OverviewScoreCard({
           </span>
           <span
             className={[
-              'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1',
+              'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 transition-transform duration-200 group-hover:scale-110 group-active:scale-95',
               toneClasses.icon,
             ].join(' ')}
             aria-hidden="true"
@@ -157,11 +164,15 @@ function OverviewScoreCard({
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-alt">
             <div
               className={[
-                'h-full rounded-full transition-[width] duration-700 ease-out',
+                'h-full rounded-full transition-[width,filter] duration-700 ease-out group-hover:brightness-125',
                 loading || error ? 'bg-border' : toneClasses.bar,
               ].join(' ')}
               style={{ width: `${loading || error ? 0 : percent}%` }}
             />
+          </div>
+          <div className="mt-2 flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-text-light opacity-70 transition-opacity group-hover:opacity-100">
+            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+            View details
           </div>
         </div>
       </div>

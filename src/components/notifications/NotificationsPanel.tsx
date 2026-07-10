@@ -635,7 +635,22 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             return (
               <div
                 key={c.channel_id}
-                className={`relative transition-[background-color] duration-150 ease-out ${stateBg}`}
+                onClick={toggleExpand}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    toggleExpand()
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-expanded={isExpanded}
+                aria-label={`${isExpanded ? 'Close' : 'Open'} quick reply for #${c.channel_name}`}
+                className={[
+                  'group/notification relative cursor-pointer transition-[background-color,box-shadow,transform] duration-150 ease-out focus-ring',
+                  'hover:-translate-y-0.5 hover:ring-1 hover:ring-violet-400/35 hover:shadow-[0_10px_22px_rgba(0,0,0,0.08)] active:translate-y-0 active:scale-[0.995]',
+                  stateBg,
+                ].join(' ')}
               >
                 <div className={`flex items-start gap-2 ${rowPad}`}>
                   {/* 2026-05-19 — twin circular buttons on the left
@@ -654,7 +669,10 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         row state. */}
                     <button
                       type="button"
-                      onClick={toggleExpand}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleExpand()
+                      }}
                       aria-expanded={isExpanded}
                       aria-label={isExpanded ? `Close reply to ${c.channel_name}` : `Reply to ${c.channel_name}`}
                       title={isExpanded ? 'Close' : 'Quick reply'}
@@ -667,24 +685,20 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       <MessageSquare size={13} aria-hidden="true" />
                     </button>
 
-                    {/* Open-in-forum pill. Per user "make the new
-                        link a bit more obvious" — promoted from a
-                        twin circular icon to a pill with icon +
-                        "Open" label so it reads as an explicit
-                        affordance, not just decoration. Same h-7 +
-                        violet palette as the speech-bubble so the
-                        two still read as a coherent pair, but the
-                        label removes any ambiguity about what it
-                        does + invites the click. */}
+                    {/* Open-in-forum icon. The row itself expands for
+                        quick reply; this compact icon is the separate
+                        "jump to full Forum" action. */}
                     <Link
                       to={channelHref}
-                      onClick={() => markChannelStarted(c)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        markChannelStarted(c)
+                      }}
                       aria-label={`Open #${c.channel_name} in forum`}
                       title="Open in forum"
-                      className="inline-flex items-center gap-1 h-7 px-2 rounded-full ring-1 bg-violet-500/15 ring-violet-500/30 text-violet-200 text-[10px] font-bold uppercase tracking-wider hover:bg-violet-500/30 hover:ring-violet-400/60 hover:text-white hover:shadow-[0_0_0_3px_rgba(167,139,250,0.18)] transition-all duration-150 active:scale-95 focus-ring"
+                      className="inline-flex items-center justify-center h-7 w-7 rounded-full ring-1 bg-violet-500/15 ring-violet-500/30 text-violet-200 hover:bg-violet-500/30 hover:ring-violet-400/60 hover:text-white hover:shadow-[0_0_0_3px_rgba(167,139,250,0.18)] transition-all duration-150 active:scale-95 focus-ring"
                     >
                       <ExternalLink size={11} strokeWidth={2.6} aria-hidden="true" />
-                      Open
                     </Link>
                     {isPing && (
                       <span className="inline-flex h-7 items-center rounded-full border border-gold/35 bg-gold/12 px-2 text-[10px] font-bold text-gold whitespace-nowrap">
@@ -693,16 +707,11 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                     )}
                   </div>
 
-                  {/* Title + preview = also a quick-reply trigger (same
-                      behavior as the speech-bubble icon). The full-Forum
-                      navigation also lives in the dedicated
-                      ExternalLink button to the left. */}
-                  <button
-                    type="button"
-                    onClick={toggleExpand}
-                    aria-expanded={isExpanded}
-                    className="flex-1 min-w-0 text-left -my-1 py-1 rounded-md hover:bg-surface-hover transition-colors focus-ring"
-                  >
+                  {/* Title + preview is part of the row-level click
+                      target. The row hover state carries the button
+                      affordance; the full-Forum navigation lives in
+                      the dedicated ExternalLink icon to the left. */}
+                  <div className="flex-1 min-w-0 -my-1 rounded-md py-1">
                     <div className="flex items-center gap-2">
                       {/* Skin pass 2026-05-06 — unread indicator is a
                           small red dot (matches the assignment-row dot
@@ -722,6 +731,10 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       >
                         #{c.channel_name}
                       </p>
+                      <span className="ml-auto hidden items-center gap-1 rounded-full border border-violet-400/30 bg-violet-500/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-violet-200 opacity-0 transition-all duration-150 group-hover/notification:translate-x-0.5 group-hover/notification:opacity-100 min-[460px]:inline-flex">
+                        <MessageSquare size={10} aria-hidden="true" />
+                        Click to reply
+                      </span>
                     </div>
                     {/* 2026-05-23 — collapsed row no longer shows the
                         message preview text. Per user: at-a-glance
@@ -737,7 +750,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                     {!hasMessage && (
                       <p className="text-[12px] text-text-light italic mt-0.5">No messages yet</p>
                     )}
-                  </button>
+                  </div>
 
                   {/* Skin pass 2026-05-06 — right column: most-recent
                       message date + (when unread) the unread count
@@ -764,6 +777,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                     dropdown opening so the expansion feels consistent. */}
                 {isExpanded && (
                   <div
+                    onClick={(e) => e.stopPropagation()}
                     className="px-3 pb-3 pt-1 space-y-2"
                     style={{
                       animation: 'fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1)',
