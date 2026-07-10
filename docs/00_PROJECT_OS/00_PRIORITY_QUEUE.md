@@ -38,7 +38,7 @@ You can also just tell an AI coder "add this to the priority queue" and it will 
 <!-- ACTIVE:START -->
 <!-- Add priority items below this line as `- [ ] ...`. The session-start hook reads everything between the ACTIVE markers. Keep finished items OUT of here — move them to Done. -->
 
-_(No active priority tasks right now.)_
+- [ ] Add reactions for Forum posts and DMs — Requested by: Gavin · Added: 2026-07-10 · ASAP: yes · Notes: Next priority after the site-wide banner. Add a simple, obvious reaction mechanic for both Forum and Direct Messages without making messages disappear or disrupting notification status behavior.
 
 <!-- ACTIVE:END -->
 
