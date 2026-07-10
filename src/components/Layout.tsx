@@ -444,6 +444,15 @@ export default function Layout() {
   })
   const openShift = openShiftQuery.data ?? null
   const siteBranding = siteBrandingQuery.data
+  const siteBannerOpacity = siteBranding?.site_banner_url
+    ? Math.max(0, Math.min(100, siteBranding.site_banner_opacity)) / 100
+    : 0
+  const siteBannerThemeOpacity = siteBranding?.site_banner_url
+    ? 1 - siteBannerOpacity
+    : 1
+  const siteBannerReadabilityOpacity = siteBranding?.site_banner_url
+    ? 0.28 + siteBannerThemeOpacity * 0.32
+    : 1
   const clockedIn = Boolean(openShift)
   const clockInTime = openShift
     ? new Date(openShift.clocked_in_at).toLocaleTimeString('en-US', {
@@ -591,10 +600,16 @@ export default function Layout() {
                       ? 'object-none object-center'
                       : 'object-cover',
                 ].join(' ')}
-                style={{ opacity: siteBranding.site_banner_opacity / 100 }}
+                style={{ opacity: siteBannerOpacity }}
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-bg/94 via-bg/74 to-bg/88" />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_0%,rgba(212,170,74,0.18),transparent_34%),radial-gradient(circle_at_78%_20%,rgba(124,58,237,0.12),transparent_30%)]" />
+              <div
+                className="absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(212,170,74,0.14),transparent_32%),linear-gradient(90deg,rgba(255,255,255,0.03),transparent_42%,rgba(212,170,74,0.05))]"
+                style={{ opacity: siteBannerThemeOpacity }}
+              />
+              <div
+                className="absolute inset-0 bg-gradient-to-r from-bg/38 via-bg/10 to-bg/30"
+                style={{ opacity: siteBannerReadabilityOpacity }}
+              />
             </>
           ) : (
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(212,170,74,0.10),transparent_32%),linear-gradient(90deg,rgba(255,255,255,0.03),transparent_42%,rgba(212,170,74,0.05))]" />
