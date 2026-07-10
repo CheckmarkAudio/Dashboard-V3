@@ -30,6 +30,12 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 
 warnings=()
 
+# ── Always-on: SESSION START ORIENTATION CONTRACT ────────────────────────────
+# Fires every session (even when everything is clean) so no coder starts work
+# without loading the "brain". Reading these keeps work aligned to the mission
+# instead of drifting into one-off changes that fight the north star.
+warnings+=("[SESSION START — READ FIRST] Before doing any work, load the brain so you stay on the mission:"$'\n'"  1. docs/AI_CODERS_READ_THIS_FIRST.md — the front door / how to operate here"$'\n'"  2. docs/00_PROJECT_OS/01_VISION_AND_PURPOSE.md — the north-star vision (Checkmark operating system, not a dashboard)"$'\n'"  3. docs/PROJECT_STATE.md + docs/SESSION_CONTEXT.md — what's live, what's in flight, where we left off"$'\n'"  4. The priority queue + drift notes surfaced below (if any)"$'\n'"Stay aligned to that vision; if a request would pull the product off the north star, say so before building.")
+
 # ── Check 0: PRIORITY QUEUE ──────────────────────────────────────────────────
 # The top of the task hierarchy. Surfaced FIRST so no session can miss an
 # ASAP ask from the director/Gavin. Reads unchecked `- [ ]` lines between the
