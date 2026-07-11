@@ -186,6 +186,12 @@ function pingLabel(sender: string | null): string {
   return `${firstName || 'Someone'} pinged you!`
 }
 
+function notificationPreview(content: string | null): string | null {
+  const text = content?.replace(/\s+/g, ' ').trim()
+  if (!text) return null
+  return text.length > 96 ? `${text.slice(0, 96).trimEnd()}...` : text
+}
+
 async function fetchChannelNotifications(): Promise<ChannelNotification[]> {
   const { data, error } = await supabase.rpc('get_channel_notifications')
   if (error) throw error
@@ -573,6 +579,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             const expandedContent = expandedMessage?.content ?? c.latest_content ?? ''
             const expandedAttachments = expandedMessage?.attachments ?? []
             const isPing = messageMentionsName(c.latest_content, profile?.display_name)
+            const collapsedPreview = notificationPreview(c.latest_content)
 
             const toggleExpand = () => {
               if (isExpanded) {
@@ -736,18 +743,20 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         Click to reply
                       </span>
                     </div>
-                    {/* 2026-05-23 — collapsed row no longer shows the
-                        message preview text. Per user: at-a-glance
-                        should only carry the channel #, the inline
-                        icons (Reply + Open) on the left, and the
-                        timestamp on the right. The full most-recent
-                        message is revealed below in the expanded
-                        quick-reply panel so admins still get the
-                        context they need when actually responding —
-                        just not in the always-on collapsed view.
-                        Empty-state still shows so admins see which
-                        channels haven't gotten any traffic. */}
-                    {!hasMessage && (
+                    {/* 2026-07-10 — collapsed row gets a tiny preview
+                        again: enough context to know what the message
+                        is, while the full content still lives in the
+                        click-to-reply dropdown. */}
+                    {collapsedPreview ? (
+                      <p
+                        className={`mt-0.5 truncate text-[11px] leading-snug ${
+                          unread ? 'text-text/75' : 'text-text-light'
+                        }`}
+                        title={collapsedPreview}
+                      >
+                        {collapsedPreview}
+                      </p>
+                    ) : !hasMessage && (
                       <p className="text-[12px] text-text-light italic mt-0.5">No messages yet</p>
                     )}
                   </div>
