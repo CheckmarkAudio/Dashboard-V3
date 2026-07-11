@@ -46,7 +46,7 @@ const FETCH_MAX_BYTES = 1_500_000
 // User-Agent string mimics a real browser. Some sites (LinkedIn,
 // Medium, Twitter) return 403/HTML-less responses to obvious bots.
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; CheckmarkLinkPreview/1.0; +https://checkmarkstudio.vercel.app/) " +
+  "Mozilla/5.0 (compatible; CheckmarkLinkPreview/1.0; +https://cm-audio.vercel.app/) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 function jsonResponse(body: unknown, status = 200): Response {
