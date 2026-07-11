@@ -19,7 +19,7 @@ interface SetupLinkBody {
 }
 
 const OWNER_EMAIL = "checkmarkaudio@gmail.com"
-const DEFAULT_REDIRECT_TO = "https://dashboard-v3-dusky.vercel.app/login"
+const DEFAULT_REDIRECT_TO = "https://checkmarkstudio.vercel.app/login"
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
