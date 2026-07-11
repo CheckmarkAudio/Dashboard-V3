@@ -10,9 +10,13 @@ import { ArrowLeft, CheckCircle, Eye, EyeOff, KeyRound, LogIn, Mail, Music } fro
  * Lean 2 — preview-login lockdown (runtime defense layer 2 / 4).
  *
  * The hostname guard says: only auto-login when the page is served
- * from a Vercel branch-preview URL. Branch-preview hostnames look
- * like `checkmarkstudio-git-<branch>-<team>.vercel.app`; the production
- * alias is `checkmarkstudio.vercel.app`.
+ * from a Vercel branch-preview URL. Branch-preview hostnames are
+ * generated from the Vercel PROJECT name (currently `cm-studio`), not
+ * from any custom production domain — they look like
+ * `cm-studio-git-<branch>-<team>.vercel.app`. The check below doesn't
+ * hardcode that prefix (it just looks for `-git-`), so it survives a
+ * future project rename without edits. The production alias — the
+ * domain explicitly excluded from auto-login — is `cm-audio.vercel.app`.
  *
  * This guard is paired with three more layers (see also `Lean 2`
  * comments below):
@@ -33,7 +37,7 @@ function isVercelBranchPreview(): boolean {
   const host = window.location.hostname
   if (!host.endsWith('.vercel.app')) return false
   // Production alias — never auto-login here.
-  if (host.startsWith('checkmarkstudio')) return false
+  if (host.startsWith('cm-audio')) return false
   // Branch previews always contain '-git-' in the hostname.
   return host.includes('-git-')
 }
