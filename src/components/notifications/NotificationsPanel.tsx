@@ -186,10 +186,11 @@ function pingLabel(sender: string | null): string {
   return `${firstName || 'Someone'} pinged you!`
 }
 
-function notificationPreview(content: string | null): string | null {
+function notificationPreview(content: string | null, sender: string | null): string | null {
   const text = content?.replace(/\s+/g, ' ').trim()
-  if (!text) return null
-  return text.length > 96 ? `${text.slice(0, 96).trimEnd()}...` : text
+  if (text) return text.length > 72 ? `${text.slice(0, 72).trimEnd()}...` : text
+  const firstName = sender?.trim().split(/\s+/)[0]
+  return firstName ? `${firstName} sent a message...` : null
 }
 
 async function fetchChannelNotifications(): Promise<ChannelNotification[]> {
@@ -579,7 +580,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             const expandedContent = expandedMessage?.content ?? c.latest_content ?? ''
             const expandedAttachments = expandedMessage?.attachments ?? []
             const isPing = messageMentionsName(c.latest_content, profile?.display_name)
-            const collapsedPreview = notificationPreview(c.latest_content)
+            const collapsedPreview = notificationPreview(c.latest_content, c.latest_sender)
 
             const toggleExpand = () => {
               if (isExpanded) {
@@ -719,7 +720,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       affordance; the full-Forum navigation lives in
                       the dedicated ExternalLink icon to the left. */}
                   <div className="flex-1 min-w-0 -my-1 rounded-md py-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                       {/* Skin pass 2026-05-06 — unread indicator is a
                           small red dot (matches the assignment-row dot
                           treatment). The unread COUNT badge moved to
@@ -732,12 +733,23 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         />
                       )}
                       <p
-                        className={`text-[13px] truncate ${
+                        className={`shrink-0 text-[13px] truncate ${
                           unread ? 'font-bold text-text' : 'font-semibold text-text-muted'
                         }`}
                       >
                         #{c.channel_name}
                       </p>
+                      {collapsedPreview && (
+                        <p
+                          className={`min-w-0 flex-1 truncate text-[11px] leading-snug ${
+                            unread ? 'font-semibold text-text-muted' : 'text-text-light'
+                          }`}
+                          title={collapsedPreview}
+                        >
+                          <span className="text-text-light">- </span>
+                          {collapsedPreview}
+                        </p>
+                      )}
                       <span className="ml-auto hidden items-center gap-1 rounded-full border border-violet-400/30 bg-violet-500/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-violet-200 opacity-0 transition-all duration-150 group-hover/notification:translate-x-0.5 group-hover/notification:opacity-100 min-[460px]:inline-flex">
                         <MessageSquare size={10} aria-hidden="true" />
                         Click to reply
@@ -747,16 +759,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                         again: enough context to know what the message
                         is, while the full content still lives in the
                         click-to-reply dropdown. */}
-                    {collapsedPreview ? (
-                      <p
-                        className={`mt-0.5 truncate text-[11px] leading-snug ${
-                          unread ? 'text-text/75' : 'text-text-light'
-                        }`}
-                        title={collapsedPreview}
-                      >
-                        {collapsedPreview}
-                      </p>
-                    ) : !hasMessage && (
+                    {!collapsedPreview && !hasMessage && (
                       <p className="text-[12px] text-text-light italic mt-0.5">No messages yet</p>
                     )}
                   </div>
