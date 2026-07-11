@@ -11,8 +11,8 @@ import { ArrowLeft, CheckCircle, Eye, EyeOff, KeyRound, LogIn, Mail, Music } fro
  *
  * The hostname guard says: only auto-login when the page is served
  * from a Vercel branch-preview URL. Branch-preview hostnames look
- * like `dashboard-v3-git-<branch>-<team>.vercel.app`; the production
- * alias is `dashboard-v3-dusky.vercel.app`.
+ * like `checkmarkstudio-git-<branch>-<team>.vercel.app`; the production
+ * alias is `checkmarkstudio.vercel.app`.
  *
  * This guard is paired with three more layers (see also `Lean 2`
  * comments below):
@@ -33,7 +33,7 @@ function isVercelBranchPreview(): boolean {
   const host = window.location.hostname
   if (!host.endsWith('.vercel.app')) return false
   // Production alias — never auto-login here.
-  if (host.startsWith('dashboard-v3-dusky')) return false
+  if (host.startsWith('checkmarkstudio')) return false
   // Branch previews always contain '-git-' in the hostname.
   return host.includes('-git-')
 }
