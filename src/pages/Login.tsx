@@ -11,9 +11,9 @@ import { ArrowLeft, CheckCircle, Eye, EyeOff, KeyRound, LogIn, Mail, Music } fro
  *
  * The hostname guard says: only auto-login when the page is served
  * from a Vercel branch-preview URL. Branch-preview hostnames are
- * generated from the Vercel PROJECT name (currently `cm-studio`), not
- * from any custom production domain — they look like
- * `cm-studio-git-<branch>-<team>.vercel.app`. The check below doesn't
+ * generated from the Vercel PROJECT name (currently `cm-audio`, same
+ * as the production domain) — they look like
+ * `cm-audio-git-<branch>-<team>.vercel.app`. The check below doesn't
  * hardcode that prefix (it just looks for `-git-`), so it survives a
  * future project rename without edits. The production alias — the
  * domain explicitly excluded from auto-login — is `cm-audio.vercel.app`.
