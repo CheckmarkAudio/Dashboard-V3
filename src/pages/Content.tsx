@@ -20,6 +20,8 @@ import { extractUrls } from '../lib/forum/linkify'
 import { unfurlLink } from '../lib/forum/unfurl'
 import { inferForumKind, uploadForumFile } from '../lib/forum/upload'
 import {
+  COMPLETED_EMOJI,
+  EMOJI_PICKER_OPTIONS,
   QUICK_REACTIONS,
   addChatMessageMentions,
   extractMentionedMemberIds,
@@ -1211,6 +1213,10 @@ function ChatBubble({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  // Full emoji picker (triggered by the Smile button) — same
+  // outside-click/Escape pattern as the … menu below.
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
 
   // Close the … menu on outside click / Escape.
   useEffect(() => {
@@ -1230,6 +1236,25 @@ function ChatBubble({
       document.removeEventListener('keydown', onKey)
     }
   }, [menuOpen])
+
+  // Close the emoji picker on outside click / Escape.
+  useEffect(() => {
+    if (!pickerOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPickerOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [pickerOpen])
 
   // Auto-clear delete confirm if the user walks away.
   useEffect(() => {
@@ -1392,25 +1417,68 @@ function ChatBubble({
                   isMe ? 'justify-end' : 'justify-start'
                 }`}
               >
-                {reactionSummaries.map((reaction) => (
-                  <button
-                    key={reaction.emoji}
-                    type="button"
-                    onClick={() => onReact(message, reaction.emoji, reaction.mine)}
-                    title={reaction.names.join(', ')}
-                    aria-pressed={reaction.mine}
-                    className={[
-                      'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold transition-colors focus-ring',
-                      reaction.mine
-                        ? 'border-gold/45 bg-gold/14 text-gold'
-                        : 'border-border bg-surface-alt/70 text-text-muted hover:border-gold/35 hover:text-gold',
-                    ].join(' ')}
-                  >
-                    <span aria-hidden="true">{reaction.emoji}</span>
-                    <span className="tabular-nums">{reaction.count}</span>
-                  </button>
-                ))}
-                <div className="inline-flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity">
+                {reactionSummaries.map((reaction) =>
+                  reaction.emoji === COMPLETED_EMOJI ? (
+                    // Completed is a shared status, not a casual reaction —
+                    // distinct labeled pill so it reads as "this is done"
+                    // at a glance instead of blending in as another count.
+                    <button
+                      key={reaction.emoji}
+                      type="button"
+                      onClick={() => onReact(message, reaction.emoji, reaction.mine)}
+                      title={`Completed by ${reaction.names.join(', ')}`}
+                      aria-pressed={reaction.mine}
+                      className={[
+                        'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold transition-colors focus-ring',
+                        'bg-status-success-bg text-status-success-text',
+                        reaction.mine
+                          ? 'border-status-success-text/60'
+                          : 'border-status-success-text/25 hover:border-status-success-text/50',
+                      ].join(' ')}
+                    >
+                      <Check size={11} strokeWidth={3} aria-hidden="true" />
+                      Completed
+                      {reaction.count > 1 && (
+                        <span className="tabular-nums opacity-80">×{reaction.count}</span>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      key={reaction.emoji}
+                      type="button"
+                      onClick={() => onReact(message, reaction.emoji, reaction.mine)}
+                      title={reaction.names.join(', ')}
+                      aria-pressed={reaction.mine}
+                      className={[
+                        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold transition-colors focus-ring',
+                        reaction.mine
+                          ? 'border-gold/45 bg-gold/14 text-gold'
+                          : 'border-border bg-surface-alt/70 text-text-muted hover:border-gold/35 hover:text-gold',
+                      ].join(' ')}
+                    >
+                      <span aria-hidden="true">{reaction.emoji}</span>
+                      <span className="tabular-nums">{reaction.count}</span>
+                    </button>
+                  ),
+                )}
+                <div className="inline-flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity">
+                  {(() => {
+                    const completedMine = reactionSummaries.some(
+                      (r) => r.emoji === COMPLETED_EMOJI && r.mine,
+                    )
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => onReact(message, COMPLETED_EMOJI, completedMine)}
+                        aria-label="Mark completed"
+                        aria-pressed={completedMine}
+                        className="inline-flex items-center gap-1 h-6 px-2 shrink-0 rounded-full border border-status-success-text/30 bg-status-success-bg text-status-success-text text-[10px] font-bold hover:border-status-success-text/60 transition-colors focus-ring"
+                      >
+                        <Check size={10} strokeWidth={3} aria-hidden="true" />
+                        Completed
+                      </button>
+                    )
+                  })()}
                   {QUICK_REACTIONS.map((emoji) => {
                     const mine = reactionSummaries.some((reaction) => reaction.emoji === emoji && reaction.mine)
                     return (
@@ -1426,8 +1494,48 @@ function ChatBubble({
                       </button>
                     )
                   })}
-                  <span className="sr-only">Add reaction</span>
-                  <Smile size={12} className="text-text-light" aria-hidden="true" />
+                  <div ref={pickerRef} className="relative inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen((v) => !v)}
+                      aria-label="More reactions"
+                      aria-expanded={pickerOpen}
+                      aria-haspopup="true"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface text-text-light hover:border-gold/40 hover:text-gold transition-colors focus-ring"
+                    >
+                      <Smile size={12} aria-hidden="true" />
+                    </button>
+                    {pickerOpen && (
+                      <div
+                        role="menu"
+                        aria-label="Choose a reaction"
+                        className={`absolute z-30 top-full mt-1 w-64 p-2 grid grid-cols-7 gap-1 bg-surface border border-border rounded-xl shadow-xl animate-fade-in ${
+                          isMe ? 'right-0' : 'left-0'
+                        }`}
+                      >
+                        {EMOJI_PICKER_OPTIONS.map((emoji) => {
+                          const mine = reactionSummaries.some((r) => r.emoji === emoji && r.mine)
+                          return (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => {
+                                onReact(message, emoji, mine)
+                                setPickerOpen(false)
+                              }}
+                              aria-label={`React ${emoji}`}
+                              aria-pressed={mine}
+                              className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-[15px] hover:bg-gold/10 transition-colors focus-ring ${
+                                mine ? 'bg-gold/15' : ''
+                              }`}
+                            >
+                              {emoji}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
