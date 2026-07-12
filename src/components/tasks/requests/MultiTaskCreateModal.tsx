@@ -22,6 +22,14 @@ type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
  *  Need a mixed-room batch? Submit twice. */
 type Destination = 'members' | StudioSpace
 
+// 2026-07-12 — director direction: "we don't need the Control Room
+// tab, that's part of Studio A." STUDIO_SPACES itself stays untouched
+// (Control Room is still a real, distinct value elsewhere — the
+// Studio Tasks page still groups existing Control Room tasks under
+// their own section); this modal just stops offering it as a
+// creation target.
+const CREATABLE_STUDIO_SPACES = STUDIO_SPACES.filter((space) => space !== 'Control Room')
+
 /**
  * MultiTaskCreateModal — PR #42, restyled 2026-07-11 to match the
  * director's reference mockup ("Add task" / assign-to tabs / member
@@ -79,7 +87,12 @@ function emptyRow(): DraftRow {
 }
 
 function destinationFromInitial(scope: AssignedTaskScope, studioSpace: StudioSpace | null): Destination {
-  if (scope === 'studio' && studioSpace) return studioSpace
+  // Guard against a caller passing a space that isn't offered as a tab
+  // (e.g. Control Room) — fall back to the first real tab instead of
+  // landing on a destination with no visibly active button.
+  if (scope === 'studio' && studioSpace && (CREATABLE_STUDIO_SPACES as readonly string[]).includes(studioSpace)) {
+    return studioSpace
+  }
   return 'members'
 }
 
@@ -239,12 +252,16 @@ export default function MultiTaskCreateModal({
         maxWidth={680}
       >
         <div className="flex flex-col gap-4">
-          {/* Assign to — Members / Control Room / Studio A / Studio B.
-              One choice for the whole modal session (see Destination
-              type comment). Bigger, bordered tabs match the reference
-              mockup's visual weight — a step up from a small pill
-              toggle since this is the first, most consequential
-              decision in the flow. */}
+          {/* Assign to — Members / Studio A / Studio B. One choice for
+              the whole modal session (see Destination type comment).
+              Bigger, bordered tabs match the reference mockup's visual
+              weight — a step up from a small pill toggle since this is
+              the first, most consequential decision in the flow.
+              2026-07-12 — Control Room dropped per director direction
+              ("that's part of Studio A"); STUDIO_SPACES itself is
+              untouched (existing Control Room tasks elsewhere in the
+              app are unaffected), this modal just doesn't offer it as
+              a creation target anymore. */}
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-text-light mb-2">
               Assign to
@@ -256,7 +273,7 @@ export default function MultiTaskCreateModal({
                 label="Members"
                 onClick={() => setDestination('members')}
               />
-              {STUDIO_SPACES.map((space) => (
+              {CREATABLE_STUDIO_SPACES.map((space) => (
                 <DestinationTab
                   key={space}
                   active={destination === space}
@@ -267,6 +284,26 @@ export default function MultiTaskCreateModal({
               ))}
             </div>
           </div>
+
+          {/* Recipient picker — photo-card grid, moved above the task
+              rows per director direction ("swap task info with the
+              members spot"): pick who first, then fill in what. Member
+              destination only. */}
+          {destination === 'members' && (
+            <MemberMultiSelect
+              label="Send to members"
+              variant="grid"
+              selectedIds={selectedMemberIds}
+              onToggle={(id) =>
+                setSelectedMemberIds((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(id)) next.delete(id)
+                  else next.add(id)
+                  return next
+                })
+              }
+            />
+          )}
 
           {/* Draft rows */}
           <div className="space-y-2">
@@ -301,24 +338,6 @@ export default function MultiTaskCreateModal({
               Add from template
             </button>
           </div>
-
-          {/* Recipient picker (member destination only) — photo-card
-              grid per the reference mockup. */}
-          {destination === 'members' && (
-            <MemberMultiSelect
-              label="Send to members"
-              variant="grid"
-              selectedIds={selectedMemberIds}
-              onToggle={(id) =>
-                setSelectedMemberIds((prev) => {
-                  const next = new Set(prev)
-                  if (next.has(id)) next.delete(id)
-                  else next.add(id)
-                  return next
-                })
-              }
-            />
-          )}
 
           {/* Submit row */}
           <div className="flex items-center gap-2 pt-2 border-t border-border">

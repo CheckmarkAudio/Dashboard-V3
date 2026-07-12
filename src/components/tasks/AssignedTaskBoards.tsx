@@ -475,12 +475,14 @@ function AssignmentBoardBody({
           the widget content). Only available in the Studio variant
           today; Team Board lacks the request-flow plumbing.
           2026-07-11 — admins get the full multi-task/multi-room tool
-          directly (opens on Control Room, matching where this button
-          lives); regular members keep the approval-request flow. */}
+          directly; regular members keep the approval-request flow.
+          2026-07-12 — defaults to Studio A (Control Room is no longer
+          an offered destination tab in the modal, per director
+          direction). */}
       {sectionedByStudioSpace && requestModalOpen && isAdmin && (
         <MultiTaskCreateModal
           initialScope="studio"
-          initialStudioSpace="Control Room"
+          initialStudioSpace="Studio A"
           onClose={() => setRequestModalOpen(false)}
         />
       )}
