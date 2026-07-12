@@ -10,7 +10,6 @@ import {
 } from '../../../lib/queries/assignments'
 import { STUDIO_SPACES, type StudioSpace } from '../../../lib/queries/adminTasks'
 import type { AssignedTaskScope } from '../../../types/assignments'
-import { FlywheelStagePicker, type FlywheelStage } from './formAtoms'
 import AddFromTemplateModal from './AddFromTemplateModal'
 
 type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
@@ -58,7 +57,6 @@ interface DraftRow {
   tempId: string
   title: string
   description: string
-  stage: FlywheelStage | null
   // Studio-scope only — captured as `recurrence_spec` on the row.
   // `null` = one-shot. Member rows leave it null.
   recurrence: RecurrenceFrequency | null
@@ -74,7 +72,6 @@ function emptyRow(): DraftRow {
         : Math.random().toString(36).slice(2),
     title: '',
     description: '',
-    stage: null,
     recurrence: null,
     dueDate: '',
     isRequired: false,
@@ -126,7 +123,6 @@ export default function MultiTaskCreateModal({
         ...emptyRow(),
         title: d.title,
         description: d.description ?? '',
-        stage: (d.category as FlywheelStage) ?? null,
         recurrence: d.recurrence_spec?.frequency ?? null,
         isRequired: d.is_required ?? false,
       }))
@@ -160,7 +156,6 @@ export default function MultiTaskCreateModal({
         ...emptyRow(),
         title: d.title,
         description: d.description ?? '',
-        stage: (d.category as FlywheelStage) ?? null,
         isRequired: d.is_required ?? false,
       }))
       return onlyEmpty ? imported : [...prev, ...imported]
@@ -174,10 +169,10 @@ export default function MultiTaskCreateModal({
         .map((d) => ({
           title: d.title.trim(),
           description: d.description.trim() || null,
-          // Studio rows don't expose Flywheel stage — server stores
-          // category=NULL for them. Member rows keep the existing
-          // FlywheelStagePicker behaviour.
-          category: scope === 'studio' ? null : d.stage,
+          // 2026-07-11 — Flywheel stage picker removed from this modal
+          // per director direction ("get rid of the flywheel stuff").
+          // category always NULL for tasks created here now.
+          category: null,
           due_date: d.dueDate || null,
           is_required: d.isRequired,
           show_on_overview: true,
@@ -280,7 +275,6 @@ export default function MultiTaskCreateModal({
                 key={d.tempId}
                 index={i}
                 draft={d}
-                scope={scope}
                 canRemove={drafts.length > 1}
                 onChange={(patch) => updateDraft(d.tempId, patch)}
                 onRemove={() => removeDraft(d.tempId)}
@@ -395,14 +389,12 @@ function DestinationTab({
 function DraftRowCard({
   index,
   draft,
-  scope,
   canRemove,
   onChange,
   onRemove,
 }: {
   index: number
   draft: DraftRow
-  scope: AssignedTaskScope
   canRemove: boolean
   onChange: (patch: Partial<DraftRow>) => void
   onRemove: () => void
@@ -467,16 +459,6 @@ function DraftRowCard({
         placeholder="Description (optional)"
         className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[12px] text-text placeholder:text-text-muted focus:outline-none focus:border-gold/50 resize-none"
       />
-
-      {/* Flywheel stage — member destination only. Studio rows aren't
-          flywheel-tracked (server stores category=NULL for them). */}
-      {scope === 'member' && (
-        <FlywheelStagePicker
-          value={draft.stage}
-          onChange={(next) => onChange({ stage: next })}
-          label="Flywheel stage"
-        />
-      )}
 
       {/* Recurrence — surfaced for BOTH destinations (2026-05-07).
           Selecting Daily / Weekly / Monthly causes
