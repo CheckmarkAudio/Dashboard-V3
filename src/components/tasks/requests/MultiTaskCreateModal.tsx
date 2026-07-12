@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Building2, FileText, Loader2, Plus, Repeat, Send, Trash2, Users } from 'lucide-react'
+import { Building2, FileText, Flame, Loader2, Plus, Repeat, Trash2, Users } from 'lucide-react'
 import FloatingDetailModal from '../../FloatingDetailModal'
 import { useToast } from '../../Toast'
 import MemberMultiSelect from '../../members/MemberMultiSelect'
@@ -10,24 +10,33 @@ import {
 } from '../../../lib/queries/assignments'
 import { STUDIO_SPACES, type StudioSpace } from '../../../lib/queries/adminTasks'
 import type { AssignedTaskScope } from '../../../types/assignments'
-import { Field, FlywheelStagePicker, type FlywheelStage } from './formAtoms'
+import { FlywheelStagePicker, type FlywheelStage } from './formAtoms'
 import AddFromTemplateModal from './AddFromTemplateModal'
 
 type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
 
+/** "members" or one of the three physical studio spaces — a single
+ *  top-of-modal destination that every draft row in this session goes
+ *  to. Replaces the old per-row studio-space picker: the 2026-07-11
+ *  redesign (matching the director's reference mockup) treats "where
+ *  does this batch go" as one modal-wide choice, not a per-task one.
+ *  Need a mixed-room batch? Submit twice. */
+type Destination = 'members' | StudioSpace
+
 /**
- * MultiTaskCreateModal — PR #42.
+ * MultiTaskCreateModal — PR #42, restyled 2026-07-11 to match the
+ * director's reference mockup ("Add task" / assign-to tabs / member
+ * photo grid).
  *
  * Replacement for the single-task AdminTaskCreateModal on the Assign
  * page. Supports row-by-row task entry plus an "Add from template"
  * shortcut that pulls items from any team template into the current
  * draft list.
  *
- * Top-of-modal toggle:
- *   - Member: tasks go to one or more members; each gets a single
- *     batch notification summarising the N tasks.
- *   - Studio: each task becomes its own shared studio row in the
- *     pool. No recipient picker.
+ * Top-of-modal "Assign to" tabs: Members / Control Room / Studio A /
+ * Studio B. Members routes tasks to one or more picked recipients
+ * (photo-card grid); any studio tab posts to that room's shared pool
+ * (no recipient picker — anyone on the team can claim from there).
  *
  * On submit fires `assign_custom_tasks_to_members` (plural) once,
  * atomic across all draft rows.
@@ -38,8 +47,9 @@ type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
  *     tweak before submit. There's no template-link preserved (by
  *     design — these are now custom one-shot tasks).
  *   - The single-task AdminTaskCreateModal is kept around for the
- *     compact Hub Quick Assign flow; only the Assign page uses this
- *     multi-row variant.
+ *     compact Hub Quick Assign flow; only the Assign page + the
+ *     admin path of "+ New Task" (My Tasks / Team / Studio widgets)
+ *     use this multi-row variant.
  */
 
 interface DraftRow {
@@ -49,9 +59,6 @@ interface DraftRow {
   title: string
   description: string
   stage: FlywheelStage | null
-  // Studio-scope only — persisted as `studio_space` on the row.
-  // Member scope rows ignore this field.
-  studioSpace: StudioSpace | null
   // Studio-scope only — captured as `recurrence_spec` on the row.
   // `null` = one-shot. Member rows leave it null.
   recurrence: RecurrenceFrequency | null
@@ -59,7 +66,7 @@ interface DraftRow {
   isRequired: boolean
 }
 
-function emptyRow(initialStudioSpace: StudioSpace | null = null): DraftRow {
+function emptyRow(): DraftRow {
   return {
     tempId:
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -68,11 +75,15 @@ function emptyRow(initialStudioSpace: StudioSpace | null = null): DraftRow {
     title: '',
     description: '',
     stage: null,
-    studioSpace: initialStudioSpace,
     recurrence: null,
     dueDate: '',
     isRequired: false,
   }
+}
+
+function destinationFromInitial(scope: AssignedTaskScope, studioSpace: StudioSpace | null): Destination {
+  if (scope === 'studio' && studioSpace) return studioSpace
+  return 'members'
 }
 
 export default function MultiTaskCreateModal({
@@ -90,10 +101,9 @@ export default function MultiTaskCreateModal({
   // empty-set behaviour used by the Hub Quick Assign flow.
   defaultRecipientIds?: string[]
   // PR #102 — when the modal opens from the Studio tab, optionally
-  // pre-fill the first draft row's studio_space (e.g., admin
-  // clicks +Add inside Control Room → opens modal with Control
-  // Room already selected on draft 1). Subsequent rows the admin
-  // adds default to "All / no specific room" so they pick per row.
+  // pre-select that room's destination tab (e.g., admin clicks +Add
+  // inside Control Room → opens modal already on the Control Room
+  // tab).
   initialStudioSpace?: StudioSpace | null
   // PR #102 — when invoked from a Templates dropdown, pre-load
   // the template's items as draft rows so the admin can review
@@ -104,20 +114,24 @@ export default function MultiTaskCreateModal({
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  const [scope, setScope] = useState<AssignedTaskScope>(initialScope)
+  const [destination, setDestination] = useState<Destination>(
+    destinationFromInitial(initialScope, initialStudioSpace),
+  )
+  const scope: AssignedTaskScope = destination === 'members' ? 'member' : 'studio'
+  const studioSpace: StudioSpace | null = destination === 'members' ? null : destination
+
   const [drafts, setDrafts] = useState<DraftRow[]>(() => {
     if (initialDrafts && initialDrafts.length > 0) {
       return initialDrafts.map((d) => ({
-        ...emptyRow(initialStudioSpace),
+        ...emptyRow(),
         title: d.title,
         description: d.description ?? '',
         stage: (d.category as FlywheelStage) ?? null,
-        studioSpace: (d.studio_space as StudioSpace | null) ?? initialStudioSpace,
         recurrence: d.recurrence_spec?.frequency ?? null,
         isRequired: d.is_required ?? false,
       }))
     }
-    return [emptyRow(initialStudioSpace)]
+    return [emptyRow()]
   })
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(
     () => new Set(defaultRecipientIds ?? []),
@@ -167,7 +181,9 @@ export default function MultiTaskCreateModal({
           due_date: d.dueDate || null,
           is_required: d.isRequired,
           show_on_overview: true,
-          studio_space: scope === 'studio' ? d.studioSpace : null,
+          // Destination is chosen once for the whole modal session now
+          // (see `Destination` type comment above).
+          studio_space: scope === 'studio' ? studioSpace : null,
           // Recurrence threads through for BOTH scopes; engine handles
           // member + studio rows uniformly.
           recurrence_spec: d.recurrence
@@ -185,7 +201,7 @@ export default function MultiTaskCreateModal({
       const recipients = summary.recipient_count
       if (scope === 'studio') {
         toast(
-          `${tasks} studio task${tasks === 1 ? '' : 's'} posted — visible to the whole team.`,
+          `${tasks} task${tasks === 1 ? '' : 's'} posted to ${studioSpace ?? 'the studio pool'} — visible to the whole team.`,
           'success',
         )
       } else {
@@ -214,33 +230,47 @@ export default function MultiTaskCreateModal({
     !submitMutation.isPending &&
     (scope === 'studio' || selectedMemberIds.size > 0)
 
+  const eyebrow =
+    destination === 'members'
+      ? 'Send to one or more team members'
+      : `Studio pool — visible to the whole team · ${destination}`
+
   return (
     <>
       <FloatingDetailModal
-        title="Add tasks"
-        eyebrow={
-          scope === 'studio'
-            ? 'Studio pool — anyone on the team can claim'
-            : 'Send to one or more team members'
-        }
+        title="Add task"
+        eyebrow={eyebrow}
         onClose={onClose}
         maxWidth={680}
       >
         <div className="flex flex-col gap-4">
-          {/* Scope toggle — Members vs Studio */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface-alt ring-1 ring-border self-start">
-            <ScopeButton
-              active={scope === 'member'}
-              icon={<Users size={13} />}
-              label="Members"
-              onClick={() => setScope('member')}
-            />
-            <ScopeButton
-              active={scope === 'studio'}
-              icon={<Building2 size={13} />}
-              label="Studio"
-              onClick={() => setScope('studio')}
-            />
+          {/* Assign to — Members / Control Room / Studio A / Studio B.
+              One choice for the whole modal session (see Destination
+              type comment). Bigger, bordered tabs match the reference
+              mockup's visual weight — a step up from a small pill
+              toggle since this is the first, most consequential
+              decision in the flow. */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-light mb-2">
+              Assign to
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <DestinationTab
+                active={destination === 'members'}
+                icon={<Users size={15} />}
+                label="Members"
+                onClick={() => setDestination('members')}
+              />
+              {STUDIO_SPACES.map((space) => (
+                <DestinationTab
+                  key={space}
+                  active={destination === space}
+                  icon={<Building2 size={15} />}
+                  label={space}
+                  onClick={() => setDestination(space)}
+                />
+              ))}
+            </div>
           </div>
 
           {/* Draft rows */}
@@ -278,21 +308,22 @@ export default function MultiTaskCreateModal({
             </button>
           </div>
 
-          {/* Recipient picker (member scope only) */}
-          {scope === 'member' && (
-            <Field label="Send to">
-              <MemberMultiSelect
-                selectedIds={selectedMemberIds}
-                onToggle={(id) =>
-                  setSelectedMemberIds((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(id)) next.delete(id)
-                    else next.add(id)
-                    return next
-                  })
-                }
-              />
-            </Field>
+          {/* Recipient picker (member destination only) — photo-card
+              grid per the reference mockup. */}
+          {destination === 'members' && (
+            <MemberMultiSelect
+              label="Send to members"
+              variant="grid"
+              selectedIds={selectedMemberIds}
+              onToggle={(id) =>
+                setSelectedMemberIds((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(id)) next.delete(id)
+                  else next.add(id)
+                  return next
+                })
+              }
+            />
           )}
 
           {/* Submit row */}
@@ -313,9 +344,11 @@ export default function MultiTaskCreateModal({
               {submitMutation.isPending ? (
                 <Loader2 size={13} className="animate-spin" />
               ) : (
-                <Send size={13} strokeWidth={2.5} />
+                <Plus size={13} strokeWidth={2.5} />
               )}
-              Send {validDraftCount} task{validDraftCount === 1 ? '' : 's'}
+              {submitMutation.isPending
+                ? 'Creating…'
+                : `Create task${validDraftCount === 1 ? '' : `s (${validDraftCount})`}`}
             </button>
           </div>
         </div>
@@ -331,7 +364,7 @@ export default function MultiTaskCreateModal({
   )
 }
 
-function ScopeButton({
+function DestinationTab({
   active,
   icon,
   label,
@@ -346,10 +379,11 @@ function ScopeButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${
+      aria-pressed={active}
+      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-[13px] font-bold transition-colors focus-ring ${
         active
-          ? 'bg-gold/15 text-gold'
-          : 'text-text-muted hover:text-text'
+          ? 'border-gold bg-gold/10 text-gold'
+          : 'border-border text-text-muted hover:text-text hover:border-text-light/40'
       }`}
     >
       {icon}
@@ -373,9 +407,8 @@ function DraftRowCard({
   onChange: (patch: Partial<DraftRow>) => void
   onRemove: () => void
 }) {
-  const isStudio = scope === 'studio'
   return (
-    <div className="rounded-xl border border-border bg-surface-alt/40 p-3 space-y-2">
+    <div className="rounded-xl border border-border bg-surface-alt/40 p-3 space-y-2.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-semibold tracking-[0.08em] text-text-muted uppercase">
           Task {index + 1}
@@ -392,14 +425,40 @@ function DraftRowCard({
         )}
       </div>
 
-      <input
-        type="text"
-        autoFocus={index === 0 && !draft.title}
-        value={draft.title}
-        onChange={(e) => onChange({ title: e.target.value })}
-        placeholder="Task title"
-        className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[13px] font-semibold text-text placeholder:text-text-muted focus:outline-none focus:border-gold/50"
-      />
+      {/* Title + priority flame + due date on one row, matching the
+          reference mockup's layout. Flame replaces the old bottom
+          "Required" checkbox — same underlying `isRequired` field. */}
+      <div className="flex items-start gap-2">
+        <input
+          type="text"
+          autoFocus={index === 0 && !draft.title}
+          value={draft.title}
+          onChange={(e) => onChange({ title: e.target.value })}
+          placeholder="Task title"
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[13px] font-semibold text-text placeholder:text-text-muted focus:outline-none focus:border-gold/50"
+        />
+        <button
+          type="button"
+          onClick={() => onChange({ isRequired: !draft.isRequired })}
+          aria-label={draft.isRequired ? 'Remove priority' : 'Mark as priority'}
+          aria-pressed={draft.isRequired}
+          title="Priority"
+          className={`shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-colors focus-ring ${
+            draft.isRequired
+              ? 'border-orange-400/60 bg-orange-500/15 text-orange-300'
+              : 'border-border text-text-light hover:text-orange-300 hover:border-orange-400/40'
+          }`}
+        >
+          <Flame size={15} aria-hidden="true" />
+        </button>
+        <input
+          type="date"
+          value={draft.dueDate}
+          onChange={(e) => onChange({ dueDate: e.target.value })}
+          aria-label="Due date"
+          className="shrink-0 w-[150px] px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[12px] text-text focus:outline-none focus:border-gold/50"
+        />
+      </div>
 
       <textarea
         value={draft.description}
@@ -409,14 +468,9 @@ function DraftRowCard({
         className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[12px] text-text placeholder:text-text-muted focus:outline-none focus:border-gold/50 resize-none"
       />
 
-      {/* Studio mode swaps Flywheel stage for the room picker, since
-          studio tasks are room-tagged and not flywheel-tracked. */}
-      {isStudio ? (
-        <StudioSpacePicker
-          value={draft.studioSpace}
-          onChange={(next) => onChange({ studioSpace: next })}
-        />
-      ) : (
+      {/* Flywheel stage — member destination only. Studio rows aren't
+          flywheel-tracked (server stores category=NULL for them). */}
+      {scope === 'member' && (
         <FlywheelStagePicker
           value={draft.stage}
           onChange={(next) => onChange({ stage: next })}
@@ -424,103 +478,15 @@ function DraftRowCard({
         />
       )}
 
-      {/* Recurrence picker — surfaced for BOTH member + studio scope
-          (2026-05-07). Member-scope tasks didn't have UI for this
-          historically; the column always accepted it, and now that
-          the engine ships (migration 20260507120000) members can pick
-          a cadence too. Selecting Daily / Weekly / Monthly causes
+      {/* Recurrence — surfaced for BOTH destinations (2026-05-07).
+          Selecting Daily / Weekly / Monthly causes
           spawn_recurring_task_instances() to insert fresh rows on
           cadence; cron fires daily at 11:00 UTC. */}
       <RecurrencePicker
         value={draft.recurrence}
         onChange={(next) => onChange({ recurrence: next })}
       />
-
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="block text-[10px] font-semibold uppercase tracking-wider text-text-light mb-1">
-            Due date
-          </label>
-          <input
-            type="date"
-            value={draft.dueDate}
-            onChange={(e) => onChange({ dueDate: e.target.value })}
-            className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[12px] text-text focus:outline-none focus:border-gold/50"
-          />
-        </div>
-        <label className="flex items-center gap-2 self-end pb-1.5 text-[12px] text-text cursor-pointer">
-          <input
-            type="checkbox"
-            checked={draft.isRequired}
-            onChange={(e) => onChange({ isRequired: e.target.checked })}
-            className="accent-gold"
-          />
-          Required
-        </label>
-      </div>
     </div>
-  )
-}
-
-// ─── Studio space pills ─────────────────────────────────────────────
-//
-// [All] [Control Room] [Studio A] [Studio B]
-//
-// "All" maps to studio_space=NULL — a task that isn't tied to a
-// specific room (it'll surface in the StudioTasksPane "(no space set)"
-// section, which doubles as the catch-all bucket). One task can't be
-// in two rooms simultaneously, so [All] = "no specific room" rather
-// than "create one task per room."
-
-function StudioSpacePicker({
-  value,
-  onChange,
-}: {
-  value: StudioSpace | null
-  onChange: (next: StudioSpace | null) => void
-}) {
-  return (
-    <div>
-      <label className="block text-[10px] font-semibold uppercase tracking-wider text-text-light mb-1.5">
-        Studio space
-      </label>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <SpacePill label="All" active={value === null} onClick={() => onChange(null)} />
-        {STUDIO_SPACES.map((space) => (
-          <SpacePill
-            key={space}
-            label={space}
-            active={value === space}
-            onClick={() => onChange(space)}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function SpacePill({
-  label,
-  active,
-  onClick,
-}: {
-  label: string
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 transition-colors ${
-        active
-          ? 'bg-gold/15 text-gold ring-gold/40'
-          : 'bg-surface-alt text-text-muted ring-border hover:text-text hover:bg-surface-hover'
-      }`}
-    >
-      {label}
-    </button>
   )
 }
 
@@ -564,5 +530,30 @@ function RecurrencePicker({
         ))}
       </div>
     </div>
+  )
+}
+
+function SpacePill({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 transition-colors ${
+        active
+          ? 'bg-gold/15 text-gold ring-gold/40'
+          : 'bg-surface-alt text-text-muted ring-border hover:text-text hover:bg-surface-hover'
+      }`}
+    >
+      {label}
+    </button>
   )
 }

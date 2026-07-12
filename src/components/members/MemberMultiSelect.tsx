@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { Check } from 'lucide-react'
+import { Check, Plus } from 'lucide-react'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
+import MemberAvatar from './MemberAvatar'
 
 /**
  * MemberMultiSelect — shared checklist for picking one or more team
@@ -10,6 +11,11 @@ import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
  *
  * Pattern: caller owns `selectedIds: Set<string>` + `onToggle(id)`.
  * No internal state, no controlled/uncontrolled split to reason about.
+ *
+ * `variant="grid"` (2026-07-11, task-popup redesign) renders photo
+ * cards instead of list rows — opt-in so the four existing list-style
+ * callers are untouched. New callers can pick whichever fits their
+ * layout.
  */
 
 interface MemberMultiSelectProps {
@@ -23,6 +29,8 @@ interface MemberMultiSelectProps {
   showPosition?: boolean
   /** Filter out inactive members. Default true. */
   excludeInactive?: boolean
+  /** 'list' (default, existing look) or 'grid' (photo cards). */
+  variant?: 'list' | 'grid'
 }
 
 export default function MemberMultiSelect({
@@ -32,6 +40,7 @@ export default function MemberMultiSelect({
   maxHeightClass = 'max-h-48',
   showPosition = true,
   excludeInactive = true,
+  variant = 'list',
 }: MemberMultiSelectProps) {
   const teamQuery = useQuery({
     queryKey: teamMemberKeys.list(),
@@ -42,13 +51,73 @@ export default function MemberMultiSelect({
     ? all.filter((m) => m.status?.toLowerCase() !== 'inactive')
     : all
 
+  const countSuffix = selectedIds.size > 0 && (
+    <span className="ml-2 text-gold">· {selectedIds.size} selected</span>
+  )
+
+  if (variant === 'grid') {
+    return (
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-light mb-2">
+          {label}
+          {countSuffix}
+        </p>
+        {teamQuery.isLoading ? (
+          <p className="px-3 py-4 text-[12px] text-text-light italic">Loading team…</p>
+        ) : members.length === 0 ? (
+          <p className="px-3 py-4 text-[12px] text-text-light italic">No members to select.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {members.map((m) => {
+              const active = selectedIds.has(m.id)
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => onToggle(m.id)}
+                  aria-pressed={active}
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border-2 text-left transition-colors focus-ring ${
+                    active
+                      ? 'border-gold bg-gold/10'
+                      : 'border-border bg-surface-alt/50 hover:border-gold/40 hover:bg-surface-hover'
+                  }`}
+                >
+                  <MemberAvatar member={m} size="md" className="shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold text-text truncate">
+                      {m.display_name}
+                    </span>
+                    {m.position && (
+                      <span className="block text-[11px] text-text-light truncate">
+                        {m.position.replace(/_/g, ' ')}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              )
+            })}
+            {/* Decorative parity with the reference mockup — every real
+                member already has a card above (small teams fit on
+                screen without a search field), so this communicates
+                "that's everyone" rather than opening a picker. */}
+            <div
+              className="flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-dashed border-border text-text-light"
+              aria-hidden="true"
+            >
+              <Plus size={16} />
+              <span className="text-[12px] font-medium">That's everyone</span>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div>
       <p className="text-[11px] font-semibold uppercase tracking-wider text-text-light mb-2">
         {label}
-        {selectedIds.size > 0 && (
-          <span className="ml-2 text-gold">· {selectedIds.size} selected</span>
-        )}
+        {countSuffix}
       </p>
       <div
         className={`${maxHeightClass} overflow-y-auto rounded-lg border border-border bg-surface-alt divide-y divide-border`}

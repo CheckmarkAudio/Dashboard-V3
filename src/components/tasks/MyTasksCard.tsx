@@ -62,6 +62,7 @@ import {
   isSelfAssigned,
 } from './shared'
 import TaskRequestModal from './requests/TaskRequestModal'
+import MultiTaskCreateModal from './requests/MultiTaskCreateModal'
 import TaskDetailModal from './TaskDetailModal'
 
 // PR #69 — assignment-source filter. "Self" means the user pressed the
@@ -93,7 +94,7 @@ interface PendingMeta {
 }
 
 export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {}) {
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
   const queryClient = useQueryClient()
   const realtimeTopicRef = useRef(`my-tasks:${crypto.randomUUID()}`)
   const [showCompleted, setShowCompleted] = useState(false)
@@ -744,7 +745,17 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
   return (
     <>
       <div className="flex flex-col h-full min-h-0">{body}</div>
-      {requestModalOpen && <TaskRequestModal onClose={() => setRequestModalOpen(false)} />}
+      {/* 2026-07-11 (task-popup redesign) — admins already have this
+          full tool on the Assign page; there's no reason to make an
+          admin "request" a task from themselves. Regular members keep
+          the lighter approval-flow modal (same as always) since they
+          can't assign work directly to teammates. */}
+      {requestModalOpen && isAdmin && (
+        <MultiTaskCreateModal onClose={() => setRequestModalOpen(false)} />
+      )}
+      {requestModalOpen && !isAdmin && (
+        <TaskRequestModal onClose={() => setRequestModalOpen(false)} />
+      )}
       {detailTask && (
         <TaskDetailModal
           task={detailTask}
