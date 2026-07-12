@@ -1,15 +1,17 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Building2, FileText, Flame, Loader2, Plus, Repeat, Trash2, Users } from 'lucide-react'
 import FloatingDetailModal from '../../FloatingDetailModal'
 import { useToast } from '../../Toast'
 import MemberMultiSelect from '../../members/MemberMultiSelect'
+import { fetchTeamMembers, teamMemberKeys } from '../../../lib/queries/teamMembers'
 import {
   assignCustomTasksToMembers,
   type CustomTaskDraft,
 } from '../../../lib/queries/assignments'
 import { STUDIO_SPACES, type StudioSpace } from '../../../lib/queries/adminTasks'
 import type { AssignedTaskScope } from '../../../types/assignments'
+import type { TeamMember } from '../../../types'
 import AddFromTemplateModal from './AddFromTemplateModal'
 
 type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
@@ -70,6 +72,11 @@ interface DraftRow {
   recurrence: RecurrenceFrequency | null
   dueDate: string
   isRequired: boolean
+  // 2026-07-12 — studio-scope only. Optional single assignee for this
+  // specific task (different rows in the same studio batch can go to
+  // different people, or stay unassigned/open-pool). Member-scope
+  // drafts ignore this — recipients are picked separately, above.
+  studioAssigneeId: string | null
 }
 
 function emptyRow(): DraftRow {
@@ -80,6 +87,7 @@ function emptyRow(): DraftRow {
         : Math.random().toString(36).slice(2),
     title: '',
     description: '',
+    studioAssigneeId: null,
     recurrence: null,
     dueDate: '',
     isRequired: false,
@@ -123,6 +131,15 @@ export default function MultiTaskCreateModal({
 }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
+
+  // Used by the per-row studio-assignee picker (destination === a
+  // studio space). Shares the app-wide cache key so this doesn't
+  // trigger a fresh fetch if the roster is already loaded elsewhere.
+  const teamMembersQuery = useQuery({
+    queryKey: teamMemberKeys.list(),
+    queryFn: fetchTeamMembers,
+    staleTime: 60_000,
+  })
 
   const [destination, setDestination] = useState<Destination>(
     destinationFromInitial(initialScope, initialStudioSpace),
@@ -192,6 +209,9 @@ export default function MultiTaskCreateModal({
           // Destination is chosen once for the whole modal session now
           // (see `Destination` type comment above).
           studio_space: scope === 'studio' ? studioSpace : null,
+          // Per-row optional assignee — studio scope only (member scope
+          // uses the recipients grid above instead).
+          studio_assignee_id: scope === 'studio' ? d.studioAssigneeId : null,
           // Recurrence threads through for BOTH scopes; engine handles
           // member + studio rows uniformly.
           recurrence_spec: d.recurrence
@@ -312,6 +332,8 @@ export default function MultiTaskCreateModal({
                 key={d.tempId}
                 index={i}
                 draft={d}
+                scope={scope}
+                members={teamMembersQuery.data ?? []}
                 canRemove={drafts.length > 1}
                 onChange={(patch) => updateDraft(d.tempId, patch)}
                 onRemove={() => removeDraft(d.tempId)}
@@ -408,12 +430,16 @@ function DestinationTab({
 function DraftRowCard({
   index,
   draft,
+  scope,
+  members,
   canRemove,
   onChange,
   onRemove,
 }: {
   index: number
   draft: DraftRow
+  scope: AssignedTaskScope
+  members: TeamMember[]
   canRemove: boolean
   onChange: (patch: Partial<DraftRow>) => void
   onRemove: () => void
@@ -470,6 +496,31 @@ function DraftRowCard({
           className="shrink-0 w-[150px] px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[12px] text-text focus:outline-none focus:border-gold/50"
         />
       </div>
+
+      {/* 2026-07-12 — optional per-task assignee for studio-scope
+          tasks. Leaving it "Unassigned" keeps today's open-pool
+          behavior; picking someone also lands this task in their My
+          Tasks (server-linked via a real assignment_recipients row)
+          without removing it from the shared Studio Tasks board. */}
+      {scope === 'studio' && (
+        <div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-text-light mb-1">
+            Assign to (optional)
+          </label>
+          <select
+            value={draft.studioAssigneeId ?? ''}
+            onChange={(e) => onChange({ studioAssigneeId: e.target.value || null })}
+            className="w-full px-2.5 py-1.5 rounded-lg bg-surface-alt border border-border text-[12px] text-text focus:outline-none focus:border-gold/50"
+          >
+            <option value="">Unassigned — open pool</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.display_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <textarea
         value={draft.description}
