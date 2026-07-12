@@ -1417,41 +1417,37 @@ function ChatBubble({
                   isMe ? 'justify-end' : 'justify-start'
                 }`}
               >
-                {/* Completed is a shared status, not a casual reaction — one
-                    persistent pill (always visible, not hover-gated) that
-                    changes appearance with state, rather than a separate
-                    "add" icon plus a summary bubble. Grey "Mark Complete"
-                    invites the click; green "Complete" (+ count once more
-                    than one person confirms) is the resulting state.
-                    Hovering always shows who via the same names list other
-                    reactions use. */}
-                {(() => {
-                  const completed = reactionSummaries.find((r) => r.emoji === COMPLETED_EMOJI)
-                  const completedMine = completed?.mine ?? false
-                  return (
+                {/* Completed behaves exactly like any other reaction —
+                    tucked into the hover row until someone actually uses
+                    it, so casual conversation doesn't get a "you must
+                    complete this" pill on every message. Once used, it
+                    shows here in the always-visible summary row (same as
+                    a heart or thumbs-up count would), just styled as a
+                    labeled green pill instead of a bare emoji+count so it
+                    still reads as a status, not a joke reaction. */}
+                {reactionSummaries.map((reaction) =>
+                  reaction.emoji === COMPLETED_EMOJI ? (
                     <button
+                      key={reaction.emoji}
                       type="button"
-                      onClick={() => onReact(message, COMPLETED_EMOJI, completedMine)}
-                      title={completed ? `Completed by ${completed.names.join(', ')}` : 'Mark this complete'}
-                      aria-pressed={completedMine}
+                      onClick={() => onReact(message, reaction.emoji, reaction.mine)}
+                      title={`Completed by ${reaction.names.join(', ')}`}
+                      aria-pressed={reaction.mine}
                       className={[
                         'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold transition-colors focus-ring',
-                        completed
-                          ? 'bg-status-success-bg text-status-success-text border-status-success-text/40'
-                          : 'bg-surface-alt/70 text-text-light border-border hover:border-text-light/50 hover:text-text-muted',
+                        'bg-status-success-bg text-status-success-text',
+                        reaction.mine
+                          ? 'border-status-success-text/60'
+                          : 'border-status-success-text/25 hover:border-status-success-text/50',
                       ].join(' ')}
                     >
                       <Check size={11} strokeWidth={3} aria-hidden="true" />
-                      {completed ? 'Complete' : 'Mark Complete'}
-                      {completed && completed.count > 1 && (
-                        <span className="tabular-nums opacity-80">×{completed.count}</span>
+                      Complete
+                      {reaction.count > 1 && (
+                        <span className="tabular-nums opacity-80">×{reaction.count}</span>
                       )}
                     </button>
-                  )
-                })()}
-                {reactionSummaries
-                  .filter((reaction) => reaction.emoji !== COMPLETED_EMOJI)
-                  .map((reaction) => (
+                  ) : (
                     <button
                       key={reaction.emoji}
                       type="button"
@@ -1468,8 +1464,26 @@ function ChatBubble({
                       <span aria-hidden="true">{reaction.emoji}</span>
                       <span className="tabular-nums">{reaction.count}</span>
                     </button>
-                  ))}
+                  ),
+                )}
                 <div className="inline-flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity">
+                  {(() => {
+                    const completedMine = reactionSummaries.some(
+                      (r) => r.emoji === COMPLETED_EMOJI && r.mine,
+                    )
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => onReact(message, COMPLETED_EMOJI, completedMine)}
+                        aria-label="Mark complete"
+                        aria-pressed={completedMine}
+                        className="inline-flex items-center gap-1 h-6 px-2 shrink-0 rounded-full border border-border bg-surface-alt/70 text-text-light text-[10px] font-bold hover:border-text-light/50 hover:text-text-muted transition-colors focus-ring"
+                      >
+                        <Check size={10} strokeWidth={3} aria-hidden="true" />
+                        Mark Complete
+                      </button>
+                    )
+                  })()}
                   {QUICK_REACTIONS.map((emoji) => {
                     const mine = reactionSummaries.some((reaction) => reaction.emoji === emoji && reaction.mine)
                     return (
