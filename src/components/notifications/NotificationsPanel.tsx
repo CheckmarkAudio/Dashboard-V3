@@ -295,7 +295,6 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
   // it to reveal a textarea + Send. Stays open until the user clears it
   // or sends, so the expanded state survives a refetch.
   const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null)
-  const [confirmingResolveId, setConfirmingResolveId] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
   const [replyBusy, setReplyBusy] = useState(false)
 
@@ -428,18 +427,14 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
     handleMarkChannelRead(c.channel_id)
   }
 
-  const completeChannel = (c: ChannelNotification) => {
-    workflow.setResolved(getChannelKey(c))
-    handleMarkChannelRead(c.channel_id)
-    setConfirmingResolveId(null)
-  }
-
-  const handleCompleteChannelClick = (c: ChannelNotification) => {
-    if (confirmingResolveId === c.channel_id) {
-      completeChannel(c)
+  const toggleChannelComplete = (c: ChannelNotification) => {
+    const key = getChannelKey(c)
+    if (workflow.getRecord(key)?.status === 'resolved') {
+      workflow.setStarted(key)
       return
     }
-    setConfirmingResolveId(c.channel_id)
+    workflow.setResolved(key)
+    handleMarkChannelRead(c.channel_id)
   }
 
   const handleAssignmentClick = (n: AssignmentNotification) => {
@@ -572,7 +567,6 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
             const channelStatus = getChannelStatus(c)
             const isCompleted = channelStatus === 'resolved'
             const isExpanded = expandedChannelId === c.channel_id
-            const confirmingComplete = confirmingResolveId === c.channel_id
             const expandedMessage =
               isExpanded && expandedMessageQuery.data?.id === c.latest_id
                 ? expandedMessageQuery.data
@@ -591,7 +585,6 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 setReplyText('')
                 markChannelStarted(c)
               }
-              setConfirmingResolveId(null)
             }
 
             const submitReply = async () => {
@@ -610,7 +603,6 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                 if (error) throw error
                 toast(`Sent to #${c.channel_name}`, 'success')
                 setReplyText('')
-                setExpandedChannelId(null)
                 // PR #68 (rev) — mark this channel read for the SENDER so
                 // their own message doesn't bump their unread badge. Without
                 // this, the realtime INSERT triggers a refetch that counts
@@ -867,16 +859,23 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       {!isCompleted ? (
                         <button
                           type="button"
-                          onClick={() => handleCompleteChannelClick(c)}
+                          onClick={() => toggleChannelComplete(c)}
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-colors focus-ring"
                         >
                           <Check size={11} strokeWidth={2.8} aria-hidden="true" />
-                          {confirmingComplete ? 'Finish' : 'Complete'}
+                          {channelStatus === 'replied' ? 'Mark complete' : 'Complete'}
                         </button>
                       ) : (
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/70">
+                        <button
+                          type="button"
+                          onClick={() => toggleChannelComplete(c)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 bg-emerald-500/10 ring-1 ring-emerald-400/25 hover:bg-emerald-500/15 transition-colors focus-ring"
+                          aria-label={`Undo completed status for #${c.channel_name}`}
+                          title="Click again to undo"
+                        >
+                          <Check size={11} strokeWidth={2.8} aria-hidden="true" />
                           Completed
-                        </span>
+                        </button>
                       )}
                       <div className="flex items-center justify-end gap-1.5">
                       <button
@@ -900,12 +899,7 @@ export default function NotificationsPanel({ onItemClick, compact = false, eyebr
                       </button>
                       </div>
                     </div>
-                    {confirmingComplete && (
-                      <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200">
-                        Notification resolved? Click Finish to complete.
-                      </div>
-                    )}
-                    <p className="text-[10px] text-text-light/70">Cmd/Ctrl + Enter to send. Completed reminders stay visible at the bottom for 7 days.</p>
+                    <p className="text-[10px] text-text-light/70">Cmd/Ctrl + Enter to send. Click complete again to undo.</p>
                   </div>
                 )}
               </div>
