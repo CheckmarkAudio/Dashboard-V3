@@ -1242,6 +1242,64 @@ export type Database = {
           },
         ]
       }
+      member_presence_sessions: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          last_seen_at: string
+          member_id: string
+          source: string
+          started_at: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          last_seen_at?: string
+          member_id: string
+          source?: string
+          started_at?: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          last_seen_at?: string
+          member_id?: string
+          source?: string
+          started_at?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_presence_sessions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "intern_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_presence_sessions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_presence_sessions_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_metrics: {
         Row: {
           created_at: string | null
@@ -4399,6 +4457,46 @@ export type Database = {
       get_team_assigned_tasks: {
         Args: { p_include_completed?: boolean; p_user_id: string }
         Returns: Json
+      }
+      presence_close: {
+        Args: never
+        Returns: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          last_seen_at: string
+          member_id: string
+          source: string
+          started_at: string
+          team_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "member_presence_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      presence_ping: {
+        Args: { p_idle_minutes?: number }
+        Returns: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          last_seen_at: string
+          member_id: string
+          source: string
+          started_at: string
+          team_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "member_presence_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       intern_generate_checklist: {
         Args: { p_date: string; p_frequency: string; p_intern_id: string }
