@@ -483,3 +483,45 @@ Token/source note:
 
 Signature:
 - CODEX:
+
+## 2026-07-22 06:14 MDT - CODEX - Member presence persistence PR1
+
+Lane:
+- Codex: schema/RLS/RPC/auth-shell, production migration application, contract typing, checkpointing.
+
+Summary:
+- Completed the Member Activity & Presence PR1 foundation on `codex/member-presence-sessions` / PR #304.
+- Added a lightweight persisted heartbeat model with `member_presence_sessions`, one open session per member, and a 10-minute idle rollover.
+- Added `presence_ping(p_idle_minutes default 10)` and `presence_close()` SECURITY DEFINER RPCs; members/admins can read through RLS, writes stay RPC-only.
+- Added `src/lib/queries/presence.ts` with the exported `PresenceSession` contract that PR2 `buildActivityDay` and PR3 widgets will consume.
+- Wired `usePresenceHeartbeat()` into `Layout` so authenticated app sessions ping on mount, visible-tab interval, visible-tab return, and route change; sign-out awaits `presence_close()`.
+- Updated `src/types/database.ts` with the matching table/RPC shape because the Supabase type-generation command requires a missing `SUPABASE_ACCESS_TOKEN` in this environment.
+
+Files changed:
+- `supabase/migrations/20260722120000_member_presence_sessions.sql`
+- `src/lib/queries/presence.ts`
+- `src/lib/presence/usePresenceHeartbeat.ts`
+- `src/components/Layout.tsx`
+- `src/types/database.ts`
+- `docs/PROJECT_STATE.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `npm run build` passed after the type-contract update.
+- `supabase db query --linked -f supabase/migrations/20260722120000_member_presence_sessions.sql` applied the migration to linked production.
+- Direct linked-db verification confirmed `public.member_presence_sessions`, `presence_ping`, and `presence_close` exist.
+- Direct linked-db policy verification confirmed exactly two RLS SELECT policies: members read own sessions and admins read team sessions.
+- Direct linked-db function-shape verification confirmed `presence_ping` and `presence_close` are SECURITY DEFINER, `search_path=public`, executable by `authenticated`, and not executable by `anon` or `public`.
+- `supabase db lint --linked --schema public --level warning --fail-on error` was not runnable here because the CLI needs `SUPABASE_ACCESS_TOKEN`; true Supabase Advisor/MCP verification remains a follow-up.
+
+Open gaps:
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: run Supabase Advisor / `get_advisors` from a session with Supabase Management access and confirm no new ERRORs; expected new notices, if any, should be the standard SECURITY DEFINER executable notices already accepted in this project.
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: run true generated types (`supabase gen types typescript --project-id ncljfjdcyswoeitsooty`) once `SUPABASE_ACCESS_TOKEN` is available; `src/types/database.ts` currently has a hand-applied generated-shape patch for this PR's table/RPCs.
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: after PR #304 preview/main deploy, open the app as a real member, confirm a row appears, wait for the heartbeat to advance `last_seen_at`, and sign out to confirm `ended_at` is set.
+- <span style="color:#7c3aed">ASSUMPTION</span>: no UI should read this table until PR2 computes activity intervals; PR1 intentionally writes only.
+
+Token/source note:
+- Exact token total not visible in this tool. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:
