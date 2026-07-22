@@ -525,3 +525,31 @@ Token/source note:
 
 Signature:
 - CODEX:
+
+## 2026-07-22 08:14 MDT - CODEX - Presence PR2 handoff notes
+
+Lane:
+- Codex: documentation handoff, project-state clarification, Claude lane setup.
+
+Summary:
+- Updated `docs/PROJECT_STATE.md` so PR #304 is no longer described as in flight; it is now recorded as merged on `main` at `de402d9`.
+- Added a dedicated Claude handoff anchor for Member Activity PR2 with the confirmed `PresenceSession` contract, lane boundaries, required behavior, non-goals, and verification checklist.
+- Kept this pass docs-only to avoid intersecting with the existing dirty task-request modal work in `src/components/tasks/requests/TaskRequestModal.tsx`.
+
+Files changed:
+- `docs/PROJECT_STATE.md`
+- `docs/00_PROJECT_OS/HANDOFF_CLAUDE_PR2_MEMBER_ACTIVITY.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `git diff --check -- docs/PROJECT_STATE.md docs/00_PROJECT_OS/HANDOFF_CLAUDE_PR2_MEMBER_ACTIVITY.md docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md` passed.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-CLAUDE</span>: PR2 should implement the pure/data `buildActivityDay` layer only; PR3 owns the widget UI.
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: Supabase Advisor and true type regeneration from PR1 still need a session with `SUPABASE_ACCESS_TOKEN`.
+
+Token/source note:
+- Exact token total not visible in this tool. Use the Codex app/session token meter if available.
+
+Signature:
+- CODEX:
