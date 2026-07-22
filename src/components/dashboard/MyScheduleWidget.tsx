@@ -162,12 +162,12 @@ export default function MyScheduleWidget() {
           <button
             type="button"
             onClick={() => setShowModal(true)}
-            aria-label="Request schedule block"
-            title="Request a schedule block (admin approves)"
+            aria-label="Open schedule request options"
+            title="Set weekly schedule, request one-time change, or see time-off status"
             className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border border-border bg-surface-alt text-text-muted hover:text-gold hover:border-gold/40 transition-colors"
           >
             <Plus size={11} aria-hidden="true" />
-            Request
+            Request schedule
           </button>
         </div>
       </div>
