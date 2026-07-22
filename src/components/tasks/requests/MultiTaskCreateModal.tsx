@@ -259,19 +259,19 @@ export default function MultiTaskCreateModal({
           </div>
 
           {/* Add row + Add from template buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               type="button"
               onClick={addEmpty}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-bold text-gold/90 hover:text-gold hover:bg-gold/5 transition-colors"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-gold/40 text-[13px] font-bold text-gold/90 hover:text-gold hover:bg-gold/[0.06] hover:border-gold/65 transition-colors focus-ring"
             >
               <Plus size={14} strokeWidth={2.5} />
-              Add task
+              Add another task
             </button>
             <button
               type="button"
               onClick={() => setTemplatePickerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-bold text-text-light hover:text-text hover:bg-surface-hover transition-colors ring-1 ring-border"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[13px] font-bold text-text-light hover:text-text hover:bg-surface-hover transition-colors ring-1 ring-border focus-ring"
             >
               <FileText size={13} />
               Add from template
