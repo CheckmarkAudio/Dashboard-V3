@@ -553,3 +553,38 @@ Token/source note:
 
 Signature:
 - CODEX:
+
+## 2026-07-22 (MDT) - CLAUDE - Member Activity PR2: pure day builder + read layer
+
+Lane:
+- Claude/Fable: pure/data activity aggregation for Member Activity (no UI, no schema, no writes) — the PR2 lane defined in HANDOFF_CLAUDE_PR2_MEMBER_ACTIVITY.md.
+
+Summary:
+- Added `src/lib/activity/buildActivityDay.ts` — a pure, sync, injected-`now` day builder that consumes PR1's `PresenceSession` contract (imported TYPE-ONLY so the pure/test path never pulls the Supabase client). A presence session is the active interval `[started_at, ended_at ?? now]`. Intervals are clipped to the requested local day, merged (overlapping AND adjacent) so active time is never double-counted, and unioned with per-event action-bracketing (each same-day event contributes a small interval). Returns a UI-ready `ActivityDayModel`: `scheduledWindow`, colored `segments` (`on`/`late`/`off`), `markers`, `totals`, `activeMinutes`, `firstActiveAt`, `lateArrival`, `minutesLate`. Late arrival = the first in-schedule segment whose start is past a 15-min grace gets a ≤15-min `late` head, the remainder stays `on` (both tunable via input).
+- Added `src/lib/activity/queries.ts` — read-only, RLS-scoped helpers PR3 composes: `fetchMemberPresenceSessions` (member/day overlap query), `fetchMemberActivityEvents` (member/day flywheel events → normalized `ActivityEvent[]`), pure mappers `flywheelRowToActivityEvent` + `toScheduledWindows` (approved-only), and a `memberActivityKeys` React-Query key factory. No writes.
+- Added `src/lib/activity/buildActivityDay.test.ts` — 20 focused tests (clipping, overlap+adjacent merging, open sessions ending at `now`, idle-separated sessions, day-boundary clipping, grace vs late head, off-schedule, no-schedule, event bracketing, marker sort, totals, out-of-day + after-now event drops). Runs on Node's built-in runner via native TS stripping — no new dependency.
+- Tooling: added `"test": "node --test 'src/**/*.test.ts'"` to package.json; excluded `src/**/*.test.ts` from `tsconfig.app.json` (tests use `.ts` import extensions for Node's runtime resolver and Node-runtime patterns, so they run via `npm test` rather than the app typecheck).
+
+Files changed:
+- `src/lib/activity/buildActivityDay.ts` (new)
+- `src/lib/activity/queries.ts` (new)
+- `src/lib/activity/buildActivityDay.test.ts` (new)
+- `package.json` (test script)
+- `tsconfig.app.json` (exclude test files)
+- `docs/PROJECT_STATE.md`, `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+What PR3 can consume:
+- `buildActivityDay({ presenceSessions, events, scheduledWindows, dayStart, now, ... })` → `ActivityDayModel`, ready to render the frozen widget spec directly (segments → bar colors, markers → proximity icons/ticks, totals + activeMinutes → summary, scheduledWindow → header "Scheduled …"). Fetch inputs via `queries.ts`; map the member's `expandSchedule` output through `toScheduledWindows`.
+
+Verification:
+- `npm run build` clean (tsc -b + vite build; only the pre-existing chunk-size warning).
+- `npm test` → 20/20 pass on Node 24's built-in runner.
+
+Non-goals held: no widget UI, no admin surface, no attendance exceptions, no schema/RPC/migration, no clock-button changes, no direct writes, no notification/forum/task-request/calendar UI. Did not touch Codex's presence.ts / schema / RLS.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-CLAUDE</span>: PR3 builds `MyActivityTodayWidget` on member Overview to the frozen visual spec, consuming this layer.
+- <span style="color:#7c3aed">ASSUMPTION</span>: `deliverable` flywheel source maps to the `video` marker type; `checklist` folds into `task`. Revisit if PR3 wants finer categories.
+
+Signature:
+- CLAUDE:
