@@ -7,6 +7,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useRouteAnnounce } from '../hooks/useRouteAnnounce'
 import { useQuickKeyListener } from '../hooks/useQuickKeyListener'
+import { usePresenceHeartbeat } from '../lib/presence/usePresenceHeartbeat'
 import { APP_ROUTES } from '../app/routes'
 import ErrorBoundary from './ErrorBoundary'
 import SelfReportModal from './SelfReportModal'
@@ -27,6 +28,7 @@ import {
   fetchMyOpenClockEntry,
   timeClockKeys,
 } from '../lib/queries/timeClock'
+import { closePresence } from '../lib/queries/presence'
 import { fetchTeamSiteBranding, teamSiteBrandingKeys } from '../lib/queries/teamSiteBranding'
 import type { LucideProps } from 'lucide-react'
 import {
@@ -509,6 +511,7 @@ export default function Layout() {
   })
   const navigate = useNavigate()
   const location = useLocation()
+  usePresenceHeartbeat(profile?.id)
   const drawerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(drawerRef, sidebarOpen)
   useRouteAnnounce()
@@ -524,6 +527,7 @@ export default function Layout() {
   }, [sidebarOpen])
 
   const handleSignOut = async () => {
+    try { await closePresence() } catch {}
     try { await signOut() } catch {}
     navigate(APP_ROUTES.auth.login)
   }
