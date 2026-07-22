@@ -112,6 +112,10 @@ export type MemberWidgetId =
   // resets daily / weekly / monthly. Anyone on the team can check;
   // admins curate the list.
   | 'team_checklist'
+  // 2026-07-22 — Member Activity & Presence PR3. Personal "My
+  // Activity · Today" timeline on Overview: heartbeat presence vs. the
+  // member's scheduled hours (green/late/off) + the day's activity feed.
+  | 'my_activity'
   // 2026-05-23 — Member Work Scheduler PR 3. Personal weekly
   // schedule on Overview with a toggle to flip to the whole team's
   // schedule. Members can also propose a schedule block from here
