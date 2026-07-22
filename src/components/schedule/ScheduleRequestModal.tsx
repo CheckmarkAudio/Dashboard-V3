@@ -13,11 +13,14 @@ import {
 import { STUDIO_WORK_WEEK, type Weekday } from '../../types'
 
 /**
- * Shared member-facing schedule request modal.
+ * Worker-facing schedule request modal.
  *
- * Tabbed UI mirrors the admin Work Scheduler form so members can
- * request **either** a one-off block OR recurring weekly hours,
- * and the visual / interaction shape is consistent across the app.
+ * The database still stores these as one-off blocks and recurring
+ * rows, but the UI uses plain choices:
+ *   - Set weekly schedule
+ *   - Request one-time change
+ *   - Request time off (visible, but held until the data contract is
+ *     approved so time off never gets mis-recorded as work time)
  *
  * Used by:
  *   - MyScheduleWidget (Overview) — header "Request" button
@@ -44,7 +47,7 @@ export interface ScheduleRequestModalProps {
   }
 }
 
-type Mode = 'block' | 'recurring'
+type Mode = 'block' | 'recurring' | 'time_off'
 
 export default function ScheduleRequestModal({
   memberId,
@@ -52,7 +55,7 @@ export default function ScheduleRequestModal({
   onSubmitted,
   prefill,
 }: ScheduleRequestModalProps) {
-  const [mode, setMode] = useState<Mode>(prefill?.mode ?? 'block')
+  const [mode, setMode] = useState<Mode>(prefill?.mode ?? 'recurring')
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Request schedule">
@@ -60,9 +63,9 @@ export default function ScheduleRequestModal({
       <div className="relative w-full max-w-md bg-surface rounded-2xl border border-border shadow-2xl p-5 animate-fade-in">
         <div className="flex items-start justify-between mb-3">
           <div>
-            <h2 className="text-base font-bold text-text">Request schedule</h2>
+            <h2 className="text-base font-bold text-text">Schedule request</h2>
             <p className="text-[11px] text-text-muted mt-0.5">
-              Admin reviews + approves. Withdraw anytime before they do.
+              Pick what you need. Admin reviews before anything changes.
             </p>
           </div>
           <button
@@ -75,28 +78,26 @@ export default function ScheduleRequestModal({
           </button>
         </div>
 
-        {/* Tab toggle */}
-        <div className="inline-flex bg-surface-alt rounded-md p-0.5 text-[11px] mb-4">
-          <button
-            type="button"
-            onClick={() => setMode('block')}
-            aria-pressed={mode === 'block'}
-            className={`px-3 py-1 rounded transition-colors ${
-              mode === 'block' ? 'bg-surface text-gold shadow-sm font-semibold' : 'text-text-muted hover:text-text'
-            }`}
-          >
-            Single block
-          </button>
-          <button
-            type="button"
+        <div className="grid gap-2 mb-4">
+          <ScheduleChoice
+            active={mode === 'recurring'}
+            title="Set weekly schedule"
+            description="Same hours on the days you pick."
             onClick={() => setMode('recurring')}
-            aria-pressed={mode === 'recurring'}
-            className={`px-3 py-1 rounded transition-colors ${
-              mode === 'recurring' ? 'bg-surface text-gold shadow-sm font-semibold' : 'text-text-muted hover:text-text'
-            }`}
-          >
-            Recurring weekly
-          </button>
+          />
+          <ScheduleChoice
+            active={mode === 'block'}
+            title="Request one-time change"
+            description="A special shift, coverage change, or single day adjustment."
+            onClick={() => setMode('block')}
+          />
+          <ScheduleChoice
+            active={mode === 'time_off'}
+            title="Request time off"
+            description="Vacation or unavailable dates. Coming soon."
+            badge="Soon"
+            onClick={() => setMode('time_off')}
+          />
         </div>
 
         {mode === 'block' ? (
@@ -108,7 +109,7 @@ export default function ScheduleRequestModal({
             prefillStart={prefill?.startTime}
             prefillEnd={prefill?.endTime}
           />
-        ) : (
+        ) : mode === 'recurring' ? (
           <RecurringForm
             memberId={memberId}
             onClose={onClose}
@@ -116,7 +117,65 @@ export default function ScheduleRequestModal({
             prefillStart={prefill?.startTime}
             prefillEnd={prefill?.endTime}
           />
+        ) : (
+          <TimeOffPlaceholder onClose={onClose} />
         )}
+      </div>
+    </div>
+  )
+}
+
+function ScheduleChoice({
+  active,
+  title,
+  description,
+  badge,
+  onClick,
+}: {
+  active: boolean
+  title: string
+  description: string
+  badge?: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={[
+        'w-full rounded-xl border px-3 py-2.5 text-left transition-all duration-150',
+        'hover:-translate-y-0.5 hover:shadow-sm focus-ring active:translate-y-0',
+        active
+          ? 'border-gold bg-gold/10 shadow-[0_0_0_3px_rgba(234,179,8,0.08)]'
+          : 'border-border bg-surface-alt/45 hover:border-gold/45 hover:bg-surface-alt',
+      ].join(' ')}
+    >
+      <span className="flex items-center justify-between gap-3">
+        <span className={`text-[13px] font-bold ${active ? 'text-gold' : 'text-text'}`}>{title}</span>
+        {badge && (
+          <span className="rounded-full border border-amber-400/35 bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-200">
+            {badge}
+          </span>
+        )}
+      </span>
+      <span className="mt-0.5 block text-[11px] leading-snug text-text-muted">{description}</span>
+    </button>
+  )
+}
+
+function TimeOffPlaceholder({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-amber-400/25 bg-amber-400/8 p-3">
+        <p className="text-[13px] font-bold text-text">Time-off requests are coming soon.</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+          We are finishing the approval flow so unavailable days stay separate from work time.
+          Nothing is saved from this screen yet.
+        </p>
+      </div>
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <Button variant="ghost" size="sm" type="button" onClick={onClose}>Close</Button>
       </div>
     </div>
   )
@@ -167,7 +226,7 @@ function BlockForm({
         ends_at: ends.toISOString(),
         note: note.trim() || null,
       })
-      toast('Schedule request sent — admin will review', 'success')
+      toast('One-time schedule change sent for review', 'success')
       await onSubmitted()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to send request', 'error')
@@ -178,6 +237,12 @@ function BlockForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="rounded-lg border border-border bg-surface-alt/35 px-3 py-2">
+        <p className="text-[12px] font-semibold text-text">One-time change</p>
+        <p className="text-[11px] text-text-muted">
+          Use this for one special date. For your normal weekly hours, choose Set weekly schedule.
+        </p>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3">
         <div>
           <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Date</label>
@@ -193,14 +258,14 @@ function BlockForm({
         </div>
       </div>
       <div>
-        <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Reason (optional)</label>
+        <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Note (optional)</label>
         <Input
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="e.g. Cover for Sara, extra mixing time"
+          placeholder="e.g. Can cover Friday afternoon"
         />
       </div>
-      <ActionRow onClose={onClose} submitting={submitting} />
+      <ActionRow onClose={onClose} submitting={submitting} submitLabel="Send one-time request" />
     </form>
   )
 }
@@ -262,7 +327,7 @@ function RecurringForm({
         ),
       )
       toast(
-        `Recurring request${weekdays.size === 1 ? '' : 's'} sent — admin will review`,
+        `Weekly schedule request${weekdays.size === 1 ? '' : 's'} sent for review`,
         'success',
       )
       await onSubmitted()
@@ -275,6 +340,12 @@ function RecurringForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="rounded-lg border border-border bg-surface-alt/35 px-3 py-2">
+        <p className="text-[12px] font-semibold text-text">Weekly schedule</p>
+        <p className="text-[11px] text-text-muted">
+          These hours apply to every selected day. Need different hours on different days? Send a second request.
+        </p>
+      </div>
       <div className="grid grid-cols-[1fr_1fr] gap-3">
         <div>
           <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Start</label>
@@ -288,7 +359,7 @@ function RecurringForm({
 
       <div>
         <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">
-          Weekdays <span className="text-text-light">(Tue–Sat is the studio default)</span>
+          Days <span className="text-text-light">(Tue–Sat is the studio default)</span>
         </label>
         <div className="flex items-center gap-1">
           {([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map((w) => {
@@ -317,11 +388,11 @@ function RecurringForm({
       </div>
 
       <div>
-        <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Reason (optional)</label>
-        <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. New regular hours" />
+        <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Note (optional)</label>
+        <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. My regular studio hours" />
       </div>
 
-      <ActionRow onClose={onClose} submitting={submitting} />
+      <ActionRow onClose={onClose} submitting={submitting} submitLabel="Send weekly request" />
     </form>
   )
 }
@@ -331,16 +402,18 @@ function RecurringForm({
 function ActionRow({
   onClose,
   submitting,
+  submitLabel,
 }: {
   onClose: () => void
   submitting: boolean
+  submitLabel: string
 }) {
   return (
     <div className="flex items-center justify-end gap-2 pt-1">
       <Button variant="ghost" size="sm" type="button" onClick={onClose}>Cancel</Button>
       <Button variant="primary" size="sm" type="submit" disabled={submitting}>
         {submitting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Send size={12} className="mr-1" />}
-        Send request
+        {submitLabel}
       </Button>
     </div>
   )

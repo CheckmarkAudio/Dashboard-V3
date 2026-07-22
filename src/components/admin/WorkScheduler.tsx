@@ -134,7 +134,7 @@ export default function WorkScheduler({ members, adminId }: WorkSchedulerProps) 
           </h2>
           <p className="text-text-muted text-[12px] mt-0.5">
             Studio work week is <span className="font-semibold text-text">Tue–Sat</span>.
-            Set recurring hours per member; add one-off blocks for coverage or schedule changes.
+            Set weekly schedules, review one-time changes, and keep time off separate from work time.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -373,7 +373,7 @@ function PendingRequestsPanel({
                 <div className="text-[13px] font-semibold text-text truncate">
                   {member?.display_name ?? b.member_id}
                   <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-amber-300/80">
-                    Single block
+                    One-time change
                   </span>
                 </div>
                 <div className="text-[11px] text-text-muted">
@@ -412,7 +412,7 @@ function PendingRequestsPanel({
                 <div className="text-[13px] font-semibold text-text truncate">
                   {member?.display_name ?? r.member_id}
                   <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-purple-300/80">
-                    Recurring · {weekdayLabel(r.weekday, 'long')}
+                    Weekly schedule · {weekdayLabel(r.weekday, 'long')}
                   </span>
                 </div>
                 <div className="text-[11px] text-text-muted">
@@ -514,15 +514,15 @@ function RecurringPanel({
         <div>
           <h3 className="text-sm font-bold text-text flex items-center gap-2">
             <ClockIcon size={14} className="text-gold" aria-hidden="true" />
-            Recurring weekly hours
+            Weekly schedules
           </h3>
           <p className="text-[11px] text-text-muted mt-0.5">
-            Default canonical schedule. New rules default to Tue–Sat.
+            Normal working hours. New weekly schedules default to Tue–Sat.
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={() => setShowForm((v) => !v)}>
           <Plus size={14} className="mr-1" />
-          Add rule
+          Add weekly schedule
         </Button>
       </div>
 
@@ -541,7 +541,7 @@ function RecurringPanel({
 
       {rows.length === 0 ? (
         <div className="text-center py-6 text-[12px] text-text-muted">
-          No recurring rules yet. Click <span className="font-semibold text-text">Add rule</span> to set canonical hours.
+          No weekly schedules yet. Click <span className="font-semibold text-text">Add weekly schedule</span> to set normal hours.
         </div>
       ) : (
         <div className="border border-border rounded-lg overflow-hidden bg-surface">
@@ -644,7 +644,7 @@ function RecurringForm({
           ),
         ),
       )
-      toast(`Added ${weekdays.size} recurring ${weekdays.size === 1 ? 'rule' : 'rules'}`, 'success')
+      toast(`Added ${weekdays.size} weekly schedule ${weekdays.size === 1 ? 'day' : 'days'}`, 'success')
       await onCreated()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to create', 'error')
@@ -676,7 +676,7 @@ function RecurringForm({
 
       <div>
         <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">
-          Weekdays <span className="text-text-light">(Tue–Sat is the studio default)</span>
+          Days <span className="text-text-light">(Tue–Sat is the studio default)</span>
         </label>
         <div className="flex items-center gap-1">
           {([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map((w) => {
@@ -760,14 +760,14 @@ function OneOffPanel({
     <section className="border border-border bg-surface-alt/40 rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-sm font-bold text-text">One-off blocks (this week)</h3>
+          <h3 className="text-sm font-bold text-text">One-time changes (this week)</h3>
           <p className="text-[11px] text-text-muted mt-0.5">
-            Coverage, special shifts, schedule overrides. Renders on top of recurring hours.
+            Coverage, special shifts, and single-day adjustments. Time off will get its own type next.
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={() => setShowForm((v) => !v)}>
           <Plus size={14} className="mr-1" />
-          Add block
+          Add one-time change
         </Button>
       </div>
 
@@ -787,7 +787,7 @@ function OneOffPanel({
 
       {blocks.length === 0 ? (
         <div className="text-center py-6 text-[12px] text-text-muted">
-          No one-off blocks this week.
+          No one-time changes this week.
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -879,7 +879,7 @@ function OneOffForm({
         },
         adminId,
       )
-      toast('One-off block added', 'success')
+      toast('One-time schedule change added', 'success')
       await onCreated()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to create', 'error')
