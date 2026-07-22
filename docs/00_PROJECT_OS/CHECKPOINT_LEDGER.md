@@ -511,6 +511,7 @@ Verification:
 - `supabase db query --linked -f supabase/migrations/20260722120000_member_presence_sessions.sql` applied the migration to linked production.
 - Direct linked-db verification confirmed `public.member_presence_sessions`, `presence_ping`, and `presence_close` exist.
 - Direct linked-db policy verification confirmed exactly two RLS SELECT policies: members read own sessions and admins read team sessions.
+- Direct linked-db function-shape verification confirmed `presence_ping` and `presence_close` are SECURITY DEFINER, `search_path=public`, executable by `authenticated`, and not executable by `anon` or `public`.
 - `supabase db lint --linked --schema public --level warning --fail-on error` was not runnable here because the CLI needs `SUPABASE_ACCESS_TOKEN`; true Supabase Advisor/MCP verification remains a follow-up.
 
 Open gaps:
