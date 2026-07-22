@@ -482,6 +482,13 @@ export interface CustomTaskDraft {
    * frequency once the recurrence engine ships. Server CHECK enforces
    * `frequency ∈ {'daily','weekly','monthly'}`. */
   recurrence_spec?: { frequency: 'daily' | 'weekly' | 'monthly'; interval: number } | null
+  /** 2026-07-12 — Only meaningful for studio-scope tasks. Optionally
+   * tags a single member on an otherwise-shared studio task; the task
+   * then also appears in that member's My Tasks (server links a real
+   * assignment_recipients row, same mechanism member-scope tasks use)
+   * while staying visible to the whole team in the Studio Tasks board.
+   * Leave unset/null for the classic open-pool behavior. */
+  studio_assignee_id?: string | null
 }
 
 export async function assignCustomTasksToMembers(

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, ArrowRightLeft, Check, Inbox, Loader2, Plus } from 'lucide-react'
 import TaskRequestModal from './requests/TaskRequestModal'
+import MultiTaskCreateModal from './requests/MultiTaskCreateModal'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   completeAssignedTask,
@@ -79,7 +80,7 @@ function AssignmentBoardBody({
   queryFn: (userId: string, opts?: { includeCompleted?: boolean }) => Promise<AssignedTask[]>
   sectionedByStudioSpace?: boolean
 }) {
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
   const queryClient = useQueryClient()
   const [showCompleted, setShowCompleted] = useState(false)
   // 2026-05-17 (Task tweaks PR) — Priority filter, per-session.
@@ -472,8 +473,20 @@ function AssignmentBoardBody({
 
       {/* Studio-only request modal (mounted last so it portals above
           the widget content). Only available in the Studio variant
-          today; Team Board lacks the request-flow plumbing. */}
-      {sectionedByStudioSpace && requestModalOpen && (
+          today; Team Board lacks the request-flow plumbing.
+          2026-07-11 — admins get the full multi-task/multi-room tool
+          directly; regular members keep the approval-request flow.
+          2026-07-12 — defaults to Studio A (Control Room is no longer
+          an offered destination tab in the modal, per director
+          direction). */}
+      {sectionedByStudioSpace && requestModalOpen && isAdmin && (
+        <MultiTaskCreateModal
+          initialScope="studio"
+          initialStudioSpace="Studio A"
+          onClose={() => setRequestModalOpen(false)}
+        />
+      )}
+      {sectionedByStudioSpace && requestModalOpen && !isAdmin && (
         <TaskRequestModal onClose={() => setRequestModalOpen(false)} />
       )}
     </div>
