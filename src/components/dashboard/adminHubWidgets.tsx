@@ -124,13 +124,20 @@ export function AdminAssignWidget() {
       </div>
 
       {/* Flow modals — Session uses the existing booking flow; Task
-          opens the row-by-row MultiTaskCreateModal (PR #42) with a
-          Members/Studio toggle + Add-from-template sub-flow;
+          opens the row-by-row MultiTaskCreateModal (PR #42) in a
+          focused member-assignment mode; studio tasks live on the
+          dedicated Studio Assign page.
           Checklist opens the admin Manage Checklist modal (added
           2026-05-19) which lets admins add/rename/recadence/archive
           maintenance items. */}
       {flow === 'session' && <CreateBookingModal onClose={handleClose} />}
-      {flow === 'task' && <MultiTaskCreateModal onClose={handleClose} />}
+      {flow === 'task' && (
+        <MultiTaskCreateModal
+          initialScope="member"
+          lockScope
+          onClose={handleClose}
+        />
+      )}
       {flow === 'checklist' && <AdminManageChecklistModal onClose={handleClose} />}
     </div>
   )

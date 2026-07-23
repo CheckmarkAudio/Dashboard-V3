@@ -938,27 +938,18 @@ export default function AssignAdmin() {
                   rows={tasks}
                   disabled={!selectedMember}
                 />
+                <button
+                  type="button"
+                  onClick={() => setAddTaskOpen(true)}
+                  disabled={!selectedMember}
+                  className="shrink-0 h-11 inline-flex items-center justify-center gap-2 px-5 rounded-xl bg-gold text-black text-[14px] font-extrabold shadow-sm ring-1 ring-black/5 hover:bg-gold-muted hover:shadow-md transition-all focus-ring disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label={`Add one or more tasks for ${selectedMember?.display_name ?? 'the selected member'}`}
+                >
+                  <Plus size={18} strokeWidth={2.7} aria-hidden="true" />
+                  Task
+                </button>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setAddTaskOpen(true)}
-              disabled={!selectedMember}
-              className="group w-full min-h-14 mb-4 inline-flex items-center gap-3 px-4 py-3 rounded-xl bg-gold text-black text-left shadow-sm hover:bg-gold-muted hover:shadow-md transition-all focus-ring disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label={`Add one or more tasks for ${selectedMember?.display_name ?? 'the selected member'}`}
-            >
-              <span className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg bg-black/10 group-hover:bg-black/15 transition-colors">
-                <Plus size={20} strokeWidth={2.6} aria-hidden="true" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[15px] font-extrabold leading-tight">Add tasks</span>
-                <span className="block text-[11px] font-semibold text-black/65 mt-0.5">
-                  Create one task or add several at once
-                </span>
-              </span>
-              <ChevronRight size={18} className="ml-auto shrink-0 opacity-60 group-hover:translate-x-0.5 transition-transform" aria-hidden="true" />
-            </button>
 
             {tasksQuery.isLoading ? (
               <div className="py-10 flex items-center justify-center text-text-light">
@@ -1030,6 +1021,7 @@ export default function AssignAdmin() {
           }}
           initialScope="member"
           defaultRecipientIds={[selectedMember.id]}
+          lockScope
         />
       )}
 
