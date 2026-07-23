@@ -1021,6 +1021,7 @@ export default function AssignAdmin() {
           }}
           initialScope="member"
           defaultRecipientIds={[selectedMember.id]}
+          lockScope
         />
       )}
 

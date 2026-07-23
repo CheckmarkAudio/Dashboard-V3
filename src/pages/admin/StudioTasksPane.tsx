@@ -454,6 +454,7 @@ export default function StudioTasksPane() {
       {addModalOpen && (
         <MultiTaskCreateModal
           initialScope="studio"
+          lockScope
           onClose={() => {
             setAddModalOpen(false)
             void queryClient.invalidateQueries({ queryKey: STUDIO_TASKS_KEY })
@@ -470,6 +471,7 @@ export default function StudioTasksPane() {
         <MultiTaskCreateModal
           initialScope="studio"
           initialDrafts={pendingTemplateDrafts}
+          lockScope
           onClose={() => {
             setPendingTemplateDrafts(null)
             void queryClient.invalidateQueries({ queryKey: STUDIO_TASKS_KEY })
