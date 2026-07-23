@@ -470,6 +470,10 @@ export async function assignCustomTaskToMembers(
 export interface CustomTaskDraft {
   title: string
   description?: string | null
+  /** Optional per-task recipients. When present, the multi-task RPC
+   * assigns this draft only to these members instead of applying the
+   * batch-wide fallback recipient list. */
+  recipient_ids?: string[]
   category?: string | null
   due_date?: string | null
   is_required?: boolean

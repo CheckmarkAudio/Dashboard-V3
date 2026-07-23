@@ -10,7 +10,6 @@ import {
 } from '../../../lib/queries/assignments'
 import type { StudioSpace } from '../../../lib/queries/adminTasks'
 import type { AssignedTaskScope } from '../../../types/assignments'
-import { Field, FlywheelStagePicker, type FlywheelStage } from './formAtoms'
 import AddFromTemplateModal from './AddFromTemplateModal'
 
 type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
@@ -48,7 +47,7 @@ interface DraftRow {
   tempId: string
   title: string
   description: string
-  stage: FlywheelStage | null
+  recipientIds: Set<string>
   // Studio-scope only — persisted as `studio_space` on the row.
   // Member scope rows ignore this field.
   studioSpace: StudioSpace | null
@@ -59,7 +58,10 @@ interface DraftRow {
   isRequired: boolean
 }
 
-function emptyRow(initialStudioSpace: StudioSpace | null = null): DraftRow {
+function emptyRow(
+  initialStudioSpace: StudioSpace | null = null,
+  recipientIds: Iterable<string> = [],
+): DraftRow {
   return {
     tempId:
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -67,7 +69,7 @@ function emptyRow(initialStudioSpace: StudioSpace | null = null): DraftRow {
         : Math.random().toString(36).slice(2),
     title: '',
     description: '',
-    stage: null,
+    recipientIds: new Set(recipientIds),
     studioSpace: initialStudioSpace,
     recurrence: null,
     dueDate: '',
@@ -113,10 +115,12 @@ export default function MultiTaskCreateModal({
   const [drafts, setDrafts] = useState<DraftRow[]>(() => {
     if (initialDrafts && initialDrafts.length > 0) {
       return initialDrafts.map((d) => ({
-        ...emptyRow(initialScope === 'studio' ? initialStudioSpace ?? 'Studio A' : null),
+        ...emptyRow(
+          initialScope === 'studio' ? initialStudioSpace ?? 'Studio A' : null,
+          defaultRecipientIds,
+        ),
         title: d.title,
         description: d.description ?? '',
-        stage: (d.category as FlywheelStage) ?? null,
         studioSpace:
           initialScope === 'studio'
             ? (d.studio_space as StudioSpace | null) ?? initialStudioSpace ?? 'Studio A'
@@ -126,12 +130,12 @@ export default function MultiTaskCreateModal({
       }))
     }
     return [
-      emptyRow(initialScope === 'studio' ? initialStudioSpace ?? 'Studio A' : null),
+      emptyRow(
+        initialScope === 'studio' ? initialStudioSpace ?? 'Studio A' : null,
+        defaultRecipientIds,
+      ),
     ]
   })
-  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(
-    () => new Set(defaultRecipientIds ?? []),
-  )
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
 
   const updateDraft = (tempId: string, patch: Partial<DraftRow>) => {
@@ -141,10 +145,14 @@ export default function MultiTaskCreateModal({
     setDrafts((prev) => (prev.length === 1 ? prev : prev.filter((d) => d.tempId !== tempId)))
   }
   const addEmpty = () =>
-    setDrafts((prev) => [
-      ...prev,
-      emptyRow(scope === 'studio' ? 'Studio A' : null),
-    ])
+    setDrafts((prev) => {
+      const inheritedRecipients =
+        prev[prev.length - 1]?.recipientIds ?? new Set(defaultRecipientIds ?? [])
+      return [
+        ...prev,
+        emptyRow(scope === 'studio' ? 'Studio A' : null, inheritedRecipients),
+      ]
+    })
 
   const changeScope = (nextScope: AssignedTaskScope) => {
     setScope(nextScope)
@@ -153,6 +161,16 @@ export default function MultiTaskCreateModal({
         prev.map((draft) => ({
           ...draft,
           studioSpace: draft.studioSpace ?? 'Studio A',
+        })),
+      )
+    } else {
+      setDrafts((prev) =>
+        prev.map((draft) => ({
+          ...draft,
+          recipientIds:
+            draft.recipientIds.size > 0
+              ? draft.recipientIds
+              : new Set(defaultRecipientIds ?? []),
         })),
       )
     }
@@ -168,11 +186,15 @@ export default function MultiTaskCreateModal({
         prev.length === 1 &&
         prev[0]?.title.trim() === '' &&
         prev[0]?.description.trim() === ''
+      const inheritedRecipients =
+        prev[prev.length - 1]?.recipientIds ?? new Set(defaultRecipientIds ?? [])
       const imported: DraftRow[] = newDrafts.map((d) => ({
-        ...emptyRow(scope === 'studio' ? 'Studio A' : null),
+        ...emptyRow(
+          scope === 'studio' ? 'Studio A' : null,
+          inheritedRecipients,
+        ),
         title: d.title,
         description: d.description ?? '',
-        stage: (d.category as FlywheelStage) ?? null,
         isRequired: d.is_required ?? false,
       }))
       return onlyEmpty ? imported : [...prev, ...imported]
@@ -186,10 +208,7 @@ export default function MultiTaskCreateModal({
         .map((d) => ({
           title: d.title.trim(),
           description: d.description.trim() || null,
-          // Studio rows don't expose Flywheel stage — server stores
-          // category=NULL for them. Member rows keep the existing
-          // FlywheelStagePicker behaviour.
-          category: scope === 'studio' ? null : d.stage,
+          category: null,
           due_date: d.dueDate || null,
           is_required: d.isRequired,
           show_on_overview: true,
@@ -199,24 +218,32 @@ export default function MultiTaskCreateModal({
           recurrence_spec: d.recurrence
             ? { frequency: d.recurrence, interval: 1 }
             : null,
+          recipient_ids:
+            scope === 'member' ? Array.from(d.recipientIds) : undefined,
         }))
+      const memberIds =
+        scope === 'member'
+          ? Array.from(new Set(drafts.flatMap((draft) => Array.from(draft.recipientIds))))
+          : []
       return assignCustomTasksToMembers(
-        scope === 'studio' ? [] : Array.from(selectedMemberIds),
+        memberIds,
         payload,
         { scope },
       )
     },
     onSuccess: (summary) => {
       const tasks = summary.task_count
-      const recipients = summary.recipient_count
       if (scope === 'studio') {
         toast(
           `${tasks} studio task${tasks === 1 ? '' : 's'} posted — visible to the whole team.`,
           'success',
         )
       } else {
+        const recipientTotal = new Set(
+          drafts.flatMap((draft) => Array.from(draft.recipientIds)),
+        ).size
         toast(
-          `Sent ${tasks} task${tasks === 1 ? '' : 's'} to ${recipients} member${recipients === 1 ? '' : 's'}.`,
+          `Assigned ${validDraftCount} task${validDraftCount === 1 ? '' : 's'} across ${recipientTotal} member${recipientTotal === 1 ? '' : 's'}.`,
           'success',
         )
       }
@@ -235,21 +262,22 @@ export default function MultiTaskCreateModal({
   })
 
   const validDraftCount = drafts.filter((d) => d.title.trim().length > 0).length
-  const recipientIsFixed =
-    lockScope && (defaultRecipientIds?.length ?? 0) > 0
   const canSubmit =
     validDraftCount > 0 &&
     !submitMutation.isPending &&
-    (scope === 'studio' || selectedMemberIds.size > 0)
+    (scope === 'studio' ||
+      drafts
+        .filter((draft) => draft.title.trim().length > 0)
+        .every((draft) => draft.recipientIds.size > 0))
 
   return (
     <>
       <FloatingDetailModal
-        title="Add tasks"
+        title="Assign tasks"
         eyebrow={
           scope === 'studio'
             ? 'Studio pool — anyone on the team can claim'
-            : 'Send to one or more team members'
+            : 'Choose who should receive the work'
         }
         onClose={onClose}
         maxWidth={720}
@@ -311,25 +339,6 @@ export default function MultiTaskCreateModal({
               </div>
             </div>
           </div>
-
-          {/* Recipient picker (member scope only) */}
-          {scope === 'member' && !recipientIsFixed && (
-            <Field label="Send to">
-              <MemberMultiSelect
-                selectedIds={selectedMemberIds}
-                maxHeightClass={lockScope ? 'max-h-36' : 'max-h-48'}
-                showPosition={!lockScope}
-                onToggle={(id) =>
-                  setSelectedMemberIds((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(id)) next.delete(id)
-                    else next.add(id)
-                    return next
-                  })
-                }
-              />
-            </Field>
-          )}
 
           {/* Submit row */}
           <div className="flex items-center gap-2 pt-2 border-t border-border">
@@ -437,6 +446,21 @@ function DraftRowCard({
         className="w-full px-3 py-2.5 rounded-xl bg-surface border border-border text-[14px] font-semibold text-text placeholder:text-text-muted focus:outline-none focus:border-gold/60 focus:ring-2 focus:ring-gold/10"
       />
 
+      {!isStudio && (
+        <MemberMultiSelect
+          layout="chips"
+          label="Assign to"
+          selectedIds={draft.recipientIds}
+          showPosition={false}
+          onToggle={(id) => {
+            const next = new Set(draft.recipientIds)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            onChange({ recipientIds: next })
+          }}
+        />
+      )}
+
       {isStudio && (
         <StudioRoomTabs
           value={
@@ -456,14 +480,6 @@ function DraftRowCard({
           placeholder="Description"
           className="w-full px-2.5 py-1.5 rounded-lg bg-surface border border-border text-[12px] text-text placeholder:text-text-muted focus:outline-none focus:border-gold/50 resize-none"
         />
-
-        {!isStudio && (
-          <FlywheelStagePicker
-            value={draft.stage}
-            onChange={(next) => onChange({ stage: next })}
-            label="Flywheel stage"
-          />
-        )}
 
         <RecurrencePicker
           value={draft.recurrence}
