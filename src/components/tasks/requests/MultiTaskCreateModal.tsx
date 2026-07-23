@@ -340,14 +340,14 @@ export default function MultiTaskCreateModal({
               type="button"
               onClick={() => submitMutation.mutate()}
               disabled={!canSubmit}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-bold bg-gold text-black hover:bg-gold-muted disabled:opacity-50"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-bold bg-gold text-black hover:bg-gold-muted disabled:opacity-100 disabled:bg-gold/55 disabled:text-black disabled:cursor-not-allowed"
             >
               {submitMutation.isPending ? (
                 <Loader2 size={13} className="animate-spin" />
               ) : (
                 <Send size={13} strokeWidth={2.5} />
               )}
-              Add tasks
+              Submit
             </button>
           </div>
         </div>
