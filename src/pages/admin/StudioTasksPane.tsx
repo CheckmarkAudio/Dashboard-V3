@@ -372,14 +372,15 @@ export default function StudioTasksPane() {
               columns={toExportColumns(taskExportColumns)}
               rows={tasks}
             />
-            <Button
-              variant="secondary"
-              size="sm"
-              iconLeft={<Plus size={14} aria-hidden="true" />}
+            <button
+              type="button"
               onClick={() => setAddModalOpen(true)}
+              className="shrink-0 h-11 inline-flex items-center justify-center gap-2 px-5 rounded-xl bg-gold text-black text-[14px] font-extrabold shadow-sm ring-1 ring-black/5 hover:bg-gold-muted hover:shadow-md transition-all focus-ring"
+              aria-label="Add one or more studio tasks"
             >
-              Add Task
-            </Button>
+              <Plus size={18} strokeWidth={2.7} aria-hidden="true" />
+              Task
+            </button>
           </div>
         </div>
       </div>
