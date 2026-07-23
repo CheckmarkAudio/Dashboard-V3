@@ -235,6 +235,8 @@ export default function MultiTaskCreateModal({
   })
 
   const validDraftCount = drafts.filter((d) => d.title.trim().length > 0).length
+  const recipientIsFixed =
+    lockScope && (defaultRecipientIds?.length ?? 0) > 0
   const canSubmit =
     validDraftCount > 0 &&
     !submitMutation.isPending &&
@@ -270,7 +272,7 @@ export default function MultiTaskCreateModal({
             </div>
           )}
 
-          <div className="rounded-2xl bg-[#c8c8c4] p-2.5 sm:p-3 ring-1 ring-[#b8b8b4]">
+          <div className="rounded-2xl bg-[#c8c8c4] dark:bg-surface-alt p-2.5 sm:p-3 ring-1 ring-[#b8b8b4] dark:ring-border">
             <div className="space-y-3">
               {/* Draft rows */}
               <div className="space-y-2">
@@ -292,7 +294,7 @@ export default function MultiTaskCreateModal({
                 <button
                   type="button"
                   onClick={addEmpty}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-full border-2 border-[#6f706d] bg-white/65 text-[13px] font-bold text-[#454644] shadow-sm hover:bg-white transition-colors focus-ring"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-full border-2 border-[#6f706d] dark:border-border bg-white/65 dark:bg-surface text-[13px] font-bold text-[#454644] dark:text-text shadow-sm hover:bg-white dark:hover:bg-surface-hover transition-colors focus-ring"
                   aria-label="Add another task"
                 >
                   <Plus size={14} strokeWidth={2.5} />
@@ -301,7 +303,7 @@ export default function MultiTaskCreateModal({
                 <button
                   type="button"
                   onClick={() => setTemplatePickerOpen(true)}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-full bg-white/90 text-[13px] font-bold text-[#454644] shadow-sm hover:bg-white transition-colors focus-ring"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-full bg-white/90 dark:bg-surface text-[13px] font-bold text-[#454644] dark:text-text shadow-sm hover:bg-white dark:hover:bg-surface-hover transition-colors focus-ring"
                 >
                   <FileText size={13} />
                   Add from template
@@ -311,10 +313,12 @@ export default function MultiTaskCreateModal({
           </div>
 
           {/* Recipient picker (member scope only) */}
-          {scope === 'member' && (
+          {scope === 'member' && !recipientIsFixed && (
             <Field label="Send to">
               <MemberMultiSelect
                 selectedIds={selectedMemberIds}
+                maxHeightClass={lockScope ? 'max-h-36' : 'max-h-48'}
+                showPosition={!lockScope}
                 onToggle={(id) =>
                   setSelectedMemberIds((prev) => {
                     const next = new Set(prev)
@@ -407,7 +411,7 @@ function DraftRowCard({
 }) {
   const isStudio = scope === 'studio'
   return (
-    <div className="rounded-2xl border border-[#bdbdb8] bg-[#efefec] p-3 sm:p-4 space-y-2.5 shadow-[0_7px_18px_rgba(20,20,20,0.12)]">
+    <div className="rounded-2xl border border-[#bdbdb8] dark:border-border bg-[#efefec] dark:bg-surface p-3 sm:p-4 space-y-2.5 shadow-[0_7px_18px_rgba(20,20,20,0.12)]">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-semibold tracking-[0.08em] text-text-muted uppercase">
           Task {index + 1}
@@ -519,29 +523,17 @@ function StudioRoomTabs({
     {
       label: 'Studio A',
       value: 'Studio A',
-      activeStyle: {
-        backgroundColor: '#e7e5e4',
-        color: '#27272a',
-        boxShadow: '0 0 0 2px #3f403e, 0 5px 12px rgba(20, 20, 20, 0.18)',
-      },
+      activeClass: 'bg-stone-200',
     },
     {
       label: 'Studio B',
       value: 'Studio B',
-      activeStyle: {
-        backgroundColor: '#e2e8f0',
-        color: '#27272a',
-        boxShadow: '0 0 0 2px #3f403e, 0 5px 12px rgba(20, 20, 20, 0.18)',
-      },
+      activeClass: 'bg-slate-200',
     },
     {
       label: 'Custom',
       value: null,
-      activeStyle: {
-        backgroundColor: '#e5e7eb',
-        color: '#27272a',
-        boxShadow: '0 0 0 2px #3f403e, 0 5px 12px rgba(20, 20, 20, 0.18)',
-      },
+      activeClass: 'bg-gray-200',
     },
   ] as const
 
@@ -558,10 +550,9 @@ function StudioRoomTabs({
           role="tab"
           aria-selected={value === studio.value}
           onClick={() => onChange(studio.value)}
-          style={value === studio.value ? studio.activeStyle : undefined}
           className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold transition-all ${
             value === studio.value
-              ? '-translate-y-px shadow-sm'
+              ? `${studio.activeClass} -translate-y-px text-zinc-800 ring-2 ring-[#3f403e] shadow-[0_5px_12px_rgba(20,20,20,0.18)] dark:bg-white/15 dark:text-white dark:ring-white/70`
               : 'text-text-muted hover:text-text hover:bg-surface-hover'
           }`}
         >
