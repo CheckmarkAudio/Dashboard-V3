@@ -795,3 +795,34 @@ Open gaps:
 
 Signature:
 - CLAUDE:
+
+## 2026-07-24 (MDT) - CLAUDE - Member Activity PR3 widget revival
+
+Lane:
+- Claude/Fable: branch recovery + merge-conflict resolution (no schema, no writes, no new UI logic).
+
+Summary:
+- PR3 (#306, "My Activity · Today" Overview widget) was auto-closed by GitHub when its base branch (`claude/member-activity-pr2`) was deleted after PR #305 merged — a mechanical side effect of routine branch cleanup, not a decision to abandon it. Widget code was never lost, just orphaned on `claude/member-activity-pr3`.
+- Diagnosed and confirmed zero file-overlap risk against everything else active in the repo at the time (`per-day-availability`/#317, `studio-toggle`/#318 open) before touching anything.
+- Did the entire revival inside an isolated git worktree (`.claude/worktrees/member-activity-pr3-revival`) specifically so the shared working tree — actively in use by other concurrent sessions — was never switched or disturbed.
+- Merged current `main` (post PR4A/#312, PR4B/#316, per-day-availability/#317) into `claude/member-activity-pr3` and resolved 4 conflicts:
+  - `src/lib/activity/buildActivityDay.ts`, `queries.ts`, `buildActivityDay.test.ts` — confirmed via direct content diff and `git log --name-only` that this branch's own commits never modified these files; the conflicts were pure squash-merge history artifacts. Took `main`'s versions entirely (the real, PR4A-refactored code) — zero loss, zero risk.
+  - `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md` — genuine but simple append-only conflict (two entry sequences grown from the same point); spliced both in, chronological order.
+- Confirmed the widget component itself needs **zero code changes** — it only reads `model.scheduledWindow` (singular), which PR4A's refactor deliberately kept as a compatibility field specifically to protect this not-yet-merged branch.
+- GitHub would not allow reopening #306 (its base branch no longer exists — hard platform limitation, confirmed via both `gh pr edit --base` and `gh pr reopen`, both rejected). Opened a fresh PR, #319, against `main`, with the full lineage documented in the PR body; left a comment on #306 pointing to #319 for traceability.
+
+Files changed:
+- Merge commit only — no new source changes beyond conflict resolution.
+- `docs/PROJECT_STATE.md`, `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md` (this entry).
+
+Verification:
+- `npm run build` clean.
+- `npm test` → 26/26 pass (original 20 + the 6 PR4A added for time-off interval subtraction).
+- Re-fetched and re-checked `main` immediately before every commit/push given the repo's fast merge cadence (~15-90 min between merges in this feature family that day) — confirmed caught up each time, no stale-base surprises.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: live Vercel-preview verification with a real member session — populated segments/markers/feed still need a real presence + flywheel dataset to confirm visually. Empty-data-state rendering was previously verified locally only.
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: carried over from the original PR3 entry — widget sits in a ~1/3-width column; decide whether to promote to a wider slot later.
+
+Signature:
+- CLAUDE:
