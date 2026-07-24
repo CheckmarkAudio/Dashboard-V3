@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  CalendarRange, Loader2, Inbox, Plus, Trash2, Check, X as XIcon, Clock as ClockIcon,
+  CalendarRange, Loader2, Inbox, Plus, Trash2, Check, X as XIcon, Clock as ClockIcon, Palmtree,
 } from 'lucide-react'
 import { Select, Button, Input } from '../ui'
 import { useTeamSchedule } from '../../lib/schedule/useTeamSchedule'
@@ -16,6 +16,7 @@ import {
 } from '../../lib/schedule/mutations'
 import {
   endOfWeek,
+  formatTimeOffDateRange,
   formatTimeRange,
   startOfWeek,
   toLocalDateString,
@@ -359,28 +360,36 @@ function PendingRequestsPanel({
         </h3>
       </div>
       <div className="space-y-2">
-        {/* Single-block proposals — same shape as before. */}
+        {/* Single-block proposals — same shape as before. kind
+            distinguishes a one-time work change from a time-off
+            request so admins know what they're reviewing at a glance
+            (time off never reads as "One-time change"). */}
         {blocks.map((b) => {
           const member = memberById.get(b.member_id)
           const starts = new Date(b.starts_at)
           const ends = new Date(b.ends_at)
+          const isTimeOff = b.kind === 'time_off'
           return (
             <div
               key={`block-${b.id}`}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface border border-border"
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg bg-surface border ${isTimeOff ? 'border-sky-500/30' : 'border-border'}`}
             >
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-semibold text-text truncate">
                   {member?.display_name ?? b.member_id}
-                  <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-amber-300/80">
-                    One-time change
+                  <span className={`ml-2 text-[10px] uppercase tracking-wider font-semibold ${isTimeOff ? 'text-sky-300' : 'text-amber-300/80'}`}>
+                    {isTimeOff ? 'Time off' : 'One-time change'}
                   </span>
                 </div>
                 <div className="text-[11px] text-text-muted">
-                  {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
-                  · {starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                  {' – '}
-                  {ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  {isTimeOff ? formatTimeOffDateRange(b.starts_at, b.ends_at) : (
+                    <>
+                      {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                      · {starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                      {' – '}
+                      {ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </>
+                  )}
                   {b.note ? ` · ${b.note}` : ''}
                 </div>
               </div>
@@ -740,7 +749,7 @@ function OneOffPanel({
   onChange: () => Promise<void>
 }) {
   const { toast } = useToast()
-  const [showForm, setShowForm] = useState(false)
+  const [openForm, setOpenForm] = useState<'none' | 'change' | 'time_off'>('none')
   const [busyId, setBusyId] = useState<string | null>(null)
 
   async function handleDelete(id: string) {
@@ -758,28 +767,48 @@ function OneOffPanel({
 
   return (
     <section className="border border-border bg-surface-alt/40 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
           <h3 className="text-sm font-bold text-text">One-time changes (this week)</h3>
           <p className="text-[11px] text-text-muted mt-0.5">
-            Coverage, special shifts, and single-day adjustments. Time off will get its own type next.
+            Coverage, special shifts, single-day adjustments, and time off.
           </p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setShowForm((v) => !v)}>
-          <Plus size={14} className="mr-1" />
-          Add one-time change
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setOpenForm((v) => (v === 'change' ? 'none' : 'change'))}>
+            <Plus size={14} className="mr-1" />
+            Add one-time change
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setOpenForm((v) => (v === 'time_off' ? 'none' : 'time_off'))}>
+            <Palmtree size={14} className="mr-1" />
+            Add time off
+          </Button>
+        </div>
       </div>
 
-      {showForm && (
+      {openForm === 'change' && (
         <OneOffForm
           memberOptions={memberOptions}
           defaultMemberId={memberFilter !== ALL_MEMBERS ? memberFilter : ''}
           adminId={adminId}
           weekStart={weekStart}
-          onCancel={() => setShowForm(false)}
+          onCancel={() => setOpenForm('none')}
           onCreated={async () => {
-            setShowForm(false)
+            setOpenForm('none')
+            await onChange()
+          }}
+        />
+      )}
+
+      {openForm === 'time_off' && (
+        <AdminTimeOffForm
+          memberOptions={memberOptions}
+          defaultMemberId={memberFilter !== ALL_MEMBERS ? memberFilter : ''}
+          adminId={adminId}
+          weekStart={weekStart}
+          onCancel={() => setOpenForm('none')}
+          onCreated={async () => {
+            setOpenForm('none')
             await onChange()
           }}
         />
@@ -795,20 +824,30 @@ function OneOffPanel({
             const member = memberById.get(b.member_id)
             const starts = new Date(b.starts_at)
             const ends = new Date(b.ends_at)
+            const isTimeOff = b.kind === 'time_off'
             return (
               <div
                 key={b.id}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface border border-border"
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg bg-surface border ${isTimeOff ? 'border-sky-500/30' : 'border-border'}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-semibold text-text truncate">
                     {member?.display_name ?? b.member_id}
+                    {isTimeOff && (
+                      <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-sky-300">
+                        Time off
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] text-text-muted">
-                    {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
-                    · {starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                    {' – '}
-                    {ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    {isTimeOff ? formatTimeOffDateRange(b.starts_at, b.ends_at) : (
+                      <>
+                        {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                        · {starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        {' – '}
+                        {ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                      </>
+                    )}
                     {b.note ? ` · ${b.note}` : ''}
                   </div>
                 </div>
@@ -827,6 +866,110 @@ function OneOffPanel({
         </div>
       )}
     </section>
+  )
+}
+
+// ─── Admin time-off direct entry ───────────────────────────────────
+// Mirrors the member TimeOffForm's full-day-span semantics, but
+// creates an already-approved block (per the director-locked rule:
+// admin-entered time off is auto-approved, no review step).
+function AdminTimeOffForm({
+  memberOptions,
+  defaultMemberId,
+  adminId,
+  weekStart,
+  onCancel,
+  onCreated,
+}: {
+  memberOptions: TeamMember[]
+  defaultMemberId: string
+  adminId: string
+  weekStart: Date
+  onCancel: () => void
+  onCreated: () => Promise<void>
+}) {
+  const { toast } = useToast()
+  const [memberId, setMemberId] = useState(defaultMemberId || memberOptions[0]?.id || '')
+  const weekStartKey = toLocalDateString(weekStart)
+  const [startDate, setStartDate] = useState(weekStartKey)
+  const [endDate, setEndDate] = useState(weekStartKey)
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!memberId || !startDate || !endDate) {
+      toast('Pick a member + start and end date', 'error')
+      return
+    }
+    if (endDate < startDate) {
+      toast('End date must be on or after the start date', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const starts = new Date(`${startDate}T00:00:00`)
+      const endExclusive = new Date(`${endDate}T00:00:00`)
+      endExclusive.setDate(endExclusive.getDate() + 1)
+      await createBlockAsAdmin(
+        {
+          member_id: memberId,
+          starts_at: starts.toISOString(),
+          ends_at: endExclusive.toISOString(),
+          note: note.trim() || null,
+          kind: 'time_off',
+          status: 'approved',
+        },
+        adminId,
+      )
+      toast('Time off added', 'success')
+      await onCreated()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to create', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mb-4 p-3 rounded-lg border border-sky-500/25 bg-sky-500/[0.04] space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3">
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Member</label>
+          <Select value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+            {memberOptions.map((m) => (
+              <option key={m.id} value={m.id}>{m.display_name}</option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Start date</label>
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => {
+              setStartDate(e.target.value)
+              if (endDate < e.target.value) setEndDate(e.target.value)
+            }}
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">End date</label>
+          <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+        </div>
+      </div>
+      <div>
+        <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Reason (optional)</label>
+        <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Vacation" />
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onCancel} type="button">Cancel</Button>
+        <Button variant="primary" size="sm" type="submit" disabled={submitting}>
+          {submitting && <Loader2 size={14} className="animate-spin mr-1" />}
+          Save
+        </Button>
+      </div>
+    </form>
   )
 }
 

@@ -479,17 +479,37 @@ export default function Calendar() {
 
   // Bucket schedule entries by local date string (YYYY-MM-DD) so the
   // week-grid render can pull each day's list inline without re-
-  // scanning the full array per cell.
-  const schedulesByDate = useMemo(() => {
+  // scanning the full array per cell. A one-off block carries a
+  // single starts_at/ends_at span rather than one row per day, so a
+  // multi-day entry (most commonly time off) is bucketed into EVERY
+  // day it overlaps, not just its start day.
+  function bucketByDate(entries: typeof scheduleExpanded): Record<string, typeof scheduleExpanded> {
     const map: Record<string, typeof scheduleExpanded> = {}
-    for (const s of filteredScheduleExpanded) {
-      const dayKey = localDateKey(new Date(s.starts_at))
-      const group = map[dayKey] ?? []
-      group.push(s)
-      map[dayKey] = group
+    for (const s of entries) {
+      const startKey = localDateKey(new Date(s.starts_at))
+      const endExclusive = new Date(s.ends_at)
+      endExclusive.setMilliseconds(endExclusive.getMilliseconds() - 1)
+      const endKey = localDateKey(endExclusive)
+      for (const wd of WEEK) {
+        if (wd.key < startKey || wd.key > endKey) continue
+        const group = map[wd.key] ?? []
+        group.push(s)
+        map[wd.key] = group
+      }
     }
     return map
-  }, [filteredScheduleExpanded])
+  }
+
+  // Work shifts render as the existing avatar-segment wash. Time off
+  // renders separately (see below) so it never reads as a work shift.
+  const schedulesByDate = useMemo(
+    () => bucketByDate(filteredScheduleExpanded.filter((s) => s.kind !== 'time_off')),
+    [filteredScheduleExpanded],
+  )
+  const timeOffByDate = useMemo(
+    () => bucketByDate(filteredScheduleExpanded.filter((s) => s.kind === 'time_off')),
+    [filteredScheduleExpanded],
+  )
 
   // 2026-07-24 — Bookings and the team-schedule overlay used to share
   // one week grid gated by a "Schedule" visibility toggle. Per director
@@ -1284,6 +1304,51 @@ export default function Calendar() {
                       </div>,
                     ]
                   })
+                })}
+
+                {/* 2026-07-24 (PR4B) — Approved time off. Rendered
+                    completely separately from the work-shift wash
+                    above (different color, diagonal-stripe pattern,
+                    "Time off" label) so it can never be mistaken for
+                    a work shift. Full column height since time off is
+                    a full-day span, not an hour range. z-0 +
+                    pointer-events-none, same as the work wash. */}
+                {activeTab === 'schedule' && WEEK.map((wd, dayIndex) => {
+                  const dayTimeOff = timeOffByDate[wd.key] ?? []
+                  if (dayTimeOff.length === 0) return null
+                  const colWidth = `((100% - 36px) / 7)`
+                  const colLeft = `(36px + ${colWidth} * ${dayIndex})`
+                  const gridHeightPx = (20 - 7) * 48
+                  return (
+                    <div
+                      key={`timeoff-${wd.key}`}
+                      aria-hidden="true"
+                      className="absolute pointer-events-none z-0 overflow-hidden flex flex-col items-center gap-1 pt-1"
+                      style={{
+                        top: 0,
+                        height: gridHeightPx,
+                        left: `calc(${colLeft} + 1px)`,
+                        width: `calc(${colWidth} - 2px)`,
+                        backgroundColor: 'rgba(56, 189, 248, 0.10)',
+                        backgroundImage:
+                          'repeating-linear-gradient(45deg, rgba(56,189,248,0.12) 0, rgba(56,189,248,0.12) 6px, transparent 6px, transparent 12px)',
+                      }}
+                    >
+                      {dayTimeOff.map((s) => {
+                        const member = memberById.get(s.member_id)
+                        return (
+                          <span
+                            key={s.key}
+                            title={`${member?.display_name ?? 'Member'} — Time off${s.note ? `: ${s.note}` : ''}`}
+                            className="flex items-center gap-1 rounded-full bg-sky-950/40 border border-sky-400/30 px-1.5 py-0.5"
+                          >
+                            {member && <MemberAvatar member={member} size="xs" />}
+                            <span className="text-[8px] font-semibold text-sky-200 uppercase tracking-wide">Off</span>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )
                 })}
 
                 {/* Booking blocks — positioned within each day column

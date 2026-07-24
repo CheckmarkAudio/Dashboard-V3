@@ -698,3 +698,74 @@ Open gaps:
 
 Signature:
 - CODEX:
+
+## 2026-07-24 (MDT) - CLAUDE - PR4B: Time Off schedule experience
+
+Actor: Claude (Sonnet 5)
+Lane: Claude/Fable focused implementation (UI only, per Codex's handoff)
+Branch: `claude/pr4b-time-off`, off `origin/main` at `4253ca6` (confirmed contains
+both PR #312 and PR #311 before starting, per handoff step 3)
+
+Summary:
+- Replaced `ScheduleRequestModal.tsx`'s `TimeOffPlaceholder` with a real
+  `TimeOffForm` (start date + end date, same date = one day, optional
+  reason) submitting `requestScheduleBlock({ ..., kind: 'time_off' })`.
+  Removed the "Soon" badge.
+- Added an "Add time off" admin action (`AdminTimeOffForm`) to
+  `WorkScheduler.tsx` calling `createBlockAsAdmin({ ..., kind: 'time_off',
+  status: 'approved' })` — admin entries auto-approve, member requests stay
+  pending through the existing `approveBlock`/`denyBlock` review path.
+  Pending-review rows and the approved one-off list both show a distinct
+  "Time off" label + date-range (not time-range) display.
+- Time off renders with a distinct sky-blue treatment (never the purple
+  work-shift styling, never a work wash block) in `MyScheduleWidget.tsx`,
+  `ProfileWeeklySchedule.tsx`, and Calendar's Team Schedule tab (a separate
+  diagonal-striped full-day band, layered apart from the existing
+  avatar-segment work-shift wash).
+- No migrations, RLS, RPC, or schema changes — consumed the landed PR4A
+  contract (`ScheduleBlockKind`, `requestScheduleBlock`,
+  `createBlockAsAdmin`, `approveBlock`/`denyBlock`,
+  `resolveEffectiveWorkWindows`) as-is.
+
+Bug found and fixed while implementing (presentation layer only):
+- `expandSchedule()` (`src/lib/schedule/expand.ts`) emits one row per
+  one-off block, not one row per day it spans. Every surface that buckets
+  entries "by day" (`MyScheduleWidget`'s 7-day list, Calendar's Team
+  Schedule tab) was keying off `starts_at`'s date only — a 3-day time-off
+  request would only have appeared to cover its first day. Fixed by
+  bucketing each entry into every local day it overlaps. `expandSchedule()`
+  and `resolveEffectiveWorkWindows()` themselves were not modified.
+
+Files changed:
+- `src/components/schedule/ScheduleRequestModal.tsx`
+- `src/components/admin/WorkScheduler.tsx`
+- `src/components/dashboard/MyScheduleWidget.tsx`
+- `src/components/members/ProfileWeeklySchedule.tsx`
+- `src/pages/Calendar.tsx`
+- `src/lib/schedule/expand.ts` (added shared `formatTimeOffDateRange` helper)
+- `docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md`, `docs/PROJECT_STATE.md`
+
+Verification:
+- `npm test -- --run`: 26/26 pass, unchanged (5 pre-existing cases cover
+  time-off interval subtraction in `resolveEffectiveWorkWindows`).
+- `npx tsc -b`: clean.
+- `npm run build`: clean (pre-existing chunk-size warning only).
+- Date-math (full-day span construction, no UTC/off-by-one drift under
+  America/Denver) verified with a rolled-back transaction test directly
+  against production (`ncljfjdcyswoeitsooty`) via Supabase MCP.
+- Modal UI verified in a local dev preview: mode switching, no stale
+  "Soon" badge, correct today-based date defaults, multi-day date-range
+  selection all behave correctly.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: this session's
+  local dev preview had no reachable Supabase backend (every request
+  resolved to `localhost` and failed — a pre-existing environment
+  limitation unrelated to this change, confirmed via network inspection).
+  The actual submit → pending row → admin approve/deny round trip and
+  dark-mode/mobile screenshots could not be captured live. Recommend a
+  short manual pass on the PR's Vercel preview before merge.
+- Token note: exact token total not visible in this tool.
+
+Signature:
+- CLAUDE:

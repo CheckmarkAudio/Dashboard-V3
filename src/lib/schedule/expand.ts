@@ -202,6 +202,23 @@ export function formatTimeRange(startTime: string, endTime: string): string {
   return `${formatHM(startTime)} – ${formatHM(endTime)}`
 }
 
+/**
+ * Time-off blocks are stored as a full-day span (start date 00:00 ->
+ * day-after-end-date 00:00, exclusive) so the display should read as
+ * a date range, not a time range — "12:00 AM – 12:00 AM" would look
+ * like a zero-length shift rather than "this whole day off."
+ */
+export function formatTimeOffDateRange(startsAt: string, endsAt: string): string {
+  const start = new Date(startsAt)
+  const endExclusive = new Date(endsAt)
+  const endInclusive = new Date(endExclusive)
+  endInclusive.setDate(endInclusive.getDate() - 1)
+  const startLabel = start.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+  if (toLocalDateString(start) === toLocalDateString(endInclusive)) return startLabel
+  const endLabel = endInclusive.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+  return `${startLabel} – ${endLabel}`
+}
+
 function formatHM(time: string): string {
   const [hStr, mStr] = time.split(':')
   const h = Number(hStr)
