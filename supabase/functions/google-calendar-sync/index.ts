@@ -249,6 +249,8 @@ function denverTodayKey(): string {
   return DENVER_DATE_FORMATTER.format(new Date())
 }
 
+const SYNC_CLAIM_STALE_MS = 2 * 60 * 1000
+
 async function syncSessionToConnection(input: {
   admin: ReturnType<typeof createClient>
   teamId: string
@@ -256,8 +258,21 @@ async function syncSessionToConnection(input: {
   calendarId: string
   accessToken: string
 }): Promise<{ eventId: string | null; action: "upserted" | "deleted" | "skipped" }> {
-  const { data: session, error: sessionErr } = await input.admin
+  // Claim-before-send: two near-simultaneous invocations for the same
+  // session (e.g. an auto-trigger firing twice, or a manual retry racing
+  // an auto-trigger) must not both read google_event_id = null and both
+  // create a Google event. This atomically flips the row to "syncing" —
+  // only the caller whose UPDATE actually matches a row proceeds; the
+  // loser sees zero rows affected and skips. A stale claim (crashed or
+  // timed-out invocation) expires after SYNC_CLAIM_STALE_MS so a session
+  // never gets stuck unsynced forever.
+  const staleBefore = new Date(Date.now() - SYNC_CLAIM_STALE_MS).toISOString()
+  const { data: claimed, error: claimErr } = await input.admin
     .from("sessions")
+    .update({ google_sync_status: "syncing", google_sync_claimed_at: new Date().toISOString() })
+    .eq("id", input.sessionId)
+    .eq("team_id", input.teamId)
+    .or(`google_sync_status.neq.syncing,google_sync_claimed_at.lt.${staleBefore}`)
     .select(`
       id,
       team_id,
@@ -272,11 +287,15 @@ async function syncSessionToConnection(input: {
       google_event_id,
       assigned_to
     `)
-    .eq("id", input.sessionId)
-    .eq("team_id", input.teamId)
     .maybeSingle()
 
-  if (sessionErr) throw new Error(sessionErr.message)
+  if (claimErr) throw new Error(claimErr.message)
+  if (!claimed) {
+    // Another invocation already holds a live claim on this session.
+    return { eventId: null, action: "skipped" }
+  }
+  const session = claimed
+
   if (!session) throw new Error("Session not found")
 
   let assignedName: string | null = null
