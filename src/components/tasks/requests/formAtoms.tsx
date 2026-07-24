@@ -5,6 +5,7 @@
 // approval modal can reuse the flywheel picker at approve-time.
 
 import type { ReactNode } from 'react'
+import { Check } from 'lucide-react'
 import {
   FLYWHEEL_STAGES as FLYWHEEL_STAGES_CANON,
   type FlywheelStage as FlywheelStageKey,
@@ -51,12 +52,14 @@ export function FlywheelStagePicker({
           <button
             type="button"
             onClick={() => onChange(null)}
-            className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold ring-1 transition-colors ${
+            aria-pressed={value === null}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
               value === null
-                ? 'bg-white/10 text-text ring-white/20'
-                : 'bg-surface-alt text-text-muted ring-border hover:text-text'
+                ? '-translate-y-px bg-surface text-text ring-2 ring-text/60 shadow-sm'
+                : 'bg-surface-alt text-text-muted ring-1 ring-border hover:text-text'
             }`}
           >
+            {value === null && <Check size={12} strokeWidth={3} aria-hidden="true" />}
             None
           </button>
         )}
@@ -67,13 +70,18 @@ export function FlywheelStagePicker({
               key={s.key}
               type="button"
               onClick={() => onChange(s.key)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold ring-1 transition-colors ${
+              aria-pressed={active}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
                 active
-                  ? `${s.bg} ${s.fg} ${s.ring}`
-                  : 'bg-surface-alt text-text-muted ring-border hover:text-text'
+                  ? `${s.bg} ${s.fg} -translate-y-px ring-2 ring-text/60 shadow-sm`
+                  : 'bg-surface-alt text-text-muted ring-1 ring-border hover:text-text'
               }`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} aria-hidden="true" />
+              {active ? (
+                <Check size={12} strokeWidth={3} aria-hidden="true" />
+              ) : (
+                <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} aria-hidden="true" />
+              )}
               {s.label}
             </button>
           )

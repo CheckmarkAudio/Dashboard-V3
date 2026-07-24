@@ -938,15 +938,16 @@ export default function AssignAdmin() {
                   rows={tasks}
                   disabled={!selectedMember}
                 />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  iconLeft={<Plus size={14} aria-hidden="true" />}
+                <button
+                  type="button"
                   onClick={() => setAddTaskOpen(true)}
                   disabled={!selectedMember}
+                  className="shrink-0 h-11 inline-flex items-center justify-center gap-2 px-5 rounded-xl bg-gold text-black text-[14px] font-extrabold shadow-sm ring-1 ring-black/5 hover:bg-gold-muted hover:shadow-md transition-all focus-ring disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label={`Add one or more tasks for ${selectedMember?.display_name ?? 'the selected member'}`}
                 >
-                  Add Task
-                </Button>
+                  <Plus size={18} strokeWidth={2.7} aria-hidden="true" />
+                  Task
+                </button>
               </div>
             </div>
 
@@ -1020,6 +1021,7 @@ export default function AssignAdmin() {
           }}
           initialScope="member"
           defaultRecipientIds={[selectedMember.id]}
+          lockScope
         />
       )}
 
