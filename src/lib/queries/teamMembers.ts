@@ -9,6 +9,41 @@
 import { supabase } from '../supabase'
 import type { TeamMember } from '../../types'
 
+const DEV_TEAM_MEMBERS: TeamMember[] = [
+  {
+    id: '00000000-0000-4000-8000-000000000001',
+    email: 'jamie@example.test',
+    display_name: 'Jamie Rivera',
+    role: 'member',
+    position: 'Studio',
+    status: 'active',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000002',
+    email: 'alex@example.test',
+    display_name: 'Alex Morgan',
+    role: 'member',
+    position: 'Production',
+    status: 'active',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000003',
+    email: 'riley@example.test',
+    display_name: 'Riley Chen',
+    role: 'member',
+    position: 'Marketing',
+    status: 'active',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000004',
+    email: 'taylor@example.test',
+    display_name: 'Taylor Brooks',
+    role: 'member',
+    position: 'Operations',
+    status: 'active',
+  },
+]
+
 export const teamMemberKeys = {
   all: ['team-members'] as const,
   list: () => [...teamMemberKeys.all, 'list'] as const,
@@ -29,10 +64,18 @@ export const teamMemberKeys = {
  * that path doesn't go through this roster query.
  */
 export async function fetchTeamMembers(): Promise<TeamMember[]> {
+  // AuthContext uses a sessionless fake admin in local Vite development,
+  // so Supabase correctly blocks roster reads. Keep the preview usable
+  // with clearly synthetic data; production builds tree-shake this path.
+  if (import.meta.env.DEV) return DEV_TEAM_MEMBERS
+
   const { data, error } = await supabase
     .from('team_members')
     .select('*')
-    .neq('status', 'inactive')
+    // PostgreSQL `NULL <> 'inactive'` is unknown, not true. Include
+    // legacy rows whose status predates the active/inactive field so
+    // they remain available in assignee pickers.
+    .or('status.is.null,status.neq.inactive')
     .order('display_name')
   if (error) throw error
   return (data ?? []) as TeamMember[]

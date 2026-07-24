@@ -510,49 +510,48 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
     submitMutation.mutate(toggles)
   }
 
-  // Sticky bottom footer — two rows:
-  //   - SubmitBar (greyed when pendingIds empty, gold when queued)
-  //   - + Task · Show-completed eye
-  // 2026-05-13 (rev) — toolbar holds ONLY the Submit Completed bar
-  // at the top; the +New Task CTA moved to its own footer at the
-  // bottom of the widget per user direction ("lets put new task at
-  // the bottom of the widget"). Rationale: SubmitBar is reactive
-  // (only matters when checks are queued), so it stays high in the
-  // visual hierarchy. +New Task is a creation affordance — natural
-  // home is below the existing list, like an inbox compose row.
+  // Keep the primary creation action visible without requiring a
+  // scroll. A second, quieter action lives after the task rows so
+  // adding the next task still feels natural while working the list.
   const toolbar = (
-    <div className="shrink-0 mb-2">
+    <div className="shrink-0 grid grid-cols-[minmax(0,1fr)_auto] gap-2 mb-2">
       <SubmitBar
         count={pendingIds.size}
         isSubmitting={submitMutation.isPending}
         onClick={submitPending}
       />
-    </div>
-  )
-
-  // Footer: outlined-gold +New Task button, anchored below the
-  // task list. Style matches the Sessions page's "Manage Bookings"
-  // button (lined-gold) so it reads as a secondary creation
-  // action — distinct from SubmitBar's filled-gold commit pill.
-  const footer = (
-    <div className="shrink-0 mt-2">
       <button
         type="button"
         onClick={() => setRequestModalOpen(true)}
-        className="w-full inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl border-2 border-gold-muted bg-gold/12 text-gold text-[13px] font-bold tracking-tight hover:bg-gold/20 hover:border-gold transition-colors focus-ring"
-        aria-label="Request a new task"
+        className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-gold text-black text-[13px] font-bold tracking-tight hover:bg-gold-muted transition-colors focus-ring"
+        aria-label="Add one or more tasks"
       >
-        <Plus size={14} strokeWidth={2.4} aria-hidden="true" />
-        New Task
+        <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+        Add task
       </button>
     </div>
   )
 
+  const addAnotherTaskRow = (
+    <button
+      type="button"
+      onClick={() => setRequestModalOpen(true)}
+      className="w-full inline-flex items-center gap-2 px-3 py-2.5 text-left text-[12px] font-semibold text-gold/85 hover:text-gold hover:bg-gold/[0.06] transition-colors focus-ring"
+      aria-label="Add another task"
+    >
+      <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-md bg-gold/10 ring-1 ring-gold/25">
+        <Plus size={11} strokeWidth={2.8} aria-hidden="true" />
+      </span>
+      Add another task
+      <span className="ml-auto text-[10px] font-normal text-text-light">
+        Add several in one request
+      </span>
+    </button>
+  )
+
   const body = (
     <>
-      {/* Toolbar (formerly footer). Submit Completed bar + Task
-          create + show-completed eye live at the TOP of the widget
-          now so the +Task affordance is visible without scrolling. */}
+      {/* Completion and creation stay visible at the top. */}
       {toolbar}
 
       {/* 2026-05-17 (Task tweaks rev3) — all filter affordances on a
@@ -610,7 +609,7 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
             <p className="text-[12px] text-text-light mt-0.5">
               {openTasks.length === 0 && doneTasks.length > 0
                 ? 'Toggle to review completed work.'
-                : 'Use "+ New Task" above to request your first one. Assigned work also lands here automatically.'}
+                : 'Use “Add task” above to request one or several. Assigned work also lands here automatically.'}
             </p>
           </div>
         ) : (
@@ -725,14 +724,12 @@ export default function MyTasksCard({ embedded = false }: MyTasksCardProps = {})
                 ))}
               </>
             )}
+
+            {addAnotherTaskRow}
           </>
         )}
         </div>
       </div>
-
-      {/* 2026-05-13 (rev) — +New Task footer pinned BELOW the task
-          list. The SubmitBar still anchors the top via {toolbar}. */}
-      {footer}
     </>
   )
 
