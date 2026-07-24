@@ -742,7 +742,7 @@ export default function Calendar() {
             <button
               type="button"
               onClick={() => setScheduleRequest(true)}
-              title="Request a schedule block or weekly hours"
+              title="Set weekly schedule, request a one-time change, or see time-off status"
               className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border border-border bg-surface-alt text-text-muted hover:text-gold hover:border-gold/40 transition-colors"
             >
               <Plus size={11} aria-hidden="true" />
