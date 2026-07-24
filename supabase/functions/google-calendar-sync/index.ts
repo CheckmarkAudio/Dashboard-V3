@@ -340,6 +340,78 @@ async function syncSessionToConnection(input: {
   return { eventId, action: "upserted" }
 }
 
+// 2026-07-24 — Handles the sessions-table auto-push trigger's system
+// call. Verifies `x-calendar-webhook-secret` against the same value
+// stored in Supabase Vault (fetched here via a service-role-only RPC,
+// since this function talks to Postgres over PostgREST, not raw SQL)
+// before doing anything privileged. team_id comes from the trigger
+// payload directly rather than a resolved caller identity, since there
+// is no calling user for a database-originated request.
+async function handleAutoUpsertSession(
+  req: Request,
+  body: { session_id?: string; team_id?: string },
+): Promise<Response> {
+  if (!body.session_id || !body.team_id) {
+    return jsonResponse({ ok: false, error: "Missing session_id or team_id" }, 400)
+  }
+
+  const admin = createClient(requireEnv("SUPABASE_URL"), requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  const incomingSecret = req.headers.get("x-calendar-webhook-secret")
+  const { data: expectedSecret, error: secretErr } = await admin.rpc("get_calendar_webhook_secret")
+  if (secretErr || !expectedSecret || !incomingSecret || incomingSecret !== expectedSecret) {
+    return jsonResponse({ ok: false, error: "Invalid webhook secret" }, 401)
+  }
+
+  const { data: connection, error: connectionErr } = await admin
+    .from("google_calendar_connections")
+    .select("calendar_id, encrypted_refresh_token, refresh_token_iv")
+    .eq("team_id", body.team_id)
+    .maybeSingle()
+
+  if (connectionErr) {
+    return jsonResponse({ ok: false, error: connectionErr.message }, 500)
+  }
+  if (!connection) {
+    // No Google connection for this team -- nothing to push. Not an
+    // error; a team may simply never have connected Google Calendar.
+    return jsonResponse({ ok: true, skipped: "not_connected" })
+  }
+
+  try {
+    const encryptionSecret = requireEnv("GOOGLE_TOKEN_ENCRYPTION_KEY")
+    const refreshToken = await decryptRefreshToken(
+      connection.encrypted_refresh_token,
+      connection.refresh_token_iv,
+      encryptionSecret,
+    )
+    const tokens = await refreshAccessToken({
+      refreshToken,
+      clientId: requireEnv("GOOGLE_CLIENT_ID"),
+      clientSecret: requireEnv("GOOGLE_CLIENT_SECRET"),
+    })
+
+    const result = await syncSessionToConnection({
+      admin,
+      teamId: body.team_id,
+      sessionId: body.session_id,
+      calendarId: connection.calendar_id,
+      accessToken: tokens.access_token,
+    })
+
+    return jsonResponse({ ok: true, action: result.action, event_id: result.eventId })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected auto-push sync error"
+    await setSessionSyncState(admin, body.team_id, body.session_id, {
+      google_sync_status: "error",
+      google_sync_error: message,
+    })
+    return jsonResponse({ ok: false, error: message }, 500)
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS })
@@ -350,12 +422,26 @@ Deno.serve(async (req: Request) => {
 
   let body:
     | {
-        action?: "upsert_session" | "delete_session_event" | "pull_inbound_changes" | "retry_pending_sessions" | string
+        action?: "upsert_session" | "delete_session_event" | "pull_inbound_changes" | "retry_pending_sessions" | "auto_upsert_session" | string
         session_id?: string
         google_event_id?: string | null
+        team_id?: string
       }
     | null = null
   let teamIdForError: string | null = null
+
+  body = await req.json().catch(() => null) as typeof body
+
+  // 2026-07-24 — Trusted system-call path for the sessions-table
+  // auto-push trigger (migration 20260724120000). A database trigger
+  // has no "calling user", so this bypasses getCallerContext's
+  // per-user-JWT model entirely and instead verifies a shared secret
+  // that only the trigger and this function can read — both fetch it
+  // fresh from Supabase Vault at call time, so nothing is hardcoded or
+  // needs manual configuration.
+  if (body?.action === "auto_upsert_session") {
+    return await handleAutoUpsertSession(req, body)
+  }
 
   try {
     const ctx = await getCallerContext(req)
@@ -365,8 +451,6 @@ Deno.serve(async (req: Request) => {
     const googleClientId = requireEnv("GOOGLE_CLIENT_ID")
     const googleClientSecret = requireEnv("GOOGLE_CLIENT_SECRET")
     const encryptionSecret = requireEnv("GOOGLE_TOKEN_ENCRYPTION_KEY")
-
-    body = await req.json().catch(() => null) as typeof body
 
     if (!body?.action) {
       return jsonResponse({ ok: false, error: "Missing action" }, 400)
