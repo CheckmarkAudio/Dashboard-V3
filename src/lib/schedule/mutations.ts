@@ -7,6 +7,7 @@
 import { supabase } from '../supabase'
 import type {
   ScheduleBlock,
+  ScheduleBlockKind,
   ScheduleRecurring,
   Weekday,
 } from '../../types'
@@ -200,6 +201,8 @@ export interface CreateBlockInput {
   starts_at: string // ISO
   ends_at: string
   note?: string | null
+  /** Work adds schedule time; approved time off subtracts from work time. */
+  kind?: ScheduleBlockKind
   /** Admin direct-add bypasses pending — defaults to approved. */
   status?: 'pending' | 'approved'
 }
@@ -216,6 +219,7 @@ export async function createBlockAsAdmin(
       starts_at: input.starts_at,
       ends_at: input.ends_at,
       note: input.note ?? null,
+      kind: input.kind ?? 'work',
       status,
       requested_by: adminId,
       approved_by: status === 'approved' ? adminId : null,
@@ -284,6 +288,7 @@ export async function requestScheduleBlock(input: {
   starts_at: string
   ends_at: string
   note?: string | null
+  kind?: ScheduleBlockKind
 }): Promise<ScheduleBlock> {
   // RLS enforces member_id = auth.uid() AND status = 'pending' AND
   // requested_by = auth.uid().
@@ -294,6 +299,7 @@ export async function requestScheduleBlock(input: {
       starts_at: input.starts_at,
       ends_at: input.ends_at,
       note: input.note ?? null,
+      kind: input.kind ?? 'work',
       status: 'pending',
       requested_by: input.member_id,
     })

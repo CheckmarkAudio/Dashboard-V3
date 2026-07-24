@@ -341,6 +341,7 @@ export const STUDIO_WORK_WEEK: readonly Weekday[] = [2, 3, 4, 5, 6] as const
 
 export interface ScheduleRecurring {
   id: string
+  team_id: string
   member_id: string
   weekday: Weekday
   /** Wall-clock time "HH:MM:SS" in studio timezone. */
@@ -370,13 +371,16 @@ export interface ScheduleRecurring {
 }
 
 export type ScheduleBlockStatus = 'pending' | 'approved' | 'denied'
+export type ScheduleBlockKind = 'work' | 'time_off'
 
 export interface ScheduleBlock {
   id: string
+  team_id: string
   member_id: string
   /** ISO timestamptz. */
   starts_at: string
   ends_at: string
+  kind: ScheduleBlockKind
   status: ScheduleBlockStatus
   note: string | null
   requested_by: string | null
@@ -403,6 +407,8 @@ export interface ExpandedSchedule {
   source: 'recurring' | 'block'
   source_id: string
   status: ScheduleBlockStatus
+  /** Recurring entries are always work; one-off blocks may be time off. */
+  kind: ScheduleBlockKind
   note: string | null
 }
 

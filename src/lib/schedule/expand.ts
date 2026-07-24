@@ -119,6 +119,7 @@ export function expandSchedule({
         source: 'recurring',
         source_id: rule.id,
         status: rule.status,
+        kind: 'work',
         note: rule.note,
       })
     }
@@ -142,6 +143,7 @@ export function expandSchedule({
       source: 'block',
       source_id: block.id,
       status: block.status,
+      kind: block.kind ?? 'work',
       note: block.note,
     })
   }
