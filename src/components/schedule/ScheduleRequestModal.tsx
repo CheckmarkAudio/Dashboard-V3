@@ -6,11 +6,12 @@ import {
   requestRecurring,
   requestScheduleBlock,
 } from '../../lib/schedule/mutations'
-import {
-  toLocalDateString,
-  weekdayLabel,
-} from '../../lib/schedule/expand'
-import { STUDIO_WORK_WEEK, type Weekday } from '../../types'
+import { toLocalDateString } from '../../lib/schedule/expand'
+import WeeklyAvailabilityGrid, {
+  createDefaultWeekAvailability,
+  invalidDays,
+  type WeekAvailability,
+} from './WeeklyAvailabilityGrid'
 
 /**
  * Worker-facing schedule request modal.
@@ -372,48 +373,42 @@ function RecurringForm({
   prefillEnd?: string
 }) {
   const { toast } = useToast()
-  const [weekdays, setWeekdays] = useState<Set<Weekday>>(new Set(STUDIO_WORK_WEEK))
-  const [startTime, setStartTime] = useState(prefillStart ?? '10:00')
-  const [endTime, setEndTime] = useState(prefillEnd ?? '18:00')
+  const [availability, setAvailability] = useState<WeekAvailability>(() =>
+    createDefaultWeekAvailability(prefillStart ?? '10:00', prefillEnd ?? '18:00'),
+  )
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  function toggleWeekday(w: Weekday) {
-    setWeekdays((prev) => {
-      const next = new Set(prev)
-      if (next.has(w)) next.delete(w)
-      else next.add(w)
-      return next
-    })
-  }
+  const enabledDays = ([0, 1, 2, 3, 4, 5, 6] as const).filter((w) => availability[w].enabled)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (weekdays.size === 0) {
-      toast('Pick at least one weekday', 'error')
+    if (enabledDays.length === 0) {
+      toast('Turn on at least one day', 'error')
       return
     }
-    if (endTime <= startTime) {
-      toast('End time must be after start time', 'error')
+    if (invalidDays(availability).length > 0) {
+      toast('Fix the day(s) where end time is before start time', 'error')
       return
     }
     setSubmitting(true)
     try {
-      // One row per weekday — matches the admin form's behavior. The
-      // member's Tue–Sat default fires 5 pending rows in one submit.
+      // One row per enabled day, each with its OWN start/end time —
+      // studio hours are sporadic, so a member's Tuesday and Thursday
+      // hours don't need to match.
       await Promise.all(
-        Array.from(weekdays).map((w) =>
+        enabledDays.map((w) =>
           requestRecurring({
             member_id: memberId,
             weekday: w,
-            start_time: startTime,
-            end_time: endTime,
+            start_time: availability[w].start,
+            end_time: availability[w].end,
             note: note.trim() || null,
           }),
         ),
       )
       toast(
-        `Weekly schedule request${weekdays.size === 1 ? '' : 's'} sent for review`,
+        `Weekly schedule request${enabledDays.length === 1 ? '' : 's'} sent for review`,
         'success',
       )
       await onSubmitted()
@@ -429,48 +424,15 @@ function RecurringForm({
       <div className="rounded-lg border border-border bg-surface-alt/35 px-3 py-2">
         <p className="text-[12px] font-semibold text-text">Weekly schedule</p>
         <p className="text-[11px] text-text-muted">
-          These hours apply to every selected day. Need different hours on different days? Send a second request.
+          Turn on the days you work and set each day's own hours — they don't have to match.
         </p>
-      </div>
-      <div className="grid grid-cols-[1fr_1fr] gap-3">
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Start</label>
-          <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-        </div>
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">End</label>
-          <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-        </div>
       </div>
 
       <div>
         <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">
-          Days <span className="text-text-light">(Tue–Sat is the studio default)</span>
+          Days &amp; hours <span className="text-text-light">(Tue–Sat is the studio default)</span>
         </label>
-        <div className="flex items-center gap-1">
-          {([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map((w) => {
-            const active = weekdays.has(w)
-            const isStudioDay = STUDIO_WORK_WEEK.includes(w)
-            return (
-              <button
-                key={w}
-                type="button"
-                onClick={() => toggleWeekday(w)}
-                aria-pressed={active}
-                className={[
-                  'flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-colors border',
-                  active
-                    ? 'bg-gold text-black border-gold'
-                    : isStudioDay
-                      ? 'bg-surface-alt text-text-muted border-border hover:text-text'
-                      : 'bg-transparent text-text-light border-border/60 hover:text-text-muted',
-                ].join(' ')}
-              >
-                {weekdayLabel(w)}
-              </button>
-            )
-          })}
-        </div>
+        <WeeklyAvailabilityGrid value={availability} onChange={setAvailability} />
       </div>
 
       <div>

@@ -3,6 +3,11 @@ import {
   CalendarRange, Loader2, Inbox, Plus, Trash2, Check, X as XIcon, Clock as ClockIcon, Palmtree,
 } from 'lucide-react'
 import { Select, Button, Input } from '../ui'
+import WeeklyAvailabilityGrid, {
+  createDefaultWeekAvailability,
+  invalidDays,
+  type WeekAvailability,
+} from '../schedule/WeeklyAvailabilityGrid'
 import { useTeamSchedule } from '../../lib/schedule/useTeamSchedule'
 import {
   approveBlock,
@@ -22,7 +27,7 @@ import {
   toLocalDateString,
   weekdayLabel,
 } from '../../lib/schedule/expand'
-import { STUDIO_WORK_WEEK, type TeamMember, type Weekday } from '../../types'
+import type { TeamMember } from '../../types'
 import { useToast } from '../Toast'
 
 /**
@@ -610,50 +615,44 @@ function RecurringForm({
 }) {
   const { toast } = useToast()
   const [memberId, setMemberId] = useState(defaultMemberId || memberOptions[0]?.id || '')
-  const [weekdays, setWeekdays] = useState<Set<Weekday>>(new Set(STUDIO_WORK_WEEK))
-  const [startTime, setStartTime] = useState('10:00')
-  const [endTime, setEndTime] = useState('18:00')
+  const [availability, setAvailability] = useState<WeekAvailability>(() =>
+    createDefaultWeekAvailability(),
+  )
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  function toggleWeekday(w: Weekday) {
-    setWeekdays((prev) => {
-      const next = new Set(prev)
-      if (next.has(w)) next.delete(w)
-      else next.add(w)
-      return next
-    })
-  }
+  const enabledDays = ([0, 1, 2, 3, 4, 5, 6] as const).filter((w) => availability[w].enabled)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!memberId || weekdays.size === 0) {
-      toast('Pick a member + at least one weekday', 'error')
+    if (!memberId || enabledDays.length === 0) {
+      toast('Pick a member + at least one day', 'error')
       return
     }
-    if (endTime <= startTime) {
-      toast('End time must be after start time', 'error')
+    if (invalidDays(availability).length > 0) {
+      toast('Fix the day(s) where end time is before start time', 'error')
       return
     }
     setSubmitting(true)
     try {
-      // One row per selected weekday. Studio's Tue–Sat default
-      // creates 5 rows in one go.
+      // One row per enabled day, each with its OWN start/end time —
+      // studio hours are sporadic, so this member's Tuesday and
+      // Thursday hours don't need to match.
       await Promise.all(
-        Array.from(weekdays).map((w) =>
+        enabledDays.map((w) =>
           createRecurring(
             {
               member_id: memberId,
               weekday: w,
-              start_time: startTime,
-              end_time: endTime,
+              start_time: availability[w].start,
+              end_time: availability[w].end,
               note: note.trim() || null,
             },
             adminId,
           ),
         ),
       )
-      toast(`Added ${weekdays.size} weekly schedule ${weekdays.size === 1 ? 'day' : 'days'}`, 'success')
+      toast(`Added ${enabledDays.length} weekly schedule ${enabledDays.length === 1 ? 'day' : 'days'}`, 'success')
       await onCreated()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to create', 'error')
@@ -664,53 +663,20 @@ function RecurringForm({
 
   return (
     <form onSubmit={handleSubmit} className="mb-4 p-3 rounded-lg border border-border bg-surface space-y-3">
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3">
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Member</label>
-          <Select value={memberId} onChange={(e) => setMemberId(e.target.value)}>
-            {memberOptions.map((m) => (
-              <option key={m.id} value={m.id}>{m.display_name}</option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Start</label>
-          <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-        </div>
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">End</label>
-          <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-        </div>
+      <div>
+        <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Member</label>
+        <Select value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+          {memberOptions.map((m) => (
+            <option key={m.id} value={m.id}>{m.display_name}</option>
+          ))}
+        </Select>
       </div>
 
       <div>
         <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">
-          Days <span className="text-text-light">(Tue–Sat is the studio default)</span>
+          Days &amp; hours <span className="text-text-light">(Tue–Sat is the studio default)</span>
         </label>
-        <div className="flex items-center gap-1">
-          {([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map((w) => {
-            const active = weekdays.has(w)
-            const isStudioDay = STUDIO_WORK_WEEK.includes(w)
-            return (
-              <button
-                key={w}
-                type="button"
-                onClick={() => toggleWeekday(w)}
-                aria-pressed={active}
-                className={[
-                  'flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-colors border',
-                  active
-                    ? 'bg-gold text-black border-gold'
-                    : isStudioDay
-                      ? 'bg-surface-alt text-text-muted border-border hover:text-text'
-                      : 'bg-transparent text-text-light border-border/60 hover:text-text-muted',
-                ].join(' ')}
-              >
-                {weekdayLabel(w)}
-              </button>
-            )
-          })}
-        </div>
+        <WeeklyAvailabilityGrid value={availability} onChange={setAvailability} />
       </div>
 
       <div>
