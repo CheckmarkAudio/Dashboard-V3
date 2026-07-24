@@ -589,6 +589,32 @@ Open gaps:
 Signature:
 - CLAUDE:
 
+## 2026-07-22 (MDT) - CLAUDE - Member Activity PR3: "My Activity · Today" Overview widget
+
+Lane:
+- Claude/Fable: scoped member_overview widget consuming PR2's pure layer (no schema, no writes).
+
+Summary:
+- Added `src/components/dashboard/MyActivityTodayWidget.tsx` — the director-approved "My Activity · Today" timeline. Header meta row (Active-now pulse when a presence session is open · date · scheduled hours in gold). Hero bar (dynamic axis that always covers the schedule + all activity + now): dashed gold scheduled band, presence segments coloured on(emerald)/late(amber)/off(sky) via the pure builder, always-visible per-event colored ticks, proximity markers that rise/grow/brighten as the pointer sweeps (smoothstep, ~9% falloff) with the nearest tick swelling in sync, and a gold "you are here" marker. Collapsible activity feed (starts collapsed). Minute-tick keeps the now-marker + open-session active time live; React-Query `refetchInterval` 60s on presence + events.
+- Registered `my_activity` end-to-end: `MemberWidgetId` union (types.ts), `MEMBER_WIDGET_REGISTRATIONS` (registry.ts, member_overview col 1 rs 2), and the `memberWidgetComponents` map (widgetRegistry.tsx). Bumped `WORKSPACE_LAYOUT_VERSION` 39 → 40 so every member's Overview picks it up.
+- Reads only backend-prepared state (member_presence_sessions + flywheel_events + work schedule) through PR2's `buildActivityDay` + `queries.ts` — satisfies the backend-prepared-state principle. WorkspacePanel wraps the component in `DashboardWidgetFrame` (frame supplies the title + drag/expand chrome), so the component renders body only.
+
+Files changed:
+- `src/components/dashboard/MyActivityTodayWidget.tsx` (new)
+- `src/domain/workspaces/types.ts`, `src/domain/workspaces/registry.ts`, `src/components/dashboard/widgetRegistry.tsx`
+- `docs/PROJECT_STATE.md`, `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `npm run build` clean (tsc -b + vite build).
+- Local dev (Dev Admin session): v40 layout reset confirmed, `my_activity` lands in the default member_overview layout (col 1), widget mounts with NO render error (no vite overlay). Rendered structure verified in the empty-data state: title, "Not active", date, "hover across the bar" hint, 7a–9p axis, collapsed "Activity feed · 0". Populated visual (coloured segments + markers + feed rows) needs a real member session with presence/flywheel data — verify on the Vercel preview.
+- NOTE: the shared working tree was switched to Codex branches three times mid-build; PR3 was recovered from an auto-stash and committed. See memory `feedback_commit_before_verify_shared_tree`.
+
+Non-goals held: no schema/RPC/migration, no admin surface, no attendance exceptions, no clock-button changes, no writes.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: view a real member's populated widget on the Vercel preview — confirm segments/markers/feed read correctly and the proximity interaction feels right at column width.
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: the widget sits in a ~1/3-width column; the mock was full-width. Decide whether to promote it to a wider/full-width slot later.
+
 ## 2026-07-23 MDT - CODEX - Schedule request language branch reconstruction
 
 Lane:

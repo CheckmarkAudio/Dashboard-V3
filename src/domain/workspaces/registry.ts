@@ -162,6 +162,23 @@ export const MEMBER_WIDGET_REGISTRATIONS: MemberWidgetRegistration[] = [
     dataScope: 'team',
     allowedRoles: ['member', 'admin', 'owner'],
   },
+  {
+    // 2026-07-22 — Member Activity & Presence PR3. "My Activity · Today"
+    // — the member's own presence-vs-schedule timeline (heartbeat
+    // sessions coloured green/late/off against their scheduled hours)
+    // plus a collapsible feed of the day's flywheel activity. Reads
+    // only backend-prepared state (member_presence_sessions +
+    // flywheel_events + the work schedule), computed by the pure
+    // buildActivityDay layer (PR2). Placed col 1, rs 2 to match the
+    // My Tasks / Calendar heights.
+    id: 'my_activity',
+    title: 'My Activity',
+    description: "Today's presence against your schedule, plus what you got done.",
+    defaultPlacements: [{ scope: 'member_overview', span: 1, rowSpan: 2, col: 1 }],
+    accessVisibility: 'personal',
+    dataScope: 'self',
+    allowedRoles: ['member', 'admin', 'owner'],
+  },
 ]
 
 // Member-side widget bank — registered but NOT on any member page today.
@@ -663,7 +680,11 @@ function buildDefaultWidgetStateForScope(
 // is one of the first things you see on landing. Bumping the version
 // drops saved member_overview layouts so every member's Overview
 // gets the new widget without manual re-add.
-export const WORKSPACE_LAYOUT_VERSION = 39
+// 2026-07-22 (v40) — Member Activity & Presence PR3 adds `my_activity`
+// to member_overview (col 1, rs=2). Bumping the version drops saved
+// member_overview layouts so the new "My Activity · Today" widget
+// appears for every member; they can drag/hide via Workspace Controls.
+export const WORKSPACE_LAYOUT_VERSION = 40
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose
