@@ -16,6 +16,7 @@ import { describeFlywheelEvent } from '../queries/flywheelEvents'
 import type { FlywheelStage } from '../flywheel/stages'
 import type { ExpandedSchedule } from '../../types'
 import type { PresenceSession } from '../queries/presence'
+import { resolveEffectiveWorkWindows } from '../schedule/effective'
 import { activityTypeFromSource, type ActivityEvent, type ScheduledWindow } from './buildActivityDay'
 
 const LOG_PREFIX = '[activity/queries]'
@@ -102,9 +103,7 @@ export function toScheduledWindows(
   expanded: ExpandedSchedule[],
   memberId: string,
 ): ScheduledWindow[] {
-  return expanded
-    .filter((e) => e.member_id === memberId && e.status === 'approved')
-    .map((e) => ({ start: e.starts_at, end: e.ends_at }))
+  return resolveEffectiveWorkWindows(expanded, memberId)
 }
 
 export const memberActivityKeys = {

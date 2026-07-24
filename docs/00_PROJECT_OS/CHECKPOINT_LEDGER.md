@@ -625,3 +625,76 @@ Token/source note:
 
 Signature:
 - CODEX:
+
+## 2026-07-24 00:54 MDT - CODEX - PR4A time-off schedule contract
+
+Lane:
+- Codex: schedule schema, ownership boundary, RLS, generated-type contract,
+  and pure effective-schedule integration. No time-off UI.
+
+Summary:
+- Added `team_id` to recurring schedules and one-off blocks, backfilled it
+  from each target member, made it required, and installed a trigger that
+  derives ownership from `member_id` on every insert or ownership update.
+- Replaced the prior globally readable schedule policies and admin-global
+  writes with direct, indexed team-scoped RLS. Member request/withdraw
+  policies remain self-only, pending-only, and are now team-scoped too.
+- Added block `kind`, constrained to `work | time_off`; existing and omitted
+  values default to `work`.
+- Added shared pure interval helpers and one effective-schedule resolver:
+  approved work windows are merged, then approved time off is subtracted.
+  Pending/denied time off never changes the effective schedule.
+- Updated Member Activity to preserve distinct effective windows. The
+  compatibility `scheduledWindow` envelope remains for existing display
+  consumers, while new/correct consumers use `scheduledWindows`.
+
+Files changed:
+- `supabase/migrations/20260724100000_schedule_time_off_and_team_scope.sql`
+- `src/lib/time/intervals.ts`
+- `src/lib/schedule/effective.ts`
+- `src/lib/schedule/effective.test.ts`
+- `src/lib/schedule/expand.ts`
+- `src/lib/schedule/mutations.ts`
+- `src/lib/activity/buildActivityDay.ts`
+- `src/lib/activity/buildActivityDay.test.ts`
+- `src/lib/activity/queries.ts`
+- `src/types/index.ts`
+- `src/types/database.ts`
+- `docs/PROJECT_STATE.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Production migration and security verification:
+- Applied the canonical migration idempotently to linked Supabase project
+  `ncljfjdcyswoeitsooty`.
+- Recorded migration version `20260724100000` as
+  `schedule_time_off_and_team_scope`.
+- Post-apply data: 18 recurring rows, 0 block rows, 0 null `team_id` rows.
+- Verified `team_id` is NOT NULL on both tables, `kind` is NOT NULL with
+  default `work`, both foreign keys and the `work | time_off` check exist,
+  and both ownership triggers are installed.
+- Runtime RLS check as authenticated member
+  `08a3f059-61ef-4852-a627-5a270c7e8912` returned 18 own-team rows and
+  0 cross-team rows.
+- Transactional member-request test derived the correct team, defaulted
+  `kind=work`, enforced `status=pending`, and was rolled back.
+- Supabase hosted Security Advisor: 0 errors.
+- Supabase hosted Performance Advisor: 0 errors.
+
+Verification:
+- `npm test -- --run`: 26/26 pass.
+- `npm run build`: passed; only the pre-existing Vite chunk-size warning.
+- TypeScript schema shape was synchronized against the verified live catalog,
+  including both new team foreign-key relationships.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-CLAUDE</span>: PR4B may wire the existing
+  Time-off placeholder to `kind='time_off'`; members create pending requests,
+  admins may create approved rows for any member in their team.
+- <span style="color:#d97706">TOOLING</span>: automated
+  `supabase gen types --linked` and CLI `db lint` remain unavailable because
+  this machine has linked SQL-query access but no `SUPABASE_ACCESS_TOKEN`.
+  Hosted advisors and direct catalog/RLS checks were used instead; do not
+  represent the type file as CLI-generated.
+
+Signature:
+- CODEX:

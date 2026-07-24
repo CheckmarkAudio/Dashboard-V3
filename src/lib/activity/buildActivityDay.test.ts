@@ -190,6 +190,30 @@ test('no scheduled window makes all active time off-schedule', () => {
   assert.equal(m.segments[0].kind, 'off')
 })
 
+test('a gap between scheduled windows remains off-schedule', () => {
+  const m = build({
+    scheduledWindows: [
+      { start: iso(9), end: iso(12) },
+      { start: iso(13), end: iso(17) },
+    ],
+    presenceSessions: [sess(iso(11), iso(14))],
+    lateGraceMinutes: 180,
+  })
+
+  assert.deepEqual(
+    m.scheduledWindows.map(({ start, end }) => [start, end]),
+    [[iso(9), iso(12)], [iso(13), iso(17)]],
+  )
+  assert.deepEqual(
+    m.segments.map(({ start, end, kind }) => [start, end, kind]),
+    [
+      [iso(11), iso(12), 'on'],
+      [iso(12), iso(13), 'off'],
+      [iso(13), iso(14), 'on'],
+    ],
+  )
+})
+
 // ─── Event bracketing, markers, totals ───────────────────────────────
 
 test('an event with no presence still creates a small active interval', () => {
