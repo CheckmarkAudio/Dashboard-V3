@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import CreateBookingModal from '../components/CreateBookingModal'
+import type { StudioSpace } from '../contexts/TaskContext'
 import CalendarDayCard from '../components/calendar/CalendarDayCard'
 import MiniMonthPicker from '../components/calendar/MiniMonthPicker'
 import BookingDetailModal, { type BookingDetail } from '../components/calendar/BookingDetailModal'
@@ -360,16 +361,57 @@ export default function Calendar() {
   // add-note flow) now live inside CalendarDayCard. This page owns
   // the week grid + week-navigation chrome. Bookings are still
   // indexed here so the week grid can position booking blocks.
+  //
+  // 2026-07-24 — Studio filter (Bookings tab). Director ask: an easy
+  // way to toggle between Studio A / Studio B / off-site bookings and
+  // see at a glance which room has what booked, so Studio B doesn't
+  // sit empty unnoticed and double-bookings are obvious. `booking.studio`
+  // already carries the raw `sessions.room` value (see lib/calendar.ts's
+  // `subtitle: s.room` mapping) — this was previously never read by the
+  // view layer at all. null = "All studios".
+  const [selectedStudio, setSelectedStudio] = useState<string | null>(null)
+  const studioFilterActive = selectedStudio !== null
+  const KNOWN_STUDIO_SPACES: readonly StudioSpace[] = ['Studio A', 'Studio B', 'External Location', 'Virtual Session']
+  function asStudioSpace(value: string | null): StudioSpace | undefined {
+    return value && (KNOWN_STUDIO_SPACES as readonly string[]).includes(value)
+      ? (value as StudioSpace)
+      : undefined
+  }
+
+  // Per-studio booking counts for the CURRENT visible week (bookings
+  // is already scoped to weekOffset via loadWeekEvents) — surfaced as
+  // a badge per pill so a thin Studio B week is visible without
+  // clicking into it.
+  const studioCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const b of bookings) {
+      if (b.status === 'Cancelled') continue
+      counts[b.studio] = (counts[b.studio] ?? 0) + 1
+    }
+    return counts
+  }, [bookings])
+
+  // Known rooms first (matches CreateBookingModal's STUDIOS order), then
+  // any other value actually seen on a booking this week (e.g. a legacy
+  // or unusual room string) so the filter never silently hides bookings.
+  const studioFilterOptions = useMemo(() => {
+    const known = ['Studio A', 'Studio B', 'External Location', 'Virtual Session']
+    const seen = new Set(Object.keys(studioCounts))
+    const extra = [...seen].filter((s) => !known.includes(s)).sort()
+    return [...known.filter((s) => seen.has(s)), ...extra]
+  }, [studioCounts])
+
   const bookingsByDate = useMemo(() => {
     const map: Record<string, CalendarBooking[]> = {}
     for (const b of bookings) {
       if (b.status === 'Cancelled') continue
+      if (studioFilterActive && b.studio !== selectedStudio) continue
       const group = map[b.date] ?? []
       group.push(b)
       map[b.date] = group
     }
     return map
-  }, [bookings])
+  }, [bookings, selectedStudio, studioFilterActive])
 
   // ─── Scheduler overlay (PR 2 of scheduler series) ────────────────
   // Fetches every team member's recurring + one-off (approved) blocks
@@ -537,7 +579,14 @@ export default function Calendar() {
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
-      {showBooking && <CreateBookingModal onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime(''); void refetch() }} prefillDate={bookingPrefillDate} prefillTime={bookingPrefillTime} />}
+      {showBooking && (
+        <CreateBookingModal
+          onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime(''); void refetch() }}
+          prefillDate={bookingPrefillDate}
+          prefillTime={bookingPrefillTime}
+          prefillStudio={asStudioSpace(selectedStudio)}
+        />
+      )}
       {editSessionId && (
         <CreateBookingModal
           editSessionId={editSessionId}
@@ -737,6 +786,56 @@ export default function Calendar() {
                   >
                     <MemberAvatar member={m} size="xs" />
                     <span className="truncate max-w-[88px]">{firstName(m.display_name)}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {/* Studio filter pills — inline with title, Bookings tab
+              only. Sky accent (distinct from the purple member-filter
+              pills on the Team Schedule tab) since this filters a
+              different axis (room, not person). Only rendered when
+              there's more than one distinct room booked this week —
+              a single-studio week has nothing to filter. */}
+          {studioFilterOptions.length > 1 && activeTab === 'bookings' && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter size={14} className="text-text-muted" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={() => setSelectedStudio(null)}
+                aria-pressed={!studioFilterActive}
+                title="Show every studio's bookings"
+                className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold border transition-colors cursor-pointer ${
+                  !studioFilterActive
+                    ? 'bg-sky-700/15 text-sky-100 border-sky-500/30'
+                    : 'bg-surface-alt text-text-muted border-border hover:text-text'
+                }`}
+              >
+                All
+                <span className="opacity-70">
+                  {Object.values(studioCounts).reduce((sum, n) => sum + n, 0)}
+                </span>
+              </button>
+              {studioFilterOptions.map((studio) => {
+                const isOn = selectedStudio === studio
+                const count = studioCounts[studio] ?? 0
+                return (
+                  <button
+                    key={studio}
+                    type="button"
+                    onClick={() => setSelectedStudio((prev) => (prev === studio ? null : studio))}
+                    aria-pressed={isOn}
+                    title={isOn ? 'Back to all studios' : `Show only ${studio}`}
+                    className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold border transition-all cursor-pointer ${
+                      isOn
+                        ? 'bg-sky-700/15 text-sky-100 border-sky-500/40 ring-1 ring-sky-500/20'
+                        : studioFilterActive
+                          ? 'bg-surface-alt/60 text-text-light border-border/60 opacity-60 hover:opacity-100 hover:text-text'
+                          : 'bg-surface-alt text-text-muted border-border hover:text-text'
+                    }`}
+                  >
+                    <span className="truncate max-w-[96px]">{studio}</span>
+                    <span className="opacity-70">{count}</span>
                   </button>
                 )
               })}

@@ -32,7 +32,7 @@ export type TaskItem = {
 
 export type BookingType = 'engineering' | 'training' | 'education' | 'music_lesson' | 'consultation'
 
-export type StudioSpace = 'Studio A' | 'Studio B' | 'Home Visit' | 'Venue'
+export type StudioSpace = 'Studio A' | 'Studio B' | 'External Location' | 'Virtual Session'
 
 export type BookingItem = {
   id: string
