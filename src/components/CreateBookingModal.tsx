@@ -125,11 +125,18 @@ export default function CreateBookingModal({
   onClose,
   prefillDate,
   prefillTime,
+  prefillStudio,
   editSessionId,
 }: {
   onClose: () => void
   prefillDate?: string
   prefillTime?: string
+  // 2026-07-24 — when the Calendar's Bookings tab is filtered to one
+  // studio and an admin clicks "+Book" on an empty cell, default the
+  // new booking to that studio instead of the modal's own default —
+  // saves a click and reduces mis-booking the wrong room, especially
+  // useful when deliberately trying to fill Studio B's week.
+  prefillStudio?: StudioSpace
   // 2026-05-07 (PR E) — when set, the modal opens in EDIT mode:
   // fetches the session row, pre-fills every field, and submits as
   // an UPDATE instead of an INSERT. Header + submit-button copy
@@ -218,7 +225,7 @@ export default function CreateBookingModal({
     if (self) setAssignedTo(self)
   }, [assignedTo, profile?.id, activeMembers])
 
-  const [studio, setStudio] = useState<StudioSpace>('Studio A')
+  const [studio, setStudio] = useState<StudioSpace>(prefillStudio ?? 'Studio A')
 
   // Conflict state — auto-clears when inputs change.
   const [conflictWarning, setConflictWarning] = useState<string | null>(null)
