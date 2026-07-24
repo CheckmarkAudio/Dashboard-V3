@@ -38,7 +38,7 @@ You can also just tell an AI coder "add this to the priority queue" and it will 
 <!-- ACTIVE:START -->
 <!-- Add priority items below this line as `- [ ] ...`. The session-start hook reads everything between the ACTIVE markers. Keep finished items OUT of here — move them to Done. -->
 
-_(No active priority tasks right now.)_
+- [ ] Google/Apple Calendar auto-push automation (workspace bookings → Google Calendar on every new/updated booking, event-triggered, not a scheduled sweep) — Requested by: director · Added: 2026-07-18 · ASAP: no · Notes: Two-way sync deprioritized in favor of one-way push first (workspace→Google matters more than Google→workspace right now). Prerequisite race-condition fix (duplicate recurring bookings + duplicate Google events) is DONE — see `claude/recurring-booking-race-fix` branch / PROJECT_STATE "Currently active" row, migration `20260718120000_recurring_session_race_and_sync_claim.sql`, edge function `google-calendar-sync` v15. Remaining: Supabase Database Webhook wiring (Codex) to fire the now-hardened push path automatically instead of the manual "Push pending bookings" button, + a nightly reconciliation cron as a safety net. Needs director input before Codex builds: reconnect Google Calendar OAuth once webhook is ready to test end-to-end; confirm recurring-series edit/delete → Google event cleanup behavior is what's expected; sign off on the PR before merge (touches booking data).
 
 <!-- ACTIVE:END -->
 
