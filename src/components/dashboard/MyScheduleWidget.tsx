@@ -5,6 +5,7 @@ import {
   Loader2,
   Plus,
   Clock as ClockIcon,
+  Palmtree,
   Trash2,
   Undo2,
   X,
@@ -110,11 +111,18 @@ export default function MyScheduleWidget() {
       d.setDate(d.getDate() + i)
       out.push({ key: toLocalDateString(d), date: d, entries: [] })
     }
-    const byKey = new Map(out.map((d) => [d.key, d]))
+    // A one-off block (e.g. a multi-day time-off request) carries a
+    // single starts_at/ends_at span, not one row per day — bucket it
+    // into every visible day it overlaps, not just its start day, or
+    // a 3-day time-off request would only appear to cover day 1.
     for (const e of expanded) {
-      const key = toLocalDateString(new Date(e.starts_at))
-      const bucket = byKey.get(key)
-      if (bucket) bucket.entries.push(e)
+      const entryStart = toLocalDateString(new Date(e.starts_at))
+      const entryEndInclusive = new Date(e.ends_at)
+      entryEndInclusive.setMilliseconds(entryEndInclusive.getMilliseconds() - 1)
+      const entryEnd = toLocalDateString(entryEndInclusive)
+      for (const d of out) {
+        if (d.key >= entryStart && d.key <= entryEnd) d.entries.push(e)
+      }
     }
     // Pending blocks (my-mode only) are already in `expanded` since
     // we passed includePending=true.
@@ -162,12 +170,12 @@ export default function MyScheduleWidget() {
           <button
             type="button"
             onClick={() => setShowModal(true)}
-            aria-label="Request schedule block"
-            title="Request a schedule block (admin approves)"
+            aria-label="Open schedule request options"
+            title="Set weekly schedule, request one-time change, or see time-off status"
             className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border border-border bg-surface-alt text-text-muted hover:text-gold hover:border-gold/40 transition-colors"
           >
             <Plus size={11} aria-hidden="true" />
-            Request
+            Request schedule
           </button>
         </div>
       </div>
@@ -392,7 +400,14 @@ function ScheduleChip({
 }) {
   const starts = new Date(entry.starts_at)
   const ends = new Date(entry.ends_at)
-  const time = `${starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} – ${ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+  const isTimeOff = entry.kind === 'time_off'
+  // Time off is stored as a full-day span (00:00 -> next-day 00:00),
+  // so a literal time-of-day readout ("12:00 AM - 12:00 AM") would be
+  // confusing here — the day itself is already the unit shown by this
+  // chip's position in the 7-day list.
+  const time = isTimeOff
+    ? (entry.note ?? 'All day')
+    : `${starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} – ${ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
   const isPending = entry.status === 'pending'
   return (
     <div
@@ -400,10 +415,17 @@ function ScheduleChip({
         'flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px]',
         isPending
           ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
-          : 'border-purple-500/20 bg-purple-700/10 text-purple-100',
+          : isTimeOff
+            ? 'border-sky-500/30 bg-sky-500/10 text-sky-100'
+            : 'border-purple-500/20 bg-purple-700/10 text-purple-100',
       ].join(' ')}
     >
-      <ClockIcon size={10} className="opacity-70 shrink-0" aria-hidden="true" />
+      {isTimeOff ? (
+        <Palmtree size={10} className="opacity-70 shrink-0" aria-hidden="true" />
+      ) : (
+        <ClockIcon size={10} className="opacity-70 shrink-0" aria-hidden="true" />
+      )}
+      {isTimeOff && <span className="font-semibold shrink-0">Time off</span>}
       <span className="font-medium truncate">{time}</span>
       {mode === 'team' && (
         <span className="opacity-70 truncate">· {memberName}</span>

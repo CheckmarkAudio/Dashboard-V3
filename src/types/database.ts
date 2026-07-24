@@ -2917,6 +2917,7 @@ export type Database = {
           created_at: string
           ends_at: string
           id: string
+          kind: string
           member_id: string
           note: string | null
           requested_by: string | null
@@ -2924,6 +2925,7 @@ export type Database = {
           reviewer_note: string | null
           starts_at: string
           status: string
+          team_id: string
           updated_at: string
         }
         Insert: {
@@ -2931,6 +2933,7 @@ export type Database = {
           created_at?: string
           ends_at: string
           id?: string
+          kind?: string
           member_id: string
           note?: string | null
           requested_by?: string | null
@@ -2938,6 +2941,7 @@ export type Database = {
           reviewer_note?: string | null
           starts_at: string
           status?: string
+          team_id?: string
           updated_at?: string
         }
         Update: {
@@ -2945,6 +2949,7 @@ export type Database = {
           created_at?: string
           ends_at?: string
           id?: string
+          kind?: string
           member_id?: string
           note?: string | null
           requested_by?: string | null
@@ -2952,6 +2957,7 @@ export type Database = {
           reviewer_note?: string | null
           starts_at?: string
           status?: string
+          team_id?: string
           updated_at?: string
         }
         Relationships: [
@@ -2997,6 +3003,13 @@ export type Database = {
             referencedRelation: "team_members"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "team_schedule_blocks_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
         ]
       }
       team_schedule_recurring: {
@@ -3017,6 +3030,7 @@ export type Database = {
           reviewer_note: string | null
           start_time: string
           status: string
+          team_id: string
           updated_at: string
           weekday: number
         }
@@ -3037,6 +3051,7 @@ export type Database = {
           reviewer_note?: string | null
           start_time: string
           status?: string
+          team_id?: string
           updated_at?: string
           weekday: number
         }
@@ -3057,6 +3072,7 @@ export type Database = {
           reviewer_note?: string | null
           start_time?: string
           status?: string
+          team_id?: string
           updated_at?: string
           weekday?: number
         }
@@ -3115,6 +3131,13 @@ export type Database = {
             columns: ["requested_by"]
             isOneToOne: false
             referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_schedule_recurring_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]

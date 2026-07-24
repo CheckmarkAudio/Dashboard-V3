@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
-import { CalendarRange, Loader2 } from 'lucide-react'
+import { CalendarRange, Loader2, Palmtree } from 'lucide-react'
 import { useTeamSchedule } from '../../lib/schedule/useTeamSchedule'
 import {
+  formatTimeOffDateRange,
   formatTimeRange,
   startOfWeek,
   toLocalDateString,
@@ -136,19 +137,29 @@ export default function ProfileWeeklySchedule({ memberId }: ProfileWeeklySchedul
                 {upcomingBlocks.map((b) => {
                   const starts = new Date(b.starts_at)
                   const ends = new Date(b.ends_at)
+                  const isTimeOff = b.kind === 'time_off'
                   return (
                     <div
                       key={b.id}
-                      className="flex items-center gap-2 px-3 py-2 rounded-md border border-purple-500/20 bg-purple-700/10"
+                      className={`flex items-center gap-2 px-3 py-2 rounded-md border ${
+                        isTimeOff ? 'border-sky-500/30 bg-sky-500/10' : 'border-purple-500/20 bg-purple-700/10'
+                      }`}
                     >
+                      {isTimeOff && <Palmtree size={12} className="text-sky-300 shrink-0" aria-hidden="true" />}
                       <span className="text-[12px] font-semibold text-text">
-                        {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                        {isTimeOff
+                          ? formatTimeOffDateRange(b.starts_at, b.ends_at)
+                          : starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
                       </span>
-                      <span className="text-[11px] text-text-muted">
-                        {starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                        {' – '}
-                        {ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                      </span>
+                      {isTimeOff ? (
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-sky-300">Time off</span>
+                      ) : (
+                        <span className="text-[11px] text-text-muted">
+                          {starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                          {' – '}
+                          {ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                      )}
                       {b.note && (
                         <span className="text-[11px] text-text-light ml-1 truncate">· {b.note}</span>
                       )}

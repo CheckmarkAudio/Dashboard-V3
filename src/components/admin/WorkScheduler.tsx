@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react'
 import {
-  CalendarRange, Loader2, Inbox, Plus, Trash2, Check, X as XIcon, Clock as ClockIcon,
+  CalendarRange, Loader2, Inbox, Plus, Trash2, Check, X as XIcon, Clock as ClockIcon, Palmtree,
 } from 'lucide-react'
 import { Select, Button, Input } from '../ui'
+import WeeklyAvailabilityGrid, {
+  createDefaultWeekAvailability,
+  invalidDays,
+  type WeekAvailability,
+} from '../schedule/WeeklyAvailabilityGrid'
 import { useTeamSchedule } from '../../lib/schedule/useTeamSchedule'
 import {
   approveBlock,
@@ -16,12 +21,13 @@ import {
 } from '../../lib/schedule/mutations'
 import {
   endOfWeek,
+  formatTimeOffDateRange,
   formatTimeRange,
   startOfWeek,
   toLocalDateString,
   weekdayLabel,
 } from '../../lib/schedule/expand'
-import { STUDIO_WORK_WEEK, type TeamMember, type Weekday } from '../../types'
+import type { TeamMember } from '../../types'
 import { useToast } from '../Toast'
 
 /**
@@ -134,7 +140,7 @@ export default function WorkScheduler({ members, adminId }: WorkSchedulerProps) 
           </h2>
           <p className="text-text-muted text-[12px] mt-0.5">
             Studio work week is <span className="font-semibold text-text">Tue–Sat</span>.
-            Set recurring hours per member; add one-off blocks for coverage or schedule changes.
+            Set weekly schedules, review one-time changes, and keep time off separate from work time.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -359,28 +365,36 @@ function PendingRequestsPanel({
         </h3>
       </div>
       <div className="space-y-2">
-        {/* Single-block proposals — same shape as before. */}
+        {/* Single-block proposals — same shape as before. kind
+            distinguishes a one-time work change from a time-off
+            request so admins know what they're reviewing at a glance
+            (time off never reads as "One-time change"). */}
         {blocks.map((b) => {
           const member = memberById.get(b.member_id)
           const starts = new Date(b.starts_at)
           const ends = new Date(b.ends_at)
+          const isTimeOff = b.kind === 'time_off'
           return (
             <div
               key={`block-${b.id}`}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface border border-border"
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg bg-surface border ${isTimeOff ? 'border-sky-500/30' : 'border-border'}`}
             >
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-semibold text-text truncate">
                   {member?.display_name ?? b.member_id}
-                  <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-amber-300/80">
-                    Single block
+                  <span className={`ml-2 text-[10px] uppercase tracking-wider font-semibold ${isTimeOff ? 'text-sky-300' : 'text-amber-300/80'}`}>
+                    {isTimeOff ? 'Time off' : 'One-time change'}
                   </span>
                 </div>
                 <div className="text-[11px] text-text-muted">
-                  {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
-                  · {starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                  {' – '}
-                  {ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  {isTimeOff ? formatTimeOffDateRange(b.starts_at, b.ends_at) : (
+                    <>
+                      {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                      · {starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                      {' – '}
+                      {ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </>
+                  )}
                   {b.note ? ` · ${b.note}` : ''}
                 </div>
               </div>
@@ -412,7 +426,7 @@ function PendingRequestsPanel({
                 <div className="text-[13px] font-semibold text-text truncate">
                   {member?.display_name ?? r.member_id}
                   <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-purple-300/80">
-                    Recurring · {weekdayLabel(r.weekday, 'long')}
+                    Weekly schedule · {weekdayLabel(r.weekday, 'long')}
                   </span>
                 </div>
                 <div className="text-[11px] text-text-muted">
@@ -514,15 +528,15 @@ function RecurringPanel({
         <div>
           <h3 className="text-sm font-bold text-text flex items-center gap-2">
             <ClockIcon size={14} className="text-gold" aria-hidden="true" />
-            Recurring weekly hours
+            Weekly schedules
           </h3>
           <p className="text-[11px] text-text-muted mt-0.5">
-            Default canonical schedule. New rules default to Tue–Sat.
+            Normal working hours. New weekly schedules default to Tue–Sat.
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={() => setShowForm((v) => !v)}>
           <Plus size={14} className="mr-1" />
-          Add rule
+          Add weekly schedule
         </Button>
       </div>
 
@@ -541,7 +555,7 @@ function RecurringPanel({
 
       {rows.length === 0 ? (
         <div className="text-center py-6 text-[12px] text-text-muted">
-          No recurring rules yet. Click <span className="font-semibold text-text">Add rule</span> to set canonical hours.
+          No weekly schedules yet. Click <span className="font-semibold text-text">Add weekly schedule</span> to set normal hours.
         </div>
       ) : (
         <div className="border border-border rounded-lg overflow-hidden bg-surface">
@@ -601,50 +615,44 @@ function RecurringForm({
 }) {
   const { toast } = useToast()
   const [memberId, setMemberId] = useState(defaultMemberId || memberOptions[0]?.id || '')
-  const [weekdays, setWeekdays] = useState<Set<Weekday>>(new Set(STUDIO_WORK_WEEK))
-  const [startTime, setStartTime] = useState('10:00')
-  const [endTime, setEndTime] = useState('18:00')
+  const [availability, setAvailability] = useState<WeekAvailability>(() =>
+    createDefaultWeekAvailability(),
+  )
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  function toggleWeekday(w: Weekday) {
-    setWeekdays((prev) => {
-      const next = new Set(prev)
-      if (next.has(w)) next.delete(w)
-      else next.add(w)
-      return next
-    })
-  }
+  const enabledDays = ([0, 1, 2, 3, 4, 5, 6] as const).filter((w) => availability[w].enabled)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!memberId || weekdays.size === 0) {
-      toast('Pick a member + at least one weekday', 'error')
+    if (!memberId || enabledDays.length === 0) {
+      toast('Pick a member + at least one day', 'error')
       return
     }
-    if (endTime <= startTime) {
-      toast('End time must be after start time', 'error')
+    if (invalidDays(availability).length > 0) {
+      toast('Fix the day(s) where end time is before start time', 'error')
       return
     }
     setSubmitting(true)
     try {
-      // One row per selected weekday. Studio's Tue–Sat default
-      // creates 5 rows in one go.
+      // One row per enabled day, each with its OWN start/end time —
+      // studio hours are sporadic, so this member's Tuesday and
+      // Thursday hours don't need to match.
       await Promise.all(
-        Array.from(weekdays).map((w) =>
+        enabledDays.map((w) =>
           createRecurring(
             {
               member_id: memberId,
               weekday: w,
-              start_time: startTime,
-              end_time: endTime,
+              start_time: availability[w].start,
+              end_time: availability[w].end,
               note: note.trim() || null,
             },
             adminId,
           ),
         ),
       )
-      toast(`Added ${weekdays.size} recurring ${weekdays.size === 1 ? 'rule' : 'rules'}`, 'success')
+      toast(`Added ${enabledDays.length} weekly schedule ${enabledDays.length === 1 ? 'day' : 'days'}`, 'success')
       await onCreated()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to create', 'error')
@@ -655,53 +663,20 @@ function RecurringForm({
 
   return (
     <form onSubmit={handleSubmit} className="mb-4 p-3 rounded-lg border border-border bg-surface space-y-3">
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3">
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Member</label>
-          <Select value={memberId} onChange={(e) => setMemberId(e.target.value)}>
-            {memberOptions.map((m) => (
-              <option key={m.id} value={m.id}>{m.display_name}</option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Start</label>
-          <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-        </div>
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">End</label>
-          <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-        </div>
+      <div>
+        <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Member</label>
+        <Select value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+          {memberOptions.map((m) => (
+            <option key={m.id} value={m.id}>{m.display_name}</option>
+          ))}
+        </Select>
       </div>
 
       <div>
         <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">
-          Weekdays <span className="text-text-light">(Tue–Sat is the studio default)</span>
+          Days &amp; hours <span className="text-text-light">(Tue–Sat is the studio default)</span>
         </label>
-        <div className="flex items-center gap-1">
-          {([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map((w) => {
-            const active = weekdays.has(w)
-            const isStudioDay = STUDIO_WORK_WEEK.includes(w)
-            return (
-              <button
-                key={w}
-                type="button"
-                onClick={() => toggleWeekday(w)}
-                aria-pressed={active}
-                className={[
-                  'flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-colors border',
-                  active
-                    ? 'bg-gold text-black border-gold'
-                    : isStudioDay
-                      ? 'bg-surface-alt text-text-muted border-border hover:text-text'
-                      : 'bg-transparent text-text-light border-border/60 hover:text-text-muted',
-                ].join(' ')}
-              >
-                {weekdayLabel(w)}
-              </button>
-            )
-          })}
-        </div>
+        <WeeklyAvailabilityGrid value={availability} onChange={setAvailability} />
       </div>
 
       <div>
@@ -740,7 +715,7 @@ function OneOffPanel({
   onChange: () => Promise<void>
 }) {
   const { toast } = useToast()
-  const [showForm, setShowForm] = useState(false)
+  const [openForm, setOpenForm] = useState<'none' | 'change' | 'time_off'>('none')
   const [busyId, setBusyId] = useState<string | null>(null)
 
   async function handleDelete(id: string) {
@@ -758,28 +733,48 @@ function OneOffPanel({
 
   return (
     <section className="border border-border bg-surface-alt/40 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
-          <h3 className="text-sm font-bold text-text">One-off blocks (this week)</h3>
+          <h3 className="text-sm font-bold text-text">One-time changes (this week)</h3>
           <p className="text-[11px] text-text-muted mt-0.5">
-            Coverage, special shifts, schedule overrides. Renders on top of recurring hours.
+            Coverage, special shifts, single-day adjustments, and time off.
           </p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setShowForm((v) => !v)}>
-          <Plus size={14} className="mr-1" />
-          Add block
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setOpenForm((v) => (v === 'change' ? 'none' : 'change'))}>
+            <Plus size={14} className="mr-1" />
+            Add one-time change
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setOpenForm((v) => (v === 'time_off' ? 'none' : 'time_off'))}>
+            <Palmtree size={14} className="mr-1" />
+            Add time off
+          </Button>
+        </div>
       </div>
 
-      {showForm && (
+      {openForm === 'change' && (
         <OneOffForm
           memberOptions={memberOptions}
           defaultMemberId={memberFilter !== ALL_MEMBERS ? memberFilter : ''}
           adminId={adminId}
           weekStart={weekStart}
-          onCancel={() => setShowForm(false)}
+          onCancel={() => setOpenForm('none')}
           onCreated={async () => {
-            setShowForm(false)
+            setOpenForm('none')
+            await onChange()
+          }}
+        />
+      )}
+
+      {openForm === 'time_off' && (
+        <AdminTimeOffForm
+          memberOptions={memberOptions}
+          defaultMemberId={memberFilter !== ALL_MEMBERS ? memberFilter : ''}
+          adminId={adminId}
+          weekStart={weekStart}
+          onCancel={() => setOpenForm('none')}
+          onCreated={async () => {
+            setOpenForm('none')
             await onChange()
           }}
         />
@@ -787,7 +782,7 @@ function OneOffPanel({
 
       {blocks.length === 0 ? (
         <div className="text-center py-6 text-[12px] text-text-muted">
-          No one-off blocks this week.
+          No one-time changes this week.
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -795,20 +790,30 @@ function OneOffPanel({
             const member = memberById.get(b.member_id)
             const starts = new Date(b.starts_at)
             const ends = new Date(b.ends_at)
+            const isTimeOff = b.kind === 'time_off'
             return (
               <div
                 key={b.id}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface border border-border"
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg bg-surface border ${isTimeOff ? 'border-sky-500/30' : 'border-border'}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-semibold text-text truncate">
                     {member?.display_name ?? b.member_id}
+                    {isTimeOff && (
+                      <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-sky-300">
+                        Time off
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] text-text-muted">
-                    {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
-                    · {starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                    {' – '}
-                    {ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    {isTimeOff ? formatTimeOffDateRange(b.starts_at, b.ends_at) : (
+                      <>
+                        {starts.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                        · {starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        {' – '}
+                        {ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                      </>
+                    )}
                     {b.note ? ` · ${b.note}` : ''}
                   </div>
                 </div>
@@ -827,6 +832,110 @@ function OneOffPanel({
         </div>
       )}
     </section>
+  )
+}
+
+// ─── Admin time-off direct entry ───────────────────────────────────
+// Mirrors the member TimeOffForm's full-day-span semantics, but
+// creates an already-approved block (per the director-locked rule:
+// admin-entered time off is auto-approved, no review step).
+function AdminTimeOffForm({
+  memberOptions,
+  defaultMemberId,
+  adminId,
+  weekStart,
+  onCancel,
+  onCreated,
+}: {
+  memberOptions: TeamMember[]
+  defaultMemberId: string
+  adminId: string
+  weekStart: Date
+  onCancel: () => void
+  onCreated: () => Promise<void>
+}) {
+  const { toast } = useToast()
+  const [memberId, setMemberId] = useState(defaultMemberId || memberOptions[0]?.id || '')
+  const weekStartKey = toLocalDateString(weekStart)
+  const [startDate, setStartDate] = useState(weekStartKey)
+  const [endDate, setEndDate] = useState(weekStartKey)
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!memberId || !startDate || !endDate) {
+      toast('Pick a member + start and end date', 'error')
+      return
+    }
+    if (endDate < startDate) {
+      toast('End date must be on or after the start date', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const starts = new Date(`${startDate}T00:00:00`)
+      const endExclusive = new Date(`${endDate}T00:00:00`)
+      endExclusive.setDate(endExclusive.getDate() + 1)
+      await createBlockAsAdmin(
+        {
+          member_id: memberId,
+          starts_at: starts.toISOString(),
+          ends_at: endExclusive.toISOString(),
+          note: note.trim() || null,
+          kind: 'time_off',
+          status: 'approved',
+        },
+        adminId,
+      )
+      toast('Time off added', 'success')
+      await onCreated()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to create', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mb-4 p-3 rounded-lg border border-sky-500/25 bg-sky-500/[0.04] space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3">
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Member</label>
+          <Select value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+            {memberOptions.map((m) => (
+              <option key={m.id} value={m.id}>{m.display_name}</option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Start date</label>
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => {
+              setStartDate(e.target.value)
+              if (endDate < e.target.value) setEndDate(e.target.value)
+            }}
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">End date</label>
+          <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+        </div>
+      </div>
+      <div>
+        <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Reason (optional)</label>
+        <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Vacation" />
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onCancel} type="button">Cancel</Button>
+        <Button variant="primary" size="sm" type="submit" disabled={submitting}>
+          {submitting && <Loader2 size={14} className="animate-spin mr-1" />}
+          Save
+        </Button>
+      </div>
+    </form>
   )
 }
 
@@ -879,7 +988,7 @@ function OneOffForm({
         },
         adminId,
       )
-      toast('One-off block added', 'success')
+      toast('One-time schedule change added', 'success')
       await onCreated()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to create', 'error')

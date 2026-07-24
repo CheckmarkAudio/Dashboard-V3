@@ -19,7 +19,7 @@ import { useStudioHours } from '../lib/schedule/useStudioHours'
 import { sessionTypeColor } from '../lib/calendar/sessionColors'
 import { memberColor } from '../lib/calendar/memberColors'
 import { useTeamMemberColors } from '../lib/calendar/useTeamMemberColors'
-import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2, CalendarRange, EyeOff, Filter } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2, CalendarRange, Filter } from 'lucide-react'
 
 // 2026-05-26 — Member pills on the calendar header display first names
 // only (per user direction "filter title easy to see"). Display names
@@ -479,22 +479,46 @@ export default function Calendar() {
 
   // Bucket schedule entries by local date string (YYYY-MM-DD) so the
   // week-grid render can pull each day's list inline without re-
-  // scanning the full array per cell.
-  const schedulesByDate = useMemo(() => {
+  // scanning the full array per cell. A one-off block carries a
+  // single starts_at/ends_at span rather than one row per day, so a
+  // multi-day entry (most commonly time off) is bucketed into EVERY
+  // day it overlaps, not just its start day.
+  function bucketByDate(entries: typeof scheduleExpanded): Record<string, typeof scheduleExpanded> {
     const map: Record<string, typeof scheduleExpanded> = {}
-    for (const s of filteredScheduleExpanded) {
-      const dayKey = localDateKey(new Date(s.starts_at))
-      const group = map[dayKey] ?? []
-      group.push(s)
-      map[dayKey] = group
+    for (const s of entries) {
+      const startKey = localDateKey(new Date(s.starts_at))
+      const endExclusive = new Date(s.ends_at)
+      endExclusive.setMilliseconds(endExclusive.getMilliseconds() - 1)
+      const endKey = localDateKey(endExclusive)
+      for (const wd of WEEK) {
+        if (wd.key < startKey || wd.key > endKey) continue
+        const group = map[wd.key] ?? []
+        group.push(s)
+        map[wd.key] = group
+      }
     }
     return map
-  }, [filteredScheduleExpanded])
+  }
 
-  // Visibility toggle. Defaults ON so admins/members immediately see
-  // who's scheduled when. Off-state hides the layer entirely (zero
-  // DOM cost beyond the fetch).
-  const [showSchedule, setShowSchedule] = useState(true)
+  // Work shifts render as the existing avatar-segment wash. Time off
+  // renders separately (see below) so it never reads as a work shift.
+  const schedulesByDate = useMemo(
+    () => bucketByDate(filteredScheduleExpanded.filter((s) => s.kind !== 'time_off')),
+    [filteredScheduleExpanded],
+  )
+  const timeOffByDate = useMemo(
+    () => bucketByDate(filteredScheduleExpanded.filter((s) => s.kind === 'time_off')),
+    [filteredScheduleExpanded],
+  )
+
+  // 2026-07-24 — Bookings and the team-schedule overlay used to share
+  // one week grid gated by a "Schedule" visibility toggle. Per director
+  // direction, they're now separate tabs within the Calendar page: the
+  // synced booking calendar is the default/main view, and the team's
+  // work-shift schedule (still the pre-existing look — a visual revamp
+  // is deferred) lives on its own tab so the two don't compete for the
+  // same grid.
+  const [activeTab, setActiveTab] = useState<'bookings' | 'schedule'>('bookings')
 
   // 2026-05-23 — Studio hours of operation overlay (Apple-Calendar-
   // style frame). Per-weekday rows from studio_hours_of_operation
@@ -677,7 +701,7 @@ export default function Calendar() {
               filter would have nothing to do). Filter icon leads the
               row instead of a "SHOW" word so the affordance reads at a
               glance. */}
-          {memberPillRow.length > 1 && showSchedule && (
+          {memberPillRow.length > 1 && activeTab === 'schedule' && (
             <div className="flex items-center gap-2 flex-wrap">
               <Filter size={14} className="text-text-muted" aria-hidden="true" />
               <button
@@ -720,29 +744,47 @@ export default function Calendar() {
           )}
         </div>
         <div className="flex items-center gap-2 text-text-muted">
-          {/* 2026-05-23 — Schedule layer toggle. Defaults to ON. */}
-          <button
-            type="button"
-            onClick={() => setShowSchedule((v) => !v)}
-            aria-pressed={showSchedule}
-            title={showSchedule ? 'Hide team schedule layer' : 'Show team schedule layer'}
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors border ${
-              showSchedule
-                ? 'bg-purple-700/15 text-purple-200 border-purple-500/25 hover:bg-purple-700/20'
-                : 'bg-surface-alt text-text-muted border-border hover:text-text'
-            }`}
-          >
-            {showSchedule ? <CalendarRange size={12} aria-hidden="true" /> : <EyeOff size={12} aria-hidden="true" />}
-            <span>Schedule</span>
-            {filteredScheduleExpanded.length > 0 && (
-              <span className="opacity-70">{filteredScheduleExpanded.length}</span>
-            )}
-          </button>
-          {profile?.id && (
+          {/* 2026-07-24 — Bookings vs. Team Schedule tab switcher.
+              Replaces the old "Schedule" visibility toggle: the two
+              views no longer share one grid, so this is a real tab,
+              not a layer on/off switch. Bookings is the default. */}
+          <div role="tablist" aria-label="Calendar view" className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-surface-alt border border-border">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'bookings'}
+              onClick={() => setActiveTab('bookings')}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                activeTab === 'bookings'
+                  ? 'bg-surface text-text shadow-sm'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              Bookings
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'schedule'}
+              onClick={() => setActiveTab('schedule')}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                activeTab === 'schedule'
+                  ? 'bg-purple-700/15 text-purple-200'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              <CalendarRange size={12} aria-hidden="true" />
+              <span>Team Schedule</span>
+              {filteredScheduleExpanded.length > 0 && (
+                <span className="opacity-70">{filteredScheduleExpanded.length}</span>
+              )}
+            </button>
+          </div>
+          {activeTab === 'schedule' && profile?.id && (
             <button
               type="button"
               onClick={() => setScheduleRequest(true)}
-              title="Request a schedule block or weekly hours"
+              title="Set weekly schedule, request a one-time change, or see time-off status"
               className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border border-border bg-surface-alt text-text-muted hover:text-gold hover:border-gold/40 transition-colors"
             >
               <Plus size={11} aria-hidden="true" />
@@ -878,9 +920,11 @@ export default function Calendar() {
                           // own onContextMenu (admin actions); since
                           // booking blocks live at z-30 and intercept
                           // pointer events, this only fires on truly
-                          // empty cells.
+                          // empty cells. 2026-07-24 — schedule-request
+                          // is a Team Schedule tab action now that the
+                          // two views are split.
                           onContextMenu={(e) => {
-                            if (!profile?.id) return
+                            if (activeTab !== 'schedule' || !profile?.id) return
                             e.preventDefault()
                             e.stopPropagation()
                             setCellMenu({
@@ -895,12 +939,17 @@ export default function Calendar() {
                               below booking blocks (z-30). When a cell is
                               already booked, the booking block intercepts
                               the hover + click; this button only surfaces
-                              on truly-empty cells. */}
-                          <button onClick={() => { setBookingPrefillDate(wd.key); setBookingPrefillTime(`${hour.toString().padStart(2,'0')}:00`); setShowBooking(true) }} className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity z-10">
-                            <span className="flex items-center gap-0.5 text-[9px] text-gold bg-surface/90 border border-gold/20 rounded px-1.5 py-0.5">
-                              <Plus size={8} />Book
-                            </span>
-                          </button>
+                              on truly-empty cells. Bookings-tab only
+                              (2026-07-24) — creating a booking from the
+                              Team Schedule tab doesn't make sense now
+                              that the two views are separate. */}
+                          {activeTab === 'bookings' && (
+                            <button onClick={() => { setBookingPrefillDate(wd.key); setBookingPrefillTime(`${hour.toString().padStart(2,'0')}:00`); setShowBooking(true) }} className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity z-10">
+                              <span className="flex items-center gap-0.5 text-[9px] text-gold bg-surface/90 border border-gold/20 rounded px-1.5 py-0.5">
+                                <Plus size={8} />Book
+                              </span>
+                            </button>
+                          )}
                         </div>
                       )
                     })}
@@ -1001,10 +1050,11 @@ export default function Calendar() {
                     out side-by-side. z-0 + pointer-events-none so it
                     sits below booking blocks (z-30) AND below the
                     +Book hover affordance (z-10) — clicks pass
-                    straight through. Hidden when the Schedule toggle
-                    is off. Out-of-grid hours (before 7am / after 7pm)
-                    get clipped via overflow on the wrapper. */}
-                {showSchedule && WEEK.map((wd, dayIndex) => {
+                    straight through. Only renders on the Team Schedule
+                    tab (2026-07-24 — split out of the Bookings tab).
+                    Out-of-grid hours (before 7am / after 7pm) get
+                    clipped via overflow on the wrapper. */}
+                {activeTab === 'schedule' && WEEK.map((wd, dayIndex) => {
                   const daySchedules = schedulesByDate[wd.key] ?? []
                   if (daySchedules.length === 0) return null
                   // 2026-05-27 (PR C iter 7) — Per Bridget: "now lets
@@ -1256,14 +1306,61 @@ export default function Calendar() {
                   })
                 })}
 
+                {/* 2026-07-24 (PR4B) — Approved time off. Rendered
+                    completely separately from the work-shift wash
+                    above (different color, diagonal-stripe pattern,
+                    "Time off" label) so it can never be mistaken for
+                    a work shift. Full column height since time off is
+                    a full-day span, not an hour range. z-0 +
+                    pointer-events-none, same as the work wash. */}
+                {activeTab === 'schedule' && WEEK.map((wd, dayIndex) => {
+                  const dayTimeOff = timeOffByDate[wd.key] ?? []
+                  if (dayTimeOff.length === 0) return null
+                  const colWidth = `((100% - 36px) / 7)`
+                  const colLeft = `(36px + ${colWidth} * ${dayIndex})`
+                  const gridHeightPx = (20 - 7) * 48
+                  return (
+                    <div
+                      key={`timeoff-${wd.key}`}
+                      aria-hidden="true"
+                      className="absolute pointer-events-none z-0 overflow-hidden flex flex-col items-center gap-1 pt-1"
+                      style={{
+                        top: 0,
+                        height: gridHeightPx,
+                        left: `calc(${colLeft} + 1px)`,
+                        width: `calc(${colWidth} - 2px)`,
+                        backgroundColor: 'rgba(56, 189, 248, 0.10)',
+                        backgroundImage:
+                          'repeating-linear-gradient(45deg, rgba(56,189,248,0.12) 0, rgba(56,189,248,0.12) 6px, transparent 6px, transparent 12px)',
+                      }}
+                    >
+                      {dayTimeOff.map((s) => {
+                        const member = memberById.get(s.member_id)
+                        return (
+                          <span
+                            key={s.key}
+                            title={`${member?.display_name ?? 'Member'} — Time off${s.note ? `: ${s.note}` : ''}`}
+                            className="flex items-center gap-1 rounded-full bg-sky-950/40 border border-sky-400/30 px-1.5 py-0.5"
+                          >
+                            {member && <MemberAvatar member={member} size="xs" />}
+                            <span className="text-[8px] font-semibold text-sky-200 uppercase tracking-wide">Off</span>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+
                 {/* Booking blocks — positioned within each day column
                     via overlap-aware lane math (PR E). Bookings that
                     share a time slot fan out side-by-side instead of
                     stacking. Z-index is z-30 — above the +Book hover
                     button (z-10) so a click on a booking always lands
                     on the booking, never on the empty-cell affordance
-                    underneath. */}
-                {WEEK.map((wd, dayIndex) => {
+                    underneath. Only renders on the Bookings tab
+                    (2026-07-24 — split out from the Team Schedule
+                    tab so the two views don't overlay each other). */}
+                {activeTab === 'bookings' && WEEK.map((wd, dayIndex) => {
                   const dayBookings = bookingsByDate[wd.key] ?? []
                   const laned = assignBookingLanes(dayBookings)
                   return laned.map(({ booking: b, lane, groupSize }) => {

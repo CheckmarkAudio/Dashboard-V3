@@ -21,6 +21,15 @@
 // never pulls the Supabase client into the pure/test path.
 
 import type { PresenceSession } from '../queries/presence'
+import {
+  clipInterval,
+  mergeIntervals,
+  subtractIntervals,
+  totalMinutes,
+  type Interval,
+} from '../time/intervals.ts'
+
+export { clipInterval, mergeIntervals, totalMinutes } from '../time/intervals.ts'
 
 // ─── Public types ────────────────────────────────────────────────────
 
@@ -78,7 +87,12 @@ export interface ActivityTotals {
 }
 
 export interface ActivityDayModel {
-  /** Merged scheduled window for the day, or null if none scheduled. */
+  /** Effective work windows after approved time off has been subtracted. */
+  scheduledWindows: ScheduledWindow[]
+  /**
+   * Compatibility display envelope from first start to last end.
+   * Consumers that show schedule detail should use `scheduledWindows`.
+   */
   scheduledWindow: ScheduledWindow | null
   /** Presence classified against the schedule, sorted by start. */
   segments: ActivitySegment[]
@@ -114,70 +128,30 @@ export interface BuildActivityDayInput {
   eventBracketMinutes?: number
 }
 
-// ─── Internal interval helpers (epoch ms, half-open [start, end)) ─────
-
-interface Interval {
-  start: number
-  end: number
-}
-
 const MINUTE_MS = 60_000
-
-/** Clip an interval to [lo, hi); returns null if empty or inverted. */
-export function clipInterval(iv: Interval, lo: number, hi: number): Interval | null {
-  const start = Math.max(iv.start, lo)
-  const end = Math.min(iv.end, hi)
-  return end > start ? { start, end } : null
-}
-
-/** Merge overlapping OR touching intervals into a sorted minimal set. */
-export function mergeIntervals(intervals: Interval[]): Interval[] {
-  const valid = intervals.filter((iv) => iv.end > iv.start)
-  const sorted = [...valid].sort((a, b) => a.start - b.start)
-  const out: Interval[] = []
-  for (const cur of sorted) {
-    const last = out[out.length - 1]
-    // `<=` so adjacent intervals (end === start) merge into one.
-    if (last && cur.start <= last.end) {
-      last.end = Math.max(last.end, cur.end)
-    } else {
-      out.push({ ...cur })
-    }
-  }
-  return out
-}
-
-/** Total covered minutes of a set of intervals (merged first for safety). */
-export function totalMinutes(intervals: Interval[]): number {
-  const merged = mergeIntervals(intervals)
-  const ms = merged.reduce((sum, iv) => sum + (iv.end - iv.start), 0)
-  return Math.round(ms / MINUTE_MS)
-}
 
 /**
  * Split one active interval against a scheduled window into `on` (inside)
  * and `off` (outside) pieces. Late colouring is applied later, once we
  * know which piece is the day's first in-schedule activity.
  */
-function classifyAgainstWindow(
+function classifyAgainstWindows(
   iv: Interval,
-  window: Interval | null,
+  windows: Interval[],
 ): { start: number; end: number; kind: SegmentKind }[] {
-  if (!window) return [{ start: iv.start, end: iv.end, kind: 'off' }]
+  if (windows.length === 0) {
+    return [{ start: iv.start, end: iv.end, kind: 'off' }]
+  }
+
   const parts: { start: number; end: number; kind: SegmentKind }[] = []
-  // Before the window.
-  if (iv.start < window.start) {
-    parts.push({ start: iv.start, end: Math.min(iv.end, window.start), kind: 'off' })
+  for (const window of windows) {
+    const overlap = clipInterval(iv, window.start, window.end)
+    if (overlap) parts.push({ ...overlap, kind: 'on' })
   }
-  // Inside the window.
-  const inStart = Math.max(iv.start, window.start)
-  const inEnd = Math.min(iv.end, window.end)
-  if (inEnd > inStart) parts.push({ start: inStart, end: inEnd, kind: 'on' })
-  // After the window.
-  if (iv.end > window.end) {
-    parts.push({ start: Math.max(iv.start, window.end), end: iv.end, kind: 'off' })
+  for (const off of subtractIntervals([iv], windows)) {
+    parts.push({ ...off, kind: 'off' })
   }
-  return parts
+  return parts.sort((a, b) => a.start - b.start)
 }
 
 // ─── Event mapping ───────────────────────────────────────────────────
@@ -256,13 +230,19 @@ export function buildActivityDay(input: BuildActivityDayInput): ActivityDayModel
   const firstActive = activeIntervals[0]
   const firstActiveMs = firstActive ? firstActive.start : null
 
-  // 4. Scheduled window = [min start, max end] of the day's windows.
-  const window = mergeScheduledWindows(scheduledWindows, dayStartMs, dayHi)
+  // 4. Keep the effective scheduled windows distinct. Approved time off can
+  // split a day, and collapsing the pieces would falsely mark the gap as work.
+  const scheduleIntervals = parseScheduledWindows(scheduledWindows, dayStartMs, dayEndMs)
+  const firstWindow = scheduleIntervals[0] ?? null
+  const lastWindow = scheduleIntervals[scheduleIntervals.length - 1] ?? null
+  const displayWindow = firstWindow && lastWindow
+    ? { start: firstWindow.start, end: lastWindow.end }
+    : null
 
   // 5. Classify active intervals against the schedule.
   const rawSegments: { start: number; end: number; kind: SegmentKind }[] = []
   for (const iv of activeIntervals) {
-    rawSegments.push(...classifyAgainstWindow(iv, window))
+    rawSegments.push(...classifyAgainstWindows(iv, scheduleIntervals))
   }
   rawSegments.sort((a, b) => a.start - b.start)
 
@@ -270,13 +250,13 @@ export function buildActivityDay(input: BuildActivityDayInput): ActivityDayModel
   //    past the grace gets a `late` head (up to lateSegmentMinutes).
   let lateArrival = false
   let minutesLate = 0
-  if (window) {
+  if (firstWindow) {
     const firstOn = rawSegments.find((s) => s.kind === 'on')
     if (firstOn) {
-      const lateThreshold = window.start + lateGraceMinutes * MINUTE_MS
+      const lateThreshold = firstWindow.start + lateGraceMinutes * MINUTE_MS
       if (firstOn.start > lateThreshold) {
         lateArrival = true
-        minutesLate = Math.round((firstOn.start - window.start) / MINUTE_MS)
+        minutesLate = Math.round((firstOn.start - firstWindow.start) / MINUTE_MS)
         const headEnd = Math.min(firstOn.end, firstOn.start + lateSegmentMinutes * MINUTE_MS)
         firstOn.kind = 'late'
         if (headEnd < firstOn.end) {
@@ -295,8 +275,15 @@ export function buildActivityDay(input: BuildActivityDayInput): ActivityDayModel
   }))
 
   return {
-    scheduledWindow: window
-      ? { start: new Date(window.start).toISOString(), end: new Date(window.end).toISOString() }
+    scheduledWindows: scheduleIntervals.map((window) => ({
+      start: new Date(window.start).toISOString(),
+      end: new Date(window.end).toISOString(),
+    })),
+    scheduledWindow: displayWindow
+      ? {
+          start: new Date(displayWindow.start).toISOString(),
+          end: new Date(displayWindow.end).toISOString(),
+        }
       : null,
     segments,
     markers,
@@ -319,22 +306,20 @@ function tallyTotal(totals: ActivityTotals, type: ActivityEventType): void {
   }
 }
 
-/** Collapse the day's scheduled windows into one [min start, max end]. */
-function mergeScheduledWindows(
+/** Parse, clip, and merge the day's effective scheduled windows. */
+function parseScheduledWindows(
   windows: ScheduledWindow[],
   lo: number,
   hi: number,
-): Interval | null {
-  let start = Infinity
-  let end = -Infinity
+): Interval[] {
+  const intervals: Interval[] = []
   for (const w of windows) {
     const ws = Date.parse(w.start)
     const we = Date.parse(w.end)
     if (Number.isNaN(ws) || Number.isNaN(we) || we <= ws) continue
     const clipped = clipInterval({ start: ws, end: we }, lo, hi)
     if (!clipped) continue
-    start = Math.min(start, clipped.start)
-    end = Math.max(end, clipped.end)
+    intervals.push(clipped)
   }
-  return end > start ? { start, end } : null
+  return mergeIntervals(intervals)
 }

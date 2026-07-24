@@ -615,5 +615,183 @@ Open gaps:
 - <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: view a real member's populated widget on the Vercel preview — confirm segments/markers/feed read correctly and the proximity interaction feels right at column width.
 - <span style="color:#d97706">NEEDS-DIRECTOR</span>: the widget sits in a ~1/3-width column; the mock was full-width. Decide whether to promote it to a wider/full-width slot later.
 
+## 2026-07-23 MDT - CODEX - Schedule request language branch reconstruction
+
+Lane:
+- Codex: cross-agent branch overlap review, source-branch reconstruction, behavior audit, verification, and publishing.
+
+Summary:
+- Reviewed Claude's schedule-language handoff against current `origin/main`.
+- Found the original `codex/schedule-ux-language-pass` branch was based before PRs #307–#309, so publishing the branch wholesale would have reintroduced unrelated task/admin diffs and shown a migration deletion.
+- Reconstructed the change from current `origin/main` using only the isolated schedule-language commit.
+- Confirmed the final code diff is limited to the four intended schedule surfaces.
+- Confirmed the visible "Request time off" path is informational only: it renders no form, has no submit handler, and calls no schedule mutation.
+
+Files changed:
+- `src/components/admin/WorkScheduler.tsx`
+- `src/components/dashboard/MyScheduleWidget.tsx`
+- `src/components/schedule/ScheduleRequestModal.tsx`
+- `src/pages/Calendar.tsx`
+- `docs/PROJECT_STATE.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `git diff --name-status origin/main..HEAD` showed only the intended schedule files before checkpoint docs were added.
+- `git diff --check origin/main..HEAD` passed.
+- `npm run build` passed from the clean worktree.
+- Manual source audit confirmed existing weekly and one-time mutation functions are unchanged and the time-off placeholder performs no write.
+
+Open gaps:
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: Time-off submission remains intentionally unavailable until PR4's schema/RLS/RPC contract is reviewed and approved.
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Verify the three schedule choices and both existing submit paths in the Vercel preview on desktop and phone.
+- <span style="color:#7c3aed">ASSUMPTION</span>: "Time off" remains the director-approved worker term for the upcoming data-backed path.
+
+Token/source note:
+- Exact token total not visible in this tool.
+
+Signature:
+- CODEX:
+
+## 2026-07-24 00:54 MDT - CODEX - PR4A time-off schedule contract
+
+Lane:
+- Codex: schedule schema, ownership boundary, RLS, generated-type contract,
+  and pure effective-schedule integration. No time-off UI.
+
+Summary:
+- Added `team_id` to recurring schedules and one-off blocks, backfilled it
+  from each target member, made it required, and installed a trigger that
+  derives ownership from `member_id` on every insert or ownership update.
+- Replaced the prior globally readable schedule policies and admin-global
+  writes with direct, indexed team-scoped RLS. Member request/withdraw
+  policies remain self-only, pending-only, and are now team-scoped too.
+- Added block `kind`, constrained to `work | time_off`; existing and omitted
+  values default to `work`.
+- Added shared pure interval helpers and one effective-schedule resolver:
+  approved work windows are merged, then approved time off is subtracted.
+  Pending/denied time off never changes the effective schedule.
+- Updated Member Activity to preserve distinct effective windows. The
+  compatibility `scheduledWindow` envelope remains for existing display
+  consumers, while new/correct consumers use `scheduledWindows`.
+
+Files changed:
+- `supabase/migrations/20260724100000_schedule_time_off_and_team_scope.sql`
+- `src/lib/time/intervals.ts`
+- `src/lib/schedule/effective.ts`
+- `src/lib/schedule/effective.test.ts`
+- `src/lib/schedule/expand.ts`
+- `src/lib/schedule/mutations.ts`
+- `src/lib/activity/buildActivityDay.ts`
+- `src/lib/activity/buildActivityDay.test.ts`
+- `src/lib/activity/queries.ts`
+- `src/types/index.ts`
+- `src/types/database.ts`
+- `docs/PROJECT_STATE.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Production migration and security verification:
+- Applied the canonical migration idempotently to linked Supabase project
+  `ncljfjdcyswoeitsooty`.
+- Recorded migration version `20260724100000` as
+  `schedule_time_off_and_team_scope`.
+- Post-apply data: 18 recurring rows, 0 block rows, 0 null `team_id` rows.
+- Verified `team_id` is NOT NULL on both tables, `kind` is NOT NULL with
+  default `work`, both foreign keys and the `work | time_off` check exist,
+  and both ownership triggers are installed.
+- Runtime RLS check as authenticated member
+  `08a3f059-61ef-4852-a627-5a270c7e8912` returned 18 own-team rows and
+  0 cross-team rows.
+- Transactional member-request test derived the correct team, defaulted
+  `kind=work`, enforced `status=pending`, and was rolled back.
+- Supabase hosted Security Advisor: 0 errors.
+- Supabase hosted Performance Advisor: 0 errors.
+
+Verification:
+- `npm test -- --run`: 26/26 pass.
+- `npm run build`: passed; only the pre-existing Vite chunk-size warning.
+- TypeScript schema shape was synchronized against the verified live catalog,
+  including both new team foreign-key relationships.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-CLAUDE</span>: PR4B may wire the existing
+  Time-off placeholder to `kind='time_off'`; members create pending requests,
+  admins may create approved rows for any member in their team.
+- <span style="color:#d97706">TOOLING</span>: automated
+  `supabase gen types --linked` and CLI `db lint` remain unavailable because
+  this machine has linked SQL-query access but no `SUPABASE_ACCESS_TOKEN`.
+  Hosted advisors and direct catalog/RLS checks were used instead; do not
+  represent the type file as CLI-generated.
+
+Signature:
+- CODEX:
+
+## 2026-07-24 (MDT) - CLAUDE - PR4B: Time Off schedule experience
+
+Actor: Claude (Sonnet 5)
+Lane: Claude/Fable focused implementation (UI only, per Codex's handoff)
+Branch: `claude/pr4b-time-off`, off `origin/main` at `4253ca6` (confirmed contains
+both PR #312 and PR #311 before starting, per handoff step 3)
+
+Summary:
+- Replaced `ScheduleRequestModal.tsx`'s `TimeOffPlaceholder` with a real
+  `TimeOffForm` (start date + end date, same date = one day, optional
+  reason) submitting `requestScheduleBlock({ ..., kind: 'time_off' })`.
+  Removed the "Soon" badge.
+- Added an "Add time off" admin action (`AdminTimeOffForm`) to
+  `WorkScheduler.tsx` calling `createBlockAsAdmin({ ..., kind: 'time_off',
+  status: 'approved' })` — admin entries auto-approve, member requests stay
+  pending through the existing `approveBlock`/`denyBlock` review path.
+  Pending-review rows and the approved one-off list both show a distinct
+  "Time off" label + date-range (not time-range) display.
+- Time off renders with a distinct sky-blue treatment (never the purple
+  work-shift styling, never a work wash block) in `MyScheduleWidget.tsx`,
+  `ProfileWeeklySchedule.tsx`, and Calendar's Team Schedule tab (a separate
+  diagonal-striped full-day band, layered apart from the existing
+  avatar-segment work-shift wash).
+- No migrations, RLS, RPC, or schema changes — consumed the landed PR4A
+  contract (`ScheduleBlockKind`, `requestScheduleBlock`,
+  `createBlockAsAdmin`, `approveBlock`/`denyBlock`,
+  `resolveEffectiveWorkWindows`) as-is.
+
+Bug found and fixed while implementing (presentation layer only):
+- `expandSchedule()` (`src/lib/schedule/expand.ts`) emits one row per
+  one-off block, not one row per day it spans. Every surface that buckets
+  entries "by day" (`MyScheduleWidget`'s 7-day list, Calendar's Team
+  Schedule tab) was keying off `starts_at`'s date only — a 3-day time-off
+  request would only have appeared to cover its first day. Fixed by
+  bucketing each entry into every local day it overlaps. `expandSchedule()`
+  and `resolveEffectiveWorkWindows()` themselves were not modified.
+
+Files changed:
+- `src/components/schedule/ScheduleRequestModal.tsx`
+- `src/components/admin/WorkScheduler.tsx`
+- `src/components/dashboard/MyScheduleWidget.tsx`
+- `src/components/members/ProfileWeeklySchedule.tsx`
+- `src/pages/Calendar.tsx`
+- `src/lib/schedule/expand.ts` (added shared `formatTimeOffDateRange` helper)
+- `docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md`, `docs/PROJECT_STATE.md`
+
+Verification:
+- `npm test -- --run`: 26/26 pass, unchanged (5 pre-existing cases cover
+  time-off interval subtraction in `resolveEffectiveWorkWindows`).
+- `npx tsc -b`: clean.
+- `npm run build`: clean (pre-existing chunk-size warning only).
+- Date-math (full-day span construction, no UTC/off-by-one drift under
+  America/Denver) verified with a rolled-back transaction test directly
+  against production (`ncljfjdcyswoeitsooty`) via Supabase MCP.
+- Modal UI verified in a local dev preview: mode switching, no stale
+  "Soon" badge, correct today-based date defaults, multi-day date-range
+  selection all behave correctly.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: this session's
+  local dev preview had no reachable Supabase backend (every request
+  resolved to `localhost` and failed — a pre-existing environment
+  limitation unrelated to this change, confirmed via network inspection).
+  The actual submit → pending row → admin approve/deny round trip and
+  dark-mode/mobile screenshots could not be captured live. Recommend a
+  short manual pass on the PR's Vercel preview before merge.
+- Token note: exact token total not visible in this tool.
+
 Signature:
 - CLAUDE:

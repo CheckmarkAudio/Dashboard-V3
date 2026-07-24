@@ -149,13 +149,20 @@ Recommendation: Option A may be the best first implementation, but only after co
 - mobile form is readable and thumb-friendly
 - data model is explicitly reviewed before backend changes
 
-## Open Decisions
+## Locked Decisions (director-approved, 2026-07-24)
 
-<span style="color:#d97706">NEEDS-DIRECTOR</span>: Choose the UI term: "Vacation", "Time off", "Away", or "Unavailable."
-
-<span style="color:#d97706">NEEDS-DIRECTOR</span>: Should employees request time off, admins create it, or both?
-
-<span style="color:#d97706">NEEDS-DIRECTOR</span>: Should time off need approval every time, or can admins enter approved time off directly?
+- **Term**: "Time off" is the exact user-facing term everywhere (button, badges, labels).
+- **Who can create it**: both — members can request their own time off; admins can enter time off directly for any team member.
+- **Approval**: member requests start `pending` and require admin approval (existing `approveBlock`/`denyBlock` path). Admin-entered time off is immediately `approved` — no review step.
+- **Data contract**: Option A from below — `kind: 'work' | 'time_off'` on `team_schedule_blocks` (landed in migration `20260724100000_schedule_time_off_and_team_scope.sql`, PR #312). PR4B (this implementation) only wires the UI on top of that contract — no new tables, columns, or RLS.
 
 <span style="color:#7c3aed">ASSUMPTION</span>: Time off affects employee availability but does not yet need payroll/accounting behavior.
+
+## PR4B Implementation Notes (2026-07-24)
+
+- `ScheduleRequestModal.tsx`: `TimeOffPlaceholder` replaced with a real `TimeOffForm` — start date + end date (same date = one day) + optional reason, submits `requestScheduleBlock({..., kind: 'time_off'})`. "Soon" badge removed.
+- `WorkScheduler.tsx`: new "Add time off" admin action (`AdminTimeOffForm`, mirrors the member form's date-range shape) calling `createBlockAsAdmin({..., kind: 'time_off', status: 'approved'})`; pending-review rows and the approved one-off list both show a distinct "Time off" label + date-range (not time-range) display when `kind === 'time_off'`.
+- `MyScheduleWidget.tsx` / `ProfileWeeklySchedule.tsx` / Calendar's Team Schedule tab: time off renders with a distinct sky-blue treatment (never the purple work-shift styling or a work wash block).
+- **Bug found and fixed while implementing this**: `expandSchedule()` (`src/lib/schedule/expand.ts`) emits one row per one-off block, not one row per day it spans. Every UI surface that buckets entries "by day" (MyScheduleWidget's 7-day list, Calendar's Team Schedule tab) was keying off `starts_at`'s date only — a 3-day time-off request would only have appeared on its first day. Fixed by bucketing each entry into every day it overlaps, in the presentation layer only (`expandSchedule` and `resolveEffectiveWorkWindows` themselves were not touched).
+- Full-day span convention: a time-off request stores `starts_at` = start date 00:00 local, `ends_at` = (end date + 1 day) 00:00 local (exclusive), so `resolveEffectiveWorkWindows`'s interval subtraction removes the entire day(s) regardless of what hours a work shift covers that day.
 
