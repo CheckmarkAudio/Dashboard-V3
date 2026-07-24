@@ -371,7 +371,7 @@ export default function Calendar() {
   // view layer at all. null = "All studios".
   const [selectedStudio, setSelectedStudio] = useState<string | null>(null)
   const studioFilterActive = selectedStudio !== null
-  const KNOWN_STUDIO_SPACES: readonly StudioSpace[] = ['Studio A', 'Studio B', 'Home Visit', 'Venue']
+  const KNOWN_STUDIO_SPACES: readonly StudioSpace[] = ['Studio A', 'Studio B', 'External Location', 'Virtual Session']
   function asStudioSpace(value: string | null): StudioSpace | undefined {
     return value && (KNOWN_STUDIO_SPACES as readonly string[]).includes(value)
       ? (value as StudioSpace)
@@ -395,7 +395,7 @@ export default function Calendar() {
   // any other value actually seen on a booking this week (e.g. a legacy
   // or unusual room string) so the filter never silently hides bookings.
   const studioFilterOptions = useMemo(() => {
-    const known = ['Studio A', 'Studio B', 'Home Visit', 'Venue']
+    const known = ['Studio A', 'Studio B', 'External Location', 'Virtual Session']
     const seen = new Set(Object.keys(studioCounts))
     const extra = [...seen].filter((s) => !known.includes(s)).sort()
     return [...known.filter((s) => seen.has(s)), ...extra]

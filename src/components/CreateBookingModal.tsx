@@ -48,7 +48,7 @@ const BOOKING_TYPE_TO_SESSION_TYPE: Record<BookingType, Session['session_type']>
   consultation: 'meeting',
 }
 
-const STUDIOS: StudioSpace[] = ['Studio A', 'Studio B', 'Home Visit', 'Venue']
+const STUDIOS: StudioSpace[] = ['Studio A', 'Studio B', 'External Location', 'Virtual Session']
 
 // 2026-05-07 — half-hour granularity for the quick-tap pills.
 // Real bookings frequently land on :30 (lessons, consults). The
