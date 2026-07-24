@@ -19,8 +19,9 @@ import { STUDIO_WORK_WEEK, type Weekday } from '../../types'
  * rows, but the UI uses plain choices:
  *   - Set weekly schedule
  *   - Request one-time change
- *   - Request time off (visible, but held until the data contract is
- *     approved so time off never gets mis-recorded as work time)
+ *   - Request time off (kind='time_off' on team_schedule_blocks —
+ *     subtracted from effective work by resolveEffectiveWorkWindows,
+ *     never rendered as a work shift)
  *
  * Used by:
  *   - MyScheduleWidget (Overview) — header "Request" button
@@ -94,8 +95,7 @@ export default function ScheduleRequestModal({
           <ScheduleChoice
             active={mode === 'time_off'}
             title="Request time off"
-            description="Vacation or unavailable dates. Coming soon."
-            badge="Soon"
+            description="Vacation or unavailable dates."
             onClick={() => setMode('time_off')}
           />
         </div>
@@ -118,7 +118,12 @@ export default function ScheduleRequestModal({
             prefillEnd={prefill?.endTime}
           />
         ) : (
-          <TimeOffPlaceholder onClose={onClose} />
+          <TimeOffForm
+            memberId={memberId}
+            onClose={onClose}
+            onSubmitted={onSubmitted}
+            prefillDate={prefill?.date}
+          />
         )}
       </div>
     </div>
@@ -164,20 +169,101 @@ function ScheduleChoice({
   )
 }
 
-function TimeOffPlaceholder({ onClose }: { onClose: () => void }) {
+// ─── Time off form ──────────────────────────────────────────────
+// Start/end date (same date = one day). Submits a pending
+// kind='time_off' block via requestScheduleBlock — admin approves
+// from Work Scheduler. Days are stored as a full-day span
+// (start date 00:00 -> day-after-end date 00:00, local time) so
+// resolveEffectiveWorkWindows subtracts the whole day(s) from
+// effective work regardless of what hours a shift covers, and so we
+// never construct the range from a UTC-based Date that could shift
+// the date under America/Denver.
+
+function TimeOffForm({
+  memberId,
+  onClose,
+  onSubmitted,
+  prefillDate,
+}: {
+  memberId: string
+  onClose: () => void
+  onSubmitted: () => void | Promise<void>
+  prefillDate?: string
+}) {
+  const { toast } = useToast()
+  const today = useMemo(() => toLocalDateString(new Date()), [])
+  const [startDate, setStartDate] = useState(prefillDate ?? today)
+  const [endDate, setEndDate] = useState(prefillDate ?? today)
+  const [reason, setReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!startDate || !endDate) {
+      toast('Pick a start and end date', 'error')
+      return
+    }
+    if (endDate < startDate) {
+      toast('End date must be on or after the start date', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const starts = new Date(`${startDate}T00:00:00`)
+      const endExclusive = new Date(`${endDate}T00:00:00`)
+      endExclusive.setDate(endExclusive.getDate() + 1)
+      await requestScheduleBlock({
+        member_id: memberId,
+        starts_at: starts.toISOString(),
+        ends_at: endExclusive.toISOString(),
+        note: reason.trim() || null,
+        kind: 'time_off',
+      })
+      toast('Time off request sent — awaiting admin review', 'success')
+      await onSubmitted()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to send request', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl border border-amber-400/25 bg-amber-400/8 p-3">
-        <p className="text-[13px] font-bold text-text">Time-off requests are coming soon.</p>
-        <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
-          We are finishing the approval flow so unavailable days stay separate from work time.
-          Nothing is saved from this screen yet.
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="rounded-lg border border-border bg-surface-alt/35 px-3 py-2">
+        <p className="text-[12px] font-semibold text-text">Time off</p>
+        <p className="text-[11px] text-text-muted">
+          For one day, use the same date for start and end. Admin reviews before it's approved.
         </p>
       </div>
-      <div className="flex items-center justify-end gap-2 pt-1">
-        <Button variant="ghost" size="sm" type="button" onClick={onClose}>Close</Button>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Start date</label>
+          <Input
+            type="date"
+            value={startDate}
+            min={today}
+            onChange={(e) => {
+              setStartDate(e.target.value)
+              if (endDate < e.target.value) setEndDate(e.target.value)
+            }}
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">End date</label>
+          <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+        </div>
       </div>
-    </div>
+      <div>
+        <label className="block text-[10px] uppercase tracking-wider text-text-muted mb-1">Reason (optional)</label>
+        <Input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g. Vacation"
+        />
+      </div>
+      <ActionRow onClose={onClose} submitting={submitting} submitLabel="Send time-off request" />
+    </form>
   )
 }
 
