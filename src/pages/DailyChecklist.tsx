@@ -72,7 +72,12 @@ export default function DailyChecklist() {
   useDocumentTitle('Tasks - Checkmark Workspace')
   const { profile, appRole } = useAuth()
   const [activePaneId, setActivePaneId] = useState<TaskPaneId>('my_tasks')
-  const [viewMode, setViewMode] = useState<TaskViewMode>('focused')
+  // On phones the widget carousel (1-up, swipeable) fits better than the
+  // sidebar+pane layout. Default to 'widgets' on narrow viewports and let
+  // the toggle switch back if the user prefers the focused view.
+  const [viewMode, setViewMode] = useState<TaskViewMode>(() =>
+    typeof window !== 'undefined' && window.innerWidth < 640 ? 'widgets' : 'focused',
+  )
   const activePane = useMemo(
     () => TASK_PANES.find((pane) => pane.key === activePaneId) ?? DEFAULT_TASK_PANE,
     [activePaneId],
