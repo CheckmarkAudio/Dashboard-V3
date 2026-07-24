@@ -362,6 +362,34 @@ export function formatDueShort(dueDate: string | null | undefined): string | nul
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+/**
+ * 2026-05-19 (Recurring tasks one-active PR) — Returns a small
+ * relative overdue label when `dueDate` is in the past (local time):
+ *   - "Yesterday"           (1 day ago)
+ *   - "2 days ago"          (2–6 days ago)
+ *   - "Mar 12"              (>1 week ago — show actual date)
+ * Returns null when the due date is today or in the future, or
+ * when the date is missing / unparseable. Used by task rows to
+ * surface a red "missed" label under the title — matches the Apple-
+ * Reminders behavior the user referenced in the screenshot.
+ */
+export function formatOverdueLabel(dueDate: string | null | undefined): string | null {
+  if (!dueDate) return null
+  // Parse as a date-only value with noon-local-time so DST jumps +
+  // evening UTC drift don't shift the day. Matches the trick used in
+  // `BookingDetailModal.formatDateLong`.
+  const d = new Date(`${dueDate}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return null
+  const today = new Date()
+  today.setHours(12, 0, 0, 0)
+  const msPerDay = 24 * 60 * 60 * 1000
+  const diffDays = Math.round((today.getTime() - d.getTime()) / msPerDay)
+  if (diffDays <= 0) return null  // due today or in the future — not overdue
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return `${diffDays} days ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 export function countByStage(
   tasks: { stage: Stage; done: boolean }[],
   submitted: Set<string> = new Set<string>(),
