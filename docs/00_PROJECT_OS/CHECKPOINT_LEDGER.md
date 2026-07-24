@@ -588,3 +588,40 @@ Open gaps:
 
 Signature:
 - CLAUDE:
+
+## 2026-07-23 MDT - CODEX - Schedule request language branch reconstruction
+
+Lane:
+- Codex: cross-agent branch overlap review, source-branch reconstruction, behavior audit, verification, and publishing.
+
+Summary:
+- Reviewed Claude's schedule-language handoff against current `origin/main`.
+- Found the original `codex/schedule-ux-language-pass` branch was based before PRs #307–#309, so publishing the branch wholesale would have reintroduced unrelated task/admin diffs and shown a migration deletion.
+- Reconstructed the change from current `origin/main` using only the isolated schedule-language commit.
+- Confirmed the final code diff is limited to the four intended schedule surfaces.
+- Confirmed the visible "Request time off" path is informational only: it renders no form, has no submit handler, and calls no schedule mutation.
+
+Files changed:
+- `src/components/admin/WorkScheduler.tsx`
+- `src/components/dashboard/MyScheduleWidget.tsx`
+- `src/components/schedule/ScheduleRequestModal.tsx`
+- `src/pages/Calendar.tsx`
+- `docs/PROJECT_STATE.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `git diff --name-status origin/main..HEAD` showed only the intended schedule files before checkpoint docs were added.
+- `git diff --check origin/main..HEAD` passed.
+- `npm run build` passed from the clean worktree.
+- Manual source audit confirmed existing weekly and one-time mutation functions are unchanged and the time-off placeholder performs no write.
+
+Open gaps:
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: Time-off submission remains intentionally unavailable until PR4's schema/RLS/RPC contract is reviewed and approved.
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Verify the three schedule choices and both existing submit paths in the Vercel preview on desktop and phone.
+- <span style="color:#7c3aed">ASSUMPTION</span>: "Time off" remains the director-approved worker term for the upcoming data-backed path.
+
+Token/source note:
+- Exact token total not visible in this tool.
+
+Signature:
+- CODEX:
