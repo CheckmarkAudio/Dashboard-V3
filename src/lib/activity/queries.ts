@@ -79,6 +79,62 @@ export async function fetchMemberActivityEvents(
   return ((data as RawMemberEventRow[] | null) ?? []).map(flywheelRowToActivityEvent)
 }
 
+/**
+ * Presence sessions for the caller's WHOLE TEAM that overlap
+ * [fromIso, toIso). No member filter — relies on the same RLS policy
+ * `useMemberPresenceSessions` does (admins read every row in their
+ * team; a non-admin caller would just get their own row back, same as
+ * the member-scoped fetch). Powers the admin "everyone's activity"
+ * roll-up — one query instead of N per-member round trips.
+ */
+export async function fetchTeamPresenceSessions(
+  fromIso: string,
+  toIso: string,
+): Promise<PresenceSession[]> {
+  const { data, error } = await supabase
+    .from('member_presence_sessions')
+    .select(PRESENCE_COLUMNS)
+    .lt('started_at', toIso)
+    .or(`ended_at.is.null,ended_at.gte.${fromIso}`)
+    .order('started_at', { ascending: true })
+  if (error) {
+    console.error(`${LOG_PREFIX} fetchTeamPresenceSessions failed:`, error)
+    throw new Error(error.message)
+  }
+  return (data as PresenceSession[] | null) ?? []
+}
+
+/** An ActivityEvent that still carries which member it belongs to —
+ *  only needed by the team-wide fetch below, where the caller has to
+ *  bucket events per member client-side. */
+export type TeamActivityEvent = ActivityEvent & { member_id: string }
+
+/**
+ * Flywheel events for the caller's WHOLE TEAM within [fromIso, toIso).
+ * `flywheel_events` RLS is team-scoped (not member-scoped), so this is
+ * a plain query with no `.eq('member_id', ...)` — same one-query
+ * economics as `fetchTeamPresenceSessions`.
+ */
+export async function fetchTeamActivityEvents(
+  fromIso: string,
+  toIso: string,
+): Promise<TeamActivityEvent[]> {
+  const { data, error } = await supabase
+    .from('flywheel_events')
+    .select('id, member_id, stage, source_type, metadata, occurred_at')
+    .gte('occurred_at', fromIso)
+    .lt('occurred_at', toIso)
+    .order('occurred_at', { ascending: true })
+  if (error) {
+    console.error(`${LOG_PREFIX} fetchTeamActivityEvents failed:`, error)
+    throw new Error(error.message)
+  }
+  return ((data as (RawMemberEventRow & { member_id: string })[] | null) ?? []).map((row) => ({
+    ...flywheelRowToActivityEvent(row),
+    member_id: row.member_id,
+  }))
+}
+
 /** Pure: turn a flywheel event row into a normalized ActivityEvent. */
 export function flywheelRowToActivityEvent(row: RawMemberEventRow): ActivityEvent {
   return {
@@ -112,4 +168,6 @@ export const memberActivityKeys = {
     [...memberActivityKeys.all, 'presence', memberId, day] as const,
   events: (memberId: string, day: string) =>
     [...memberActivityKeys.all, 'events', memberId, day] as const,
+  teamPresence: (day: string) => [...memberActivityKeys.all, 'team-presence', day] as const,
+  teamEvents: (day: string) => [...memberActivityKeys.all, 'team-events', day] as const,
 }

@@ -410,6 +410,21 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     allowedRoles: ['admin', 'owner'],
   },
   {
+    // 2026-07-26 — Team Activity. Admin counterpart to the member-side
+    // "My Activity" widget: one compact presence-vs-schedule bar per
+    // team member, all sharing the same time axis so an admin can scan
+    // who's on/late/off-schedule at a glance. Placed col 3 (stacks
+    // under Notifications) to keep the 3-column rhythm consistent with
+    // Task Requests (col 1) and Employee Schedule (col 2).
+    id: 'admin_team_activity',
+    title: 'Team Activity',
+    description: "Every member's presence today, against their schedule.",
+    defaultPlacements: [{ scope: 'admin_overview', span: 1, rowSpan: 2, col: 3 }],
+    accessVisibility: 'admin',
+    dataScope: 'team',
+    allowedRoles: ['admin', 'owner'],
+  },
+  {
     // PR #46: thumbnail grid replaces big-card preview; search /
     // filters / Arrange-by row stays pinned at top while the grid
     // scrolls. Standalone admin_template_preview widget folded into
@@ -663,7 +678,14 @@ function buildDefaultWidgetStateForScope(
 // is one of the first things you see on landing. Bumping the version
 // drops saved member_overview layouts so every member's Overview
 // gets the new widget without manual re-add.
-export const WORKSPACE_LAYOUT_VERSION = 39
+// 2026-07-26 (v40) — `admin_team_activity` added to admin_overview
+// (col 3, rs=2, stacks under Notifications). Bumping the version drops
+// saved admin_overview layouts so every admin's Hub picks up the new
+// widget without manual re-add. NOTE: PR #319 (member-side My Activity
+// promotion) independently bumps this same constant to 40 on its own
+// branch off an earlier main — whichever of the two PRs merges second
+// will hit a trivial one-line conflict here; resolve by bumping to 41.
+export const WORKSPACE_LAYOUT_VERSION = 40
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

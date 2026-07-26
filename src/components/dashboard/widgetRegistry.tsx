@@ -48,6 +48,7 @@ import MyScheduleWidget from './MyScheduleWidget'
 import AdminTemplatesWidget from '../admin/templates/AdminTemplatesWidget'
 import AdminEditTasksWidget from '../admin/tasks/AdminEditTasksWidget'
 import AdminClockInWidget from '../admin/AdminClockInWidget'
+import AdminTeamActivityWidget from '../admin/AdminTeamActivityWidget'
 import AdminEmployeeScheduleWidget from '../admin/AdminEmployeeScheduleWidget'
 
 // ═════════════════════════════════════════════════════════════════════
@@ -106,6 +107,7 @@ const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
   // PR #50 — "Who's on the clock". Lists team members with an open
   // time_clock_entries shift, with a live elapsed counter per row.
   admin_clock_in: AdminClockInWidget,
+  admin_team_activity: AdminTeamActivityWidget,
   // Lean 7 (PR #78) — admin Hub copy of today_calendar. Reuses the
   // exact TodayCalendarWidget component (CalendarDayCard wrapper);
   // separate id keeps the disjoint MemberWidgetId / AdminWidgetId
