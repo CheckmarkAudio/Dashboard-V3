@@ -139,7 +139,15 @@ export default function HeaderActivityBar() {
     <button
       type="button"
       onClick={() => navigate('/')}
-      className="hidden shrink-0 items-center gap-4 h-[72px] px-5 rounded-2xl bg-[#221f14] border-[1.5px] border-gold shadow-[0_6px_18px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-gold-muted hover:brightness-110 transition-all focus-ring lg:flex"
+      // `.widget-card` is the same shared, theme-aware chrome every
+      // panel in the app already uses (dark: surface-alt→surface
+      // gradient + soft white border; light: flat white + border-
+      // border, no shadow) -- reusing it directly is what actually
+      // makes this control belong here instead of reading as a
+      // custom one-off. The gold ring is layered ON TOP for a touch
+      // of brand distinction + interactivity, not baked into the
+      // base chrome.
+      className="widget-card hidden shrink-0 items-center gap-4 h-[72px] px-5 ring-1 ring-gold/20 hover:ring-gold/40 hover:-translate-y-0.5 transition-all focus-ring lg:flex"
       title={title}
       aria-label={title}
     >
@@ -155,7 +163,12 @@ export default function HeaderActivityBar() {
           {title}
         </span>
 
-        <div className="relative h-[11px] w-[520px] rounded-md bg-[#3a3826] shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]" aria-hidden="true">
+        {/* Recessed groove — `bg-border` gives correct "recessed
+            below the card" contrast in BOTH themes from one token
+            (dark border #34343d is lighter than the card behind it;
+            light border #dedee5 is darker than the white card), vs.
+            a hardcoded hex that only ever reads right in one theme. */}
+        <div className="relative h-[11px] w-[520px] rounded-md bg-border shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)]" aria-hidden="true">
           {model.scheduledWindow && (
             // Solid fill, not a dashed outline — this is a real,
             // committed scheduled window, not a maybe. Presence
