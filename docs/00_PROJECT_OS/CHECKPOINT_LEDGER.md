@@ -769,3 +769,32 @@ Open gaps:
 
 Signature:
 - CLAUDE:
+
+## 2026-07-26 (MDT) - CLAUDE - Admin Team Activity widget (Hub)
+
+Lane:
+- Claude/Fable: scoped admin Hub widget, reuses PR2's already-merged pure activity layer (no schema, no new RLS).
+
+Summary:
+- Director asked for each member's own independent activity bar on their own Overview (shipped separately as the Today View promotion on PR #319), plus a separate admin-only spot to see EVERYONE's bars at a glance.
+- Added two team-wide fetchers to `src/lib/activity/queries.ts` — `fetchTeamPresenceSessions` / `fetchTeamActivityEvents` (both no `member_id` filter; RLS already scopes admins to their whole team via PR1's `member_presence_sessions` policy and `flywheel_events`' team-scoped SELECT, so this is 2 queries total regardless of team size, not N).
+- New `src/components/admin/AdminTeamActivityWidget.tsx` — one compact row per team member (avatar + name + a mini presence-vs-schedule bar), all sharing a fixed 7a–9p axis so bars are directly comparable across the roster. Deliberately simpler than the personal widget: no per-event markers/feed, since the point is a team-wide scan, not one person's detail. A gold "now" tick + emerald "Xm" pill mark whoever has an open presence session.
+- Registered as `admin_team_activity` (new `AdminWidgetId`), placed `admin_overview` col 3 rs2 (stacks under Notifications, matching the existing 1-widget-per-column rhythm — Task Requests col1, Employee Schedule col2). `WORKSPACE_LAYOUT_VERSION` 39 → 40.
+- **Known collision:** PR #319 independently bumps this same constant to 40 on a separate branch off an earlier main commit. Whichever PR merges second will hit a trivial one-line conflict on that constant — resolve by bumping to 41. Documented inline at the constant.
+
+Files changed:
+- `src/components/admin/AdminTeamActivityWidget.tsx` (new)
+- `src/lib/activity/queries.ts`, `src/domain/workspaces/types.ts`, `src/domain/workspaces/registry.ts`, `src/components/dashboard/widgetRegistry.tsx`
+- `docs/PROJECT_STATE.md`, `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `npm run build` clean; `npm test` 26/26 pass (no change to pure logic itself).
+- Local dev preview (separate worktree, separate port): v40 layout reset confirmed, `admin_team_activity` lands in admin_overview col 3 as designed. Card renders correctly — title, "TEAM ACTIVITY · 0 ACTIVE NOW" header, one row per roster member (avatar + name), no console/render error. Verified via direct DOM inspection (Browser-pane screenshot had an unrelated scroll-timing quirk this session, worked around with structural checks instead).
+- Bar rendering itself (colored segments) not yet visually confirmed against real multi-member data — this local dev roster had no seeded presence/schedule data for the visible members.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: visual check on the Vercel preview with real team presence/schedule data — confirm bars, "now" tick, and the active-count header read correctly with several members at once.
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: confirm col 3 / stacked-under-Notifications placement is the right spot, and whether `admin_clock_in` ("On the Clock" — currently unplaced/dormant) should be retired now that this widget covers the same "who's active" question plus schedule context.
+
+Signature:
+- CLAUDE:

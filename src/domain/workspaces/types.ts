@@ -174,6 +174,11 @@ export type AdminWidgetId =
   // (Hub order: Approvals · Employee Schedule · Notifications) so
   // admins glance at staffing alongside the approval queue.
   | 'admin_employee_schedule'
+  // 2026-07-26 — Team Activity. Admin Hub counterpart to the member
+  // "My Activity" widget: one compact presence-vs-schedule bar per
+  // team member on a shared axis, so admins can see who's on/late/
+  // off-schedule right now at a glance.
+  | 'admin_team_activity'
   // Admin-side widget bank — registered but not on the page yet.
   | 'team_focus'
   | 'approval_queue'
