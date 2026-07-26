@@ -38,7 +38,7 @@ You can also just tell an AI coder "add this to the priority queue" and it will 
 <!-- ACTIVE:START -->
 <!-- Add priority items below this line as `- [ ] ...`. The session-start hook reads everything between the ACTIVE markers. Keep finished items OUT of here — move them to Done. -->
 
-- [ ] Google/Apple Calendar auto-push automation (workspace bookings → Google Calendar on every new/updated booking, event-triggered, not a scheduled sweep) — Requested by: director · Added: 2026-07-18 · ASAP: no · Notes: Two-way sync deprioritized in favor of one-way push first (workspace→Google matters more than Google→workspace right now). Prerequisite race-condition fix (duplicate recurring bookings + duplicate Google events) is DONE — see `claude/recurring-booking-race-fix` branch / PROJECT_STATE "Currently active" row, migration `20260718120000_recurring_session_race_and_sync_claim.sql`, edge function `google-calendar-sync` v15. Remaining: Supabase Database Webhook wiring (Codex) to fire the now-hardened push path automatically instead of the manual "Push pending bookings" button, + a nightly reconciliation cron as a safety net. Needs director input before Codex builds: reconnect Google Calendar OAuth once webhook is ready to test end-to-end; confirm recurring-series edit/delete → Google event cleanup behavior is what's expected; sign off on the PR before merge (touches booking data).
+_(No active priority tasks right now.)_
 
 <!-- ACTIVE:END -->
 
@@ -47,6 +47,8 @@ You can also just tell an AI coder "add this to the priority queue" and it will 
 ## Done
 
 Completed priority items, most recent first. Kept as a record — do not delete.
+
+- [x] Google/Apple Calendar auto-push automation (workspace bookings → Google Calendar on every new/updated booking, event-triggered, not a scheduled sweep) — Requested by: director · Added: 2026-07-18 · Done: 2026-07-24 · Notes: Shipped as two PRs: [#314](https://github.com/CheckmarkAudio/Dashboard-V3/pull/314) (recurring-booking race fix + Google-sync claim-before-send hardening — prerequisite so the automation can't create duplicate bookings or duplicate Google events) and [#315](https://github.com/CheckmarkAudio/Dashboard-V3/pull/315) (the actual trigger — a Postgres trigger on `sessions` INSERT/UPDATE calls `google-calendar-sync` via `pg_net`, async, authenticated by a shared secret stored only in Supabase Vault). Verified live in production with real test bookings: create → real Google event, edit → same event updated, cancel → event deleted. Two-way (Google→workspace) sync stays deferred, matching the original ask. Nightly `pg_cron` reconciliation safety net is a nice-to-have, not blocking, and remains unbuilt.
 
 - [x] Add communication reactions, @pings, and sound cues for Forum + DMs — Requested by: Gavin · Added: 2026-07-10 · Done: 2026-07-10 · Notes: Added chat_message_reactions and chat_message_mentions, Forum/DM reaction buttons, @[Name] mention picker, Checkmark Chime/Soft Pop/Silent preference, and global clickable sound bubbles for DMs, reactions, and pings.
 
