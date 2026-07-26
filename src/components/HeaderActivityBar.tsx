@@ -66,6 +66,28 @@ function formatActiveMinutes(mins: number): string {
  * a concrete scheduled time... treated more set than potential" (was
  * a dashed outline with no fill; now a solid gold-tinted block).
  * Also moved to render BEFORE the theme toggle in Layout.tsx.
+ *
+ * v4 (2026-07-26) — "looking way better" but "sticks out... hovery
+ * over the header... not integrated." Root cause: the `.widget-card`
+ * shadow/ring/lift combo is a *content-card* pattern (a clickable
+ * tile that should feel separate from the page), not a *chrome*
+ * pattern (a persistent nav control that should feel like part of
+ * the bar it lives in). Cross-checked how other products treat a
+ * persistent status control in a nav bar — Discord's voice-connection
+ * strip, Notion's presence stack, Linear's status pills, GitHub's
+ * header controls — none of them use a drop shadow or hover-lift;
+ * they sit flush using the bar's own hover-state color, a hairline
+ * border at most, and let content (icons/color/text) carry the
+ * distinction instead of the container. Applied that here: dropped
+ * the shadow + gold ring + `-translate-y` lift, swapped to the same
+ * solid `bg-surface-hover` tone the header's OTHER buttons already
+ * use on hover (so at rest it already reads as "a control that
+ * belongs to this bar," not a card that landed on it), and reduced
+ * the radius to match sibling controls instead of the heavier
+ * widget-card radius. Still solid/opaque per the earlier "not
+ * transparent" note — the bar's own content (colored segments, gold
+ * now-marker) carries the legibility now that it's large, so the
+ * container no longer has to.
  */
 export default function HeaderActivityBar() {
   const { profile } = useAuth()
@@ -139,15 +161,14 @@ export default function HeaderActivityBar() {
     <button
       type="button"
       onClick={() => navigate('/')}
-      // `.widget-card` is the same shared, theme-aware chrome every
-      // panel in the app already uses (dark: surface-alt→surface
-      // gradient + soft white border; light: flat white + border-
-      // border, no shadow) -- reusing it directly is what actually
-      // makes this control belong here instead of reading as a
-      // custom one-off. The gold ring is layered ON TOP for a touch
-      // of brand distinction + interactivity, not baked into the
-      // base chrome.
-      className="widget-card hidden shrink-0 items-center gap-4 h-[72px] px-5 ring-1 ring-gold/20 hover:ring-gold/40 hover:-translate-y-0.5 transition-all focus-ring lg:flex"
+      // `bg-surface-hover` is the exact solid tone the header's OTHER
+      // buttons (theme toggle, bells) already transition to on hover
+      // -- using it at rest is what makes this read as "a control
+      // that's part of this bar's own material" instead of a card
+      // sitting on top of it. No shadow, no ring, no lift-on-hover
+      // (those are content-card affordances, not nav-chrome ones);
+      // hover just deepens the same tone a step further.
+      className="hidden shrink-0 items-center gap-4 h-[72px] px-5 rounded-xl bg-surface-hover border border-border/60 hover:bg-border/70 transition-colors focus-ring lg:flex"
       title={title}
       aria-label={title}
     >
