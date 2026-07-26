@@ -562,6 +562,27 @@ export default function Layout() {
                 that's a separate component with real counts and compact route
                 action-strip variants. */}
 
+            {/* Skin pass 2026-05-06 — Book a Session moved back to the
+                Overview page (sits to the right of the member panel
+                via MemberHighlights' actions slot) per user feedback.
+                Layout's top-bar reserves space for cross-app utilities
+                only (activity bar, theme toggle, profile, bell). */}
+
+            {/* 2026-07-26 — Clock In/Out (PR #50) retired. Presence is
+                heartbeat-driven now (usePresenceHeartbeat, mounted
+                above), not a manual punch. HeaderActivityBar replaces
+                the button with a passive glance-only indicator — click
+                through to Overview for the full My Activity card. Sign
+                out lives on the member's own Profile page now (the
+                Clock Out modal's Log Out path was the only other
+                entry point, and it's gone with the button); presence
+                is closed centrally in AuthContext.signOut() so every
+                remaining sign-out path gets it automatically.
+                Placed BEFORE the theme toggle per director direction
+                ("the bar needs to be to the left of the dark mode
+                light mode button"). */}
+            <HeaderActivityBar />
+
             {/* Theme toggle — light/dark. System preference stays accessible
                 via ThemeContext for anyone who wants a future Settings UI. */}
             <button
@@ -573,24 +594,6 @@ export default function Layout() {
             >
               {resolvedTheme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
             </button>
-
-            {/* Skin pass 2026-05-06 — Book a Session moved back to the
-                Overview page (sits to the right of the member panel
-                via MemberHighlights' actions slot) per user feedback.
-                Layout's top-bar reserves space for cross-app utilities
-                only (theme toggle, activity bar, profile, bell). */}
-
-            {/* 2026-07-26 — Clock In/Out (PR #50) retired. Presence is
-                heartbeat-driven now (usePresenceHeartbeat, mounted
-                above), not a manual punch. HeaderActivityBar replaces
-                the button with a passive glance-only indicator — click
-                through to Overview for the full My Activity card. Sign
-                out lives on the member's own Profile page now (the
-                Clock Out modal's Log Out path was the only other
-                entry point, and it's gone with the button); presence
-                is closed centrally in AuthContext.signOut() so every
-                remaining sign-out path gets it automatically. */}
-            <HeaderActivityBar />
 
             {/* Profile — clickable to the signed-in user's own profile */}
             <button

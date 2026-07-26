@@ -56,9 +56,16 @@ function formatActiveMinutes(mins: number): string {
  *
  * v2 (2026-07-26) — director feedback on v1: "very hard to see... the
  * time thing [is] puny, give it a soul." Solid (non-transparent) fill,
- * a real gold border, a 320px timeline (was 84px) with a glowing
+ * a real gold border, a bigger timeline (was 84px) with a glowing
  * "now" marker and hour-tick context underneath, and a bold two-line
  * label instead of a single muted word.
+ *
+ * v3 (2026-07-26) — further feedback: "there's a lot of space, fill
+ * it more" (timeline 320px → 520px) and the scheduled-hours band read
+ * as too tentative — "it shouldn't be translucent really since it is
+ * a concrete scheduled time... treated more set than potential" (was
+ * a dashed outline with no fill; now a solid gold-tinted block).
+ * Also moved to render BEFORE the theme toggle in Layout.tsx.
  */
 export default function HeaderActivityBar() {
   const { profile } = useAuth()
@@ -148,10 +155,14 @@ export default function HeaderActivityBar() {
           {title}
         </span>
 
-        <div className="relative h-[11px] w-[320px] rounded-md bg-[#3a3826] shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]" aria-hidden="true">
+        <div className="relative h-[11px] w-[520px] rounded-md bg-[#3a3826] shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]" aria-hidden="true">
           {model.scheduledWindow && (
+            // Solid fill, not a dashed outline — this is a real,
+            // committed scheduled window, not a maybe. Presence
+            // segments (below) paint on top in their own vivid
+            // colors wherever actual activity occurred.
             <div
-              className="absolute top-0 h-full rounded-md border border-dashed border-gold/45"
+              className="absolute top-0 h-full rounded-md bg-gold/35 border border-gold/80"
               style={{
                 left: `${pct(Date.parse(model.scheduledWindow.start))}%`,
                 width: `${Math.max(1.5, pct(Date.parse(model.scheduledWindow.end)) - pct(Date.parse(model.scheduledWindow.start)))}%`,
@@ -180,7 +191,7 @@ export default function HeaderActivityBar() {
           />
         </div>
 
-        <div className="flex justify-between w-[320px] text-[9px] text-text-light tracking-wide">
+        <div className="flex justify-between w-[520px] text-[9px] text-text-light tracking-wide">
           {AXIS_TICKS.map((h) => (
             <span key={h}>{hourLabel(h)}</span>
           ))}
