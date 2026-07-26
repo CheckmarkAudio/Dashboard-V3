@@ -1,7 +1,7 @@
 import { Suspense, useState, useRef, useEffect, useLayoutEffect, useMemo, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -10,7 +10,7 @@ import { useQuickKeyListener } from '../hooks/useQuickKeyListener'
 import { usePresenceHeartbeat } from '../lib/presence/usePresenceHeartbeat'
 import { APP_ROUTES } from '../app/routes'
 import ErrorBoundary from './ErrorBoundary'
-import SelfReportModal from './SelfReportModal'
+import HeaderActivityBar from './HeaderActivityBar'
 import NotificationsBell from './notifications/NotificationsBell'
 import MessagesBell from './messages/MessagesBell'
 import CommunicationNotifier from './communication/CommunicationNotifier'
@@ -19,22 +19,14 @@ import DmDock from './messages/DmDock'
 import FlywheelDemoBadge from './flywheel/FlywheelDemoBadge'
 import ForcePasswordChangeModal from './auth/ForcePasswordChangeModal'
 import MemberAvatar from './members/MemberAvatar'
-import { useToast } from './Toast'
 import TroubleshootingButton from './TroubleshootingButton'
 import checkmarkLogo from '../assets/checkmark-audio-logo.png'
-import {
-  clockIn,
-  clockOut,
-  fetchMyOpenClockEntry,
-  timeClockKeys,
-} from '../lib/queries/timeClock'
-import { closePresence } from '../lib/queries/presence'
 import { fetchTeamSiteBranding, teamSiteBrandingKeys } from '../lib/queries/teamSiteBranding'
 import type { LucideProps } from 'lucide-react'
 import {
   LayoutDashboard, Users, Calendar, Settings, Gauge,
   Menu, X, ChevronDown, ClipboardList, CheckSquare,
-  BarChart3, Briefcase, MessageSquare, Clock, Sun, Moon,
+  BarChart3, Briefcase, MessageSquare, Sun, Moon,
   Loader2, MoreHorizontal, FolderUp,
 } from 'lucide-react'
 
@@ -407,45 +399,17 @@ const adminLinks: NavLinkDef[] = [
 const settingsLink: NavLinkDef = { to: APP_ROUTES.admin.settings, icon: Settings, label: 'Settings' }
 
 export default function Layout() {
-  const { profile, canAccessAdmin, appRole, signOut } = useAuth()
+  const { profile, canAccessAdmin, appRole } = useAuth()
   const { resolved: resolvedTheme, toggle: toggleTheme } = useTheme()
-  const queryClient = useQueryClient()
-  const { toast } = useToast()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [showSelfReport, setShowSelfReport] = useState(false)
-  const [selfReportShift, setSelfReportShift] = useState<{
-    clockInTime: string
-    clockedInAtIso?: string
-  } | null>(null)
   const [adminExpanded, setAdminExpanded] = useState(true)
-  // 2026-05-12 (clock polish) — re-render every 60s while a shift is
-  // open so the elapsed-time text on the Clock Out pill ticks
-  // forward without each consumer wiring its own interval.
-  const [, setNowTick] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => setNowTick((n) => n + 1), 60_000)
-    return () => clearInterval(id)
-  }, [])
 
-  // PR #50 — Clock In/Out is now DB-backed. The header button reads
-  // the user's currently-open shift on mount and toggles based on
-  // its presence. `clockInTime` (display string) is derived from the
-  // open shift's `clocked_in_at` so reloads / multi-tab show the
-  // same state.
-  const openShiftQuery = useQuery({
-    queryKey: timeClockKeys.myOpen(),
-    queryFn: fetchMyOpenClockEntry,
-    enabled: Boolean(profile?.id),
-    // Refetch on focus so a clock-out done in another tab shows up.
-    refetchOnWindowFocus: true,
-  })
   const siteBrandingQuery = useQuery({
     queryKey: teamSiteBrandingKeys.current(),
     queryFn: fetchTeamSiteBranding,
     enabled: Boolean(profile?.id),
     staleTime: 5 * 60_000,
   })
-  const openShift = openShiftQuery.data ?? null
   const siteBranding = siteBrandingQuery.data
   const siteBannerOpacity = siteBranding?.site_banner_url
     ? Math.max(0, Math.min(100, siteBranding.site_banner_opacity)) / 100
@@ -456,59 +420,7 @@ export default function Layout() {
   const siteBannerReadabilityOpacity = siteBranding?.site_banner_url
     ? 0.28 + siteBannerThemeOpacity * 0.32
     : 1
-  const clockedIn = Boolean(openShift)
-  const clockInTime = openShift
-    ? new Date(openShift.clocked_in_at).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })
-    : ''
-  // 2026-05-12 (clock polish) — live elapsed counter on the Clock Out
-  // pill so members can see how long they've been on the clock at a
-  // glance. Re-derived on every render; the 60s `setNowTick` interval
-  // above keeps it ticking forward while the page stays open.
-  const clockElapsed = openShift ? formatShiftElapsed(openShift.clocked_in_at) : ''
 
-  const clockInMutation = useMutation({
-    mutationFn: clockIn,
-    onSuccess: (row) => {
-      queryClient.setQueryData(timeClockKeys.myOpen(), row)
-      void queryClient.invalidateQueries({ queryKey: timeClockKeys.currentlyClockedIn() })
-      // Acknowledge the action — the button silently swapping reads as
-      // unconfirmed. Toast confirms the time so multi-tab sessions
-      // can sanity-check.
-      const t = new Date(row.clocked_in_at).toLocaleTimeString('en-US', {
-        hour: 'numeric', minute: '2-digit', hour12: true,
-      })
-      toast(`Clocked in at ${t}`, 'success')
-    },
-    onError: (err) => {
-      toast(err instanceof Error ? err.message : 'Failed to clock in', 'error')
-    },
-  })
-  const clockOutMutation = useMutation({
-    // 2026-05-07 — accept the SelfReportModal reflection text so the
-    // "Went well / To improve" entries actually persist to
-    // time_clock_entries.notes (Members > Clock Data reads from there).
-    mutationFn: (notes?: string | null) => clockOut(notes ?? undefined),
-    onSuccess: (row) => {
-      queryClient.setQueryData(timeClockKeys.myOpen(), null)
-      void queryClient.invalidateQueries({ queryKey: timeClockKeys.currentlyClockedIn() })
-      // Refresh the admin Clock Data table so the just-closed shift +
-      // its notes show up on the Members page without a manual reload.
-      void queryClient.invalidateQueries({ queryKey: timeClockKeys.all })
-      // Confirm with shift duration for confidence.
-      const mins = row.clocked_out_at
-        ? Math.max(0, Math.round((new Date(row.clocked_out_at).getTime() - new Date(row.clocked_in_at).getTime()) / 60_000))
-        : 0
-      const human = mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`
-      toast(`Clocked out · ${human} on shift`, 'success')
-    },
-    onError: (err) => {
-      toast(err instanceof Error ? err.message : 'Failed to clock out', 'error')
-    },
-  })
   const navigate = useNavigate()
   const location = useLocation()
   usePresenceHeartbeat(profile?.id)
@@ -525,17 +437,6 @@ export default function Layout() {
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
   }, [sidebarOpen])
-
-  const handleSignOut = async () => {
-    try { await closePresence() } catch {}
-    try { await signOut() } catch {}
-    navigate(APP_ROUTES.auth.login)
-  }
-
-  const closeSelfReport = () => {
-    setShowSelfReport(false)
-    setSelfReportShift(null)
-  }
 
   const closeDrawer = () => setSidebarOpen(false)
 
@@ -674,73 +575,19 @@ export default function Layout() {
                 Overview page (sits to the right of the member panel
                 via MemberHighlights' actions slot) per user feedback.
                 Layout's top-bar reserves space for cross-app utilities
-                only (theme toggle, clock in/out, profile, bell). */}
+                only (theme toggle, activity bar, profile, bell). */}
 
-            {/* Clock In / Clock Out — DB-backed (PR #50). Click "Clock
-                In" → fires the clock_in RPC. Click "Clock Out" →
-                opens SelfReportModal where the user can either close
-                their shift (clock_out RPC) or "Log Out" (signs out
-                AND closes the shift). Live timer updates every 30s
-                while the shift is open. */}
-            {showSelfReport && selfReportShift && (
-              <SelfReportModal
-                clockInTime={selfReportShift.clockInTime}
-                clockedInAtIso={selfReportShift.clockedInAtIso}
-                // X / backdrop / Escape — dismiss the modal. Before
-                // submit this keeps the user on shift; after submit
-                // the shift is already closed and the user stays
-                // signed in. Keeping this modal outside the
-                // `clockedIn` branch prevents React from unmounting
-                // the success screen when clock_out clears myOpen.
-                onDismiss={closeSelfReport}
-                // Submit — fires clock_out with the user's
-                // reflection. The modal flips to its success screen
-                // internally and stays mounted even after the header
-                // button changes back to Clock In.
-                onClockOut={(notes) => {
-                  clockOutMutation.mutate(notes)
-                }}
-                // Log Out from the post-submit success screen —
-                // shift is already closed by onClockOut, so this
-                // ONLY signs out (no second clock_out call).
-                onLogout={async () => {
-                  closeSelfReport()
-                  await handleSignOut()
-                }}
-              />
-            )}
-
-            {!clockedIn ? (
-              <button
-                onClick={() => clockInMutation.mutate()}
-                disabled={clockInMutation.isPending || openShiftQuery.isLoading}
-                className="flex items-center gap-2 h-10 px-4 rounded-2xl bg-gold text-black text-[13px] font-extrabold tracking-tight hover:bg-gold-muted transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {clockInMutation.isPending ? (
-                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                ) : (
-                  <Clock size={14} strokeWidth={2} aria-hidden="true" />
-                )}
-                Clock In
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => {
-                    setSelfReportShift({
-                      clockInTime,
-                      clockedInAtIso: openShift?.clocked_in_at,
-                    })
-                    setShowSelfReport(true)
-                  }}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold/12 text-gold border border-gold/25 text-[12px] font-semibold hover:bg-gold/20 transition-all tabular-nums"
-                  title={`On the clock since ${clockInTime}`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
-                  {clockInTime} · {clockElapsed} · Clock Out
-                </button>
-              </>
-            )}
+            {/* 2026-07-26 — Clock In/Out (PR #50) retired. Presence is
+                heartbeat-driven now (usePresenceHeartbeat, mounted
+                above), not a manual punch. HeaderActivityBar replaces
+                the button with a passive glance-only indicator — click
+                through to Overview for the full My Activity card. Sign
+                out lives on the member's own Profile page now (the
+                Clock Out modal's Log Out path was the only other
+                entry point, and it's gone with the button); presence
+                is closed centrally in AuthContext.signOut() so every
+                remaining sign-out path gets it automatically. */}
+            <HeaderActivityBar />
 
             {/* Profile — clickable to the signed-in user's own profile */}
             <button
@@ -771,11 +618,13 @@ export default function Layout() {
 
             {/* PR #67 — Notifications bell moved to the rightmost slot of
                 the top bar, replacing the standalone Sign out button.
-                The Clock Out modal already exposes a Log Out path
-                (lines 593-597) so a dedicated sign-out icon was
-                redundant. The bell's dropdown uses `getBoundingClientRect`
-                to anchor to its actual position, so the panel still
-                opens flush against the right edge. */}
+                Originally the Clock Out modal's Log Out path made a
+                dedicated icon redundant; as of the 2026-07-26 clock
+                retirement, sign-out lives on the member's own Profile
+                page instead (reachable via the avatar button below).
+                The bell's dropdown uses `getBoundingClientRect` to
+                anchor to its actual position, so the panel still opens
+                flush against the right edge. */}
             {/* Direct Messages — sits just left of the notifications
                 bell. Same dropdown interaction model; its unread badge
                 counts DM/group threads (forum channels stay on the
@@ -848,25 +697,4 @@ export default function Layout() {
     </div>
     </DmDockProvider>
   )
-}
-
-/**
- * Compact shift duration string, e.g. "3m" / "1h 23m" / "8h" / "1d 4h".
- * Mirrors the format used in the admin "On the clock" widget so the
- * member-side pill and admin-side pill read the same.
- */
-function formatShiftElapsed(clockInIso: string): string {
-  const start = new Date(clockInIso).getTime()
-  const ms = Math.max(0, Date.now() - start)
-  const totalMin = Math.floor(ms / 60_000)
-  if (totalMin < 1) return 'just now'
-  if (totalMin < 60) return `${totalMin}m`
-  const totalHours = Math.floor(totalMin / 60)
-  if (totalHours < 24) {
-    const m = totalMin % 60
-    return m === 0 ? `${totalHours}h` : `${totalHours}h ${m}m`
-  }
-  const days = Math.floor(totalHours / 24)
-  const h = totalHours % 24
-  return h === 0 ? `${days}d` : `${days}d ${h}h`
 }

@@ -215,7 +215,12 @@ export const MEMBER_BANK_REGISTRATIONS: MemberWidgetRegistration[] = [
 // Hub stacks (Lean 7, PR #78):
 //   col 1: admin_task_requests (rs2)
 //   col 2: admin_today_calendar (rs2)
-//   col 3: admin_notifications (rs2) · admin_team · admin_clock_in
+//   col 3: admin_notifications (rs2) · admin_team
+// (`admin_clock_in` retired 2026-07-26 — see the note on its old id
+// in types.ts. Note: this comment block predates several later Hub
+// changes and may not reflect current placements exactly — treat
+// `ADMIN_WIDGET_REGISTRATIONS`'s actual `defaultPlacements` as the
+// source of truth, not this comment.)
 // admin_quick_assign + admin_flywheel are still registered (so saved
 // layouts that referenced them sanitize cleanly via the LAYOUT_VERSION
 // bump) but their `admin_overview` placement was dropped — the
@@ -392,18 +397,6 @@ export const ADMIN_WIDGET_REGISTRATIONS: AdminWidgetRegistration[] = [
     id: 'admin_team',
     title: 'Team',
     description: 'Your crew at a glance.',
-    defaultPlacements: [],
-    accessVisibility: 'admin',
-    dataScope: 'team',
-    allowedRoles: ['admin', 'owner'],
-  },
-  {
-    // Lean 2 rev15 (PR #79) — dropped from admin_overview alongside
-    // admin_team. Same rationale as above. Re-add a placement here
-    // if "Who's on the clock" returns to the Hub.
-    id: 'admin_clock_in',
-    title: 'On the Clock',
-    description: '',
     defaultPlacements: [],
     accessVisibility: 'admin',
     dataScope: 'team',
@@ -663,7 +656,16 @@ function buildDefaultWidgetStateForScope(
 // is one of the first things you see on landing. Bumping the version
 // drops saved member_overview layouts so every member's Overview
 // gets the new widget without manual re-add.
-export const WORKSPACE_LAYOUT_VERSION = 39
+// 2026-07-26 (v40) — `admin_clock_in` ("On the Clock") retired along
+// with the Clock In/Out button; id removed from the AdminWidgetId
+// union entirely. Bumping the version sanitizes away any saved Hub
+// layout that had it manually added via Workspace Controls, instead
+// of leaving a broken slot. NOTE: PR #319 (My Activity → Today View)
+// and PR #321 (admin Team Activity widget) each independently bump
+// this same constant to 40 on their own branches off an earlier main.
+// Whichever of these three PRs merges LAST needs a 1-line bump to 42
+// (the second-to-merge already needs 41) — resolve at merge time.
+export const WORKSPACE_LAYOUT_VERSION = 40
 
 // Default layouts per scope. Each scope picks its widgets from the
 // relevant side's registrations (all + bank) and uses only those whose

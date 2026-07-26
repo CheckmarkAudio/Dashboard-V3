@@ -4,6 +4,7 @@ import { supabase, withSupabaseRetry } from '../lib/supabase'
 import { time as perfTime } from '../lib/perfTrace'
 import { normalizeEmail } from '../lib/email'
 import { clearSessionExpandState } from '../hooks/useSessionExpand'
+import { closePresence } from '../lib/queries/presence'
 import type { TeamMember } from '../types'
 import {
   OWNER_EMAIL,
@@ -464,6 +465,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * is guaranteed to be signed out locally within a tick.
    */
   const signOut = useCallback(async () => {
+    // Best-effort: close the caller's open presence session (if any)
+    // BEFORE the local session clears, since presence_close() needs
+    // a still-valid auth.uid(). Centralized here (rather than in each
+    // sign-out call site) so every path that calls signOut() gets
+    // this automatically — the retired Clock button was the only
+    // caller that used to remember to do this.
+    try { await closePresence() } catch { /* non-fatal — heartbeat idle-close is the backstop */ }
+
     try {
       // scope: 'local' clears the stored session and subscribers
       // without making a network call to /auth/v1/logout. It cannot

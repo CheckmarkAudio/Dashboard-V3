@@ -38,7 +38,7 @@ You can also just tell an AI coder "add this to the priority queue" and it will 
 <!-- ACTIVE:START -->
 <!-- Add priority items below this line as `- [ ] ...`. The session-start hook reads everything between the ACTIVE markers. Keep finished items OUT of here — move them to Done. -->
 
-_(No active priority tasks right now.)_
+- [ ] Redesign the schedule widget's visual treatment — Requested by: director · Added: 2026-07-26 · ASAP: no · Notes: director dislikes the purple chip rows currently used for scheduled shifts (`AdminEmployeeScheduleWidget.tsx`'s day-row chips, `border-purple-500/20 bg-purple-700/10 text-purple-100`, and the matching treatment in `MyScheduleWidget.tsx` + Calendar's Team Schedule tab). Wants it "easy on the eyes" and in Checkmark brand colors (gold/black/white per the design system — see `project_design_system_v1` memory / the design-system PDF — purple is off-brand here) instead of purple. Not urgent — explicitly deferred ("we can reform... though"), just don't lose it. Canonical home for the actual redesign plan is `docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md` per the `docs/ux/` file-org rule.
 
 <!-- ACTIVE:END -->
 

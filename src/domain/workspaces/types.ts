@@ -159,10 +159,12 @@ export type AdminWidgetId =
   // Requests on top and Edit at bottom). Recent resolved
   // task_requests, both approved and declined.
   | 'admin_approval_log'
-  // PR #50 — "Who's on the clock" Hub widget. Lists team members
-  // with an open time_clock_entries shift, with a live elapsed
-  // counter per row.
-  | 'admin_clock_in'
+  // NOTE: `admin_clock_in` ("Who's on the clock", PR #50) was retired
+  // 2026-07-26 alongside the Clock In/Out button — superseded by
+  // `admin_team_activity`, which covers the same "who's active right
+  // now" question plus schedule context. Keeping the id out of the
+  // union so any saved layout that referenced it sanitizes cleanly
+  // via the LAYOUT_VERSION bump.
   // Lean 7 (PR #78) — admin Hub copy of today_calendar. Same
   // CalendarDayCard component as the member widget; separate id so
   // the disjoint MemberWidgetId / AdminWidgetId invariant holds.
