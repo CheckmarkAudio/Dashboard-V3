@@ -275,6 +275,7 @@ function OverviewMainStage({
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(430px,520px)_minmax(0,1fr)] lg:items-start">
       <div className="space-y-4">
         <OverviewScorePreview activeId={activeScoreId} onSelect={onSelectScore} />
+        <OverviewWidgetCard id="my_activity" />
         <OverviewPersonalScheduleCard />
       </div>
 

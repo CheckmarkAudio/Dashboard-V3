@@ -589,6 +589,32 @@ Open gaps:
 Signature:
 - CLAUDE:
 
+## 2026-07-22 (MDT) - CLAUDE - Member Activity PR3: "My Activity · Today" Overview widget
+
+Lane:
+- Claude/Fable: scoped member_overview widget consuming PR2's pure layer (no schema, no writes).
+
+Summary:
+- Added `src/components/dashboard/MyActivityTodayWidget.tsx` — the director-approved "My Activity · Today" timeline. Header meta row (Active-now pulse when a presence session is open · date · scheduled hours in gold). Hero bar (dynamic axis that always covers the schedule + all activity + now): dashed gold scheduled band, presence segments coloured on(emerald)/late(amber)/off(sky) via the pure builder, always-visible per-event colored ticks, proximity markers that rise/grow/brighten as the pointer sweeps (smoothstep, ~9% falloff) with the nearest tick swelling in sync, and a gold "you are here" marker. Collapsible activity feed (starts collapsed). Minute-tick keeps the now-marker + open-session active time live; React-Query `refetchInterval` 60s on presence + events.
+- Registered `my_activity` end-to-end: `MemberWidgetId` union (types.ts), `MEMBER_WIDGET_REGISTRATIONS` (registry.ts, member_overview col 1 rs 2), and the `memberWidgetComponents` map (widgetRegistry.tsx). Bumped `WORKSPACE_LAYOUT_VERSION` 39 → 40 so every member's Overview picks it up.
+- Reads only backend-prepared state (member_presence_sessions + flywheel_events + work schedule) through PR2's `buildActivityDay` + `queries.ts` — satisfies the backend-prepared-state principle. WorkspacePanel wraps the component in `DashboardWidgetFrame` (frame supplies the title + drag/expand chrome), so the component renders body only.
+
+Files changed:
+- `src/components/dashboard/MyActivityTodayWidget.tsx` (new)
+- `src/domain/workspaces/types.ts`, `src/domain/workspaces/registry.ts`, `src/components/dashboard/widgetRegistry.tsx`
+- `docs/PROJECT_STATE.md`, `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `npm run build` clean (tsc -b + vite build).
+- Local dev (Dev Admin session): v40 layout reset confirmed, `my_activity` lands in the default member_overview layout (col 1), widget mounts with NO render error (no vite overlay). Rendered structure verified in the empty-data state: title, "Not active", date, "hover across the bar" hint, 7a–9p axis, collapsed "Activity feed · 0". Populated visual (coloured segments + markers + feed rows) needs a real member session with presence/flywheel data — verify on the Vercel preview.
+- NOTE: the shared working tree was switched to Codex branches three times mid-build; PR3 was recovered from an auto-stash and committed. See memory `feedback_commit_before_verify_shared_tree`.
+
+Non-goals held: no schema/RPC/migration, no admin surface, no attendance exceptions, no clock-button changes, no writes.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: view a real member's populated widget on the Vercel preview — confirm segments/markers/feed read correctly and the proximity interaction feels right at column width.
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: the widget sits in a ~1/3-width column; the mock was full-width. Decide whether to promote it to a wider/full-width slot later.
+
 ## 2026-07-23 MDT - CODEX - Schedule request language branch reconstruction
 
 Lane:
@@ -766,6 +792,37 @@ Open gaps:
   dark-mode/mobile screenshots could not be captured live. Recommend a
   short manual pass on the PR's Vercel preview before merge.
 - Token note: exact token total not visible in this tool.
+
+Signature:
+- CLAUDE:
+
+## 2026-07-24 (MDT) - CLAUDE - Member Activity PR3 widget revival
+
+Lane:
+- Claude/Fable: branch recovery + merge-conflict resolution (no schema, no writes, no new UI logic).
+
+Summary:
+- PR3 (#306, "My Activity · Today" Overview widget) was auto-closed by GitHub when its base branch (`claude/member-activity-pr2`) was deleted after PR #305 merged — a mechanical side effect of routine branch cleanup, not a decision to abandon it. Widget code was never lost, just orphaned on `claude/member-activity-pr3`.
+- Diagnosed and confirmed zero file-overlap risk against everything else active in the repo at the time (`per-day-availability`/#317, `studio-toggle`/#318 open) before touching anything.
+- Did the entire revival inside an isolated git worktree (`.claude/worktrees/member-activity-pr3-revival`) specifically so the shared working tree — actively in use by other concurrent sessions — was never switched or disturbed.
+- Merged current `main` (post PR4A/#312, PR4B/#316, per-day-availability/#317) into `claude/member-activity-pr3` and resolved 4 conflicts:
+  - `src/lib/activity/buildActivityDay.ts`, `queries.ts`, `buildActivityDay.test.ts` — confirmed via direct content diff and `git log --name-only` that this branch's own commits never modified these files; the conflicts were pure squash-merge history artifacts. Took `main`'s versions entirely (the real, PR4A-refactored code) — zero loss, zero risk.
+  - `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md` — genuine but simple append-only conflict (two entry sequences grown from the same point); spliced both in, chronological order.
+- Confirmed the widget component itself needs **zero code changes** — it only reads `model.scheduledWindow` (singular), which PR4A's refactor deliberately kept as a compatibility field specifically to protect this not-yet-merged branch.
+- GitHub would not allow reopening #306 (its base branch no longer exists — hard platform limitation, confirmed via both `gh pr edit --base` and `gh pr reopen`, both rejected). Opened a fresh PR, #319, against `main`, with the full lineage documented in the PR body; left a comment on #306 pointing to #319 for traceability.
+
+Files changed:
+- Merge commit only — no new source changes beyond conflict resolution.
+- `docs/PROJECT_STATE.md`, `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md` (this entry).
+
+Verification:
+- `npm run build` clean.
+- `npm test` → 26/26 pass (original 20 + the 6 PR4A added for time-off interval subtraction).
+- Re-fetched and re-checked `main` immediately before every commit/push given the repo's fast merge cadence (~15-90 min between merges in this feature family that day) — confirmed caught up each time, no stale-base surprises.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: live Vercel-preview verification with a real member session — populated segments/markers/feed still need a real presence + flywheel dataset to confirm visually. Empty-data-state rendering was previously verified locally only.
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: carried over from the original PR3 entry — widget sits in a ~1/3-width column; decide whether to promote to a wider slot later.
 
 Signature:
 - CLAUDE:

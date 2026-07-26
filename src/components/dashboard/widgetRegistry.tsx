@@ -45,6 +45,7 @@ import {
 } from '../tasks/AssignedTaskBoards'
 import TeamChecklistWidget from '../checklist/TeamChecklistWidget'
 import MyScheduleWidget from './MyScheduleWidget'
+import MyActivityTodayWidget from './MyActivityTodayWidget'
 import AdminTemplatesWidget from '../admin/templates/AdminTemplatesWidget'
 import AdminEditTasksWidget from '../admin/tasks/AdminEditTasksWidget'
 import AdminClockInWidget from '../admin/AdminClockInWidget'
@@ -77,6 +78,9 @@ const memberWidgetComponents: Record<MemberWidgetId, ComponentType> = {
   // 2026-05-23 — Member Work Scheduler PR 3. Personal weekly hours
   // snapshot on Overview with a Mine/Team toggle + Request modal.
   my_schedule: MyScheduleWidget,
+  // 2026-07-22 — Member Activity & Presence PR3. "My Activity · Today"
+  // presence-vs-schedule timeline + activity feed on Overview.
+  my_activity: MyActivityTodayWidget,
 }
 
 const adminWidgetComponents: Record<AdminWidgetId, ComponentType> = {
