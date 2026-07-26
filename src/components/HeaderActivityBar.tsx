@@ -13,12 +13,15 @@ import {
 } from '../lib/activity/queries'
 
 // Same fixed axis + segment palette as MyActivityTodayWidget /
-// AdminTeamActivityWidget, just compressed to header-pill size.
+// AdminTeamActivityWidget.
 const AXIS_START_HOUR = 7
 const AXIS_END_HOUR = 21
+// Context ticks under the bar — not evenly spaced in hours, just
+// enough landmarks to read the bar as a real timeline at a glance.
+const AXIS_TICKS = [7, 11, 15, 19, 21]
 
-const SEGMENT_COLOR: Record<SegmentKind, string> = {
-  on: '#34d399',
+const SEGMENT_FILL: Record<SegmentKind, string> = {
+  on: 'linear-gradient(90deg, #22c98e, #34d399)',
   late: '#fbbf24',
   off: '#60a5fa',
 }
@@ -29,15 +32,33 @@ function startOfLocalDay(d: Date): Date {
   return out
 }
 
+function hourLabel(h: number): string {
+  const hr = ((h + 11) % 12) + 1
+  return `${hr}${h < 12 || h === 24 ? 'a' : 'p'}`
+}
+
+function formatActiveMinutes(mins: number): string {
+  if (mins < 60) return `${mins}m`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
+
 /**
  * HeaderActivityBar — replaces the retired Clock In/Out button.
  *
- * A passive glance-only presence indicator: today's mini
- * presence-vs-schedule bar for the signed-in member, live-updating
- * every 60s. Clicking it opens Overview, where the full "My Activity"
- * card lives. There is no click-to-clock-in/out action here anymore —
+ * A passive glance-only presence indicator: today's presence-vs-
+ * schedule timeline for the signed-in member, live-updating every
+ * 60s. Clicking it opens Overview, where the full "My Activity" card
+ * lives. There is no click-to-clock-in/out action here anymore —
  * presence is heartbeat-driven (usePresenceHeartbeat, mounted
  * separately in Layout), not a manual punch.
+ *
+ * v2 (2026-07-26) — director feedback on v1: "very hard to see... the
+ * time thing [is] puny, give it a soul." Solid (non-transparent) fill,
+ * a real gold border, a 320px timeline (was 84px) with a glowing
+ * "now" marker and hour-tick context underneath, and a bold two-line
+ * label instead of a single muted word.
  */
 export default function HeaderActivityBar() {
   const { profile } = useAuth()
@@ -99,54 +120,72 @@ export default function HeaderActivityBar() {
     const p = ((ms - axisStartMs) / (axisEndMs - axisStartMs)) * 100
     return Math.max(0, Math.min(100, p))
   }
+  const nowPct = pct(now.getTime())
 
   if (!memberId) return null
 
   const title = isActiveNow
-    ? `Active today · ${model.activeMinutes}m so far`
+    ? `Active now · ${formatActiveMinutes(model.activeMinutes)} today`
     : 'My Activity today'
 
   return (
     <button
       type="button"
       onClick={() => navigate('/')}
-      className="hidden shrink-0 items-center gap-2 h-10 px-3 rounded-2xl bg-gold/12 text-gold border border-gold/25 hover:bg-gold/20 transition-all focus-ring sm:flex"
+      className="hidden shrink-0 items-center gap-4 h-[72px] px-5 rounded-2xl bg-[#221f14] border-[1.5px] border-gold shadow-[0_6px_18px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-gold-muted hover:brightness-110 transition-all focus-ring lg:flex"
       title={title}
       aria-label={title}
     >
-      <span
-        className={`w-1.5 h-1.5 rounded-full ${isActiveNow ? 'bg-emerald-400 animate-pulse' : 'bg-text-light'}`}
-        aria-hidden="true"
-      />
-      <div className="relative h-2 w-[84px] rounded-full bg-surface-alt/70" aria-hidden="true">
-        {model.scheduledWindow && (
-          <div
-            className="absolute top-0 h-full rounded-full border border-dashed border-gold/40"
-            style={{
-              left: `${pct(Date.parse(model.scheduledWindow.start))}%`,
-              width: `${Math.max(2, pct(Date.parse(model.scheduledWindow.end)) - pct(Date.parse(model.scheduledWindow.start)))}%`,
-            }}
-          />
+      <span className="relative shrink-0 flex items-center justify-center w-[10px] h-[10px]" aria-hidden="true">
+        <span className={`absolute inset-0 rounded-full ${isActiveNow ? 'bg-emerald-400' : 'bg-text-light'}`} />
+        {isActiveNow && (
+          <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-40" />
         )}
-        {model.segments.map((s, i) => {
-          const left = pct(Date.parse(s.start))
-          const right = pct(Date.parse(s.end))
-          return (
-            <div
-              key={i}
-              className="absolute top-0 h-full rounded-full"
-              style={{ left: `${left}%`, width: `${Math.max(2, right - left)}%`, background: SEGMENT_COLOR[s.kind] }}
-            />
-          )
-        })}
-        <div
-          className="absolute top-[-1px] h-[10px] w-[2px] rounded-full bg-gold"
-          style={{ left: `${pct(now.getTime())}%` }}
-        />
-      </div>
-      <span className="text-[11px] font-semibold tabular-nums">
-        {isActiveNow ? 'Active' : 'My Activity'}
       </span>
+
+      <div className="flex flex-col items-start gap-1.5">
+        <span className="text-[13px] font-bold text-text tracking-tight tabular-nums whitespace-nowrap">
+          {title}
+        </span>
+
+        <div className="relative h-[11px] w-[320px] rounded-md bg-[#3a3826] shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]" aria-hidden="true">
+          {model.scheduledWindow && (
+            <div
+              className="absolute top-0 h-full rounded-md border border-dashed border-gold/45"
+              style={{
+                left: `${pct(Date.parse(model.scheduledWindow.start))}%`,
+                width: `${Math.max(1.5, pct(Date.parse(model.scheduledWindow.end)) - pct(Date.parse(model.scheduledWindow.start)))}%`,
+              }}
+            />
+          )}
+          {model.segments.map((s, i) => {
+            const left = pct(Date.parse(s.start))
+            const right = pct(Date.parse(s.end))
+            return (
+              <div
+                key={i}
+                className="absolute top-0 h-full rounded-md"
+                style={{ left: `${left}%`, width: `${Math.max(1.5, right - left)}%`, background: SEGMENT_FILL[s.kind] }}
+              />
+            )
+          })}
+          {/* Glowing "now" marker — tick + halo dot */}
+          <div
+            className="absolute top-[-4px] w-[3px] h-[19px] rounded-sm bg-gold shadow-[0_0_8px_2px_rgba(201,168,76,0.55)]"
+            style={{ left: `${nowPct}%` }}
+          />
+          <div
+            className="absolute top-[-9px] w-[9px] h-[9px] -ml-[3px] rounded-full bg-gold shadow-[0_0_10px_3px_rgba(201,168,76,0.5)]"
+            style={{ left: `${nowPct}%` }}
+          />
+        </div>
+
+        <div className="flex justify-between w-[320px] text-[9px] text-text-light tracking-wide">
+          {AXIS_TICKS.map((h) => (
+            <span key={h}>{hourLabel(h)}</span>
+          ))}
+        </div>
+      </div>
     </button>
   )
 }

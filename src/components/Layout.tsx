@@ -523,7 +523,10 @@ export default function Layout() {
           <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-gold/28 to-transparent" />
         </div>
         {/* Row 1: logo · (mobile hamburger) · right-aligned controls */}
-        <div className="relative z-10 h-16 flex items-center px-4 lg:px-6">
+        {/* 2026-07-26 — h-16 → h-24: HeaderActivityBar's 72px-tall
+            timeline control needs real vertical room to read clearly
+            (director: "make the header wider vertically"). */}
+        <div className="relative z-10 h-24 flex items-center px-4 lg:px-6">
           {/* Mobile hamburger */}
           <button
             onClick={() => setSidebarOpen(true)}
