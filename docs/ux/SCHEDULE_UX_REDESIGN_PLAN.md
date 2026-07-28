@@ -166,3 +166,85 @@ Recommendation: Option A may be the best first implementation, but only after co
 - **Bug found and fixed while implementing this**: `expandSchedule()` (`src/lib/schedule/expand.ts`) emits one row per one-off block, not one row per day it spans. Every UI surface that buckets entries "by day" (MyScheduleWidget's 7-day list, Calendar's Team Schedule tab) was keying off `starts_at`'s date only — a 3-day time-off request would only have appeared on its first day. Fixed by bucketing each entry into every day it overlaps, in the presentation layer only (`expandSchedule` and `resolveEffectiveWorkWindows` themselves were not touched).
 - Full-day span convention: a time-off request stores `starts_at` = start date 00:00 local, `ends_at` = (end date + 1 day) 00:00 local (exclusive), so `resolveEffectiveWorkWindows`'s interval subtraction removes the entire day(s) regardless of what hours a work shift covers that day.
 
+## Calendar page visual revamp (director brief, 2026-07-28)
+
+Not started — logged in `docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md`, not urgent. Director wants a
+**preview/mockup first**, iterated in-chat, before any of this is built (same pattern used for
+`HeaderActivityBar`). This section is the brief that preview should be built against.
+
+### Problem, in the director's words
+
+- "Team Schedule vs Booking calendar" — the tab toggle should be "extremely easy to notice."
+- Employee-hours display: "I hate the grey icons, I dont like the purple, I dont like how we
+  cant tell who is what."
+- "We need to make sure that the hours match with the employee's schedule."
+- Inspiration source named explicitly: Monday.com and "other planning scheduling apps."
+- Separately, the schedule-edit modal: "the current modal but its unclear what an employees
+  schedule is currently when they open the modal... I couldnt tell what I was updating or if i
+  even had a set schedule to begin with... perhaps we need a visual breakdown of a person's
+  current schedule so they can see while they are updating it."
+
+### Where the current implementation lives
+
+- Tab toggle + grid: `src/pages/Calendar.tsx` (`Bookings` / `Team Schedule 18` tabs, week grid
+  below).
+- Purple wash blocks: `bg-purple-700/15` (chips), `bg-purple-700/35` (default full-column wash,
+  around line ~1296), `border-purple-500/*`, `text-purple-300` (the `+` add-shift icon).
+- Grey/dimmed member avatars: `grayscale(1) opacity(0.45)` (dimmed) / `grayscale(1) opacity(0.85)`
+  (hovered-but-not-this-member) around lines ~1328-1392, driven by `hoveredMemberId` state.
+  **This default-greyscale-until-hover behavior was an explicit prior director decision, dated
+  2026-05-27** ("can the icons be more greyed out and when you hover over them they light up to
+  show you the schedule of the one you are hovering over?" — see the comment directly above the
+  `hoveredMemberId` state declaration). The 2026-07-28 ask to make "who is what" identifiable
+  without hovering is a change to that decision, not an oversight — worth confirming with the
+  director whether the hover-highlight interaction should stay (just layered on top of
+  always-identifiable colors/initials) or go away entirely.
+- Schedule-edit modal: `src/components/schedule/ScheduleRequestModal.tsx` (see "Likely
+  Implementation Path" above — this is the same modal already in scope for the weekly/one-time/
+  time-off mode split; the "show current schedule while editing" ask is additive to that work,
+  not a separate modal).
+
+### Direction to explore for the preview
+
+- Toggle: a clearly-segmented control (not two plain tab labels) — e.g. a pill/segmented switch
+  with a visible active-state fill, similar to how Monday.com / Asana switch between
+  Calendar/Timeline/Board views.
+- Grid: brand-colored (gold/black/white) shift blocks instead of purple; each member gets a
+  consistent, distinguishable identity (initial-avatar + a fixed accent color per person, not a
+  shared purple/grey treatment) so "who is what" reads without needing to hover.
+- Hour accuracy: confirm whether grid cells are computed from real `starts_at`/`ends_at` per
+  member (likely yes, via `useTeamSchedule`/`expandSchedule`) or whether there's a rendering
+  rounding/snapping bug making blocks look offset from the actual scheduled hours — needs a code
+  read, not just a visual restyle, before mocking pixel-perfect alignment.
+- Schedule-edit modal: add a "your current schedule" visual summary (e.g. a compact 7-day strip
+  showing today's saved hours per day, or "No schedule set yet") rendered above/beside the edit
+  form, so the member can see what they're about to change instead of an unlabeled blank form.
+
+### Locked decisions (director-approved, 2026-07-28)
+
+Two mockup rounds shown in-chat (`calendar_page_revamp_preview`, then
+`team_schedule_toggle_active_preview` rendered against the real 6-person team — Bridget,
+Checkmark, Christian, Matthan, Richard, Tony). Director signed off on the direction:
+
+- **Bookings tab keeps its Google Calendar-style day/time grid layout.** This redesign is
+  scoped to the Team Schedule tab only — do not touch Bookings' layout as part of this work.
+- **Team Schedule tab** moves to a member-rows-down-the-side layout (avatar + name per row,
+  one column per day), gold-filled segmented toggle replacing the two plain tab labels, and
+  one fixed accent color per member (avatar + their hour-blocks everywhere) instead of the
+  purple wash + greyscale-until-hover treatment. Block position/width within a day cell should
+  reflect that member's real start/end time, not a fixed full-day fill.
+- **Schedule-edit modal** gets the "current schedule" 7-day pill strip shown above the edit
+  form (gold-tinted pill = a scheduled day with its hours, muted "Off" pill = no shift that
+  day) — confirmed as the right direction.
+- Per-member color palette used in the mockups (gold/teal/rose/amber/blue/neutral-gray) was a
+  placeholder, not yet locked — fine to reuse or restyle at implementation time.
+- Still open: whether the hover-highlight interaction from the 2026-05-27 decision (dim
+  everyone, light up on hover) survives alongside always-visible per-member color, or is
+  dropped entirely now that color alone carries identity. Ask before implementing.
+
+### Non-goals (carried over from the section above)
+
+Same as the existing Non-Goals list — no payroll/PTO accounting, no Accountant concepts, no
+Google Calendar sync changes here. Bookings' calendar-grid layout is explicitly out of scope
+for this redesign (see Locked decisions above).
+
