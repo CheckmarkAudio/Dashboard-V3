@@ -26,6 +26,12 @@ const SEGMENT_FILL: Record<SegmentKind, string> = {
   off: '#60a5fa',
 }
 
+const SEGMENT_LABEL: Record<SegmentKind, string> = {
+  on: 'Present',
+  late: 'Late start',
+  off: 'Active outside schedule',
+}
+
 function startOfLocalDay(d: Date): Date {
   const out = new Date(d)
   out.setHours(0, 0, 0, 0)
@@ -42,6 +48,10 @@ function formatActiveMinutes(mins: number): string {
   const h = Math.floor(mins / 60)
   const m = mins % 60
   return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
+
+function formatClockTime(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
 /**
@@ -88,6 +98,27 @@ function formatActiveMinutes(mins: number): string {
  * transparent" note — the bar's own content (colored segments, gold
  * now-marker) carries the legibility now that it's large, so the
  * container no longer has to.
+ *
+ * v5 (2026-07-27) — director liked the always-deeper hover tone
+ * better than the lighter resting one, and wants it gold-tinted
+ * ("glass look is gold") rather than neutral: the container now sits
+ * permanently at that gold-glass weight (frosted/blurred, translucent
+ * ON PURPOSE — this is chrome, not content) instead of only reaching
+ * it on hover. The gold tint is currently the one and only option;
+ * "part of a customizability" (director's phrasing) reads as an
+ * eventual per-user/theme setting, not something this pass builds —
+ * flagged back to the director rather than guessing at a picker UI
+ * that doesn't exist yet. Inside the bar, the opposite move: the
+ * scheduled-window band went from a 35%-alpha tint to fully solid
+ * gold (matches how the presence segments were already solid), so
+ * everything that represents actual DATA reads as concrete while only
+ * the container chrome is allowed to be glass. Also added native
+ * hover tooltips on the scheduled band and each presence segment
+ * ("Present · 10:00 AM–12:30 PM" etc.) per "when we hover over the
+ * markers we need it to show us what they are" — mouse-hover only for
+ * now (title attributes); a fully keyboard/touch-reachable tooltip
+ * would need these to stop being plain divs inside one wrapping
+ * button, which is a bigger restructure than this pass.
  */
 export default function HeaderActivityBar() {
   const { profile } = useAuth()
@@ -161,14 +192,12 @@ export default function HeaderActivityBar() {
     <button
       type="button"
       onClick={() => navigate('/')}
-      // `bg-surface-hover` is the exact solid tone the header's OTHER
-      // buttons (theme toggle, bells) already transition to on hover
-      // -- using it at rest is what makes this read as "a control
-      // that's part of this bar's own material" instead of a card
-      // sitting on top of it. No shadow, no ring, no lift-on-hover
-      // (those are content-card affordances, not nav-chrome ones);
-      // hover just deepens the same tone a step further.
-      className="hidden shrink-0 items-center gap-4 h-[72px] px-5 rounded-xl bg-surface-hover border border-border/60 hover:bg-border/70 transition-colors focus-ring lg:flex"
+      // Gold glass chrome, always at the "deeper" weight (not just on
+      // hover) -- blurred + translucent is fine HERE because this is
+      // the container, not the data; the timeline inside stays fully
+      // solid so nothing that represents real activity is ever hard
+      // to read.
+      className="hidden shrink-0 items-center gap-4 h-[72px] px-5 rounded-xl bg-gold/16 backdrop-blur-md border border-gold/35 hover:bg-gold/22 hover:border-gold/50 transition-colors focus-ring lg:flex"
       title={title}
       aria-label={title}
     >
@@ -191,16 +220,17 @@ export default function HeaderActivityBar() {
             a hardcoded hex that only ever reads right in one theme. */}
         <div className="relative h-[11px] w-[520px] rounded-md bg-border shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)]" aria-hidden="true">
           {model.scheduledWindow && (
-            // Solid fill, not a dashed outline — this is a real,
-            // committed scheduled window, not a maybe. Presence
-            // segments (below) paint on top in their own vivid
-            // colors wherever actual activity occurred.
+            // Fully solid — a committed scheduled window is data, not
+            // decoration, so (unlike the glass container) it gets no
+            // transparency. Presence segments paint on top in their
+            // own solid colors wherever actual activity occurred.
             <div
-              className="absolute top-0 h-full rounded-md bg-gold/35 border border-gold/80"
+              className="absolute top-0 h-full rounded-md bg-gold"
               style={{
                 left: `${pct(Date.parse(model.scheduledWindow.start))}%`,
                 width: `${Math.max(1.5, pct(Date.parse(model.scheduledWindow.end)) - pct(Date.parse(model.scheduledWindow.start)))}%`,
               }}
+              title={`Scheduled · ${formatClockTime(Date.parse(model.scheduledWindow.start))}–${formatClockTime(Date.parse(model.scheduledWindow.end))}`}
             />
           )}
           {model.segments.map((s, i) => {
@@ -211,6 +241,7 @@ export default function HeaderActivityBar() {
                 key={i}
                 className="absolute top-0 h-full rounded-md"
                 style={{ left: `${left}%`, width: `${Math.max(1.5, right - left)}%`, background: SEGMENT_FILL[s.kind] }}
+                title={`${SEGMENT_LABEL[s.kind]} · ${formatClockTime(Date.parse(s.start))}–${formatClockTime(Date.parse(s.end))}`}
               />
             )
           })}
@@ -218,10 +249,12 @@ export default function HeaderActivityBar() {
           <div
             className="absolute top-[-4px] w-[3px] h-[19px] rounded-sm bg-gold shadow-[0_0_8px_2px_rgba(201,168,76,0.55)]"
             style={{ left: `${nowPct}%` }}
+            title={`Now · ${formatClockTime(now.getTime())}`}
           />
           <div
             className="absolute top-[-9px] w-[9px] h-[9px] -ml-[3px] rounded-full bg-gold shadow-[0_0_10px_3px_rgba(201,168,76,0.5)]"
             style={{ left: `${nowPct}%` }}
+            title={`Now · ${formatClockTime(now.getTime())}`}
           />
         </div>
 
