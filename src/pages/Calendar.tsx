@@ -632,18 +632,72 @@ export default function Calendar() {
           "click any name to filter" without needing a verbal hint.
           Wrap behavior: on narrow viewports the right-side controls
           drop to a new row beneath the title block. */}
-      <div className="flex items-center justify-between gap-x-4 gap-y-2 mb-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
-            {loading && <Loader2 size={14} className="animate-spin text-text-light" aria-label="Loading calendar" />}
-            {error && (
-              <span className="flex items-center gap-1 text-xs text-amber-300">
-                <AlertCircle size={12} />
-                {error}
-              </span>
+      {/* 2026-07-28 — director: "we just want [the toggle] on the
+          left" — this row used to be split into a `justify-between`
+          left group (title + filter pills) and a right group (toggle
+          + Request schedule), so the toggle's on-screen position
+          jumped depending on how wide the filter-pill row happened to
+          be that tab (member pills vs studio pills vs none) — wide
+          enough to wrap the right group onto its own line made it
+          leap from "far right" to "flush left." Now it's ONE
+          left-aligned flow: title, then the toggle (fixed position,
+          never depends on what pills render after it), then Request
+          schedule, then the filter pills last. */}
+      <div className="flex items-center gap-3 flex-wrap mb-3 min-w-0">
+        <div className="flex items-center gap-2">
+          <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
+          {loading && <Loader2 size={14} className="animate-spin text-text-light" aria-label="Loading calendar" />}
+          {error && (
+            <span className="flex items-center gap-1 text-xs text-amber-300">
+              <AlertCircle size={12} />
+              {error}
+            </span>
+          )}
+        </div>
+        <div role="tablist" aria-label="Calendar view" className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface-alt border border-border">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'bookings'}
+            onClick={() => setActiveTab('bookings')}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-bold transition-colors ${
+              activeTab === 'bookings'
+                ? 'bg-gold text-[#241d08] shadow-sm'
+                : 'text-text-muted hover:text-text'
+            }`}
+          >
+            Bookings
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'schedule'}
+            onClick={() => setActiveTab('schedule')}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-bold transition-colors ${
+              activeTab === 'schedule'
+                ? 'bg-gold text-[#241d08] shadow-sm'
+                : 'text-text-muted hover:text-text'
+            }`}
+          >
+            <CalendarRange size={15} aria-hidden="true" />
+            <span>Team Schedule</span>
+            {filteredScheduleExpanded.length > 0 && (
+              <span className="opacity-70">{filteredScheduleExpanded.length}</span>
             )}
-          </div>
+          </button>
+        </div>
+        {activeTab === 'schedule' && profile?.id && (
+          <button
+            type="button"
+            onClick={() => setScheduleRequest(true)}
+            title="Set weekly schedule, request a one-time change, or see time-off status"
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border border-border bg-surface-alt text-text-muted hover:text-gold hover:border-gold/40 transition-colors"
+          >
+            <Plus size={11} aria-hidden="true" />
+            <span>Request schedule</span>
+          </button>
+        )}
+        <div className="flex items-center gap-3 flex-wrap min-w-0">
           {/* Member filter pills — inline with title. Renders only when
               there's more than one staffer AND the schedule layer is on
               (the pills filter the schedule overlay; with it hidden the
@@ -747,62 +801,6 @@ export default function Calendar() {
                 )
               })}
             </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2 text-text-muted">
-          {/* 2026-07-24 — Bookings vs. Team Schedule tab switcher.
-              Replaces the old "Schedule" visibility toggle: the two
-              views no longer share one grid, so this is a real tab,
-              not a layer on/off switch. Bookings is the default.
-              2026-07-28 — director: "make the toggle extremely easy
-              to notice" / "super noticeable like your preview." Both
-              segments share one solid gold-fill active state, now
-              sized up (bigger padding, bigger text, a soft shadow on
-              the active pill) to match the weight of the approved
-              mockup rather than blending into the surrounding
-              toolbar row. */}
-          <div role="tablist" aria-label="Calendar view" className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface-alt border border-border">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'bookings'}
-              onClick={() => setActiveTab('bookings')}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-bold transition-colors ${
-                activeTab === 'bookings'
-                  ? 'bg-gold text-[#241d08] shadow-sm'
-                  : 'text-text-muted hover:text-text'
-              }`}
-            >
-              Bookings
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'schedule'}
-              onClick={() => setActiveTab('schedule')}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-bold transition-colors ${
-                activeTab === 'schedule'
-                  ? 'bg-gold text-[#241d08] shadow-sm'
-                  : 'text-text-muted hover:text-text'
-              }`}
-            >
-              <CalendarRange size={15} aria-hidden="true" />
-              <span>Team Schedule</span>
-              {filteredScheduleExpanded.length > 0 && (
-                <span className="opacity-70">{filteredScheduleExpanded.length}</span>
-              )}
-            </button>
-          </div>
-          {activeTab === 'schedule' && profile?.id && (
-            <button
-              type="button"
-              onClick={() => setScheduleRequest(true)}
-              title="Set weekly schedule, request a one-time change, or see time-off status"
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border border-border bg-surface-alt text-text-muted hover:text-gold hover:border-gold/40 transition-colors"
-            >
-              <Plus size={11} aria-hidden="true" />
-              <span>Request schedule</span>
-            </button>
           )}
         </div>
       </div>
