@@ -49,6 +49,10 @@ You can also just tell an AI coder "add this to the priority queue" and it will 
   - General visual quality bar: "easy to notice," "easy on the eyes," draw inspiration from Monday.com and other scheduling/planning tools rather than inventing from scratch.
   - Canonical home for the full plan (problem breakdown, data model notes, file list, acceptance criteria) is `docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md` — this Calendar-page brief has been added there as a new section.
 
+- [ ] Customizable per-member schedule colors — Requested by: director · Added: 2026-07-28 · ASAP: no · Notes: after locking the six team members' colors for the Team Schedule redesign (Bridget red-orange, Checkmark gold, Christian blue, Matthan gray, Richard green, Tony red — see `docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md`), director wants these changeable later as a real setting in admin Settings (a color picker per member) rather than hardcoded. Log only, build alongside the Team Schedule redesign above — not urgent on its own.
+
+- [ ] Developer activity tracker / patch notes for Bridget's own dev work — Requested by: Bridget (director) · Added: 2026-07-28 · ASAP: no · Notes: Bridget does the actual Dashboard-V3 + checkmarkaudio.com coding herself and wants to see her own dev work reflected somewhere in the app — there is currently no dev-activity tracker or changelog/patch-notes record anywhere. Distinct from the existing Member Activity/Presence system: presence (`usePresenceHeartbeat`) only captures time with the Dashboard-V3 browser tab open and focused — it has no visibility into time spent coding in an editor/CLI, so "coding hours" can't be captured automatically without new instrumentation (flagged to Bridget directly, not glossed over). Near-term direction discussed: a simple manual "log a work session" entry (start/end + note) she fills in herself, rendered as its own segment kind on `HeaderActivityBar`, with the bar's click-through wired to a real activity-detail page instead of just Overview (`navigate('/')` today). A fuller version — patch notes/changelog tied to git commit history — is a separate, bigger feature, not scoped yet.
+
 <!-- ACTIVE:END -->
 
 ---
