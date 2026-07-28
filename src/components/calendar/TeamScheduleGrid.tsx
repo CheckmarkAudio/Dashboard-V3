@@ -59,6 +59,14 @@ function formatCompactHour(iso: string): string {
  * shift's own start–end time printed directly on the block, plus a
  * shared hour ruler (7a/11a/3p/7p) under each day header so a block's
  * position also reads against a fixed reference, not just its label.
+ *
+ * v3 (2026-07-28) — v2's label lived INSIDE the colored bar, so a
+ * short shift (a narrow bar) clipped its own time text ("4p–8p"
+ * cropped to "1p–8p" — director screenshot). Decoupled the two: the
+ * time label is now its own line spanning the FULL cell width above
+ * a slim position/duration bar underneath, so legibility never
+ * depends on how long the shift is — a 1-hour shift and an 8-hour
+ * shift both print their full time range the same way.
  */
 export default function TeamScheduleGrid({
   weekDays,
@@ -139,16 +147,16 @@ export default function TeamScheduleGrid({
                 const dayWork = (schedulesByDate[wd.key] ?? []).filter((s) => s.member_id === member.id)
                 if (dayOff.length > 0) {
                   return (
-                    <div key={wd.key} className="flex items-center justify-center h-11 rounded-md bg-sky-950/20 border border-sky-400/20">
+                    <div key={wd.key} className="flex items-center justify-center min-h-11 rounded-md bg-sky-950/20 border border-sky-400/20">
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">Off</span>
                     </div>
                   )
                 }
                 if (dayWork.length === 0) {
-                  return <div key={wd.key} className="h-11 rounded-md bg-border/20" />
+                  return <div key={wd.key} className="min-h-11 rounded-md bg-border/20" />
                 }
                 return (
-                  <div key={wd.key} className="relative h-11 rounded-md bg-border/50">
+                  <div key={wd.key} className="flex flex-col justify-center gap-2 min-h-11 px-0.5">
                     {dayWork.map((s) => {
                       const startMin = minutesOfDay(s.starts_at)
                       const endMin = minutesOfDay(s.ends_at)
@@ -158,20 +166,25 @@ export default function TeamScheduleGrid({
                       return (
                         <div
                           key={s.key}
-                          className="absolute top-0 h-full rounded-md flex items-center justify-center overflow-hidden px-0.5"
-                          style={{
-                            left: `${left}%`,
-                            width: `${widthPct}%`,
-                            background: color.accent,
-                          }}
+                          className="flex flex-col gap-1"
                           title={`${member.display_name ?? 'Member'} · ${formatClockTime(s.starts_at)}–${formatClockTime(s.ends_at)}`}
                         >
+                          {/* Time label lives on its own line, full
+                              cell width — never clipped by how short
+                              the shift is, unlike v2's inside-the-bar
+                              label. */}
                           <span
-                            className="text-[10px] font-bold text-white whitespace-nowrap leading-none"
-                            style={{ textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}
+                            className="text-[10px] font-bold text-center truncate leading-none"
+                            style={{ color: color.accent }}
                           >
                             {formatCompactHour(s.starts_at)}–{formatCompactHour(s.ends_at)}
                           </span>
+                          <div className="relative h-2 rounded-full bg-border/50">
+                            <div
+                              className="absolute top-0 h-full rounded-full"
+                              style={{ left: `${left}%`, width: `${widthPct}%`, background: color.accent }}
+                            />
+                          </div>
                         </div>
                       )
                     })}
