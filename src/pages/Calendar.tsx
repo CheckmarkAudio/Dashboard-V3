@@ -18,8 +18,9 @@ import { fetchTeamMembers, teamMemberKeys } from '../lib/queries/teamMembers'
 import { useTeamSchedule } from '../lib/schedule/useTeamSchedule'
 import { useStudioHours } from '../lib/schedule/useStudioHours'
 import { sessionTypeColor } from '../lib/calendar/sessionColors'
-import { memberColor } from '../lib/calendar/memberColors'
 import { useTeamMemberColors } from '../lib/calendar/useTeamMemberColors'
+import { resolveScheduleColor } from '../lib/calendar/teamScheduleColors'
+import TeamScheduleGrid from '../components/calendar/TeamScheduleGrid'
 import { ChevronLeft, ChevronRight, Plus, AlertCircle, Loader2, CalendarRange, Filter } from 'lucide-react'
 
 // 2026-05-26 — Member pills on the calendar header display first names
@@ -133,53 +134,6 @@ interface BookingLane<T> {
   booking: T
   lane: number
   groupSize: number
-}
-
-/**
- * 2026-05-27 — Schedule-overlay segment builder.
- *
- * Returns segments where a constant set of members is "on" between
- * two consecutive transition times. Used so:
- *   1. The colored block per segment fills the full column width
- *      without lane-splitting + without redundant per-member
- *      rectangles stacked vertically.
- *   2. We can compute, for each segment, which members are
- *      arriving (their shift starts here) vs. leaving (their shift
- *      ends here) — so a member's avatar shows exactly TWICE per
- *      shift (start + end) instead of once per overlapping segment
- *      they pass through.
- */
-interface ShiftSpan {
-  memberId: string
-  startMin: number
-  endMin: number
-}
-interface ScheduleSegment {
-  key: string
-  startMin: number
-  endMin: number
-  memberIds: string[]
-}
-function buildScheduleSegments(shifts: ShiftSpan[]): ScheduleSegment[] {
-  if (shifts.length === 0) return []
-  const pointsSet = new Set<number>()
-  for (const s of shifts) {
-    pointsSet.add(s.startMin)
-    pointsSet.add(s.endMin)
-  }
-  const points = [...pointsSet].sort((a, b) => a - b)
-  const segments: ScheduleSegment[] = []
-  for (let i = 0; i < points.length - 1; i++) {
-    const t1 = points[i]
-    const t2 = points[i + 1]
-    if (t1 === undefined || t2 === undefined) continue
-    const memberIds = shifts
-      .filter((s) => s.startMin <= t1 && s.endMin >= t2)
-      .map((s) => s.memberId)
-    if (memberIds.length === 0) continue
-    segments.push({ key: `seg-${t1}-${t2}`, startMin: t1, endMin: t2, memberIds })
-  }
-  return segments
 }
 
 function assignBookingLanes<T extends { startTime: string; endTime: string }>(
@@ -311,33 +265,22 @@ export default function Calendar() {
   // clicked. Closes on Escape, outside click, or after picking an
   // action.
   const [contextMenu, setContextMenu] = useState<{ booking: CalendarBooking; x: number; y: number } | null>(null)
-  // 2026-05-23 — empty-cell right-click context menu (separate state
-  // from the booking context menu since the actions differ). Carries
-  // the cell's day-key + start time so "Request schedule here" can
-  // pre-fill the modal. Same outside-click/Escape close behavior.
-  const [cellMenu, setCellMenu] = useState<{ dateKey: string; startTime: string; x: number; y: number } | null>(null)
-  // Schedule-request modal state. `prefill` is set when entry came
-  // from the right-click cell menu so the Block tab arrives with
-  // the picked day + start hour already populated.
+  // Schedule-request modal state. Opened via the header "Request
+  // schedule" button (2026-07-28 — the empty-cell right-click variant
+  // was removed along with the old shared hour-grid; the Team Schedule
+  // tab no longer has per-hour cells to right-click, see
+  // TeamScheduleGrid.tsx).
   const [scheduleRequest, setScheduleRequest] = useState<ScheduleRequestModalProps['prefill'] | true | null>(null)
   const { isAdmin, profile } = useAuth()
   const { toast } = useToast()
 
-  // Close the context menu on outside click / Escape so it doesn't
-  // linger after the user moves on. Same handler covers BOTH the
-  // booking context menu (admin actions) AND the empty-cell context
-  // menu (request schedule here).
+  // Close the booking context menu on outside click / Escape so it
+  // doesn't linger after the user moves on.
   useEffect(() => {
-    if (!contextMenu && !cellMenu) return
-    const onPointer = () => {
-      setContextMenu(null)
-      setCellMenu(null)
-    }
+    if (!contextMenu) return
+    const onPointer = () => setContextMenu(null)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setContextMenu(null)
-        setCellMenu(null)
-      }
+      if (e.key === 'Escape') setContextMenu(null)
     }
     window.addEventListener('pointerdown', onPointer)
     window.addEventListener('keydown', onKey)
@@ -345,7 +288,7 @@ export default function Calendar() {
       window.removeEventListener('pointerdown', onPointer)
       window.removeEventListener('keydown', onKey)
     }
-  }, [contextMenu, cellMenu])
+  }, [contextMenu])
 
   // Build the prompt label for the delete dialog from a CalendarBooking.
   // Used by both the right-click menu and the modal's Delete pill.
@@ -458,15 +401,6 @@ export default function Calendar() {
     return map
   }, [teamMembers])
 
-  // 2026-05-26 (PR C) — direct ID lookup for the schedule-shift
-  // overlay layer, where each block carries `member_id` (uuid) on
-  // the row. Faster than scanning `teamMembers` per block render.
-  const memberById = useMemo(() => {
-    const map = new Map<string, (typeof teamMembers)[number]>()
-    for (const m of teamMembers) map.set(m.id, m)
-    return map
-  }, [teamMembers])
-
   // 2026-05-27 — Avatar-derived calendar colors. Each member's
   // shift block tints to the dominant color sampled from their
   // profile picture (Checkmark's gold mic → gold blocks, etc).
@@ -486,15 +420,13 @@ export default function Calendar() {
   const memberFilterActive = selectedMemberId !== null
 
   // 2026-05-27 — Per Bridget: "can the icons be more greyed out and
-  // when you hover over them they light up to show you the schedule
-  // of the one you are hovering over?"
-  //
-  // Schedule-overlay avatars sit grayscaled + dimmed by default.
-  // Hovering one (or any of its other appearances elsewhere on the
-  // calendar) snaps THAT member's icons to full color and dims
-  // every segment that doesn't contain them — so the hovered
-  // member's full week-schedule visually lights up on demand.
-  const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null)
+  // when you hover over them they light up..." — that grayscale-
+  // until-hover treatment lived in the old shared hour-grid overlay,
+  // removed 2026-07-28 in favor of TeamScheduleGrid.tsx, where every
+  // member has an always-visible, always-distinguishable color (see
+  // docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md "Locked decisions" — whether
+  // a hover-highlight interaction should be layered back on top is an
+  // open question for the director, not decided here).
 
   // Sort active members alphabetically for the pill row. Inactive
   // members are dropped — they shouldn't show as filter targets.
@@ -679,38 +611,6 @@ export default function Calendar() {
         </div>
       )}
 
-      {/* 2026-05-23 — Empty-cell right-click menu. Renders only when
-          a user right-clicks an empty cell (booking blocks intercept
-          their own context menu above). Single action: open the
-          Request modal with the cell's day + start hour pre-filled. */}
-      {cellMenu && profile?.id && (
-        <div
-          role="menu"
-          aria-label="Empty cell actions"
-          onPointerDown={(e) => e.stopPropagation()}
-          style={{ top: cellMenu.y, left: cellMenu.x }}
-          className="fixed z-50 min-w-[220px] bg-surface border border-border rounded-xl shadow-xl py-1 animate-fade-in"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              const prefill = {
-                mode: 'block' as const,
-                date: cellMenu.dateKey,
-                startTime: cellMenu.startTime,
-              }
-              setCellMenu(null)
-              setScheduleRequest(prefill)
-            }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-text hover:bg-surface-hover transition-colors"
-          >
-            <Plus size={12} className="text-purple-300" aria-hidden="true" />
-            Request schedule here
-          </button>
-        </div>
-      )}
-
       {/* Schedule-request modal. Driven by `scheduleRequest`:
             true       → open with no prefill (header pill flow)
             {prefill}  → open with day/time prefilled (cell menu flow)
@@ -760,15 +660,21 @@ export default function Calendar() {
                 title="Show every member's schedule"
                 className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold border transition-colors cursor-pointer ${
                   !memberFilterActive
-                    ? 'bg-purple-700/15 text-purple-100 border-purple-500/30'
+                    ? 'bg-gold/15 text-gold border-gold/40'
                     : 'bg-surface-alt text-text-muted border-border hover:text-text'
                 }`}
               >
                 All
                 <span className="opacity-70">{memberPillRow.length}</span>
               </button>
+              {/* 2026-07-28 — Pills now use the SAME locked/avatar
+                  color as that member's row on the grid below (via
+                  `resolveScheduleColor`), replacing the shared purple
+                  active-state — so a pill and its row read as the
+                  same identity at a glance. */}
               {memberPillRow.map((m) => {
                 const isOn = selectedMemberId === m.id
+                const c = resolveScheduleColor(m, teamMemberColors)
                 return (
                   <button
                     key={m.id}
@@ -776,9 +682,10 @@ export default function Calendar() {
                     onClick={() => selectMember(m.id)}
                     aria-pressed={isOn}
                     title={isOn ? `Back to all members` : `Show only ${m.display_name}`}
+                    style={isOn ? { backgroundColor: c.bg, borderColor: c.border, color: c.accent } : undefined}
                     className={`inline-flex items-center gap-1.5 h-7 pl-0.5 pr-2.5 rounded-full text-[11px] font-semibold border transition-all cursor-pointer ${
                       isOn
-                        ? 'bg-purple-700/15 text-purple-100 border-purple-500/40 ring-1 ring-purple-500/20'
+                        ? ''
                         : memberFilterActive
                           ? 'bg-surface-alt/60 text-text-light border-border/60 opacity-60 hover:opacity-100 hover:text-text'
                           : 'bg-surface-alt text-text-muted border-border hover:text-text'
@@ -846,7 +753,12 @@ export default function Calendar() {
           {/* 2026-07-24 — Bookings vs. Team Schedule tab switcher.
               Replaces the old "Schedule" visibility toggle: the two
               views no longer share one grid, so this is a real tab,
-              not a layer on/off switch. Bookings is the default. */}
+              not a layer on/off switch. Bookings is the default.
+              2026-07-28 — director: "make the toggle extremely easy
+              to notice." Both segments now share one solid gold-fill
+              active state (was a faint shadow for Bookings, a purple
+              tint for Team Schedule) so whichever view is on is
+              unambiguous at a glance. */}
           <div role="tablist" aria-label="Calendar view" className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-surface-alt border border-border">
             <button
               type="button"
@@ -855,7 +767,7 @@ export default function Calendar() {
               onClick={() => setActiveTab('bookings')}
               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                 activeTab === 'bookings'
-                  ? 'bg-surface text-text shadow-sm'
+                  ? 'bg-gold text-[#241d08]'
                   : 'text-text-muted hover:text-text'
               }`}
             >
@@ -868,7 +780,7 @@ export default function Calendar() {
               onClick={() => setActiveTab('schedule')}
               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                 activeTab === 'schedule'
-                  ? 'bg-purple-700/15 text-purple-200'
+                  ? 'bg-gold text-[#241d08]'
                   : 'text-text-muted hover:text-text'
               }`}
             >
@@ -998,7 +910,13 @@ export default function Calendar() {
                 })}
               </div>
 
-              {/* Time rows with inline booking blocks */}
+              {/* Time rows with inline booking blocks. Bookings-tab
+                  only (2026-07-28) — the Team Schedule tab now renders
+                  its own member-rows layout below instead of sharing
+                  this hour grid, per the director-approved redesign
+                  (docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md). Bookings'
+                  Google-Calendar-style grid is explicitly unchanged. */}
+              {activeTab === 'bookings' && (
               <div className="relative" style={{ height: HOURS.length * 48 }}>
                 {/* Grid lines */}
                 {HOURS.map(hour => (
@@ -1012,27 +930,6 @@ export default function Calendar() {
                         <div
                           key={di}
                           className={`border-l border-border group/cell relative ${isSel ? 'bg-gold/[0.03]' : ''}`}
-                          // 2026-05-23 — right-click an empty cell to
-                          // open the "Request schedule here" menu,
-                          // which pre-fills the cell's day + start
-                          // time into the modal. Bookings keep their
-                          // own onContextMenu (admin actions); since
-                          // booking blocks live at z-30 and intercept
-                          // pointer events, this only fires on truly
-                          // empty cells. 2026-07-24 — schedule-request
-                          // is a Team Schedule tab action now that the
-                          // two views are split.
-                          onContextMenu={(e) => {
-                            if (activeTab !== 'schedule' || !profile?.id) return
-                            e.preventDefault()
-                            e.stopPropagation()
-                            setCellMenu({
-                              dateKey: wd.key,
-                              startTime: `${hour.toString().padStart(2, '0')}:00`,
-                              x: e.clientX,
-                              y: e.clientY,
-                            })
-                          }}
                         >
                           {/* +Book hover affordance — sits at z-10 so it's
                               below booking blocks (z-30). When a cell is
@@ -1142,314 +1039,6 @@ export default function Calendar() {
                   )
                 })}
 
-                {/* 2026-05-23 — Schedule overlay (PR 2). Translucent
-                    sage/teal blocks for each (member × day) scheduled
-                    window. Uses the same lane positioning as bookings
-                    so multiple staffed members on the same day fan
-                    out side-by-side. z-0 + pointer-events-none so it
-                    sits below booking blocks (z-30) AND below the
-                    +Book hover affordance (z-10) — clicks pass
-                    straight through. Only renders on the Team Schedule
-                    tab (2026-07-24 — split out of the Bookings tab).
-                    Out-of-grid hours (before 7am / after 7pm) get
-                    clipped via overflow on the wrapper. */}
-                {activeTab === 'schedule' && WEEK.map((wd, dayIndex) => {
-                  const daySchedules = schedulesByDate[wd.key] ?? []
-                  if (daySchedules.length === 0) return null
-                  // 2026-05-27 (PR C iter 7) — Per Bridget: "now lets
-                  // have them overlap low opacity."
-                  //
-                  // Each shift renders at FULL COLUMN WIDTH (no lane
-                  // splitting). Overlapping shifts stack on top of
-                  // each other — at /15 alpha the colors blend
-                  // visibly where they overlap so you can see "two
-                  // people are on this hour" by the colors mixing.
-                  // Each block still gets ONE avatar at the top.
-                  //
-                  // To prevent avatars from piling at the exact same
-                  // pixel when shifts start together, we still run
-                  // `assignBookingLanes` PURELY to compute a lane
-                  // index per shift, then use that index to stagger
-                  // the avatar position horizontally (24 px per lane)
-                  // — the blocks themselves stay full-column-width.
-                  const asEvents = daySchedules.map((s) => {
-                    const start = new Date(s.starts_at)
-                    const end = new Date(s.ends_at)
-                    return {
-                      key: s.key,
-                      memberId: s.member_id,
-                      note: s.note,
-                      startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
-                      endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
-                    }
-                  })
-                  const laned = assignBookingLanes(asEvents)
-                  const gridStart = 7 * 60
-                  const gridEnd = 20 * 60
-                  const colWidth = `((100% - 36px) / 7)`
-                  const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                  // 2026-05-27 — Schedule overlay now renders as a
-                  // thin colored line per shift with the member's
-                  // avatar at the top, per Bridget: "rather than
-                  // taking up the whole calendar block, theres
-                  // brackets or a line streatching down showing who
-                  // is on shift? right now its a mess and we cant
-                  // see all of the user icons."
-                  //
-                  // The filled blocks are dropped entirely. Each
-                  // member's shift is a 24 px avatar at the start of
-                  // the time range + a 3 px vertical bar in their
-                  // accent color extending down for the duration.
-                  // Multiple members on shift = avatars side-by-side
-                  // at the top (lane-spaced), with their lines
-                  // dropping down in parallel. The rest of the day
-                  // column stays clear so booking blocks remain
-                  // legible underneath.
-                  // 2026-05-27 — Per Bridget: "lets go back to this
-                  // [filled segment blocks], but instead of having
-                  // the icons appear multiple times down the line in
-                  // chunks have an icon for each member for their
-                  // start time, and their end time."
-                  //
-                  // Each segment (a time range where the set of
-                  // on-shift members is constant) renders as a
-                  // single full-column-width purple wash. Inside the
-                  // wash we only show avatars for members whose
-                  // shift is starting or ending at that segment's
-                  // boundaries — so each person's icon appears
-                  // exactly twice per shift (top of the segment
-                  // where they arrive, bottom of the segment where
-                  // they leave), never repeated in the middle.
-                  const shiftSpans: ShiftSpan[] = laned.map(({ booking: ev }) => ({
-                    memberId: ev.memberId,
-                    startMin: timeToMinutes(ev.startTime),
-                    endMin: timeToMinutes(ev.endTime),
-                  }))
-                  const shiftByMember = new Map<string, ShiftSpan>()
-                  for (const s of shiftSpans) shiftByMember.set(s.memberId, s)
-                  const segments = buildScheduleSegments(shiftSpans)
-                  return segments.flatMap((seg) => {
-                    const visStart = Math.max(seg.startMin, gridStart)
-                    const visEnd = Math.min(seg.endMin, gridEnd)
-                    if (visEnd <= visStart) return []
-                    const topPx = ((visStart - gridStart) / 60) * 48
-                    const heightPx = ((visEnd - visStart) / 60) * 48
-                    // Partition this segment's members into those
-                    // who are *starting* their shift exactly here
-                    // and those who are *ending* exactly here. A
-                    // member can be both (a shift that spans only
-                    // this segment), in which case we show them in
-                    // both rows.
-                    const startingMembers: typeof teamMembers = []
-                    const endingMembers: typeof teamMembers = []
-                    for (const memberId of seg.memberIds) {
-                      const shift = shiftByMember.get(memberId)
-                      const member = memberById.get(memberId)
-                      if (!member || !shift) continue
-                      if (shift.startMin === seg.startMin) startingMembers.push(member)
-                      if (shift.endMin === seg.endMin) endingMembers.push(member)
-                    }
-                    // 2026-05-27 — Per Bridget: "can we not have the
-                    // dividers though in the calendar sections since
-                    // those arent times where shifts stop?"
-                    //
-                    // The "dividers" she was seeing were a combo of
-                    // (a) the per-segment border + rounded corners
-                    // and (b) the hour-grid lines visible through
-                    // the /15 translucent wash. Dropping the
-                    // border + rounded corners makes adjacent
-                    // segments touch as one continuous shape, and
-                    // bumping the fill to /35 masks the grid lines
-                    // underneath so the wash reads as one block.
-                    // 2026-05-27 — Per Bridget: "we need both the icon
-                    // to light up and the block time should also
-                    // light up, almost like a hoverover filtering.
-                    // when its not lit up its greyed out not blacked
-                    // out."
-                    //
-                    // Segment painting depends on the hover state:
-                    //   - No hover active → neutral purple wash
-                    //   - Hover on a member in THIS segment → fill
-                    //     becomes that member's accent color at
-                    //     /55 alpha so the block actively GLOWS in
-                    //     their hue, not just stays at neutral while
-                    //     others dim
-                    //   - Hover on a member NOT in this segment →
-                    //     segment opacity drops to 0.18 so it
-                    //     recedes
-                    const segContainsHovered =
-                      hoveredMemberId !== null &&
-                      seg.memberIds.includes(hoveredMemberId)
-                    const segDimmed =
-                      hoveredMemberId !== null && !segContainsHovered
-                    const hoveredColor = segContainsHovered
-                      ? teamMemberColors.get(hoveredMemberId!)
-                        ?? memberColor(hoveredMemberId!)
-                      : null
-                    const segBgStyle: React.CSSProperties = hoveredColor
-                      ? { backgroundColor: hoveredColor.bg.replace('0.30', '0.55') }
-                      : {}
-                    return [
-                      <div
-                        key={`${wd.key}-${seg.key}`}
-                        aria-hidden="true"
-                        className={`absolute pointer-events-none overflow-hidden flex flex-col z-0 transition-all ${hoveredColor ? '' : 'bg-purple-700/35'}`}
-                        style={{
-                          top: topPx,
-                          height: Math.max(heightPx, 16),
-                          left: `calc(${colLeft} + 1px)`,
-                          width: `calc(${colWidth} - 2px)`,
-                          opacity: segDimmed ? 0.18 : 1,
-                          ...segBgStyle,
-                        }}
-                      >
-                        {/* Top row — members arriving at this
-                            segment's start boundary. Per-member
-                            color rings so different staff are easy
-                            to tell apart at a glance. */}
-                        {startingMembers.length > 0 && (
-                          <div className="flex items-center flex-wrap gap-1 px-1 pt-0.5">
-                            {startingMembers.map((m) => {
-                              const c = teamMemberColors.get(m.id) ?? memberColor(m.id)
-                              const isHovered = hoveredMemberId === m.id
-                              const dim = hoveredMemberId !== null && !isHovered
-                              return (
-                                <span
-                                  key={`s-${m.id}`}
-                                  title={m.display_name || 'Member'}
-                                  onMouseEnter={() => setHoveredMemberId(m.id)}
-                                  onMouseLeave={() => setHoveredMemberId(null)}
-                                  className="shrink-0 rounded-full pointer-events-auto cursor-pointer transition-all"
-                                  style={{
-                                    boxShadow: `0 0 0 ${isHovered ? 3 : 2}px ${c.accent}`,
-                                    // 2026-05-27 — Per Bridget: idle
-                                    // should be GREYED OUT, not
-                                    // blacked out. Drop the full
-                                    // grayscale + low opacity combo
-                                    // (which on dark mode reads as
-                                    // near-invisible). Keep full
-                                    // grayscale for the desaturation
-                                    // tell, but push opacity back up
-                                    // to ~0.85 so the avatar shape
-                                    // stays legible. Dim state (when
-                                    // a DIFFERENT member is being
-                                    // hovered) lowers to 0.45 for
-                                    // recession without disappearing.
-                                    filter: isHovered
-                                      ? 'none'
-                                      : dim
-                                        ? 'grayscale(1) opacity(0.45)'
-                                        : 'grayscale(1) opacity(0.85)',
-                                    transform: isHovered ? 'scale(1.15)' : 'scale(1)',
-                                    zIndex: isHovered ? 20 : 'auto',
-                                  }}
-                                >
-                                  <MemberAvatar member={m} size="xs" />
-                                </span>
-                              )
-                            })}
-                          </div>
-                        )}
-                        {/* Spacer pushes the ending row to the
-                            bottom of the segment. */}
-                        <div className="flex-1" />
-                        {/* Bottom row — members whose shift ends at
-                            this segment's end boundary. Only renders
-                            when the block is tall enough to read as
-                            "two separate rows" (≥ 32 px). */}
-                        {endingMembers.length > 0 && heightPx >= 32 && (
-                          <div className="flex items-center flex-wrap gap-1 px-1 pb-0.5">
-                            {endingMembers.map((m) => {
-                              const c = teamMemberColors.get(m.id) ?? memberColor(m.id)
-                              const isHovered = hoveredMemberId === m.id
-                              const dim = hoveredMemberId !== null && !isHovered
-                              return (
-                                <span
-                                  key={`e-${m.id}`}
-                                  title={m.display_name || 'Member'}
-                                  onMouseEnter={() => setHoveredMemberId(m.id)}
-                                  onMouseLeave={() => setHoveredMemberId(null)}
-                                  className="shrink-0 rounded-full pointer-events-auto cursor-pointer transition-all"
-                                  style={{
-                                    boxShadow: `0 0 0 ${isHovered ? 3 : 2}px ${c.accent}`,
-                                    // 2026-05-27 — Per Bridget: idle
-                                    // should be GREYED OUT, not
-                                    // blacked out. Drop the full
-                                    // grayscale + low opacity combo
-                                    // (which on dark mode reads as
-                                    // near-invisible). Keep full
-                                    // grayscale for the desaturation
-                                    // tell, but push opacity back up
-                                    // to ~0.85 so the avatar shape
-                                    // stays legible. Dim state (when
-                                    // a DIFFERENT member is being
-                                    // hovered) lowers to 0.45 for
-                                    // recession without disappearing.
-                                    filter: isHovered
-                                      ? 'none'
-                                      : dim
-                                        ? 'grayscale(1) opacity(0.45)'
-                                        : 'grayscale(1) opacity(0.85)',
-                                    transform: isHovered ? 'scale(1.15)' : 'scale(1)',
-                                    zIndex: isHovered ? 20 : 'auto',
-                                  }}
-                                >
-                                  <MemberAvatar member={m} size="xs" />
-                                </span>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>,
-                    ]
-                  })
-                })}
-
-                {/* 2026-07-24 (PR4B) — Approved time off. Rendered
-                    completely separately from the work-shift wash
-                    above (different color, diagonal-stripe pattern,
-                    "Time off" label) so it can never be mistaken for
-                    a work shift. Full column height since time off is
-                    a full-day span, not an hour range. z-0 +
-                    pointer-events-none, same as the work wash. */}
-                {activeTab === 'schedule' && WEEK.map((wd, dayIndex) => {
-                  const dayTimeOff = timeOffByDate[wd.key] ?? []
-                  if (dayTimeOff.length === 0) return null
-                  const colWidth = `((100% - 36px) / 7)`
-                  const colLeft = `(36px + ${colWidth} * ${dayIndex})`
-                  const gridHeightPx = (20 - 7) * 48
-                  return (
-                    <div
-                      key={`timeoff-${wd.key}`}
-                      aria-hidden="true"
-                      className="absolute pointer-events-none z-0 overflow-hidden flex flex-col items-center gap-1 pt-1"
-                      style={{
-                        top: 0,
-                        height: gridHeightPx,
-                        left: `calc(${colLeft} + 1px)`,
-                        width: `calc(${colWidth} - 2px)`,
-                        backgroundColor: 'rgba(56, 189, 248, 0.10)',
-                        backgroundImage:
-                          'repeating-linear-gradient(45deg, rgba(56,189,248,0.12) 0, rgba(56,189,248,0.12) 6px, transparent 6px, transparent 12px)',
-                      }}
-                    >
-                      {dayTimeOff.map((s) => {
-                        const member = memberById.get(s.member_id)
-                        return (
-                          <span
-                            key={s.key}
-                            title={`${member?.display_name ?? 'Member'} — Time off${s.note ? `: ${s.note}` : ''}`}
-                            className="flex items-center gap-1 rounded-full bg-sky-950/40 border border-sky-400/30 px-1.5 py-0.5"
-                          >
-                            {member && <MemberAvatar member={member} size="xs" />}
-                            <span className="text-[8px] font-semibold text-sky-200 uppercase tracking-wide">Off</span>
-                          </span>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
-
                 {/* Booking blocks — positioned within each day column
                     via overlap-aware lane math (PR E). Bookings that
                     share a time slot fan out side-by-side instead of
@@ -1530,6 +1119,20 @@ export default function Calendar() {
                   })
                 })}
               </div>
+              )}
+
+              {activeTab === 'schedule' && (
+                <TeamScheduleGrid
+                  weekDays={WEEK}
+                  members={memberFilterActive ? memberPillRow.filter((m) => m.id === selectedMemberId) : memberPillRow}
+                  schedulesByDate={schedulesByDate}
+                  timeOffByDate={timeOffByDate}
+                  teamMemberColors={teamMemberColors}
+                  gridStartHour={GRID_START_HOUR}
+                  gridEndHour={GRID_END_HOUR}
+                  selectedDate={selectedDate}
+                />
+              )}
             </div>
           </div>
         </div>
