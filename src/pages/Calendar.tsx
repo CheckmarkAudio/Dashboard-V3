@@ -755,19 +755,21 @@ export default function Calendar() {
               views no longer share one grid, so this is a real tab,
               not a layer on/off switch. Bookings is the default.
               2026-07-28 — director: "make the toggle extremely easy
-              to notice." Both segments now share one solid gold-fill
-              active state (was a faint shadow for Bookings, a purple
-              tint for Team Schedule) so whichever view is on is
-              unambiguous at a glance. */}
-          <div role="tablist" aria-label="Calendar view" className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-surface-alt border border-border">
+              to notice" / "super noticeable like your preview." Both
+              segments share one solid gold-fill active state, now
+              sized up (bigger padding, bigger text, a soft shadow on
+              the active pill) to match the weight of the approved
+              mockup rather than blending into the surrounding
+              toolbar row. */}
+          <div role="tablist" aria-label="Calendar view" className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface-alt border border-border">
             <button
               type="button"
               role="tab"
               aria-selected={activeTab === 'bookings'}
               onClick={() => setActiveTab('bookings')}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-bold transition-colors ${
                 activeTab === 'bookings'
-                  ? 'bg-gold text-[#241d08]'
+                  ? 'bg-gold text-[#241d08] shadow-sm'
                   : 'text-text-muted hover:text-text'
               }`}
             >
@@ -778,13 +780,13 @@ export default function Calendar() {
               role="tab"
               aria-selected={activeTab === 'schedule'}
               onClick={() => setActiveTab('schedule')}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-bold transition-colors ${
                 activeTab === 'schedule'
-                  ? 'bg-gold text-[#241d08]'
+                  ? 'bg-gold text-[#241d08] shadow-sm'
                   : 'text-text-muted hover:text-text'
               }`}
             >
-              <CalendarRange size={12} aria-hidden="true" />
+              <CalendarRange size={15} aria-hidden="true" />
               <span>Team Schedule</span>
               {filteredScheduleExpanded.length > 0 && (
                 <span className="opacity-70">{filteredScheduleExpanded.length}</span>

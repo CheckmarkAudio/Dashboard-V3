@@ -16,6 +16,8 @@ import { localDateKey } from '../../lib/dates'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTeamSchedule } from '../../lib/schedule/useTeamSchedule'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
+import { useTeamMemberColors } from '../../lib/calendar/useTeamMemberColors'
+import { resolveScheduleColor } from '../../lib/calendar/teamScheduleColors'
 import BookingDetailModal, { type BookingDetail } from './BookingDetailModal'
 import CreateBookingModal from '../CreateBookingModal'
 
@@ -370,6 +372,15 @@ export default function CalendarDayCard({
     scheduleMembers.forEach((m) => map.set(m.id, m.display_name || 'Member'))
     return map
   }, [scheduleMembers])
+  const scheduleMemberById = useMemo(() => {
+    const map = new Map<string, (typeof scheduleMembers)[number]>()
+    scheduleMembers.forEach((m) => map.set(m.id, m))
+    return map
+  }, [scheduleMembers])
+  // 2026-07-28 — same locked/avatar-derived colors as the Calendar
+  // page's Team Schedule grid, so "who's on shift" reads as the same
+  // person's color everywhere instead of a flat purple chip.
+  const teamMemberColors = useTeamMemberColors(scheduleMembers)
 
   // Sort shifts by start time, alphabetize ties by member name so the
   // list stays stable.
@@ -484,14 +495,19 @@ export default function CalendarDayCard({
         ) : (
           <div className="space-y-0">
             {/* 2026-05-23 — Scheduled shifts row (PR 5). Sits above the
-                booking list so "who's working today" reads first. Each
-                shift is a compact purple chip (Users icon — visually
-                distinct from the gold booking rows underneath). Only
-                renders when there's at least one shift on this day. */}
+                booking list so "who's working today" reads first. Only
+                renders when there's at least one shift on this day.
+                2026-07-28 — director: "we are doing away with purple,
+                make it match the calendar we just made for the
+                employee schedules." Chips now use the same per-member
+                color as the Calendar page's Team Schedule grid
+                (`resolveScheduleColor` — locked picks for the six real
+                team members, avatar-derived fallback for anyone else)
+                instead of a flat purple treatment. */}
             {selectedShifts.length > 0 && (
               <div className="py-2 mb-1 border-b border-border-strong">
                 <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
-                  <Users size={11} className="text-purple-300" aria-hidden="true" />
+                  <Users size={11} className="text-gold" aria-hidden="true" />
                   <span className="text-[10px] uppercase tracking-wider font-semibold text-text-muted">
                     On shift today
                   </span>
@@ -505,14 +521,23 @@ export default function CalendarDayCard({
                     const ends = new Date(s.ends_at)
                     const memberName = scheduleMemberNameById.get(s.member_id) ?? 'Member'
                     const time = `${starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}–${ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                    const member = scheduleMemberById.get(s.member_id)
+                    const color = member
+                      ? resolveScheduleColor(member, teamMemberColors)
+                      : null
                     return (
                       <span
                         key={s.key}
-                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-purple-500/20 bg-purple-700/10 text-[11px] text-purple-100"
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px]"
+                        style={
+                          color
+                            ? { backgroundColor: color.bg, borderColor: color.border, color: color.accent }
+                            : undefined
+                        }
                         title={s.note ? `${memberName} · ${time} · ${s.note}` : `${memberName} · ${time}`}
                       >
                         <span className="font-semibold truncate max-w-[110px]">{memberName}</span>
-                        <span className="opacity-70">{time}</span>
+                        <span className="opacity-80">{time}</span>
                       </span>
                     )
                   })}
