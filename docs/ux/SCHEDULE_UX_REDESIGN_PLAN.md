@@ -236,18 +236,19 @@ Checkmark, Christian, Matthan, Richard, Tony). Director signed off on the direct
 - **Schedule-edit modal** gets the "current schedule" 7-day pill strip shown above the edit
   form (gold-tinted pill = a scheduled day with its hours, muted "Off" pill = no shift that
   day) — confirmed as the right direction.
-- Per-member color palette used in the mockups (teal/rose/amber/blue) was a placeholder for
-  everyone except two now-locked picks:
-  - **Bridget: red-orange, `#E0532A`** (director-picked, re-rendered and confirmed).
-    Deliberately distinct from brand gold so her personal identity color never gets confused
-    with the app's own accent color.
-  - **Checkmark (the shared/studio account, not an individual): brand gold, same `#C9A84C`
-    used for the toggle fill / `HeaderActivityBar`** (director-picked, re-rendered and
-    confirmed). Unlike Bridget's case, gold overlapping the brand chrome here is intentional —
-    the studio's own row IS the brand, so its identity color and the app's accent color being
-    the same thing makes sense rather than clashing.
-  - Remaining members (Christian, Matthan, Richard, Tony) still open to restyle at
-    implementation time.
+- **Full per-member color palette is now locked** (director-picked across three mockup
+  rounds, all re-rendered and confirmed against the real 6-person team):
+  - **Bridget: red-orange, `#E0532A`.** Deliberately distinct from brand gold so her personal
+    identity color never gets confused with the app's own accent color.
+  - **Checkmark (the shared/studio account, not an individual): brand gold, `#C9A84C`** — same
+    tone as the toggle fill / `HeaderActivityBar`. Unlike Bridget's case, gold overlapping the
+    brand chrome here is intentional — the studio's own row IS the brand.
+  - **Christian: blue, `#378ADD`.**
+  - **Matthan: gray, `#A8A69C`.**
+  - **Richard: green, `#639922`** — moved off an earlier amber pick because it read too close
+    to Checkmark's gold at a glance.
+  - **Tony: red, `#E24B4A`** — a true red, kept visually distinct from Bridget's red-orange.
+  - This is the full roster; no members remain unassigned.
 - Still open: whether the hover-highlight interaction from the 2026-05-27 decision (dim
   everyone, light up on hover) survives alongside always-visible per-member color, or is
   dropped entirely now that color alone carries identity. Ask before implementing.
