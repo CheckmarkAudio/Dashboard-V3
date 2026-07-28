@@ -141,7 +141,7 @@ export default function MyScheduleWidget() {
       {/* Header: title row + mode toggle + Request button */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <CalendarRange size={14} className="text-purple-300 shrink-0" aria-hidden="true" />
+          <CalendarRange size={14} className="text-gold shrink-0" aria-hidden="true" />
           <span className="text-[11px] text-text-light truncate">{headerLabel}</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -300,7 +300,7 @@ function MyRecurringStrip({
                 'inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px]',
                 pendingDelete
                   ? 'border-rose-500/30 bg-rose-500/10 text-rose-100'
-                  : 'border-purple-500/20 bg-purple-700/10 text-purple-100',
+                  : 'border-gold/25 bg-gold/10 text-gold',
               ].join(' ')}
               title={pendingDelete ? 'Removal pending admin review' : undefined}
             >
@@ -324,7 +324,7 @@ function MyRecurringStrip({
                   disabled={busyId === r.id}
                   aria-label="Request to remove this rule"
                   title="Request to remove"
-                  className="text-purple-200/70 hover:text-rose-200 transition-colors disabled:opacity-50"
+                  className="text-gold/70 hover:text-rose-200 transition-colors disabled:opacity-50"
                 >
                   {busyId === r.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
                 </button>
@@ -417,7 +417,7 @@ function ScheduleChip({
           ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
           : isTimeOff
             ? 'border-sky-500/30 bg-sky-500/10 text-sky-100'
-            : 'border-purple-500/20 bg-purple-700/10 text-purple-100',
+            : 'border-gold/25 bg-gold/10 text-gold',
       ].join(' ')}
     >
       {isTimeOff ? (

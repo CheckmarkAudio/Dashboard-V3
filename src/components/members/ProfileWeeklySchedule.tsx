@@ -142,7 +142,7 @@ export default function ProfileWeeklySchedule({ memberId }: ProfileWeeklySchedul
                     <div
                       key={b.id}
                       className={`flex items-center gap-2 px-3 py-2 rounded-md border ${
-                        isTimeOff ? 'border-sky-500/30 bg-sky-500/10' : 'border-purple-500/20 bg-purple-700/10'
+                        isTimeOff ? 'border-sky-500/30 bg-sky-500/10' : 'border-gold/25 bg-gold/10'
                       }`}
                     >
                       {isTimeOff && <Palmtree size={12} className="text-sky-300 shrink-0" aria-hidden="true" />}

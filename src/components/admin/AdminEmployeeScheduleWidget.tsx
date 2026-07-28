@@ -14,7 +14,9 @@ import {
   toLocalDateString,
 } from '../../lib/schedule/expand'
 import { fetchTeamMembers, teamMemberKeys } from '../../lib/queries/teamMembers'
-import type { ExpandedSchedule } from '../../types'
+import { useTeamMemberColors } from '../../lib/calendar/useTeamMemberColors'
+import { resolveScheduleColor } from '../../lib/calendar/teamScheduleColors'
+import type { ExpandedSchedule, TeamMember } from '../../types'
 
 /**
  * Admin Hub widget — Employee Schedule.
@@ -25,11 +27,14 @@ import type { ExpandedSchedule } from '../../types'
  * ("Widget Order: Approvals, Employee Schedule, Notifications").
  *
  * Renders 7 day rows (Mon→Sun). Each row shows a wrapped list of
- * member chips (display name + time range) — same purple chip
- * treatment as the Calendar overlay + MyScheduleWidget for visual
- * consistency. Pending request count surfaces as a small amber badge
- * in the header so admins notice when there's something to review
- * without leaving the Hub.
+ * member chips (display name + time range). 2026-07-28 — recolored
+ * from a flat purple treatment to each member's own resolved color
+ * (`resolveScheduleColor` — same locked/avatar-derived colors as the
+ * Calendar page's Team Schedule grid and CalendarDayCard's "On shift
+ * today"), so a person's identity color reads the same everywhere in
+ * the app instead of one shared purple for everyone. Pending request
+ * count surfaces as a small amber badge in the header so admins
+ * notice when there's something to review without leaving the Hub.
  */
 export default function AdminEmployeeScheduleWidget() {
   // Always pin to the current week. A future iteration could add
@@ -63,6 +68,12 @@ export default function AdminEmployeeScheduleWidget() {
     members.forEach((m) => map.set(m.id, m.display_name || 'Member'))
     return map
   }, [members])
+  const memberById = useMemo(() => {
+    const map = new Map<string, TeamMember>()
+    members.forEach((m) => map.set(m.id, m))
+    return map
+  }, [members])
+  const teamMemberColors = useTeamMemberColors(members)
 
   // Bucket approved-only entries by date for the day rows. Pending
   // proposals live in the header badge only — admins act on them via
@@ -117,7 +128,7 @@ export default function AdminEmployeeScheduleWidget() {
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <Users size={13} className="text-purple-300 shrink-0" aria-hidden="true" />
+          <Users size={13} className="text-gold shrink-0" aria-hidden="true" />
           <span className="text-[11px] text-text-light truncate">
             {weekLabel} · {stafedCount} staffed
           </span>
@@ -166,6 +177,8 @@ export default function AdminEmployeeScheduleWidget() {
                 date={d.date}
                 entries={d.entries}
                 memberNameById={memberNameById}
+                memberById={memberById}
+                teamMemberColors={teamMemberColors}
               />
             ))}
           </div>
@@ -179,10 +192,14 @@ function DayRow({
   date,
   entries,
   memberNameById,
+  memberById,
+  teamMemberColors,
 }: {
   date: Date
   entries: ExpandedSchedule[]
   memberNameById: Map<string, string>
+  memberById: Map<string, TeamMember>
+  teamMemberColors: ReturnType<typeof useTeamMemberColors>
 }) {
   const dayName = date.toLocaleDateString([], { weekday: 'short' })
   const dayNum = date.toLocaleDateString([], { day: 'numeric' })
@@ -205,14 +222,21 @@ function DayRow({
               const ends = new Date(e.ends_at)
               const time = `${starts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}–${ends.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
               const memberName = memberNameById.get(e.member_id) ?? 'Member'
+              const member = memberById.get(e.member_id)
+              const color = member ? resolveScheduleColor(member, teamMemberColors) : null
               return (
                 <span
                   key={e.key}
-                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-purple-500/20 bg-purple-700/10 text-[11px] text-purple-100"
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px]"
+                  style={
+                    color
+                      ? { backgroundColor: color.bg, borderColor: color.border, color: color.accent }
+                      : undefined
+                  }
                   title={`${memberName} · ${time}${e.note ? ` · ${e.note}` : ''}`}
                 >
                   <span className="font-semibold truncate max-w-[110px]">{memberName}</span>
-                  <span className="opacity-70">{time}</span>
+                  <span className="opacity-80">{time}</span>
                 </span>
               )
             })}
