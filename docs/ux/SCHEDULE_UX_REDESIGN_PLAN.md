@@ -249,9 +249,41 @@ Checkmark, Christian, Matthan, Richard, Tony). Director signed off on the direct
     to Checkmark's gold at a glance.
   - **Tony: red, `#E24B4A`** — a true red, kept visually distinct from Bridget's red-orange.
   - This is the full roster; no members remain unassigned.
-- Still open: whether the hover-highlight interaction from the 2026-05-27 decision (dim
-  everyone, light up on hover) survives alongside always-visible per-member color, or is
-  dropped entirely now that color alone carries identity. Ask before implementing.
+- **Resolved 2026-07-28 — stays retired.** The hover-highlight interaction from the
+  2026-05-27 decision (dim everyone, light up on hover) does NOT come back. Director asked
+  for the whole redesign to make identity readable without hovering; bringing the
+  dim-until-hover behavior back on top of always-visible colors would partially undo that
+  with no stated reason to. Decided directly (director gave standing "go without asking
+  permission" authorization on 2026-07-28) rather than left open indefinitely.
+
+### Implementation status (2026-07-28)
+
+Shipped, in order:
+
+- **[PR #328](https://github.com/CheckmarkAudio/Dashboard-V3/pull/328)** — `TeamScheduleGrid.tsx`
+  (member-rows layout), `teamScheduleColors.ts` (locked-color resolver), the gold-filled
+  toggle (later pinned to a fixed left position after director feedback that it jumped
+  around depending on filter-pill width), and time labels moved to their own line above a
+  slim position bar (a v2 attempt printed the time INSIDE the bar, which clipped on short
+  shifts — director screenshot caught it).
+- **Follow-up PR** (same day) —
+  - `ScheduleRequestModal.tsx` now shows a "Your current schedule" 7-day pill strip above
+    the mode picker, and `RecurringForm` seeds its grid from the member's real approved
+    schedule (`fetchMemberRecurring()`) instead of a generic Tue–Sat 10–6 template, closing
+    out "I couldnt tell what I was updating or if i even had a set schedule to begin with."
+    Submitting still sends a fresh pending request rather than replacing the approved rows
+    in place — that propose/approve semantics question wasn't in scope, only what the
+    member sees going in; copy in the form says this explicitly so it isn't a surprise.
+  - Purple-to-brand-color sweep finished on the two originally-named files
+    (`AdminEmployeeScheduleWidget.tsx`, `MyScheduleWidget.tsx`) plus two more found in the
+    same family (`WorkScheduler.tsx`, `ProfileWeeklySchedule.tsx`). Multi-member surfaces
+    (`AdminEmployeeScheduleWidget.tsx`, matching `CalendarDayCard.tsx` from PR #328) use
+    `resolveScheduleColor` per member; single-person surfaces (a member's own hours) use
+    flat gold — no identity distinction needed when the whole widget is already "me."
+- **Not built** (separate, bigger items, still tracked in `00_PRIORITY_QUEUE.md`):
+  customizable per-member colors as a real admin-Settings setting (this whole redesign's
+  locked-color table is a stand-in for that); the propose/approve-in-place question above,
+  if it turns out to matter in practice.
 
 ### Non-goals (carried over from the section above)
 
