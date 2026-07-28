@@ -1,17 +1,55 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Loader2, Send, X } from 'lucide-react'
 import { Button, Input } from '../ui'
 import { useToast } from '../Toast'
 import {
+  fetchMemberRecurring,
   requestRecurring,
   requestScheduleBlock,
 } from '../../lib/schedule/mutations'
-import { toLocalDateString } from '../../lib/schedule/expand'
+import { toLocalDateString, weekdayLabel } from '../../lib/schedule/expand'
+import type { ScheduleRecurring, Weekday } from '../../types'
 import WeeklyAvailabilityGrid, {
   createDefaultWeekAvailability,
   invalidDays,
   type WeekAvailability,
 } from './WeeklyAvailabilityGrid'
+
+const ALL_WEEKDAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6]
+
+function formatHourRange(startTime: string, endTime: string): string {
+  const fmt = (t: string) => {
+    const [hStr, mStr] = t.split(':')
+    const h = Number(hStr)
+    const m = Number(mStr ?? 0)
+    const period = h < 12 ? 'AM' : 'PM'
+    const hour12 = ((h + 11) % 12) + 1
+    return m === 0 ? `${hour12}${period}` : `${hour12}:${m.toString().padStart(2, '0')}${period}`
+  }
+  return `${fmt(startTime)}–${fmt(endTime)}`
+}
+
+/** Real approved recurring rows -> the form's local per-day state, so
+ *  "Set weekly schedule" opens already reflecting what's actually
+ *  saved instead of a generic Tue–Sat 10–6 template. Days with no
+ *  current row fall back to the given defaults, disabled. */
+function recurringToWeekAvailability(
+  rows: ScheduleRecurring[],
+  defaultStart: string,
+  defaultEnd: string,
+): WeekAvailability {
+  const out = createDefaultWeekAvailability(defaultStart, defaultEnd)
+  for (const w of ALL_WEEKDAYS) out[w] = { ...out[w], enabled: false }
+  for (const row of rows) {
+    out[row.weekday] = {
+      enabled: true,
+      start: row.start_time.slice(0, 5),
+      end: row.end_time.slice(0, 5),
+    }
+  }
+  return out
+}
 
 /**
  * Worker-facing schedule request modal.
@@ -59,6 +97,17 @@ export default function ScheduleRequestModal({
 }: ScheduleRequestModalProps) {
   const [mode, setMode] = useState<Mode>(prefill?.mode ?? 'recurring')
 
+  // 2026-07-28 — director: "when I updated my hours I couldnt tell
+  // what I was updating or if i even had a set schedule to begin
+  // with... perhaps we need a visual breakdown of a person's current
+  // schedule so they can see while they are updating it." Fetched
+  // once at the modal level (not per-form) so the summary strip below
+  // and RecurringForm's pre-fill both read from the same data.
+  const { data: currentRecurring = [], isLoading: loadingCurrent } = useQuery({
+    queryKey: ['schedule', 'member-recurring', memberId],
+    queryFn: () => fetchMemberRecurring(memberId),
+  })
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Request schedule">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -79,6 +128,8 @@ export default function ScheduleRequestModal({
             <X size={16} aria-hidden="true" />
           </button>
         </div>
+
+        <CurrentScheduleStrip rows={currentRecurring} loading={loadingCurrent} />
 
         <div className="grid gap-2 mb-4">
           <ScheduleChoice
@@ -111,13 +162,26 @@ export default function ScheduleRequestModal({
             prefillEnd={prefill?.endTime}
           />
         ) : mode === 'recurring' ? (
-          <RecurringForm
-            memberId={memberId}
-            onClose={onClose}
-            onSubmitted={onSubmitted}
-            prefillStart={prefill?.startTime}
-            prefillEnd={prefill?.endTime}
-          />
+          loadingCurrent ? (
+            // Wait for the current-schedule fetch before mounting the
+            // form — RecurringForm reads `currentRecurring` only on
+            // its FIRST render to build its initial state, so
+            // mounting it early (before the real data lands) would
+            // silently lock it into the generic default template.
+            <div className="flex items-center justify-center gap-2 py-6 text-[12px] text-text-muted">
+              <Loader2 size={14} className="animate-spin" />
+              Loading your schedule…
+            </div>
+          ) : (
+            <RecurringForm
+              memberId={memberId}
+              onClose={onClose}
+              onSubmitted={onSubmitted}
+              prefillStart={prefill?.startTime}
+              prefillEnd={prefill?.endTime}
+              currentRecurring={currentRecurring}
+            />
+          )
         ) : (
           <TimeOffForm
             memberId={memberId}
@@ -127,6 +191,54 @@ export default function ScheduleRequestModal({
           />
         )}
       </div>
+    </div>
+  )
+}
+
+/** "Your current schedule" — a 7-day pill strip shown above the mode
+ *  picker, always visible regardless of which mode is selected, so
+ *  it answers "do I even have a schedule, and what is it" before the
+ *  member touches anything. Gold pill = a day they're currently
+ *  scheduled (with its real hours); muted pill = no shift that day. */
+function CurrentScheduleStrip({ rows, loading }: { rows: ScheduleRecurring[]; loading: boolean }) {
+  const byWeekday = new Map(rows.map((r) => [r.weekday, r]))
+  return (
+    <div className="mb-4 rounded-lg border border-border bg-surface-alt/35 px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-wider font-semibold text-text-muted mb-2">
+        Your current schedule
+      </p>
+      {loading ? (
+        <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
+          <Loader2 size={12} className="animate-spin" />
+          Loading…
+        </div>
+      ) : (
+        <div className="grid grid-cols-7 gap-1">
+          {ALL_WEEKDAYS.map((w) => {
+            const row = byWeekday.get(w)
+            return (
+              <div
+                key={w}
+                className={`rounded-md text-center py-1.5 px-0.5 ${
+                  row ? 'bg-gold/[0.14] border border-gold/40' : 'bg-surface-alt border border-border'
+                }`}
+              >
+                <p className={`text-[9px] font-semibold ${row ? 'text-gold' : 'text-text-muted'}`}>
+                  {weekdayLabel(w, 'short')}
+                </p>
+                <p className={`text-[8px] leading-tight mt-0.5 ${row ? 'text-text' : 'text-text-light'}`}>
+                  {row ? formatHourRange(row.start_time.slice(0, 5), row.end_time.slice(0, 5)) : 'Off'}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {!loading && rows.length === 0 && (
+        <p className="text-[11px] text-text-light italic mt-2">
+          No weekly schedule set yet — anything you submit below will be your first.
+        </p>
+      )}
     </div>
   )
 }
@@ -365,16 +477,26 @@ function RecurringForm({
   onSubmitted,
   prefillStart,
   prefillEnd,
+  currentRecurring,
 }: {
   memberId: string
   onClose: () => void
   onSubmitted: () => void | Promise<void>
   prefillStart?: string
   prefillEnd?: string
+  /** This member's real approved weekly schedule, already loaded by
+   *  the parent before this form mounts (see the loadingCurrent gate
+   *  in ScheduleRequestModal) — seeds the grid with what's actually
+   *  saved instead of a generic template, per director: "I couldnt
+   *  tell what I was updating." Falls back to the default template
+   *  only when the member has no current recurring schedule at all. */
+  currentRecurring: ScheduleRecurring[]
 }) {
   const { toast } = useToast()
   const [availability, setAvailability] = useState<WeekAvailability>(() =>
-    createDefaultWeekAvailability(prefillStart ?? '10:00', prefillEnd ?? '18:00'),
+    currentRecurring.length > 0
+      ? recurringToWeekAvailability(currentRecurring, prefillStart ?? '10:00', prefillEnd ?? '18:00')
+      : createDefaultWeekAvailability(prefillStart ?? '10:00', prefillEnd ?? '18:00'),
   )
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -426,6 +548,12 @@ function RecurringForm({
         <p className="text-[11px] text-text-muted">
           Turn on the days you work and set each day's own hours — they don't have to match.
         </p>
+        {currentRecurring.length > 0 && (
+          <p className="text-[11px] text-gold mt-1">
+            Pre-filled from your current schedule. Sending sends a fresh request for admin
+            review — it doesn't replace your approved schedule until they approve it.
+          </p>
+        )}
       </div>
 
       <div>

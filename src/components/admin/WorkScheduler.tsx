@@ -425,7 +425,7 @@ function PendingRequestsPanel({
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-semibold text-text truncate">
                   {member?.display_name ?? r.member_id}
-                  <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-purple-300/80">
+                  <span className="ml-2 text-[10px] uppercase tracking-wider font-semibold text-gold/80">
                     Weekly schedule · {weekdayLabel(r.weekday, 'long')}
                   </span>
                 </div>

@@ -838,3 +838,59 @@ Open gaps:
 
 Signature:
 - CLAUDE:
+
+## 2026-07-28 (MDT) - CLAUDE - Schedule redesign follow-ups (modal + purple sweep completion)
+
+Summary:
+- Director gave standing authorization to proceed through the remaining Calendar/schedule
+  priority-queue items without asking permission on each one ("go with this next, as many
+  things as possible that you can do without asking approval, do").
+- **Schedule-edit modal current-schedule view**: `ScheduleRequestModal.tsx` now fetches and
+  shows a "Your current schedule" 7-day pill strip above the mode picker, and
+  `RecurringForm` seeds from the member's real approved recurring schedule
+  (`fetchMemberRecurring()`, new in `mutations.ts`) instead of a hardcoded Tue–Sat 10–6
+  template — closes the "I couldnt tell what I was updating" complaint directly.
+- **Hour-accuracy investigation**: resolved by construction, no code change needed — PR
+  #328's grid already positions blocks from real `starts_at`/`ends_at` via the same
+  percentage-mapping proven in `HeaderActivityBar`.
+- **Hover-highlight NEEDS-DIRECTOR**: decided to stay retired (my call, under the standing
+  authorization above) — bringing back dim-until-hover would partially undo the redesign's
+  own stated goal (identity readable without hovering).
+- **Purple cleanup finished**: swept the codebase for remaining purple schedule chips beyond
+  the two files originally named, found two more (`WorkScheduler.tsx`,
+  `ProfileWeeklySchedule.tsx`), did all four in one pass. Multi-member surfaces get
+  per-member `resolveScheduleColor`; single-person surfaces get flat gold.
+
+Files changed:
+- `src/components/schedule/ScheduleRequestModal.tsx`, `src/lib/schedule/mutations.ts`
+- `src/components/dashboard/MyScheduleWidget.tsx`, `src/components/admin/WorkScheduler.tsx`,
+  `src/components/admin/AdminEmployeeScheduleWidget.tsx`,
+  `src/components/members/ProfileWeeklySchedule.tsx`
+- `docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md`, `docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md` (moved
+  both schedule-redesign priority items to Done), `docs/PROJECT_STATE.md`
+
+Verification:
+- `npm run build` clean, `npm test` 26/26 pass.
+- Local dev preview: confirmed the modal's current-schedule strip renders correctly
+  (loading state, then either populated gold pills or the empty-state message) and that
+  `RecurringForm` correctly waits for the fetch to settle before mounting (no stale
+  default-template flash). Real populated data (a member with an actual approved schedule)
+  couldn't be exercised locally — no reachable Supabase backend in this environment, same
+  known limitation as every other session this week — verified the strip's visual treatment
+  instead via a synthetic DOM injection reproducing the exact classes of the compiled build.
+  `AdminEmployeeScheduleWidget.tsx`'s per-member chip recolor could not be visually
+  confirmed with real data for the same reason; verified by code review against the
+  already-proven `resolveScheduleColor` pattern from PR #328.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Vercel preview pass with real
+  schedule data for both the modal's current-schedule strip and the Hub widget's per-member
+  chips.
+- Left deliberately out of scope: whether resubmitting a weekly schedule should replace the
+  member's existing approved rows in place, versus the current behavior (a fresh pending
+  request alongside them). The modal's copy is honest about this now rather than implying
+  in-place replacement; flagged in `SCHEDULE_UX_REDESIGN_PLAN.md` as a possible future item,
+  not decided or built here.
+
+Signature:
+- CLAUDE:
