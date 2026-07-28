@@ -220,8 +220,31 @@ Not started — logged in `docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md`, not urgent.
   showing today's saved hours per day, or "No schedule set yet") rendered above/beside the edit
   form, so the member can see what they're about to change instead of an unlabeled blank form.
 
+### Locked decisions (director-approved, 2026-07-28)
+
+Two mockup rounds shown in-chat (`calendar_page_revamp_preview`, then
+`team_schedule_toggle_active_preview` rendered against the real 6-person team — Bridget,
+Checkmark, Christian, Matthan, Richard, Tony). Director signed off on the direction:
+
+- **Bookings tab keeps its Google Calendar-style day/time grid layout.** This redesign is
+  scoped to the Team Schedule tab only — do not touch Bookings' layout as part of this work.
+- **Team Schedule tab** moves to a member-rows-down-the-side layout (avatar + name per row,
+  one column per day), gold-filled segmented toggle replacing the two plain tab labels, and
+  one fixed accent color per member (avatar + their hour-blocks everywhere) instead of the
+  purple wash + greyscale-until-hover treatment. Block position/width within a day cell should
+  reflect that member's real start/end time, not a fixed full-day fill.
+- **Schedule-edit modal** gets the "current schedule" 7-day pill strip shown above the edit
+  form (gold-tinted pill = a scheduled day with its hours, muted "Off" pill = no shift that
+  day) — confirmed as the right direction.
+- Per-member color palette used in the mockups (gold/teal/rose/amber/blue/neutral-gray) was a
+  placeholder, not yet locked — fine to reuse or restyle at implementation time.
+- Still open: whether the hover-highlight interaction from the 2026-05-27 decision (dim
+  everyone, light up on hover) survives alongside always-visible per-member color, or is
+  dropped entirely now that color alone carries identity. Ask before implementing.
+
 ### Non-goals (carried over from the section above)
 
 Same as the existing Non-Goals list — no payroll/PTO accounting, no Accountant concepts, no
-Google Calendar sync changes here.
+Google Calendar sync changes here. Bookings' calendar-grid layout is explicitly out of scope
+for this redesign (see Locked decisions above).
 
