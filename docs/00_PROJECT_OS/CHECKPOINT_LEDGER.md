@@ -769,3 +769,39 @@ Open gaps:
 
 Signature:
 - CLAUDE:
+
+## 2026-07-26 (MDT) - CLAUDE - PR5: retire Clock In/Out button + "On the Clock" widget
+
+Lane:
+- Claude/Fable: global header change (auth-shell adjacent) + admin widget retirement. Touches AuthContext — flagged for extra care given roles-doc guidance on auth-shell changes.
+
+Summary:
+- Director: "fully retire the clock in clock out button and put the bar at the top in place of it... for the on the clock widget, we can retire it."
+- **Header:** removed the Clock In/Out button (PR #50, `time_clock_entries`-backed) and its state/queries/mutations from `Layout.tsx` entirely. New `src/components/HeaderActivityBar.tsx` takes its place — a passive, glance-only presence indicator (compact mini bar on the same 7a–9p axis as My Activity / Team Activity, live pulse dot when a presence session is open, live-updating every 60s). Clicking it navigates to Overview, where the full My Activity card lives. No click-to-act — presence is heartbeat-driven (`usePresenceHeartbeat`, already mounted separately), not a manual punch anymore.
+- **Sign-out regression caught and fixed:** the retired Clock Out modal's "Log Out" path was, per a PR #67 comment, the ONLY sign-out entry point besides the member's own Profile page — and Profile's `handleSignOut` never called `closePresence()`. Rather than leave presence sessions open forever after signing out via Profile, moved `closePresence()` into `AuthContext.signOut()` itself (best-effort, before the local session clears) so EVERY sign-out path gets it automatically, not just whichever caller remembers.
+- **`SelfReportModal` ("what went well / to improve") is now unwired** — it was reachable only via Clock Out, which no longer exists. Per the locked 2026-07 decision to "preserve the reflection as an optional end-of-day prompt, decoupled from any punch," did NOT delete the component. Left it in place, unwired — **NEEDS-DIRECTOR** on where it should live now (see Open gaps).
+- **Retired `admin_clock_in` ("On the Clock")**: deleted `AdminClockInWidget.tsx` outright (it had `defaultPlacements: []` already — dormant since an earlier cleanup, confirmed via ground-truth grep before deleting) and removed it from the `AdminWidgetId` union + `ADMIN_WIDGET_REGISTRATIONS` + the `adminWidgetComponents` map. Superseded by `admin_team_activity` (PR #321), which covers the same "who's active" question plus schedule context.
+- Added a non-urgent backlog item to `docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md` (Active, `ASAP: no`, matching the existing convention): director wants the schedule widgets' purple chip treatment replaced with Checkmark brand colors — not built here, just tracked so it isn't lost.
+- `WORKSPACE_LAYOUT_VERSION` 39 → 40 (sanitizes any saved Hub layout that had manually added the now-deleted "On the Clock"). **Three-way collision**: PR #319 and PR #321 each independently bump this same constant to 40 on their own branches off an earlier main. Whichever of these three PRs merges LAST needs a bump to 42 (documented inline at the constant).
+
+Files changed:
+- `src/components/HeaderActivityBar.tsx` (new)
+- `src/components/Layout.tsx` (clock button + wiring removed; HeaderActivityBar in its place)
+- `src/contexts/AuthContext.tsx` (`closePresence()` centralized into `signOut()`)
+- `src/components/admin/AdminClockInWidget.tsx` (deleted)
+- `src/components/dashboard/widgetRegistry.tsx`, `src/domain/workspaces/types.ts`, `src/domain/workspaces/registry.ts` (admin_clock_in removed; layout version bump)
+- `docs/00_PROJECT_OS/00_PRIORITY_QUEUE.md` (schedule-widget-colors backlog item)
+- `docs/PROJECT_STATE.md`, `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- `npm run build` clean, `npm test` 26/26 pass.
+- Local dev preview (isolated worktree/port): confirmed via direct DOM inspection — header's right-side cluster now reads [theme toggle, HeaderActivityBar (`aria-label="My Activity today"`), profile, messages, notifications]; no "Clock In"/"Clock Out" text anywhere; no render/vite error. Admin `/admin` Hub confirmed no "On the Clock" text, no error. (This session's local dev has no reachable Supabase backend — every module's queries fail uniformly, a pre-existing environment limitation unrelated to this change, already noted in the PR4B checkpoint entry; HeaderActivityBar degrades gracefully to its not-active default state under that condition, which is the correct behavior.)
+- `time_clock_entries` table, `clock_in`/`clock_out` RPCs, and the Members → Clock Data historical shift table are UNTOUCHED — real shift history stays intact and readable, per the original PR5 scope ("keep history read-only, do NOT drop").
+
+Open gaps:
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: where should the "what went well / to improve" reflection prompt (`SelfReportModal.tsx`) live now that it has no trigger? Options: fire it optionally from Profile's sign-out action; a small standalone "Reflect on today" affordance somewhere; or retire it too. Not decided here — didn't want to guess through it.
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: visual check on the Vercel preview with a real signed-in session — confirm HeaderActivityBar's mini bar renders with real color segments, and that sign-out via Profile still works end-to-end (closePresence + supabase signOut + redirect).
+- Three-way `WORKSPACE_LAYOUT_VERSION` collision with PR #319 / PR #321 — resolve at merge time per the inline note.
+
+Signature:
+- CLAUDE:
