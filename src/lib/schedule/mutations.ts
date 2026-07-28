@@ -84,6 +84,27 @@ export async function requestRecurring(input: {
   return data as ScheduleRecurring
 }
 
+/**
+ * A member's own currently-in-effect weekly schedule — approved,
+ * active recurring rows, one per weekday they work. Used by
+ * `ScheduleRequestModal` to show "your current schedule" before/while
+ * they submit a change, so the form never starts from an unlabeled
+ * blank template when a real schedule already exists (director:
+ * "I couldnt tell what I was updating or if i even had a set
+ * schedule to begin with").
+ */
+export async function fetchMemberRecurring(memberId: string): Promise<ScheduleRecurring[]> {
+  const { data, error } = await supabase
+    .from('team_schedule_recurring')
+    .select('*')
+    .eq('member_id', memberId)
+    .eq('status', 'approved')
+    .eq('active', true)
+    .order('weekday', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as ScheduleRecurring[]
+}
+
 /** Admin approves a pending recurring proposal. */
 export async function approveRecurring(
   id: string,
