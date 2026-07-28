@@ -805,3 +805,36 @@ Open gaps:
 
 Signature:
 - CLAUDE:
+
+## 2026-07-28 (MDT) - CLAUDE - Calendar Team Schedule tab redesign
+
+Summary:
+- Director: "can we build or commit push the visual calendar rework with the team schedule hours and coordinated colors?" — building the direction already approved across three mockup rounds this session (see `docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md` "Locked decisions").
+- **New `src/components/calendar/TeamScheduleGrid.tsx`** replaces the old schedule overlay that lived directly on the shared Bookings hour-grid. Layout: one row per active team member (avatar + name), one column per weekday, each day-cell a mini timeline with the member's real scheduled block(s) positioned/sized by `starts_at`/`ends_at` on a 7a–8p axis — same `pct()` percentage-mapping approach already proven in `HeaderActivityBar`. Time off renders as a muted "Off" label instead of a block.
+- **New `src/lib/calendar/teamScheduleColors.ts`** — `resolveScheduleColor()` matches the director's locked picks by first name (Bridget red-orange, Checkmark gold, Christian blue, Matthan gray, Richard green, Tony red), falling back to the existing avatar-extraction system (`teamMemberColors`/`memberColor`, unchanged) for anyone else. This is a deliberate, documented stand-in for the not-yet-built "customizable per-member schedule colors" admin-Settings item — a real per-member setting should replace this hardcoded table when that ships, not grow it by hand.
+- **Toggle**: both tab segments now share one solid gold-fill active state (`bg-gold text-[#241d08]`), replacing the old asymmetric pair (a faint shadow for Bookings, a purple tint for Team Schedule) — director: "make the toggle extremely easy to notice."
+- **Filter pills**: recolored from the shared purple active-state to each member's own resolved color, so a pill and its grid row read as the same identity.
+- **Bookings tab is untouched.** Its Google-Calendar-style hour grid, booking blocks, studio-hours-of-operation overlay, and right-click booking actions are exactly as before, still gated to `activeTab === 'bookings'`.
+- **Dead code removed, not left stubbed:** the old schedule-overlay segment-merge + start/end-avatar renderer and the old time-off diagonal-stripe overlay (both now permanently unreachable once the shared hour-grid section was scoped to `activeTab === 'bookings'` — confirmed via `tsc`'s "no overlap" errors on the leftover `activeTab === 'schedule'` checks inside that branch); the empty-cell right-click "Request schedule here" menu + its `cellMenu` state (the header's "+ Request schedule" button remains the entry point — a deliberate scope trim, not an oversight); the `hoveredMemberId` hover-spotlight system (superseded by always-visible per-member color, which was the whole point of this redesign — whether a hover-highlight layer should come back on top is still an open question for the director, not decided here).
+- Unused imports/helpers cleaned up as a consequence: `memberColor` import, `memberById`, `ShiftSpan`/`ScheduleSegment`/`buildScheduleSegments`.
+- Also fixed a stale doc reference caught mid-session: `docs/PROJECT_STATE.md`'s Snapshot table still named the Supabase project "Checkmark Intern Manager" — it was renamed director-side to "CM- Audio Workspace" (same project ref `ncljfjdcyswoeitsooty`); corrected.
+
+Files changed:
+- `src/components/calendar/TeamScheduleGrid.tsx` (new)
+- `src/lib/calendar/teamScheduleColors.ts` (new)
+- `src/pages/Calendar.tsx` (toggle + pill restyle; old schedule overlay/time-off overlay/cellMenu/hoveredMemberId removed; TeamScheduleGrid wired in)
+- `docs/PROJECT_STATE.md` (new "Currently active" row + Supabase project name fix)
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md` (this entry)
+
+Verification:
+- `npm run build` clean (`tsc -b && vite build`), `npm test` 26/26 pass.
+- Local dev preview (isolated worktree/port): confirmed via screenshot in both light and dark mode — gold-filled toggle on whichever tab is active, member-rows grid renders with distinct per-member ring colors on avatars, filter pills recolored. This session's local dev has no reachable Supabase backend (same pre-existing environment limitation noted on the PR4B/PR5 entries above — every `/rest/v1/...` call resolves to `localhost` and fails), so no real schedule blocks were visible to confirm the hour-positioning math against live data.
+- **Not verified yet, needs the Vercel preview:** real filled timeline blocks against actual `team_schedule_blocks`/`team_schedule_recurring` rows for the real 6-person team, confirming the locked colors land on the right people and block width/position matches real hours.
+
+Open gaps:
+- <span style="color:#2563eb">NEEDS-WORKER-TEST</span>: Vercel preview pass with real schedule data — the one thing local dev couldn't confirm.
+- Not built from the same director brief (still open in the priority queue): the schedule-edit modal's "show your current schedule while editing" visual breakdown, and the hour-accuracy investigation (whether any perceived mismatch was a real bug or an artifact of the old segment-merge rendering, which no longer exists).
+- <span style="color:#d97706">NEEDS-DIRECTOR</span>: whether the retired hover-highlight interaction (dim everyone, light up on hover) should be layered back on top of the new always-visible colors, or stays retired — flagged, not decided.
+
+Signature:
+- CLAUDE:
