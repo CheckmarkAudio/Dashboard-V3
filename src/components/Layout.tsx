@@ -27,7 +27,7 @@ import {
   LayoutDashboard, Users, Calendar, Settings, Gauge,
   Menu, X, ChevronDown, ClipboardList, CheckSquare,
   BarChart3, Briefcase, MessageSquare, Sun, Moon,
-  Loader2, MoreHorizontal, FolderUp,
+  Loader2, MoreHorizontal, FolderUp, FolderKanban,
 } from 'lucide-react'
 
 /**
@@ -358,6 +358,7 @@ function ResponsiveTopNav({ entries }: { entries: TopNavEntry[] }) {
 const mainLinks: NavLinkDef[] = [
   { to: APP_ROUTES.member.overview, icon: LayoutDashboard, label: 'Overview' },
   { to: APP_ROUTES.member.tasks, icon: CheckSquare, label: 'Tasks' },
+  { to: APP_ROUTES.member.projects, icon: FolderKanban, label: 'Projects' },
   { to: APP_ROUTES.member.calendar, icon: Calendar, label: 'Calendar' },
   { to: APP_ROUTES.member.booking, icon: Briefcase, label: 'Booking' },
   { to: APP_ROUTES.member.content, icon: MessageSquare, label: 'Forum' },

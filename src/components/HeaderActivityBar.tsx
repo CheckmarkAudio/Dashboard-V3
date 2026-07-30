@@ -189,9 +189,16 @@ export default function HeaderActivityBar() {
     : 'My Activity today'
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => navigate('/')}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          navigate('/')
+        }
+      }}
       // Gold glass chrome, always at the "deeper" weight (not just on
       // hover) -- blurred + translucent is fine HERE because this is
       // the container, not the data; the timeline inside stays fully
@@ -218,7 +225,7 @@ export default function HeaderActivityBar() {
             (dark border #34343d is lighter than the card behind it;
             light border #dedee5 is darker than the white card), vs.
             a hardcoded hex that only ever reads right in one theme. */}
-        <div className="relative h-[11px] w-[520px] rounded-md bg-border shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)]" aria-hidden="true">
+        <div className="relative h-[11px] w-[520px] rounded-md bg-border shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)]">
           {model.scheduledWindow && (
             // Fully solid — a committed scheduled window is data, not
             // decoration, so (unlike the glass container) it gets no
@@ -245,6 +252,31 @@ export default function HeaderActivityBar() {
               />
             )
           })}
+          {model.markers.map((marker) => {
+            const markerPct = pct(Date.parse(marker.at))
+            const markerTitle = `${marker.label} · ${formatClockTime(Date.parse(marker.at))}`
+            return marker.href ? (
+              <button
+                key={marker.id}
+                type="button"
+                className="absolute z-20 top-[-7px] -ml-[5px] h-[10px] w-[10px] rounded-full border-2 border-surface bg-violet-400 shadow-[0_0_7px_rgba(167,139,250,0.85)] hover:scale-150 focus:scale-150 transition-transform focus-ring"
+                style={{ left: `${markerPct}%` }}
+                title={`${markerTitle} · Open project`}
+                aria-label={`${markerTitle}. Open project.`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  navigate(marker.href!)
+                }}
+              />
+            ) : (
+              <span
+                key={marker.id}
+                className="absolute z-10 top-[-6px] -ml-[4px] h-2 w-2 rounded-full border border-surface bg-sky-400"
+                style={{ left: `${markerPct}%` }}
+                title={markerTitle}
+              />
+            )
+          })}
           {/* Glowing "now" marker — tick + halo dot */}
           <div
             className="absolute top-[-4px] w-[3px] h-[19px] rounded-sm bg-gold shadow-[0_0_8px_2px_rgba(201,168,76,0.55)]"
@@ -264,6 +296,6 @@ export default function HeaderActivityBar() {
           ))}
         </div>
       </div>
-    </button>
+    </div>
   )
 }

@@ -81,6 +81,11 @@ export async function fetchMemberActivityEvents(
 
 /** Pure: turn a flywheel event row into a normalized ActivityEvent. */
 export function flywheelRowToActivityEvent(row: RawMemberEventRow): ActivityEvent {
+  const projectId = typeof row.metadata?.project_id === 'string' ? row.metadata.project_id : null
+  const taskId = typeof row.metadata?.task_id === 'string' ? row.metadata.task_id : null
+  const href = projectId
+    ? `/projects?project=${encodeURIComponent(projectId)}${taskId ? `&task=${encodeURIComponent(taskId)}` : ''}`
+    : undefined
   return {
     id: row.id,
     at: row.occurred_at,
@@ -91,6 +96,7 @@ export function flywheelRowToActivityEvent(row: RawMemberEventRow): ActivityEven
       metadata: row.metadata,
     }),
     sourceType: row.source_type,
+    href,
   }
 }
 

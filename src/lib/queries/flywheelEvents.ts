@@ -42,6 +42,7 @@ export type FlywheelSourceType =
   | 'forum_post'        // public forum message → education
   | 'education_student' // education_students enrolled → education
   | 'review'            // client review logged → retention
+  | 'project_progress'  // project/task progress note → workflow
 
 export interface RecordFlywheelEventInput {
   stage: FlywheelStage
@@ -201,6 +202,8 @@ export function describeFlywheelEvent(
       const rating = typeof m.rating === 'number' ? m.rating : null
       return rating ? `logged a ${rating}★ review` : 'logged a client review'
     }
+    case 'project_progress':
+      return str('title') ? `recorded progress · ${str('title')}` : 'recorded project progress'
     default:
       return `logged a ${row.stage} event`
   }
