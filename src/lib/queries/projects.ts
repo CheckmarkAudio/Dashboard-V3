@@ -154,6 +154,68 @@ export async function completeProjectObjective(
   return data as ProjectObjective
 }
 
+export async function updateProjectDetails(input: {
+  projectId: string
+  title: string
+  description?: string
+  targetDate?: string
+}): Promise<Project> {
+  const { data, error } = await supabase.rpc('update_project_details', {
+    p_project_id: input.projectId,
+    p_title: input.title,
+    p_description: input.description || null,
+    p_target_date: input.targetDate || null,
+  })
+  if (error) throw new Error(error.message)
+  return data as Project
+}
+
+export async function archiveProject(projectId: string): Promise<Project> {
+  const { data, error } = await supabase.rpc('archive_project', { p_project_id: projectId })
+  if (error) throw new Error(error.message)
+  return data as Project
+}
+
+export async function updateProjectObjective(input: {
+  objectiveId: string
+  title: string
+}): Promise<ProjectObjective> {
+  const { data, error } = await supabase.rpc('update_project_objective', {
+    p_objective_id: input.objectiveId,
+    p_title: input.title,
+  })
+  if (error) throw new Error(error.message)
+  return data as ProjectObjective
+}
+
+export async function deleteProjectObjective(objectiveId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('delete_project_objective', {
+    p_objective_id: objectiveId,
+  })
+  if (error) throw new Error(error.message)
+  return typeof data === 'number' ? data : 0
+}
+
+export async function updateProjectTask(input: {
+  taskId: string
+  title: string
+  dueDate?: string
+}): Promise<ProjectTask> {
+  const { data, error } = await supabase.rpc('update_project_task', {
+    p_task_id: input.taskId,
+    p_title: input.title,
+    p_due_date: input.dueDate || null,
+  })
+  if (error) throw new Error(error.message)
+  return data as ProjectTask
+}
+
+export async function deleteProjectTask(taskId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('delete_project_task', { p_task_id: taskId })
+  if (error) throw new Error(error.message)
+  return data as string
+}
+
 export async function addProjectProgressNote(input: {
   projectId: string
   taskId: string | null

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  Archive,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -12,6 +13,7 @@ import {
   Clock3,
   FileText,
   FolderKanban,
+  Pencil,
   ListTodo,
   ListPlus,
   MessageSquarePlus,
@@ -28,11 +30,17 @@ import {
   addProjectProgressNote,
   addProjectObjective,
   addProjectObjectiveTask,
+  archiveProject,
   completeProjectObjective,
   createProject,
+  deleteProjectObjective,
+  deleteProjectTask,
   fetchProjectDetail,
   fetchProjects,
   projectKeys,
+  updateProjectDetails,
+  updateProjectObjective,
+  updateProjectTask,
   type Project,
   type ProjectObjective,
   type ProjectTask,
@@ -332,6 +340,8 @@ function ProjectTaskRow({
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [writing, setWriting] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(task.title)
   const [note, setNote] = useState('')
 
   const completeMutation = useMutation({
@@ -354,9 +364,48 @@ function ProjectTaskRow({
     },
     onError: (error: Error) => toast(error.message, 'error'),
   })
+  const editMutation = useMutation({
+    mutationFn: updateProjectTask,
+    onSuccess: () => {
+      setEditing(false)
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      toast('Subtask updated.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+  const deleteMutation = useMutation({
+    mutationFn: deleteProjectTask,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
+      toast('Subtask deleted.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
 
   return (
     <div id={`task-${task.id}`} className="border-b border-border last:border-b-0 scroll-mt-28">
+      {editing ? (
+        <form
+          className="flex flex-col gap-2 bg-surface-alt/50 p-3 sm:flex-row"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (editTitle.trim()) editMutation.mutate({ taskId: task.id, title: editTitle.trim(), dueDate: task.due_date ?? undefined })
+          }}
+        >
+          <Input
+            autoFocus
+            wrapperClassName="flex-1"
+            aria-label={`Edit ${task.title}`}
+            value={editTitle}
+            onChange={(event) => setEditTitle(event.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { setEditing(false); setEditTitle(task.title) }}>Cancel</Button>
+            <Button type="submit" size="sm" loading={editMutation.isPending} disabled={!editTitle.trim()}>Save</Button>
+          </div>
+        </form>
+      ) : (
       <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
         <button
           type="button"
@@ -381,7 +430,31 @@ function ProjectTaskRow({
         >
           Add progress note
         </Button>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="p-2 rounded-lg text-text-light hover:bg-surface-hover hover:text-text focus-ring"
+          aria-label={`Edit ${task.title}`}
+          title="Edit subtask"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm(`Delete subtask “${task.title}”? Its progress notes will remain in the project timeline.`)) {
+              deleteMutation.mutate(task.id)
+            }
+          }}
+          disabled={deleteMutation.isPending}
+          className="p-2 rounded-lg text-text-light hover:bg-red-500/10 hover:text-red-400 focus-ring disabled:opacity-50"
+          aria-label={`Delete ${task.title}`}
+          title="Delete subtask"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
+      )}
       {writing && (
         <form
           className="border-t border-border bg-gold/5 p-3 sm:pl-12"
@@ -422,6 +495,8 @@ function ProjectObjectiveSection({
 }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(objective.title)
   const completedTasks = tasks.filter((task) => task.is_completed).length
   const canComplete = tasks.length > 0 && completedTasks === tasks.length
   const mutation = useMutation({
@@ -432,9 +507,48 @@ function ProjectObjectiveSection({
     },
     onError: (error: Error) => toast(error.message, 'error'),
   })
+  const editMutation = useMutation({
+    mutationFn: updateProjectObjective,
+    onSuccess: () => {
+      setEditing(false)
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      toast('Objective updated.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+  const deleteMutation = useMutation({
+    mutationFn: deleteProjectObjective,
+    onSuccess: (deletedTasks) => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
+      toast(`Objective deleted${deletedTasks ? ` with ${deletedTasks} subtask${deletedTasks === 1 ? '' : 's'}` : ''}.`, 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
 
   return (
     <article className="border-b border-border last:border-b-0">
+      {editing ? (
+        <form
+          className="flex flex-col gap-2 border-b border-gold/30 bg-gold/8 p-3 sm:flex-row"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (editTitle.trim()) editMutation.mutate({ objectiveId: objective.id, title: editTitle.trim() })
+          }}
+        >
+          <Input
+            autoFocus
+            wrapperClassName="flex-1"
+            aria-label={`Edit objective ${objective.title}`}
+            value={editTitle}
+            onChange={(event) => setEditTitle(event.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { setEditing(false); setEditTitle(objective.title) }}>Cancel</Button>
+            <Button type="submit" size="sm" loading={editMutation.isPending} disabled={!editTitle.trim()}>Save objective</Button>
+          </div>
+        </form>
+      ) : null}
       <header className="flex flex-col gap-3 bg-surface-alt/45 px-4 py-4 sm:flex-row sm:items-center">
         <button
           type="button"
@@ -471,6 +585,34 @@ function ProjectObjectiveSection({
             {tasks.length === 0 ? 'Add a subtask to unlock' : 'Finish subtasks to unlock'}
           </span>
         )}
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="p-2 rounded-lg text-text-light hover:bg-surface-hover hover:text-text focus-ring"
+            aria-label={`Edit objective ${objective.title}`}
+            title="Edit objective"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const nestedWarning = tasks.length
+                ? ` This will also delete its ${tasks.length} nested subtask${tasks.length === 1 ? '' : 's'}.`
+                : ''
+              if (window.confirm(`Delete objective “${objective.title}”?${nestedWarning} Progress notes will remain in the project timeline.`)) {
+                deleteMutation.mutate(objective.id)
+              }
+            }}
+            disabled={deleteMutation.isPending}
+            className="p-2 rounded-lg text-text-light hover:bg-red-500/10 hover:text-red-400 focus-ring disabled:opacity-50"
+            aria-label={`Delete objective ${objective.title}`}
+            title="Delete objective"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </header>
       {tasks.length > 0 && (
         <div className="pl-4 sm:pl-8">
@@ -488,8 +630,97 @@ function ProjectObjectiveSection({
   )
 }
 
+function EditProjectForm({
+  project,
+  onClose,
+  onArchived,
+}: {
+  project: Project
+  onClose: () => void
+  onArchived: () => void
+}) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const [title, setTitle] = useState(project.title)
+  const [description, setDescription] = useState(project.objective ?? '')
+  const [targetDate, setTargetDate] = useState(project.target_date ?? '')
+  const editMutation = useMutation({
+    mutationFn: updateProjectDetails,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all })
+      toast('Project updated.', 'success')
+      onClose()
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+  const archiveMutation = useMutation({
+    mutationFn: archiveProject,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all })
+      toast('Project archived.', 'success')
+      onArchived()
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+
+  return (
+    <form
+      className="rounded-xl border border-gold/35 bg-gold/5 p-4 sm:p-5 space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (title.trim()) {
+          editMutation.mutate({
+            projectId: project.id,
+            title: title.trim(),
+            description: description.trim(),
+            targetDate,
+          })
+        }
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-bold text-text">Edit project</h2>
+          <p className="mt-1 text-xs text-text-muted">Update the project context or archive it from the active workspace.</p>
+        </div>
+        <button type="button" onClick={onClose} className="p-2 rounded-lg text-text-muted hover:bg-surface-hover focus-ring" aria-label="Close project editor">
+          <X size={16} />
+        </button>
+      </div>
+      <Input label="Project name" required value={title} onChange={(event) => setTitle(event.target.value)} />
+      <Textarea
+        label="Description"
+        rows={5}
+        hint="Line breaks and dashes are preserved."
+        value={description}
+        onChange={(event) => setDescription(event.target.value)}
+      />
+      <Input label="Target date (optional)" type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} />
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <Button
+          variant="danger"
+          iconLeft={<Archive size={15} />}
+          loading={archiveMutation.isPending}
+          onClick={() => {
+            if (window.confirm(`Archive “${project.title}”? It will leave the active Projects list, but its data and history will be preserved.`)) {
+              archiveMutation.mutate(project.id)
+            }
+          }}
+        >
+          Archive project
+        </Button>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button type="submit" loading={editMutation.isPending} disabled={!title.trim()}>Save project</Button>
+        </div>
+      </div>
+    </form>
+  )
+}
+
 function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () => void }) {
   const [addingObjective, setAddingObjective] = useState(false)
+  const [editingProject, setEditingProject] = useState(false)
   const query = useQuery({
     queryKey: projectKeys.detail(projectId),
     queryFn: () => fetchProjectDetail(projectId),
@@ -525,6 +756,14 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
         <ArrowLeft size={15} /> All projects
       </button>
 
+      {editingProject && (
+        <EditProjectForm
+          project={project}
+          onClose={() => setEditingProject(false)}
+          onArchived={onBack}
+        />
+      )}
+
       <section className="overflow-hidden rounded-xl border border-border bg-surface">
         <div className="p-5 sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -542,9 +781,14 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
                 {project.objective || 'No project description yet.'}
               </p>
             </div>
-            <div className="shrink-0 rounded-xl border border-border bg-surface-alt px-4 py-3 text-right">
-              <div className="text-2xl font-bold tabular-nums text-text">{completedObjectives}/{objectives.length}</div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-text-light">objectives complete</div>
+            <div className="flex shrink-0 items-start gap-2">
+              <Button variant="secondary" size="sm" iconLeft={<Pencil size={14} />} onClick={() => setEditingProject(true)}>
+                Edit project
+              </Button>
+              <div className="rounded-xl border border-border bg-surface-alt px-4 py-3 text-right">
+                <div className="text-2xl font-bold tabular-nums text-text">{completedObjectives}/{objectives.length}</div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-text-light">objectives complete</div>
+              </div>
             </div>
           </div>
           <div className="mt-5 h-2 overflow-hidden rounded-full bg-border">
