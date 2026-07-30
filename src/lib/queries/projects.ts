@@ -196,6 +196,17 @@ export async function deleteProjectObjective(objectiveId: string): Promise<numbe
   return typeof data === 'number' ? data : 0
 }
 
+export async function reorderProjectObjectives(input: {
+  projectId: string
+  objectiveIds: string[]
+}): Promise<void> {
+  const { error } = await supabase.rpc('reorder_project_objectives', {
+    p_project_id: input.projectId,
+    p_objective_ids: input.objectiveIds,
+  })
+  if (error) throw new Error(error.message)
+}
+
 export async function updateProjectTask(input: {
   taskId: string
   title: string

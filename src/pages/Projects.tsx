@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -7,6 +7,8 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ChevronRight,
   Circle,
   ClipboardCheck,
@@ -38,6 +40,7 @@ import {
   fetchProjectDetail,
   fetchProjects,
   projectKeys,
+  reorderProjectObjectives,
   updateProjectDetails,
   updateProjectObjective,
   updateProjectTask,
@@ -488,10 +491,22 @@ function ProjectObjectiveSection({
   projectId,
   objective,
   tasks,
+  position,
+  objectiveCount,
+  onMove,
+  onDragStart,
+  onDragOver,
+  onDrop,
 }: {
   projectId: string
   objective: ProjectObjective
   tasks: ProjectTask[]
+  position: number
+  objectiveCount: number
+  onMove: (from: number, to: number) => void
+  onDragStart: () => void
+  onDragOver: (event: DragEvent<HTMLElement>) => void
+  onDrop: () => void
 }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -527,7 +542,11 @@ function ProjectObjectiveSection({
   })
 
   return (
-    <article className="border-b border-border last:border-b-0">
+    <article
+      className="border-b border-border last:border-b-0"
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       {editing ? (
         <form
           className="flex flex-col gap-2 border-b border-gold/30 bg-gold/8 p-3 sm:flex-row"
@@ -550,6 +569,40 @@ function ProjectObjectiveSection({
         </form>
       ) : null}
       <header className="flex flex-col gap-3 bg-surface-alt/45 px-4 py-4 sm:flex-row sm:items-center">
+        <div className="flex shrink-0 items-center gap-0.5" aria-label={`Reorder objective ${objective.title}`}>
+          <button
+            type="button"
+            draggable
+            onDragStart={onDragStart}
+            className="cursor-grab rounded-lg p-2 text-text-light hover:bg-surface-hover hover:text-gold focus-ring active:cursor-grabbing"
+            aria-label={`Drag to reorder ${objective.title}`}
+            title="Drag to move objective"
+          >
+            <ListTodo size={16} />
+          </button>
+          <div className="flex flex-col">
+            <button
+              type="button"
+              onClick={() => onMove(position, position - 1)}
+              disabled={position === 0}
+              className="rounded p-0.5 text-text-light hover:bg-surface-hover hover:text-gold focus-ring disabled:opacity-20"
+              aria-label={`Move ${objective.title} up`}
+              title="Move objective up"
+            >
+              <ChevronUp size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => onMove(position, position + 1)}
+              disabled={position === objectiveCount - 1}
+              className="rounded p-0.5 text-text-light hover:bg-surface-hover hover:text-gold focus-ring disabled:opacity-20"
+              aria-label={`Move ${objective.title} down`}
+              title="Move objective down"
+            >
+              <ChevronDown size={13} />
+            </button>
+          </div>
+        </div>
         <button
           type="button"
           disabled={mutation.isPending || (!objective.is_completed && !canComplete)}
@@ -721,10 +774,55 @@ function EditProjectForm({
 function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () => void }) {
   const [addingObjective, setAddingObjective] = useState(false)
   const [editingProject, setEditingProject] = useState(false)
+  const [draggedObjectiveId, setDraggedObjectiveId] = useState<string | null>(null)
+  const objectiveComposerRef = useRef<HTMLDivElement>(null)
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
   const query = useQuery({
     queryKey: projectKeys.detail(projectId),
     queryFn: () => fetchProjectDetail(projectId),
   })
+  const orderedObjectives = query.data?.objectives ?? []
+  const reorderMutation = useMutation({
+    mutationFn: reorderProjectObjectives,
+    onMutate: async ({ objectiveIds }) => {
+      await queryClient.cancelQueries({ queryKey: projectKeys.detail(projectId) })
+      const previous = queryClient.getQueryData(projectKeys.detail(projectId))
+      queryClient.setQueryData(projectKeys.detail(projectId), (current: typeof query.data) => {
+        if (!current) return current
+        const positions = new Map(objectiveIds.map((id, index) => [id, index]))
+        return {
+          ...current,
+          objectives: [...current.objectives].sort(
+            (a, b) => (positions.get(a.id) ?? 0) - (positions.get(b.id) ?? 0),
+          ),
+        }
+      })
+      return { previous }
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(projectKeys.detail(projectId), context.previous)
+      toast(error.message, 'error')
+    },
+    onSettled: () => {
+      setDraggedObjectiveId(null)
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+    },
+  })
+  const moveObjective = (from: number, to: number) => {
+    if (to < 0 || to >= orderedObjectives.length || from === to || reorderMutation.isPending) return
+    const next = [...orderedObjectives]
+    const [moved] = next.splice(from, 1)
+    if (!moved) return
+    next.splice(to, 0, moved)
+    reorderMutation.mutate({ projectId, objectiveIds: next.map((objective) => objective.id) })
+  }
+  const dropObjective = (targetId: string) => {
+    if (!draggedObjectiveId || draggedObjectiveId === targetId) return
+    const from = orderedObjectives.findIndex((objective) => objective.id === draggedObjectiveId)
+    const to = orderedObjectives.findIndex((objective) => objective.id === targetId)
+    moveObjective(from, to)
+  }
 
   useEffect(() => {
     if (!query.data) return
@@ -732,6 +830,11 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
     if (!taskId) return
     window.setTimeout(() => document.getElementById(`task-${taskId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
   }, [query.data])
+
+  useEffect(() => {
+    if (!addingObjective) return
+    window.setTimeout(() => objectiveComposerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+  }, [addingObjective])
 
   if (query.isLoading) {
     return <div className="min-h-[560px] animate-pulse rounded-xl border border-border bg-surface" />
@@ -813,25 +916,40 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
             New objective
           </Button>
         </header>
-        {addingObjective && (
-          <AddObjectiveForm projectId={project.id} onClose={() => setAddingObjective(false)} />
-        )}
         {objectives.length === 0 ? (
-          <div className="p-6 text-center">
-            <Target size={26} className="mx-auto text-gold" />
-            <p className="mt-2 text-sm font-semibold text-text">What is the first major objective?</p>
-            <p className="mt-1 text-xs text-text-muted">Add an objective umbrella, then place its subtasks underneath.</p>
-          </div>
+          <>
+            <div className="p-6 text-center">
+              <Target size={26} className="mx-auto text-gold" />
+              <p className="mt-2 text-sm font-semibold text-text">What is the first major objective?</p>
+              <p className="mt-1 text-xs text-text-muted">Add an objective umbrella, then place its subtasks underneath.</p>
+            </div>
+            {addingObjective && (
+              <div ref={objectiveComposerRef}>
+                <AddObjectiveForm projectId={project.id} onClose={() => setAddingObjective(false)} />
+              </div>
+            )}
+          </>
         ) : (
           <div>
-            {objectives.map((objective) => (
+            {objectives.map((objective, index) => (
               <ProjectObjectiveSection
                 key={objective.id}
                 projectId={project.id}
                 objective={objective}
                 tasks={tasks.filter((task) => task.project_objective_id === objective.id)}
+                position={index}
+                objectiveCount={objectives.length}
+                onMove={moveObjective}
+                onDragStart={() => setDraggedObjectiveId(objective.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => dropObjective(objective.id)}
               />
             ))}
+            {addingObjective && (
+              <div ref={objectiveComposerRef}>
+                <AddObjectiveForm projectId={project.id} onClose={() => setAddingObjective(false)} />
+              </div>
+            )}
             {ungroupedTasks.length > 0 && (
               <div className="border-t border-border">
                 <div className="bg-amber-500/5 px-4 py-3 text-xs font-semibold text-amber-300">
