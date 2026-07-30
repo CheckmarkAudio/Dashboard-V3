@@ -15,6 +15,7 @@ import {
   ListTodo,
   MessageSquarePlus,
   Plus,
+  Trash2,
   Target,
   X,
 } from 'lucide-react'
@@ -24,12 +25,15 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { completeAssignedTask } from '../lib/queries/assignments'
 import {
   addProjectProgressNote,
-  addProjectTask,
+  addProjectObjective,
+  addProjectObjectiveTask,
+  completeProjectObjective,
   createProject,
   fetchProjectDetail,
   fetchProjects,
   projectKeys,
   type Project,
+  type ProjectObjective,
   type ProjectTask,
 } from '../lib/queries/projects'
 import { memberActivityKeys } from '../lib/activity/queries'
@@ -57,7 +61,8 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
   const { toast } = useToast()
   const [, setSearchParams] = useSearchParams()
   const [title, setTitle] = useState('')
-  const [objective, setObjective] = useState('')
+  const [description, setDescription] = useState('')
+  const [objectives, setObjectives] = useState([''])
   const [targetDate, setTargetDate] = useState('')
 
   const mutation = useMutation({
@@ -74,7 +79,12 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
   function submit(event: FormEvent) {
     event.preventDefault()
     if (!title.trim()) return
-    mutation.mutate({ title: title.trim(), objective: objective.trim(), targetDate })
+    mutation.mutate({
+      title: title.trim(),
+      description: description.trim(),
+      targetDate,
+      objectives: objectives.map((item) => item.trim()).filter(Boolean),
+    })
   }
 
   return (
@@ -82,7 +92,7 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-bold text-text">Create a project</h2>
-          <p className="mt-1 text-xs text-text-muted">Name the outcome. You can add concrete tasks next.</p>
+          <p className="mt-1 text-xs text-text-muted">Add context, then turn the major outcomes into a checklist.</p>
         </div>
         <button type="button" onClick={onClose} className="p-2 rounded-lg text-text-muted hover:bg-surface-hover focus-ring" aria-label="Close project form">
           <X size={16} />
@@ -97,13 +107,51 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
         onChange={(event) => setTitle(event.target.value)}
       />
       <Textarea
-        label="What does done look like?"
-        hint="A short outcome keeps the project easy to refocus on."
-        rows={3}
-        placeholder="Clients can sign in, review files, and approve deliverables."
-        value={objective}
-        onChange={(event) => setObjective(event.target.value)}
+        label="Description"
+        hint="Line breaks and dashes will be preserved exactly as written."
+        rows={4}
+        placeholder="Website revamp and migration."
+        value={description}
+        onChange={(event) => setDescription(event.target.value)}
       />
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium text-text-muted">Objective checklist</legend>
+        <p className="text-xs text-text-light">Each objective becomes a checkable umbrella for its own subtasks.</p>
+        {objectives.map((item, index) => (
+          <div key={index} className="flex items-center gap-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-xs font-bold text-gold">
+              {index + 1}
+            </span>
+            <Input
+              wrapperClassName="flex-1"
+              aria-label={`Objective ${index + 1}`}
+              placeholder={index === 0 ? 'Example: Improve SEO' : 'Add another objective'}
+              value={item}
+              onChange={(event) => setObjectives((current) => current.map((value, itemIndex) => (
+                itemIndex === index ? event.target.value : value
+              )))}
+            />
+            {objectives.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setObjectives((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                className="p-2 rounded-lg text-text-light hover:bg-red-500/10 hover:text-red-400 focus-ring"
+                aria-label={`Remove objective ${index + 1}`}
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+          </div>
+        ))}
+        <Button
+          variant="secondary"
+          size="sm"
+          iconLeft={<Plus size={14} />}
+          onClick={() => setObjectives((current) => [...current, ''])}
+        >
+          Add objective
+        </Button>
+      </fieldset>
       <Input
         label="Target date (optional)"
         type="date"
@@ -162,17 +210,53 @@ function ProjectListCard({
   )
 }
 
-function AddTaskForm({ projectId }: { projectId: string }) {
+function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objectiveId: string }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [title, setTitle] = useState('')
   const mutation = useMutation({
-    mutationFn: addProjectTask,
+    mutationFn: addProjectObjectiveTask,
     onSuccess: () => {
       setTitle('')
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
       void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
-      toast('Next task added.', 'success')
+      toast('Subtask added.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+
+  return (
+    <form
+      className="flex flex-col gap-2 border-t border-border bg-surface-alt/35 p-3 sm:flex-row"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (title.trim()) mutation.mutate({ projectId, objectiveId, title: title.trim() })
+      }}
+    >
+      <Input
+        wrapperClassName="flex-1"
+        aria-label="New objective subtask"
+        placeholder="Add a concrete subtask…"
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+      />
+      <Button type="submit" loading={mutation.isPending} disabled={!title.trim()} iconLeft={<Plus size={15} />}>
+        Add subtask
+      </Button>
+    </form>
+  )
+}
+
+function AddObjectiveForm({ projectId }: { projectId: string }) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const [title, setTitle] = useState('')
+  const mutation = useMutation({
+    mutationFn: addProjectObjective,
+    onSuccess: () => {
+      setTitle('')
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      toast('Objective added.', 'success')
     },
     onError: (error: Error) => toast(error.message, 'error'),
   })
@@ -187,13 +271,13 @@ function AddTaskForm({ projectId }: { projectId: string }) {
     >
       <Input
         wrapperClassName="flex-1"
-        aria-label="New project task"
-        placeholder="Add the next concrete action…"
+        aria-label="New project objective"
+        placeholder="Add another objective umbrella…"
         value={title}
         onChange={(event) => setTitle(event.target.value)}
       />
       <Button type="submit" loading={mutation.isPending} disabled={!title.trim()} iconLeft={<Plus size={15} />}>
-        Add task
+        Add objective
       </Button>
     </form>
   )
@@ -288,6 +372,83 @@ function ProjectTaskRow({
   )
 }
 
+function ProjectObjectiveSection({
+  projectId,
+  objective,
+  tasks,
+}: {
+  projectId: string
+  objective: ProjectObjective
+  tasks: ProjectTask[]
+}) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const completedTasks = tasks.filter((task) => task.is_completed).length
+  const canComplete = tasks.length > 0 && completedTasks === tasks.length
+  const mutation = useMutation({
+    mutationFn: (next: boolean) => completeProjectObjective(objective.id, next),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      toast(objective.is_completed ? 'Objective reopened.' : 'Objective completed.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+
+  return (
+    <article className="border-b border-border last:border-b-0">
+      <header className="flex flex-col gap-3 bg-surface-alt/45 px-4 py-4 sm:flex-row sm:items-center">
+        <button
+          type="button"
+          disabled={mutation.isPending || (!objective.is_completed && !canComplete)}
+          onClick={() => mutation.mutate(!objective.is_completed)}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-ring disabled:cursor-not-allowed"
+          title={!objective.is_completed && !canComplete
+            ? (tasks.length === 0 ? 'Add at least one subtask first' : 'Complete every subtask first')
+            : undefined}
+        >
+          {objective.is_completed ? (
+            <CheckCircle2 size={24} className="shrink-0 text-emerald-400" />
+          ) : (
+            <Circle
+              size={24}
+              className={canComplete ? 'shrink-0 text-gold' : 'shrink-0 text-text-light opacity-55'}
+            />
+          )}
+          <span className="min-w-0">
+            <span className={objective.is_completed
+              ? 'block truncate text-sm font-bold text-text-muted line-through'
+              : 'block truncate text-sm font-bold text-text'}
+            >
+              {objective.title}
+            </span>
+            <span className="mt-0.5 block text-[11px] text-text-light">
+              {completedTasks}/{tasks.length} subtasks complete
+              {!objective.is_completed && canComplete ? ' · Ready to check off' : ''}
+            </span>
+          </span>
+        </button>
+        {!objective.is_completed && !canComplete && (
+          <span className="text-[11px] font-semibold text-text-light">
+            {tasks.length === 0 ? 'Add a subtask to unlock' : 'Finish subtasks to unlock'}
+          </span>
+        )}
+      </header>
+      {tasks.length > 0 && (
+        <div className="pl-4 sm:pl-8">
+          {tasks.map((task) => (
+            <ProjectTaskRow key={task.id} projectId={projectId} task={task} />
+          ))}
+        </div>
+      )}
+      {!objective.is_completed && (
+        <div className="pl-4 sm:pl-8">
+          <AddSubtaskForm projectId={projectId} objectiveId={objective.id} />
+        </div>
+      )}
+    </article>
+  )
+}
+
 function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () => void }) {
   const query = useQuery({
     queryKey: projectKeys.detail(projectId),
@@ -312,9 +473,10 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
     )
   }
 
-  const { project, tasks, updates } = query.data
-  const completed = tasks.filter((task) => task.is_completed).length
-  const progress = tasks.length ? Math.round((completed / tasks.length) * 100) : 0
+  const { project, objectives, tasks, updates } = query.data
+  const completedObjectives = objectives.filter((objective) => objective.is_completed).length
+  const progress = objectives.length ? Math.round((completedObjectives / objectives.length) * 100) : 0
+  const ungroupedTasks = tasks.filter((task) => !task.project_objective_id)
   const taskTitle = new Map(tasks.map((task) => [task.id, task.title]))
 
   return (
@@ -336,13 +498,13 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
                 </span>
               </div>
               <h1 className="text-xl font-bold tracking-tight text-text sm:text-2xl">{project.title}</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">
-                {project.objective || 'Add an outcome summary so everyone knows what completing this project means.'}
+              <p className="mt-2 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-text-muted">
+                {project.objective || 'No project description yet.'}
               </p>
             </div>
             <div className="shrink-0 rounded-xl border border-border bg-surface-alt px-4 py-3 text-right">
-              <div className="text-2xl font-bold tabular-nums text-text">{completed}/{tasks.length}</div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-text-light">tasks complete</div>
+              <div className="text-2xl font-bold tabular-nums text-text">{completedObjectives}/{objectives.length}</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-text-light">objectives complete</div>
             </div>
           </div>
           <div className="mt-5 h-2 overflow-hidden rounded-full bg-border">
@@ -355,23 +517,42 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-bold text-text">
-              <ListTodo size={16} className="text-gold" /> Project tasks
+              <ListTodo size={16} className="text-gold" /> Objective checklist
             </h2>
-            <p className="mt-1 text-xs text-text-muted">Choose one next action. Record progress without leaving the task.</p>
+            <p className="mt-1 text-xs text-text-muted">Complete the subtasks, then check off their objective.</p>
           </div>
         </header>
-        {tasks.length === 0 ? (
+        {objectives.length === 0 ? (
           <div className="p-6 text-center">
             <Target size={26} className="mx-auto text-gold" />
-            <p className="mt-2 text-sm font-semibold text-text">What is the very next action?</p>
-            <p className="mt-1 text-xs text-text-muted">Add one small, checkable task below.</p>
+            <p className="mt-2 text-sm font-semibold text-text">What is the first major objective?</p>
+            <p className="mt-1 text-xs text-text-muted">Add an objective umbrella, then place its subtasks underneath.</p>
           </div>
         ) : (
           <div>
-            {tasks.map((task) => <ProjectTaskRow key={task.id} projectId={project.id} task={task} />)}
+            {objectives.map((objective) => (
+              <ProjectObjectiveSection
+                key={objective.id}
+                projectId={project.id}
+                objective={objective}
+                tasks={tasks.filter((task) => task.project_objective_id === objective.id)}
+              />
+            ))}
+            {ungroupedTasks.length > 0 && (
+              <div className="border-t border-border">
+                <div className="bg-amber-500/5 px-4 py-3 text-xs font-semibold text-amber-300">
+                  Earlier project tasks · add new work inside an objective
+                </div>
+                <div className="pl-4 sm:pl-8">
+                  {ungroupedTasks.map((task) => (
+                    <ProjectTaskRow key={task.id} projectId={project.id} task={task} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
-        <AddTaskForm projectId={project.id} />
+        <AddObjectiveForm projectId={project.id} />
       </section>
 
       <section className="overflow-hidden rounded-xl border border-border bg-surface">

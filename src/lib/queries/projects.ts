@@ -18,11 +18,22 @@ export interface Project {
 export interface ProjectTask {
   id: string
   project_id: string
+  project_objective_id: string | null
   title: string
   due_date: string | null
   is_completed: boolean
   completed_at: string | null
   sort_order: number
+}
+
+export interface ProjectObjective {
+  id: string
+  project_id: string
+  title: string
+  sort_order: number
+  is_completed: boolean
+  completed_at: string | null
+  created_at: string
 }
 
 export interface ProjectUpdate {
@@ -52,14 +63,21 @@ export async function fetchProjects(): Promise<Project[]> {
 
 export async function fetchProjectDetail(projectId: string): Promise<{
   project: Project
+  objectives: ProjectObjective[]
   tasks: ProjectTask[]
   updates: ProjectUpdate[]
 }> {
-  const [projectResult, tasksResult, updatesResult] = await Promise.all([
+  const [projectResult, objectivesResult, tasksResult, updatesResult] = await Promise.all([
     supabase.from('projects').select('*').eq('id', projectId).single(),
     supabase
+      .from('project_objectives')
+      .select('id, project_id, title, sort_order, is_completed, completed_at, created_at')
+      .eq('project_id', projectId)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
+    supabase
       .from('assigned_tasks')
-      .select('id, project_id, title, due_date, is_completed, completed_at, sort_order')
+      .select('id, project_id, project_objective_id, title, due_date, is_completed, completed_at, sort_order')
       .eq('project_id', projectId)
       .order('is_completed', { ascending: true })
       .order('sort_order', { ascending: true })
@@ -70,10 +88,11 @@ export async function fetchProjectDetail(projectId: string): Promise<{
       .eq('project_id', projectId)
       .order('created_at', { ascending: false }),
   ])
-  const error = projectResult.error ?? tasksResult.error ?? updatesResult.error
+  const error = projectResult.error ?? objectivesResult.error ?? tasksResult.error ?? updatesResult.error
   if (error) throw new Error(error.message)
   return {
     project: projectResult.data as Project,
+    objectives: (objectivesResult.data ?? []) as ProjectObjective[],
     tasks: (tasksResult.data ?? []) as ProjectTask[],
     updates: (updatesResult.data ?? []) as ProjectUpdate[],
   }
@@ -81,30 +100,58 @@ export async function fetchProjectDetail(projectId: string): Promise<{
 
 export async function createProject(input: {
   title: string
-  objective?: string
+  description?: string
   targetDate?: string
+  objectives?: string[]
 }): Promise<Project> {
-  const { data, error } = await supabase.rpc('create_project', {
+  const { data, error } = await supabase.rpc('create_project_with_objectives', {
     p_title: input.title,
-    p_objective: input.objective || null,
+    p_description: input.description || null,
     p_target_date: input.targetDate || null,
+    p_objectives: input.objectives ?? [],
   })
   if (error) throw new Error(error.message)
   return data as Project
 }
 
-export async function addProjectTask(input: {
+export async function addProjectObjective(input: {
   projectId: string
+  title: string
+}): Promise<ProjectObjective> {
+  const { data, error } = await supabase.rpc('add_project_objective', {
+    p_project_id: input.projectId,
+    p_title: input.title,
+  })
+  if (error) throw new Error(error.message)
+  return data as ProjectObjective
+}
+
+export async function addProjectObjectiveTask(input: {
+  projectId: string
+  objectiveId: string
   title: string
   dueDate?: string
 }): Promise<ProjectTask> {
-  const { data, error } = await supabase.rpc('add_project_task', {
+  const { data, error } = await supabase.rpc('add_project_objective_task', {
     p_project_id: input.projectId,
+    p_objective_id: input.objectiveId,
     p_title: input.title,
     p_due_date: input.dueDate || null,
   })
   if (error) throw new Error(error.message)
   return data as ProjectTask
+}
+
+export async function completeProjectObjective(
+  objectiveId: string,
+  isCompleted: boolean,
+): Promise<ProjectObjective> {
+  const { data, error } = await supabase.rpc('complete_project_objective', {
+    p_objective_id: objectiveId,
+    p_is_completed: isCompleted,
+  })
+  if (error) throw new Error(error.message)
+  return data as ProjectObjective
 }
 
 export async function addProjectProgressNote(input: {
