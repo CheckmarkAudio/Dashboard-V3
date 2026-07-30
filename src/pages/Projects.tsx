@@ -13,6 +13,7 @@ import {
   FileText,
   FolderKanban,
   ListTodo,
+  ListPlus,
   MessageSquarePlus,
   Plus,
   Trash2,
@@ -213,11 +214,13 @@ function ProjectListCard({
 function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objectiveId: string }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const mutation = useMutation({
     mutationFn: addProjectObjectiveTask,
     onSuccess: () => {
       setTitle('')
+      setOpen(false)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
       void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
       toast('Subtask added.', 'success')
@@ -225,9 +228,25 @@ function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objecti
     onError: (error: Error) => toast(error.message, 'error'),
   })
 
+  if (!open) {
+    return (
+      <div className="border-t border-dashed border-sky-500/20 px-3 py-2.5">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="border-sky-500/35 bg-sky-500/5 text-sky-300 hover:bg-sky-500/10"
+          iconLeft={<ListPlus size={14} />}
+          onClick={() => setOpen(true)}
+        >
+          Add subtask inside this objective
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <form
-      className="flex flex-col gap-2 border-t border-border bg-surface-alt/35 p-3 sm:flex-row"
+      className="flex flex-col gap-2 border-t border-dashed border-sky-500/25 bg-sky-500/5 p-3 sm:flex-row"
       onSubmit={(event) => {
         event.preventDefault()
         if (title.trim()) mutation.mutate({ projectId, objectiveId, title: title.trim() })
@@ -240,14 +259,29 @@ function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objecti
         value={title}
         onChange={(event) => setTitle(event.target.value)}
       />
-      <Button type="submit" loading={mutation.isPending} disabled={!title.trim()} iconLeft={<Plus size={15} />}>
-        Add subtask
-      </Button>
+      <div className="flex gap-2">
+        <Button variant="ghost" onClick={() => { setOpen(false); setTitle('') }}>Cancel</Button>
+        <Button
+          type="submit"
+          loading={mutation.isPending}
+          disabled={!title.trim()}
+          className="bg-sky-400 text-slate-950 hover:bg-sky-300"
+          iconLeft={<ListPlus size={15} />}
+        >
+          Save subtask
+        </Button>
+      </div>
     </form>
   )
 }
 
-function AddObjectiveForm({ projectId }: { projectId: string }) {
+function AddObjectiveForm({
+  projectId,
+  onClose,
+}: {
+  projectId: string
+  onClose: () => void
+}) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [title, setTitle] = useState('')
@@ -255,6 +289,7 @@ function AddObjectiveForm({ projectId }: { projectId: string }) {
     mutationFn: addProjectObjective,
     onSuccess: () => {
       setTitle('')
+      onClose()
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
       toast('Objective added.', 'success')
     },
@@ -263,7 +298,7 @@ function AddObjectiveForm({ projectId }: { projectId: string }) {
 
   return (
     <form
-      className="flex flex-col gap-2 border-t border-border bg-surface-alt/35 p-3 sm:flex-row"
+      className="flex flex-col gap-2 border-b border-gold/30 bg-gold/8 p-4 sm:flex-row"
       onSubmit={(event) => {
         event.preventDefault()
         if (title.trim()) mutation.mutate({ projectId, title: title.trim() })
@@ -272,13 +307,17 @@ function AddObjectiveForm({ projectId }: { projectId: string }) {
       <Input
         wrapperClassName="flex-1"
         aria-label="New project objective"
-        placeholder="Add another objective umbrella…"
+        autoFocus
+        placeholder="Name the major objective…"
         value={title}
         onChange={(event) => setTitle(event.target.value)}
       />
-      <Button type="submit" loading={mutation.isPending} disabled={!title.trim()} iconLeft={<Plus size={15} />}>
-        Add objective
-      </Button>
+      <div className="flex gap-2">
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button type="submit" loading={mutation.isPending} disabled={!title.trim()} iconLeft={<Target size={15} />}>
+          Save objective
+        </Button>
+      </div>
     </form>
   )
 }
@@ -450,6 +489,7 @@ function ProjectObjectiveSection({
 }
 
 function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () => void }) {
+  const [addingObjective, setAddingObjective] = useState(false)
   const query = useQuery({
     queryKey: projectKeys.detail(projectId),
     queryFn: () => fetchProjectDetail(projectId),
@@ -521,7 +561,17 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
             </h2>
             <p className="mt-1 text-xs text-text-muted">Complete the subtasks, then check off their objective.</p>
           </div>
+          <Button
+            iconLeft={<Target size={15} />}
+            onClick={() => setAddingObjective(true)}
+            disabled={addingObjective}
+          >
+            New objective
+          </Button>
         </header>
+        {addingObjective && (
+          <AddObjectiveForm projectId={project.id} onClose={() => setAddingObjective(false)} />
+        )}
         {objectives.length === 0 ? (
           <div className="p-6 text-center">
             <Target size={26} className="mx-auto text-gold" />
@@ -552,7 +602,6 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
             )}
           </div>
         )}
-        <AddObjectiveForm projectId={project.id} />
       </section>
 
       <section className="overflow-hidden rounded-xl border border-border bg-surface">
