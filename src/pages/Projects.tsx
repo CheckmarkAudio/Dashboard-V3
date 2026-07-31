@@ -546,7 +546,14 @@ function ProjectObjectiveSection({
   const [editing, setEditing] = useState(false)
   const [editTitle, setEditTitle] = useState(objective.title)
   const completedTasks = tasks.filter((task) => task.is_completed).length
-  const canComplete = tasks.length > 0 && completedTasks === tasks.length
+  // 2026-07-31 — director: "we do need to remove [the subtask
+  // requirement] especially since not all objectives will have
+  // subtasks." Was `tasks.length > 0 && completedTasks === tasks.length`
+  // (blocked completion entirely until a subtask existed); `.every()`
+  // is vacuously true for an empty list, so an objective with no
+  // subtasks is completable immediately, while one WITH subtasks still
+  // requires them all done first.
+  const canComplete = tasks.every((task) => task.is_completed)
   const mutation = useMutation({
     mutationFn: (next: boolean) => completeProjectObjective(objective.id, next),
     onSuccess: (_updated, next) => {
@@ -652,9 +659,7 @@ function ProjectObjectiveSection({
           disabled={!canCompleteWork || mutation.isPending || (!objective.is_completed && !canComplete)}
           onClick={() => mutation.mutate(!objective.is_completed)}
           className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-ring disabled:cursor-not-allowed"
-          title={!objective.is_completed && !canComplete
-            ? (tasks.length === 0 ? 'Add at least one subtask first' : 'Complete every subtask first')
-            : undefined}
+          title={!objective.is_completed && !canComplete ? 'Complete every subtask first' : undefined}
         >
           {objective.is_completed ? (
             <CheckCircle2 size={24} className="shrink-0 text-emerald-400" />
@@ -672,14 +677,14 @@ function ProjectObjectiveSection({
               {objective.title}
             </span>
             <span className="mt-0.5 block text-[11px] text-text-light">
-              {completedTasks}/{tasks.length} subtasks complete
+              {tasks.length > 0 ? `${completedTasks}/${tasks.length} subtasks complete` : 'No subtasks'}
               {!objective.is_completed && canComplete ? ' · Ready to check off' : ''}
             </span>
           </span>
         </button>
         {!objective.is_completed && !canComplete && (
           <span className="text-[11px] font-semibold text-text-light">
-            {tasks.length === 0 ? 'Add a subtask to unlock' : 'Finish subtasks to unlock'}
+            Finish subtasks to unlock
           </span>
         )}
         <div className="flex shrink-0 items-center gap-1">
