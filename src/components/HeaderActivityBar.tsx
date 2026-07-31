@@ -240,8 +240,13 @@ export default function HeaderActivityBar() {
             // the already-elapsed portion — reading as "done" when it
             // hasn't happened yet. Split in two: elapsed stays fully
             // solid (still "concrete, not potential"), upcoming gets a
-            // lighter fill + outline so it reads as "coming up," never
-            // "already ticked off."
+            // lighter fill so it reads as "coming up," never "already
+            // ticked off." 2026-07-31 — director: "we dont need to have
+            // a tick marker for beginning and end of schedule, schedule
+            // should be colored in the bar only" -- dropped the border
+            // this piece originally had, since a border draws an edge
+            // line right at the schedule's end time that reads as a
+            // boundary tick. Fill-only now, no border on either piece.
             const startMs = Date.parse(model.scheduledWindow.start)
             const endMs = Date.parse(model.scheduledWindow.end)
             const elapsedEndMs = Math.min(endMs, now.getTime())
@@ -261,7 +266,7 @@ export default function HeaderActivityBar() {
                 )}
                 {hasUpcoming && (
                   <div
-                    className="absolute top-0 h-full rounded-md bg-gold/25 border border-gold/60"
+                    className="absolute top-0 h-full rounded-md bg-gold/25"
                     style={{
                       left: `${pct(Math.max(startMs, now.getTime()))}%`,
                       width: `${Math.max(1.5, pct(endMs) - pct(Math.max(startMs, now.getTime())))}%`,
