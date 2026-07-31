@@ -226,20 +226,52 @@ export default function HeaderActivityBar() {
             light border #dedee5 is darker than the white card), vs.
             a hardcoded hex that only ever reads right in one theme. */}
         <div className="relative h-[11px] w-[520px] rounded-md bg-border shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)]">
-          {model.scheduledWindow && (
-            // Fully solid — a committed scheduled window is data, not
-            // decoration, so (unlike the glass container) it gets no
-            // transparency. Presence segments paint on top in their
-            // own solid colors wherever actual activity occurred.
-            <div
-              className="absolute top-0 h-full rounded-md bg-gold"
-              style={{
-                left: `${pct(Date.parse(model.scheduledWindow.start))}%`,
-                width: `${Math.max(1.5, pct(Date.parse(model.scheduledWindow.end)) - pct(Date.parse(model.scheduledWindow.start)))}%`,
-              }}
-              title={`Scheduled · ${formatClockTime(Date.parse(model.scheduledWindow.start))}–${formatClockTime(Date.parse(model.scheduledWindow.end))}`}
-            />
-          )}
+          {model.scheduledWindow && (() => {
+            // 2026-07-28 — director screenshot: "I see something ticked
+            // off past 3pm and its not 3pm yet." Root cause wasn't a
+            // timezone bug (checked: dayStart/now/axis all derive from
+            // the same local Date consistently, and every other layer
+            // — presence, events — is already correctly clipped to
+            // `now`). The scheduled band specifically was NOT clipped
+            // to `now` by design (it shows the whole shift, per the
+            // earlier "treated more set than potential" direction), so
+            // a shift running past the current time painted its
+            // not-yet-happened portion in the exact same solid gold as
+            // the already-elapsed portion — reading as "done" when it
+            // hasn't happened yet. Split in two: elapsed stays fully
+            // solid (still "concrete, not potential"), upcoming gets a
+            // lighter fill + outline so it reads as "coming up," never
+            // "already ticked off."
+            const startMs = Date.parse(model.scheduledWindow.start)
+            const endMs = Date.parse(model.scheduledWindow.end)
+            const elapsedEndMs = Math.min(endMs, now.getTime())
+            const hasElapsed = elapsedEndMs > startMs
+            const hasUpcoming = endMs > Math.max(startMs, now.getTime())
+            return (
+              <>
+                {hasElapsed && (
+                  <div
+                    className="absolute top-0 h-full rounded-md bg-gold"
+                    style={{
+                      left: `${pct(startMs)}%`,
+                      width: `${Math.max(1.5, pct(elapsedEndMs) - pct(startMs))}%`,
+                    }}
+                    title={`Scheduled (elapsed) · ${formatClockTime(startMs)}–${formatClockTime(elapsedEndMs)}`}
+                  />
+                )}
+                {hasUpcoming && (
+                  <div
+                    className="absolute top-0 h-full rounded-md bg-gold/25 border border-gold/60"
+                    style={{
+                      left: `${pct(Math.max(startMs, now.getTime()))}%`,
+                      width: `${Math.max(1.5, pct(endMs) - pct(Math.max(startMs, now.getTime())))}%`,
+                    }}
+                    title={`Scheduled (upcoming) · ${formatClockTime(Math.max(startMs, now.getTime()))}–${formatClockTime(endMs)}`}
+                  />
+                )}
+              </>
+            )
+          })()}
           {model.segments.map((s, i) => {
             const left = pct(Date.parse(s.start))
             const right = pct(Date.parse(s.end))
