@@ -117,6 +117,11 @@ test('activityTypeFromSource maps known source types', () => {
   assert.equal(activityTypeFromSource('review'), 'other')
 })
 
+test('project and objective completions appear as completed-work markers', () => {
+  assert.equal(activityTypeFromSource('project_objective'), 'task')
+  assert.equal(activityTypeFromSource('project_completed'), 'task')
+})
+
 // ─── Open sessions end at injected now ───────────────────────────────
 
 test('open session is treated as ending at now', () => {

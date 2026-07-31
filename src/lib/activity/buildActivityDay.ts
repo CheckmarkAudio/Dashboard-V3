@@ -52,6 +52,8 @@ export interface ActivityEvent {
   label: string
   /** Raw source discriminator it came from (flywheel source_type, etc.). */
   sourceType: string
+  /** App route to the source record, when the event supports drill-down. */
+  href?: string
 }
 
 /** A scheduled work window for the member on the target day (ISO bounds). */
@@ -75,6 +77,7 @@ export interface ActivityMarker {
   at: string
   type: ActivityEventType
   label: string
+  href?: string
 }
 
 export interface ActivityTotals {
@@ -161,6 +164,8 @@ export function activityTypeFromSource(sourceType: string): ActivityEventType {
   switch (sourceType) {
     case 'task':
     case 'checklist':
+    case 'project_objective':
+    case 'project_completed':
       return 'task'
     case 'session':
       return 'session'
@@ -168,6 +173,8 @@ export function activityTypeFromSource(sourceType: string): ActivityEventType {
       return 'upload'
     case 'deliverable':
       return 'video'
+    case 'project_progress':
+      return 'other'
     default:
       return 'other'
   }
@@ -213,7 +220,7 @@ export function buildActivityDay(input: BuildActivityDayInput): ActivityDayModel
   for (const ev of events) {
     const at = Date.parse(ev.at)
     if (Number.isNaN(at) || at < dayStartMs || at >= dayEndMs || at > dayHi) continue
-    markers.push({ id: ev.id, at: ev.at, type: ev.type, label: ev.label })
+    markers.push({ id: ev.id, at: ev.at, type: ev.type, label: ev.label, href: ev.href })
     tallyTotal(totals, ev.type)
     const clipped = clipInterval(
       { start: at - bracketMs, end: at + bracketMs },

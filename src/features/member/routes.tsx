@@ -10,6 +10,7 @@ import { APP_ROUTES } from '../../app/routes'
 const Dashboard      = lazy(() => import('../../pages/Dashboard'))
 const Profile        = lazy(() => import('../../pages/Profile'))
 const DailyChecklist = lazy(() => import('../../pages/DailyChecklist'))
+const Projects       = lazy(() => import('../../pages/Projects'))
 const Sessions       = lazy(() => import('../../pages/Sessions'))
 const Calendar       = lazy(() => import('../../pages/Calendar'))
 const Content        = lazy(() => import('../../pages/Content'))
@@ -25,6 +26,7 @@ export const MEMBER_ROUTES: FeatureRouteDef[] = [
   { index: true, element: <Dashboard /> },
   { path: APP_ROUTES.member.profile,  element: <Profile /> },
   { path: APP_ROUTES.member.tasks,    element: <DailyChecklist /> },
+  { path: APP_ROUTES.member.projects, element: <Projects /> },
   { path: APP_ROUTES.member.booking,  element: <Sessions /> },
   { path: APP_ROUTES.member.calendar, element: <Calendar /> },
   { path: APP_ROUTES.member.content,  element: <Content /> },
