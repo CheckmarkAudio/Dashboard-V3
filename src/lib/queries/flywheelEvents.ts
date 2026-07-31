@@ -43,6 +43,8 @@ export type FlywheelSourceType =
   | 'education_student' // education_students enrolled → education
   | 'review'            // client review logged → retention
   | 'project_progress'  // project/task progress note → workflow
+  | 'project_objective' // project objective completed → production
+  | 'project_completed' // entire project completed → production
 
 export interface RecordFlywheelEventInput {
   stage: FlywheelStage
@@ -204,6 +206,10 @@ export function describeFlywheelEvent(
     }
     case 'project_progress':
       return str('title') ? `recorded progress · ${str('title')}` : 'recorded project progress'
+    case 'project_objective':
+      return str('title') ? `completed project objective “${str('title')}”` : 'completed a project objective'
+    case 'project_completed':
+      return str('title') ? `completed project “${str('title')}”` : 'completed a project'
     default:
       return `logged a ${row.stage} event`
   }

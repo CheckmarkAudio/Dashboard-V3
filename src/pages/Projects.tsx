@@ -34,6 +34,7 @@ import {
   addProjectObjectiveTask,
   archiveProject,
   completeProjectObjective,
+  completeProject,
   createProject,
   deleteProjectObjective,
   deleteProjectTask,
@@ -49,6 +50,7 @@ import {
   type ProjectTask,
 } from '../lib/queries/projects'
 import { memberActivityKeys } from '../lib/activity/queries'
+import { emitFlywheelEvent, flywheelKeys } from '../lib/queries/flywheelEvents'
 
 function dateLabel(value: string | null): string {
   if (!value) return 'No target date'
@@ -213,7 +215,11 @@ function ProjectListCard({
             {project.objective || 'No outcome summary yet.'}
           </p>
           <div className="mt-3 flex items-center gap-2 text-[11px] text-text-light">
-            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-400">Active</span>
+            <span className={project.status === 'completed'
+              ? 'rounded-full bg-blue-500/10 px-2 py-0.5 font-semibold text-blue-300'
+              : 'rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-400'}>
+              {project.status === 'completed' ? 'Completed' : 'Active'}
+            </span>
             <span>{dateLabel(project.target_date)}</span>
           </div>
         </div>
@@ -516,8 +522,19 @@ function ProjectObjectiveSection({
   const canComplete = tasks.length > 0 && completedTasks === tasks.length
   const mutation = useMutation({
     mutationFn: (next: boolean) => completeProjectObjective(objective.id, next),
-    onSuccess: () => {
+    onSuccess: (_updated, next) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      if (next) {
+        void emitFlywheelEvent({
+          stage: 'production',
+          source_type: 'project_objective',
+          source_id: objective.id,
+          metadata: { title: objective.title, project_id: projectId },
+        }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: memberActivityKeys.all })
+          void queryClient.invalidateQueries({ queryKey: flywheelKeys.all })
+        })
+      }
       toast(objective.is_completed ? 'Objective reopened.' : 'Objective completed.', 'success')
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -809,6 +826,25 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
     },
   })
+  const projectCompletionMutation = useMutation({
+    mutationFn: (next: boolean) => completeProject(projectId, next),
+    onSuccess: (updated, next) => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all })
+      if (next) {
+        void emitFlywheelEvent({
+          stage: 'production',
+          source_type: 'project_completed',
+          source_id: updated.id,
+          metadata: { title: updated.title, project_id: updated.id },
+        }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: memberActivityKeys.all })
+          void queryClient.invalidateQueries({ queryKey: flywheelKeys.all })
+        })
+      }
+      toast(next ? 'Project completed and added to your activity tracker.' : 'Project reopened.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
   const moveObjective = (from: number, to: number) => {
     if (to < 0 || to >= orderedObjectives.length || from === to || reorderMutation.isPending) return
     const next = [...orderedObjectives]
@@ -849,6 +885,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
 
   const { project, objectives, tasks, updates } = query.data
   const completedObjectives = objectives.filter((objective) => objective.is_completed).length
+  const canCompleteProject = objectives.length > 0 && completedObjectives === objectives.length
   const progress = objectives.length ? Math.round((completedObjectives / objectives.length) * 100) : 0
   const ungroupedTasks = tasks.filter((task) => !task.project_objective_id)
   const taskTitle = new Map(tasks.map((task) => [task.id, task.title]))
@@ -872,7 +909,9 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <div className="mb-2 flex items-center gap-2">
-                <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-400">
+                <span className={project.status === 'completed'
+                  ? 'rounded-full bg-blue-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-300'
+                  : 'rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-400'}>
                   {project.status}
                 </span>
                 <span className="flex items-center gap-1 text-xs text-text-light">
@@ -885,6 +924,27 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
               </p>
             </div>
             <div className="flex shrink-0 items-start gap-2">
+              {project.status === 'completed' ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => projectCompletionMutation.mutate(false)}
+                  loading={projectCompletionMutation.isPending}
+                >
+                  Reopen project
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  iconLeft={<CheckCircle2 size={14} />}
+                  disabled={!canCompleteProject}
+                  loading={projectCompletionMutation.isPending}
+                  onClick={() => projectCompletionMutation.mutate(true)}
+                  title={!canCompleteProject ? 'Complete every objective first' : 'Complete project'}
+                >
+                  Complete project
+                </Button>
+              )}
               <Button variant="secondary" size="sm" iconLeft={<Pencil size={14} />} onClick={() => setEditingProject(true)}>
                 Edit project
               </Button>
@@ -1036,8 +1096,10 @@ export default function Projects() {
         <aside className={selectedId ? 'hidden lg:block' : 'block'}>
           <div className="mb-3 flex items-center justify-between px-1">
             <div>
-              <h2 className="text-sm font-bold text-text">Active projects</h2>
-              <p className="text-xs text-text-muted">{projects.length} ongoing objective{projects.length === 1 ? '' : 's'}</p>
+              <h2 className="text-sm font-bold text-text">Projects</h2>
+              <p className="text-xs text-text-muted">
+                {projects.filter((project) => project.status !== 'completed').length} active · {projects.filter((project) => project.status === 'completed').length} completed
+              </p>
             </div>
           </div>
           <div className="space-y-2">

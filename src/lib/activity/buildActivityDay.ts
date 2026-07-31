@@ -164,6 +164,8 @@ export function activityTypeFromSource(sourceType: string): ActivityEventType {
   switch (sourceType) {
     case 'task':
     case 'checklist':
+    case 'project_objective':
+    case 'project_completed':
       return 'task'
     case 'session':
       return 'session'

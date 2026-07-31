@@ -176,6 +176,18 @@ export async function archiveProject(projectId: string): Promise<Project> {
   return data as Project
 }
 
+export async function completeProject(
+  projectId: string,
+  isCompleted: boolean,
+): Promise<Project> {
+  const { data, error } = await supabase.rpc('complete_project', {
+    p_project_id: projectId,
+    p_is_completed: isCompleted,
+  })
+  if (error) throw new Error(error.message)
+  return data as Project
+}
+
 export async function updateProjectObjective(input: {
   objectiveId: string
   title: string
