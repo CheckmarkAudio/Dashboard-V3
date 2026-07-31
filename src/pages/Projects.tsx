@@ -19,15 +19,17 @@ import {
   ListTodo,
   ListPlus,
   MessageSquarePlus,
+  Pin,
+  PinOff,
   Plus,
   Trash2,
   Target,
+  Users,
   X,
 } from 'lucide-react'
 import { Button, EmptyState, Input, PageHeader, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
-import { completeAssignedTask } from '../lib/queries/assignments'
 import {
   addProjectProgressNote,
   addProjectObjective,
@@ -35,6 +37,7 @@ import {
   archiveProject,
   completeProjectObjective,
   completeProject,
+  completeProjectTask,
   createProject,
   deleteProjectObjective,
   deleteProjectTask,
@@ -42,6 +45,8 @@ import {
   fetchProjects,
   projectKeys,
   reorderProjectObjectives,
+  setProjectMember,
+  setProjectPin,
   updateProjectDetails,
   updateProjectObjective,
   updateProjectTask,
@@ -191,17 +196,23 @@ function ProjectListCard({
   selected: boolean
   onSelect: () => void
 }) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const pinMutation = useMutation({
+    mutationFn: () => setProjectPin(project.id, !project.is_pinned),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: projectKeys.list() }),
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
   return (
-    <button
-      type="button"
-      onClick={onSelect}
+    <article
       className={[
-        'w-full text-left rounded-xl border p-4 transition-colors focus-ring',
+        'relative w-full rounded-xl border transition-colors',
         selected
           ? 'border-gold/55 bg-gold/10'
           : 'border-border bg-surface hover:bg-surface-hover',
       ].join(' ')}
     >
+      <button type="button" onClick={onSelect} className="w-full rounded-xl p-4 pr-12 text-left focus-ring">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
           <FolderKanban size={17} />
@@ -224,7 +235,18 @@ function ProjectListCard({
           </div>
         </div>
       </div>
-    </button>
+      </button>
+      <button
+        type="button"
+        onClick={() => pinMutation.mutate()}
+        disabled={pinMutation.isPending}
+        className={project.is_pinned ? 'absolute right-3 top-3 rounded-lg p-2 text-gold hover:bg-gold/10 focus-ring' : 'absolute right-3 top-3 rounded-lg p-2 text-text-light hover:bg-surface-hover hover:text-gold focus-ring'}
+        aria-label={project.is_pinned ? `Unpin ${project.title}` : `Pin ${project.title}`}
+        title={project.is_pinned ? 'Unpin project' : 'Pin project to top'}
+      >
+        {project.is_pinned ? <PinOff size={15} /> : <Pin size={15} />}
+      </button>
+    </article>
   )
 }
 
@@ -342,9 +364,11 @@ function AddObjectiveForm({
 function ProjectTaskRow({
   projectId,
   task,
+  canCompleteWork,
 }: {
   projectId: string
   task: ProjectTask
+  canCompleteWork: boolean
 }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -354,7 +378,7 @@ function ProjectTaskRow({
   const [note, setNote] = useState('')
 
   const completeMutation = useMutation({
-    mutationFn: (next: boolean) => completeAssignedTask(task.id, next),
+    mutationFn: (next: boolean) => completeProjectTask(task.id, next),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
       void queryClient.invalidateQueries({ queryKey: memberActivityKeys.all })
@@ -419,9 +443,10 @@ function ProjectTaskRow({
         <button
           type="button"
           onClick={() => completeMutation.mutate(!task.is_completed)}
-          disabled={completeMutation.isPending}
+          disabled={!canCompleteWork || completeMutation.isPending}
           className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-ring disabled:opacity-50"
           aria-label={`${task.is_completed ? 'Mark incomplete' : 'Complete'} ${task.title}`}
+          title={!canCompleteWork ? 'Only project members can complete this task' : undefined}
         >
           {task.is_completed
             ? <CheckCircle2 size={22} className="shrink-0 text-emerald-400" />
@@ -503,6 +528,7 @@ function ProjectObjectiveSection({
   onDragStart,
   onDragOver,
   onDrop,
+  canCompleteWork,
 }: {
   projectId: string
   objective: ProjectObjective
@@ -513,6 +539,7 @@ function ProjectObjectiveSection({
   onDragStart: () => void
   onDragOver: (event: DragEvent<HTMLElement>) => void
   onDrop: () => void
+  canCompleteWork: boolean
 }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -622,7 +649,7 @@ function ProjectObjectiveSection({
         </div>
         <button
           type="button"
-          disabled={mutation.isPending || (!objective.is_completed && !canComplete)}
+          disabled={!canCompleteWork || mutation.isPending || (!objective.is_completed && !canComplete)}
           onClick={() => mutation.mutate(!objective.is_completed)}
           className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-ring disabled:cursor-not-allowed"
           title={!objective.is_completed && !canComplete
@@ -687,7 +714,7 @@ function ProjectObjectiveSection({
       {tasks.length > 0 && (
         <div className="pl-4 sm:pl-8">
           {tasks.map((task) => (
-            <ProjectTaskRow key={task.id} projectId={projectId} task={task} />
+            <ProjectTaskRow key={task.id} projectId={projectId} task={task} canCompleteWork={canCompleteWork} />
           ))}
         </div>
       )}
@@ -788,6 +815,66 @@ function EditProjectForm({
   )
 }
 
+function ProjectTeam({
+  projectId,
+  members,
+  teamMembers,
+  canManage,
+}: {
+  projectId: string
+  members: { member_id: string; display_name: string }[]
+  teamMembers: { id: string; display_name: string }[]
+  canManage: boolean
+}) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const [managing, setManaging] = useState(false)
+  const memberIds = new Set(members.map((member) => member.member_id))
+  const mutation = useMutation({
+    mutationFn: setProjectMember,
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      toast(input.isMember ? 'Member added to the project.' : 'Member removed from the project.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-border bg-surface">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-text"><Users size={16} className="text-gold" /> Project team</h2>
+          <p className="mt-1 text-xs text-text-muted">Only these members can check off project work.</p>
+        </div>
+        {canManage && <Button variant="secondary" size="sm" onClick={() => setManaging((value) => !value)}>{managing ? 'Done' : 'Manage members'}</Button>}
+      </header>
+      <div className="flex flex-wrap gap-2 p-4">
+        {members.map((member) => (
+          <span key={member.member_id} className="rounded-full border border-border bg-surface-alt px-3 py-1.5 text-xs font-semibold text-text">
+            {member.display_name}
+          </span>
+        ))}
+      </div>
+      {managing && (
+        <div className="grid gap-2 border-t border-border bg-surface-alt/40 p-4 sm:grid-cols-2">
+          {teamMembers.map((member) => (
+            <label key={member.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text">
+              <input
+                type="checkbox"
+                checked={memberIds.has(member.id)}
+                disabled={mutation.isPending}
+                onChange={(event) => mutation.mutate({ projectId, memberId: member.id, isMember: event.target.checked })}
+                className="h-4 w-4 accent-gold"
+              />
+              {member.display_name}
+            </label>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () => void }) {
   const [addingObjective, setAddingObjective] = useState(false)
   const [editingProject, setEditingProject] = useState(false)
@@ -883,7 +970,10 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
     )
   }
 
-  const { project, objectives, tasks, updates } = query.data
+  const { project, objectives, tasks, updates, members, teamMembers, currentMemberId } = query.data
+  const canCompleteWork = Boolean(currentMemberId && members.some((member) => member.member_id === currentMemberId))
+  const currentTeamMember = teamMembers.find((member) => member.id === currentMemberId)
+  const canManageMembers = currentMemberId === project.owner_id || currentTeamMember?.role === 'admin' || currentTeamMember?.role === 'owner'
   const completedObjectives = objectives.filter((objective) => objective.is_completed).length
   const canCompleteProject = objectives.length > 0 && completedObjectives === objectives.length
   const progress = objectives.length ? Math.round((completedObjectives / objectives.length) * 100) : 0
@@ -937,7 +1027,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
                 <Button
                   size="sm"
                   iconLeft={<CheckCircle2 size={14} />}
-                  disabled={!canCompleteProject}
+                  disabled={!canCompleteWork || !canCompleteProject}
                   loading={projectCompletionMutation.isPending}
                   onClick={() => projectCompletionMutation.mutate(true)}
                   title={!canCompleteProject ? 'Complete every objective first' : 'Complete project'}
@@ -959,6 +1049,13 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
           </div>
         </div>
       </section>
+
+      <ProjectTeam
+        projectId={project.id}
+        members={members}
+        teamMembers={teamMembers}
+        canManage={canManageMembers}
+      />
 
       <section className="overflow-hidden rounded-xl border border-border bg-surface">
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5">
@@ -1003,6 +1100,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
                 onDragStart={() => setDraggedObjectiveId(objective.id)}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => dropObjective(objective.id)}
+                canCompleteWork={canCompleteWork}
               />
             ))}
             {addingObjective && (
@@ -1017,7 +1115,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
                 </div>
                 <div className="pl-4 sm:pl-8">
                   {ungroupedTasks.map((task) => (
-                    <ProjectTaskRow key={task.id} projectId={project.id} task={task} />
+                    <ProjectTaskRow key={task.id} projectId={project.id} task={task} canCompleteWork={canCompleteWork} />
                   ))}
                 </div>
               </div>
@@ -1073,6 +1171,12 @@ export default function Projects() {
     () => projects.find((project) => project.id === selectedId) ?? null,
     [projects, selectedId],
   )
+
+  useEffect(() => {
+    if (!projectsQuery.isLoading && !selectedId && projects[0]) {
+      setSearchParams({ project: projects[0].id }, { replace: true })
+    }
+  }, [projects, projectsQuery.isLoading, selectedId, setSearchParams])
 
   function selectProject(id: string | null) {
     setSearchParams(id ? { project: id } : {})
