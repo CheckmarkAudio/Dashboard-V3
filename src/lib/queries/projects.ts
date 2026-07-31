@@ -13,6 +13,20 @@ export interface Project {
   created_at: string
   updated_at: string
   completed_at: string | null
+  is_pinned?: boolean
+}
+
+export interface ProjectMember {
+  member_id: string
+  display_name: string
+  avatar_url: string | null
+}
+
+export interface ProjectTeamMember {
+  id: string
+  display_name: string
+  avatar_url: string | null
+  role: string | null
 }
 
 export interface ProjectTask {
@@ -52,13 +66,16 @@ export const projectKeys = {
 }
 
 export async function fetchProjects(): Promise<Project[]> {
-  const { data, error } = await supabase
-    .from('projects')
-    .select('*')
-    .neq('status', 'archived')
-    .order('updated_at', { ascending: false })
+  const [projectsResult, pinsResult] = await Promise.all([
+    supabase.from('projects').select('*').neq('status', 'archived').order('updated_at', { ascending: false }),
+    supabase.from('project_pins').select('project_id'),
+  ])
+  const error = projectsResult.error ?? pinsResult.error
   if (error) throw new Error(error.message)
-  return (data ?? []) as Project[]
+  const pinned = new Set((pinsResult.data ?? []).map((row) => row.project_id as string))
+  return ((projectsResult.data ?? []) as Project[])
+    .map((project) => ({ ...project, is_pinned: pinned.has(project.id) }))
+    .sort((a, b) => Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned)))
 }
 
 export async function fetchProjectDetail(projectId: string): Promise<{
@@ -66,8 +83,11 @@ export async function fetchProjectDetail(projectId: string): Promise<{
   objectives: ProjectObjective[]
   tasks: ProjectTask[]
   updates: ProjectUpdate[]
+  members: ProjectMember[]
+  teamMembers: ProjectTeamMember[]
+  currentMemberId: string | null
 }> {
-  const [projectResult, objectivesResult, tasksResult, updatesResult] = await Promise.all([
+  const [projectResult, objectivesResult, tasksResult, updatesResult, membersResult, teamResult, userResult] = await Promise.all([
     supabase.from('projects').select('*').eq('id', projectId).single(),
     supabase
       .from('project_objectives')
@@ -87,15 +107,50 @@ export async function fetchProjectDetail(projectId: string): Promise<{
       .select('id, project_id, task_id, author_id, note, created_at')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false }),
+    supabase.from('project_members').select('member_id, member:team_members!project_members_member_id_fkey(display_name, avatar_url)').eq('project_id', projectId),
+    supabase.from('team_members').select('id, display_name, avatar_url, role').eq('status', 'active').order('display_name'),
+    supabase.auth.getUser(),
   ])
-  const error = projectResult.error ?? objectivesResult.error ?? tasksResult.error ?? updatesResult.error
+  const error = projectResult.error ?? objectivesResult.error ?? tasksResult.error ?? updatesResult.error ?? membersResult.error ?? teamResult.error
   if (error) throw new Error(error.message)
+  const members = (membersResult.data ?? []).map((row: any) => ({
+    member_id: row.member_id as string,
+    display_name: (Array.isArray(row.member) ? row.member[0]?.display_name : row.member?.display_name) ?? 'Team member',
+    avatar_url: (Array.isArray(row.member) ? row.member[0]?.avatar_url : row.member?.avatar_url) ?? null,
+  }))
   return {
     project: projectResult.data as Project,
     objectives: (objectivesResult.data ?? []) as ProjectObjective[],
     tasks: (tasksResult.data ?? []) as ProjectTask[],
     updates: (updatesResult.data ?? []) as ProjectUpdate[],
+    members,
+    teamMembers: (teamResult.data ?? []) as ProjectTeamMember[],
+    currentMemberId: userResult.data.user?.id ?? null,
   }
+}
+
+export async function setProjectPin(projectId: string, isPinned: boolean): Promise<boolean> {
+  const { data, error } = await supabase.rpc('set_project_pin', { p_project_id: projectId, p_is_pinned: isPinned })
+  if (error) throw new Error(error.message)
+  return Boolean(data)
+}
+
+export async function setProjectMember(input: { projectId: string; memberId: string; isMember: boolean }): Promise<void> {
+  const { error } = await supabase.rpc('set_project_member', {
+    p_project_id: input.projectId,
+    p_member_id: input.memberId,
+    p_is_member: input.isMember,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function completeProjectTask(taskId: string, isCompleted: boolean): Promise<ProjectTask> {
+  const { data, error } = await supabase.rpc('complete_project_task', {
+    p_task_id: taskId,
+    p_is_completed: isCompleted,
+  })
+  if (error) throw new Error(error.message)
+  return data as ProjectTask
 }
 
 export async function createProject(input: {
