@@ -666,8 +666,8 @@ function ProjectObjectiveSection({
           )}
           <span className="min-w-0">
             <span className={objective.is_completed
-              ? 'block truncate text-sm font-bold text-text-muted line-through'
-              : 'block truncate text-sm font-bold text-text'}
+              ? 'block whitespace-pre-wrap break-words text-sm font-bold leading-6 text-text-muted line-through'
+              : 'block whitespace-pre-wrap break-words text-sm font-bold leading-6 text-text'}
             >
               {objective.title}
             </span>
@@ -1058,20 +1058,13 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
       />
 
       <section className="overflow-hidden rounded-xl border border-border bg-surface">
-        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5">
+        <header className="border-b border-border px-4 py-3.5">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-bold text-text">
               <ListTodo size={16} className="text-gold" /> Objective checklist
             </h2>
             <p className="mt-1 text-xs text-text-muted">Complete the subtasks, then check off their objective.</p>
           </div>
-          <Button
-            iconLeft={<Target size={15} />}
-            onClick={() => setAddingObjective(true)}
-            disabled={addingObjective}
-          >
-            New objective
-          </Button>
         </header>
         {objectives.length === 0 ? (
           <>
@@ -1120,6 +1113,13 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
                 </div>
               </div>
             )}
+          </div>
+        )}
+        {!addingObjective && (
+          <div className="border-t border-border bg-gold/5 p-4">
+            <Button iconLeft={<Target size={15} />} onClick={() => setAddingObjective(true)}>
+              Add next objective
+            </Button>
           </div>
         )}
       </section>
