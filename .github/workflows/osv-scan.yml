@@ -1,0 +1,32 @@
+name: OSV vulnerability scan
+
+on:
+  pull_request:
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/osv-scan.yml"
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+# Advisory-only by default — surfaces findings as a check annotation but does
+# not block PRs. Tighten by removing `continue-on-error` once the baseline is clean.
+jobs:
+  osv-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.0.2
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --lockfile=package-lock.json
+            --format=table
