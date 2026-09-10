@@ -1,3 +1,4 @@
+import { isSampleMode } from '../../preview/sampleMode'
 // Phase 3.1 — react-query factory for team_members ("team members").
 //
 // Centralizes the select shape + query key so every page consuming
@@ -67,7 +68,7 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
   // AuthContext uses a sessionless fake admin in local Vite development,
   // so Supabase correctly blocks roster reads. Keep the preview usable
   // with clearly synthetic data; production builds tree-shake this path.
-  if (import.meta.env.DEV) return DEV_TEAM_MEMBERS
+  if (import.meta.env.DEV) return isSampleMode() ? (await import('../../preview/fixtures')).sampleMembers as TeamMember[] : DEV_TEAM_MEMBERS
 
   const { data, error } = await supabase
     .from('team_members')

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -9,9 +9,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  ChevronRight,
   Circle,
-  ClipboardCheck,
   Clock3,
   FileText,
   FolderKanban,
@@ -19,8 +17,6 @@ import {
   ListTodo,
   ListPlus,
   MessageSquarePlus,
-  Pin,
-  PinOff,
   Plus,
   Trash2,
   Target,
@@ -46,7 +42,6 @@ import {
   projectKeys,
   reorderProjectObjectives,
   setProjectMember,
-  setProjectPin,
   updateProjectDetails,
   updateProjectObjective,
   updateProjectTask,
@@ -187,68 +182,6 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
   )
 }
 
-function ProjectListCard({
-  project,
-  selected,
-  onSelect,
-}: {
-  project: Project
-  selected: boolean
-  onSelect: () => void
-}) {
-  const queryClient = useQueryClient()
-  const { toast } = useToast()
-  const pinMutation = useMutation({
-    mutationFn: () => setProjectPin(project.id, !project.is_pinned),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: projectKeys.list() }),
-    onError: (error: Error) => toast(error.message, 'error'),
-  })
-  return (
-    <article
-      className={[
-        'relative w-full rounded-xl border transition-colors',
-        selected
-          ? 'border-gold/55 bg-gold/10'
-          : 'border-border bg-surface hover:bg-surface-hover',
-      ].join(' ')}
-    >
-      <button type="button" onClick={onSelect} className="w-full rounded-xl p-4 pr-12 text-left focus-ring">
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
-          <FolderKanban size={17} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="truncate text-sm font-bold text-text">{project.title}</h2>
-            <ChevronRight size={15} className="shrink-0 text-text-light" />
-          </div>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">
-            {project.objective || 'No outcome summary yet.'}
-          </p>
-          <div className="mt-3 flex items-center gap-2 text-[11px] text-text-light">
-            <span className={project.status === 'completed'
-              ? 'rounded-full bg-blue-500/10 px-2 py-0.5 font-semibold text-blue-300'
-              : 'rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-400'}>
-              {project.status === 'completed' ? 'Completed' : 'Active'}
-            </span>
-            <span>{dateLabel(project.target_date)}</span>
-          </div>
-        </div>
-      </div>
-      </button>
-      <button
-        type="button"
-        onClick={() => pinMutation.mutate()}
-        disabled={pinMutation.isPending}
-        className={project.is_pinned ? 'absolute right-3 top-3 rounded-lg p-2 text-gold hover:bg-gold/10 focus-ring' : 'absolute right-3 top-3 rounded-lg p-2 text-text-light hover:bg-surface-hover hover:text-gold focus-ring'}
-        aria-label={project.is_pinned ? `Unpin ${project.title}` : `Pin ${project.title}`}
-        title={project.is_pinned ? 'Unpin project' : 'Pin project to top'}
-      >
-        {project.is_pinned ? <PinOff size={15} /> : <Pin size={15} />}
-      </button>
-    </article>
-  )
-}
 
 function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objectiveId: string }) {
   const queryClient = useQueryClient()
@@ -1167,23 +1100,13 @@ export default function Projects() {
   const selectedId = searchParams.get('project')
   const projectsQuery = useQuery({ queryKey: projectKeys.list(), queryFn: fetchProjects })
   const projects = projectsQuery.data ?? []
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedId) ?? null,
-    [projects, selectedId],
-  )
-
-  useEffect(() => {
-    if (!projectsQuery.isLoading && !selectedId && projects[0]) {
-      setSearchParams({ project: projects[0].id }, { replace: true })
-    }
-  }, [projects, projectsQuery.isLoading, selectedId, setSearchParams])
 
   function selectProject(id: string | null) {
     setSearchParams(id ? { project: id } : {})
   }
 
   return (
-    <div className="mx-auto max-w-[1320px] animate-fade-in space-y-5">
+    <div className="mx-auto max-w-[900px] animate-fade-in space-y-6">
       <PageHeader
         icon={FolderKanban}
         title="Projects"
@@ -1196,59 +1119,135 @@ export default function Projects() {
 
       {creating && <CreateProjectForm onClose={() => setCreating(false)} />}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[330px_minmax(0,1fr)]">
-        <aside className={selectedId ? 'hidden lg:block' : 'block'}>
-          <div className="mb-3 flex items-center justify-between px-1">
-            <div>
-              <h2 className="text-sm font-bold text-text">Projects</h2>
-              <p className="text-xs text-text-muted">
-                {projects.filter((project) => project.status !== 'completed').length} active · {projects.filter((project) => project.status === 'completed').length} completed
-              </p>
-            </div>
+      {/* Single-column, expandable projects layout — ADHD-friendly */}
+      {projectsQuery.isLoading ? (
+        <div className="space-y-3">
+          <div className="h-40 animate-pulse rounded-xl bg-surface" />
+          <div className="h-40 animate-pulse rounded-xl bg-surface" />
+        </div>
+      ) : projects.length === 0 ? (
+        <EmptyState
+          icon={FolderKanban}
+          title="No projects yet"
+          description="Create one outcome, then add its next concrete task."
+          action={<Button size="sm" onClick={() => setCreating(true)} iconLeft={<Plus size={14} />}>Create project</Button>}
+        />
+      ) : (
+        <div className="space-y-4">
+          <div className="px-1">
+            <h2 className="text-sm font-bold text-text">All Projects</h2>
+            <p className="text-xs text-text-muted">
+              {projects.filter((p) => p.status !== 'completed').length} active · {projects.filter((p) => p.status === 'completed').length} completed
+            </p>
           </div>
-          <div className="space-y-2">
-            {projectsQuery.isLoading ? (
-              <>
-                <div className="h-32 animate-pulse rounded-xl bg-surface" />
-                <div className="h-32 animate-pulse rounded-xl bg-surface" />
-              </>
-            ) : projects.length === 0 ? (
-              <EmptyState
-                icon={FolderKanban}
-                title="No projects yet"
-                description="Create one outcome, then add its next concrete task."
-                action={<Button size="sm" onClick={() => setCreating(true)} iconLeft={<Plus size={14} />}>Create project</Button>}
-              />
-            ) : (
-              projects.map((project) => (
-                <ProjectListCard
-                  key={project.id}
-                  project={project}
-                  selected={project.id === selectedId}
-                  onSelect={() => selectProject(project.id)}
-                />
-              ))
-            )}
-          </div>
-        </aside>
+          {projects.map((project) => (
+            <ProjectExpandableCard
+              key={project.id}
+              project={project}
+              isExpanded={selectedId === project.id}
+              onToggleExpand={() => selectProject(selectedId === project.id ? null : project.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
-        <main className={!selectedId ? 'hidden lg:block' : 'block'}>
-          {selectedId ? (
-            <ProjectDetail projectId={selectedId} onBack={() => selectProject(null)} />
-          ) : (
-            <div className="flex min-h-[560px] items-center justify-center rounded-xl border border-dashed border-border bg-surface/40 p-8 text-center">
-              <div className="max-w-sm">
-                <ClipboardCheck size={36} className="mx-auto text-gold" />
-                <h2 className="mt-4 text-lg font-bold text-text">Choose one project to focus</h2>
-                <p className="mt-2 text-sm leading-6 text-text-muted">
-                  Its outcome, next tasks, and progress notes will stay together in one calm workspace.
-                </p>
-                {selectedProject && <p className="sr-only">{selectedProject.title}</p>}
+/**
+ * Expandable project card — shows overview, expands inline to show full detail
+ * ADHD-friendly: big click target, clear visual hierarchy, no navigation
+ */
+function ProjectExpandableCard({
+  project,
+  isExpanded,
+  onToggleExpand,
+}: {
+  project: Project
+  isExpanded: boolean
+  onToggleExpand: () => void
+}) {
+  const projectQuery = useQuery({
+    queryKey: projectKeys.detail(project.id),
+    queryFn: () => fetchProjectDetail(project.id),
+    enabled: isExpanded,
+  })
+  const data = projectQuery.data
+  const objectives = data?.objectives ?? []
+  const completedObjectives = objectives.filter((o) => o.is_completed).length
+  const progress = objectives.length ? Math.round((completedObjectives / objectives.length) * 100) : 0
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-surface transition-all">
+      {/* Clickable header — always visible, big target */}
+      <button
+        type="button"
+        onClick={onToggleExpand}
+        className="w-full p-4 text-left hover:bg-surface-hover focus-ring transition-colors sm:p-5"
+      >
+        <div className="flex items-start gap-4">
+          {/* Chevron */}
+          <div className="shrink-0 pt-1">
+            <ChevronDown
+              size={24}
+              className={`transition-transform text-gold ${isExpanded ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
+          </div>
+
+          {/* Project info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+              <h3 className="text-lg font-bold text-text">{project.title}</h3>
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shrink-0 ${
+                project.status === 'completed'
+                  ? 'bg-blue-500/15 text-blue-300'
+                  : 'bg-emerald-500/15 text-emerald-400'
+              }`}>
+                {project.status}
+              </span>
+            </div>
+
+            <p className="text-sm text-text-muted line-clamp-2 mb-3">
+              {project.objective || 'No description yet'}
+            </p>
+
+            {/* Quick stats */}
+            <div className="flex flex-wrap gap-4 text-sm mb-3">
+              <div>
+                <span className="font-bold text-text">{objectives.length}</span>
+                <span className="text-text-light ml-1">objectives</span>
+              </div>
+              <div>
+                <span className="font-bold text-text">{completedObjectives}</span>
+                <span className="text-text-light ml-1">complete</span>
+              </div>
+              <div className="flex items-center gap-1 text-text-light">
+                <CalendarDays size={14} />
+                {dateLabel(project.target_date)}
               </div>
             </div>
+
+            {/* Progress bar */}
+            {objectives.length > 0 && (
+              <div className="h-2 w-full overflow-hidden rounded-full bg-border">
+                <div className="h-full rounded-full bg-gold transition-all" style={{ width: `${progress}%` }} />
+              </div>
+            )}
+          </div>
+        </div>
+      </button>
+
+      {/* Expanded detail — shown below header when expanded */}
+      {isExpanded && (
+        <div className="border-t border-border bg-surface-alt/30">
+          {projectQuery.isLoading ? (
+            <div className="p-6 text-center text-text-light">Loading project details…</div>
+          ) : (
+            <ProjectDetail projectId={project.id} onBack={() => onToggleExpand()} />
           )}
-        </main>
-      </div>
+        </div>
+      )}
     </div>
   )
 }

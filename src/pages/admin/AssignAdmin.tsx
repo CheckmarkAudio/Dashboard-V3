@@ -703,7 +703,7 @@ export default function AssignAdmin() {
         </aside>
 
         {/* ─── Main content ──────────────────────────────────────── */}
-        <main className="rounded-xl border border-border bg-surface p-5">
+        <section className="rounded-xl border border-border bg-surface p-5">
           {view === 'templates' ? (
             <TemplateLibrary embedded />
           ) : view === 'studio' ? (
@@ -897,9 +897,9 @@ export default function AssignAdmin() {
                   </button>
                 )}
                 <div className="min-w-0">
-                  <h1 className="text-xl font-bold text-text truncate">
+                  <h2 className="text-xl font-bold text-text truncate">
                     All Tasks for {selectedMember?.display_name ?? 'Selected Member'}
-                  </h1>
+                  </h2>
                   <p className="text-[12px] text-text-muted mt-0.5">
                     {tasks.length} task{tasks.length === 1 ? '' : 's'} · {completedCount} complete
                   </p>
@@ -1007,7 +1007,7 @@ export default function AssignAdmin() {
           </div>
           </>
           )}
-        </main>
+        </section>
       </div>
 
       {/* ─── Modals ─────────────────────────────────────────────── */}

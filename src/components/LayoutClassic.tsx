@@ -1,6 +1,7 @@
 import SamplePreviewBadge from './SamplePreviewBadge'
 import AppearanceLink from './AppearanceLink'
-import { Suspense, useState, useRef, useEffect, type ComponentType } from 'react'
+import { Suspense, useState, useRef, useEffect, useLayoutEffect, useMemo, type ComponentType } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
@@ -12,7 +13,6 @@ import { usePresenceHeartbeat } from '../lib/presence/usePresenceHeartbeat'
 import { APP_ROUTES } from '../app/routes'
 import ErrorBoundary from './ErrorBoundary'
 import HeaderActivityBar from './HeaderActivityBar'
-import WorkspaceJump from './WorkspaceJump'
 import NotificationsBell from './notifications/NotificationsBell'
 import MessagesBell from './messages/MessagesBell'
 import CommunicationNotifier from './communication/CommunicationNotifier'
@@ -29,7 +29,7 @@ import {
   LayoutDashboard, Users, Calendar, Settings, Gauge,
   Menu, X, ChevronDown, ClipboardList, CheckSquare,
   BarChart3, Briefcase, MessageSquare, Sun, Moon,
-  Loader2, FolderUp, FolderKanban, Palette,
+  Loader2, MoreHorizontal, FolderUp, FolderKanban,
 } from 'lucide-react'
 
 /**
@@ -70,7 +70,7 @@ function NavItem({ link, onNavigate }: { link: NavLinkDef; onNavigate: () => voi
       onClick={onNavigate}
       className={({ isActive }) =>
         [
-          'workspace-nav-item relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 focus-ring',
+          'relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 focus-ring',
           isActive
             ? 'bg-white/[0.08] text-gold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-5 before:rounded-r-full before:bg-gold'
             : 'text-text-muted hover:bg-white/[0.04] hover:text-text',
@@ -80,6 +80,275 @@ function NavItem({ link, onNavigate }: { link: NavLinkDef; onNavigate: () => voi
       <link.icon size={17} strokeWidth={2} aria-hidden="true" />
       {link.label}
     </NavLink>
+  )
+}
+
+/**
+ * Horizontal variant used in the desktop top nav strip. Lighter visual weight
+ * than the sidebar NavItem — icon + label sit inline, active state is a soft
+ * outline + gold text rather than a bg-pill-with-bar, matching the reference
+ * aesthetic (readable, spacious, no vertical accent bar).
+ */
+function TopNavItem({ link }: { link: NavLinkDef }) {
+  return (
+    <NavLink
+      to={link.to}
+      end={link.to === '/' || link.to === '/admin'}
+      className={({ isActive }) =>
+        [
+          // Slightly larger than the original compact nav so top-level
+          // routes read as tappable controls, not just text labels.
+          'inline-flex items-center gap-2.5 h-11 px-4 rounded-[22px] text-[14px] font-semibold transition-all duration-200 focus-ring whitespace-nowrap',
+          isActive
+            ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+            : 'text-text-muted hover:text-text hover:bg-white/[0.03]',
+        ].join(' ')
+      }
+    >
+      <link.icon size={16} strokeWidth={1.8} aria-hidden="true" />
+      {link.label}
+    </NavLink>
+  )
+}
+
+/**
+ * GitHub-style responsive top nav. Measures each item's natural width
+ * once on mount, then watches the container with ResizeObserver. When
+ * items won't fit, the tail is moved into a "More" overflow dropdown
+ * instead of spawning a horizontal scrollbar. The divider between main
+ * and admin items stays put when both sides have visible items, and
+ * drops out cleanly when the boundary is crossed.
+ */
+type TopNavEntry =
+  | { kind: 'link'; link: NavLinkDef }
+  | { kind: 'divider' }
+
+function MoreDropdown({ entries }: { entries: TopNavEntry[] }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const location = useLocation()
+  const links = entries.filter((e): e is Extract<TopNavEntry, { kind: 'link' }> => e.kind === 'link')
+
+  // Close when route changes (covers item-click navigation)
+  useEffect(() => { setOpen(false) }, [location.pathname])
+
+  // Anchor the dropdown to the button on open + window resize/scroll
+  useLayoutEffect(() => {
+    if (!open) return
+    const place = () => {
+      if (!buttonRef.current) return
+      const r = buttonRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 6, right: window.innerWidth - r.right })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open])
+
+  // Close on outside click / Escape
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (buttonRef.current?.contains(t)) return
+      if (panelRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onEsc)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onEsc)
+    }
+  }, [open])
+
+  const anyActive = links.some(({ link }) => {
+    const end = link.to === '/' || link.to === '/admin'
+    return end ? location.pathname === link.to : location.pathname.startsWith(link.to)
+  })
+
+  // Three states with distinct visual weight so More never competes
+  // with the truly-active nav pill:
+  //   • anyActive — overflow link is the current page → full gold pill
+  //   • open      — menu is showing but no active link → muted ring only
+  //   • idle      — same neutral hover style as other TopNavItems
+  const triggerClass = anyActive
+    ? 'text-gold bg-gradient-to-b from-gold/18 to-gold/8 ring-1 ring-gold/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+    : open
+      ? 'text-text bg-white/[0.04] ring-1 ring-white/10'
+      : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`inline-flex items-center gap-1.5 h-11 px-3.5 rounded-[22px] text-[14px] font-semibold transition-all duration-200 focus-ring ${triggerClass}`}
+      >
+        <MoreHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
+        More
+      </button>
+
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          role="menu"
+          style={{ top: pos.top, right: pos.right }}
+          className="fixed min-w-[200px] rounded-xl border border-border/60 bg-surface/95 backdrop-blur-md shadow-2xl py-1 z-[60] animate-slide-up"
+        >
+          {links.map(({ link }) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              end={link.to === '/' || link.to === '/admin'}
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className={({ isActive }) =>
+                [
+                  'flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg text-[13px] font-medium transition-colors',
+                  isActive
+                    ? 'text-gold bg-gold/10'
+                    : 'text-text-muted hover:bg-white/[0.04] hover:text-text',
+                ].join(' ')
+              }
+            >
+              <link.icon size={15} strokeWidth={1.8} aria-hidden="true" />
+              {link.label}
+            </NavLink>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+function ResponsiveTopNav({ entries }: { entries: TopNavEntry[] }) {
+  const containerRef = useRef<HTMLElement>(null)
+  const measureRef = useRef<HTMLDivElement>(null)
+  const moreRef = useRef<HTMLDivElement>(null)
+  const widthsRef = useRef<number[]>([])
+  const moreWidthRef = useRef<number>(0)
+  const [containerWidth, setContainerWidth] = useState(0)
+  const [measureTick, setMeasureTick] = useState(0)
+
+  // Gap between children is gap-1 → 4px. Tiny safety buffer keeps the
+  // last item from flirting with sub-pixel rounding bugs that would
+  // produce the dreaded 1px scrollbar.
+  const GAP = 4
+  const SAFETY = 2
+
+  // Stable signature of the entries array — reduces churn so the
+  // measurement effect doesn't fire when the parent passes a fresh
+  // array literal each render with the same content.
+  const entriesKey = useMemo(
+    () => entries.map((e) => (e.kind === 'divider' ? '|' : e.link.to)).join(','),
+    [entries],
+  )
+
+  // Measure each entry's natural width whenever the entries list
+  // changes. Stored in refs so we don't trigger a re-render storm
+  // through useState; we bump `measureTick` once when measurements
+  // are ready so visibleCount can recompute.
+  useLayoutEffect(() => {
+    if (!measureRef.current) return
+    const nodes = Array.from(measureRef.current.children) as HTMLElement[]
+    widthsRef.current = nodes.map((n) => n.offsetWidth)
+    if (moreRef.current) moreWidthRef.current = moreRef.current.offsetWidth
+    setMeasureTick((t) => t + 1)
+  }, [entriesKey])
+
+  // Track the container width via ResizeObserver
+  useEffect(() => {
+    if (!containerRef.current) return
+    const el = containerRef.current
+    setContainerWidth(el.clientWidth)
+    const ro = new ResizeObserver((es) => {
+      for (const e of es) setContainerWidth(e.contentRect.width)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // How many leading entries fit, reserving space for "More" when needed.
+  const visibleCount = useMemo(() => {
+    const widths = widthsRef.current
+    const moreWidth = moreWidthRef.current
+    if (!containerWidth || widths.length !== entries.length) return entries.length
+
+    const sumWith = (count: number) =>
+      widths.slice(0, count).reduce((s, w, i) => s + w + (i > 0 ? GAP : 0), 0)
+
+    // Fits all without any overflow button?
+    if (sumWith(entries.length) + SAFETY <= containerWidth) return entries.length
+
+    // Otherwise reserve the "More" button's width (+ gap before it)
+    const reserve = moreWidth + GAP + SAFETY
+    for (let count = entries.length - 1; count >= 0; count--) {
+      if (sumWith(count) + reserve <= containerWidth) {
+        // Don't leave a trailing divider visible with nothing after it
+        const last = entries[count - 1]
+        if (last && last.kind === 'divider') return count - 1
+        return count
+      }
+    }
+    return 0
+  }, [containerWidth, measureTick, entries])
+
+  const visible = entries.slice(0, visibleCount)
+  const overflow = entries.slice(visibleCount).filter((e) => e.kind === 'link')
+
+  return (
+    <nav
+      ref={containerRef}
+      className="hidden lg:flex items-center gap-1 px-4 lg:px-6 h-12 border-t border-border/50 relative overflow-hidden"
+      aria-label="Primary navigation"
+    >
+      {/* Hidden measurement row — absolute + invisible so it doesn't
+          affect layout, but rendered in the DOM so we can read each
+          item's natural offsetWidth. The parent's `overflow-hidden`
+          clips it so it can't trigger a scrollbar even before measured. */}
+      <div
+        ref={measureRef}
+        aria-hidden="true"
+        className="absolute left-0 top-0 invisible pointer-events-none flex items-center gap-1"
+      >
+        {entries.map((entry, i) =>
+          entry.kind === 'divider'
+            ? <span key={`m-div-${i}`} className="mx-2 h-5 w-px bg-border/60" />
+            : <TopNavItem key={`m-${entry.link.to}`} link={entry.link} />
+        )}
+      </div>
+      <div
+        ref={moreRef}
+        aria-hidden="true"
+        className="absolute left-0 top-0 invisible pointer-events-none"
+      >
+        <div className="inline-flex items-center gap-1.5 h-11 px-3.5 rounded-[22px] text-[14px] font-semibold">
+          <MoreHorizontal size={16} strokeWidth={1.8} />
+          More
+        </div>
+      </div>
+
+      {/* Actual visible items */}
+      {visible.map((entry, i) =>
+        entry.kind === 'divider'
+          ? <span key={`div-${i}`} className="mx-2 h-5 w-px bg-border/60" aria-hidden="true" />
+          : <TopNavItem key={entry.link.to} link={entry.link} />
+      )}
+
+      {overflow.length > 0 && <MoreDropdown entries={overflow} />}
+    </nav>
   )
 }
 
@@ -130,7 +399,6 @@ const adminLinks: NavLinkDef[] = [
   // top nav stays focused on top-level surfaces.
   { to: APP_ROUTES.admin.analytics, icon: BarChart3, label: 'Analytics' },
 ]
-const appearanceLink: NavLinkDef = { to: '/appearance', icon: Palette, label: 'Appearance' }
 const settingsLink: NavLinkDef = { to: APP_ROUTES.admin.settings, icon: Settings, label: 'Settings' }
 
 export default function Layout() {
@@ -159,19 +427,10 @@ export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   usePresenceHeartbeat(profile?.id)
-  const mainRef = useRef<HTMLElement>(null)
-  useEffect(() => { mainRef.current?.scrollTo({ top: 0 }) }, [location.pathname])
   const drawerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(drawerRef, sidebarOpen)
   useRouteAnnounce()
   useQuickKeyListener()
-
-  useEffect(() => {
-    const desktop = window.matchMedia('(min-width: 760px)')
-    const closeOnDesktop = () => { if (desktop.matches) setSidebarOpen(false) }
-    desktop.addEventListener('change', closeOnDesktop)
-    return () => desktop.removeEventListener('change', closeOnDesktop)
-  }, [])
 
   useEffect(() => {
     if (!sidebarOpen) return
@@ -184,11 +443,11 @@ export default function Layout() {
 
   const closeDrawer = () => setSidebarOpen(false)
 
-  /* Shared destinations for the desktop rail and mobile drawer. */
-  const renderSidebar = (id: string) => (
+  /* ── Sidebar (navigation only — no logo/profile per v5.2) ── */
+  const sidebar = (
     <div className="flex flex-col h-full">
       <nav className="flex-1 px-3 pt-4 pb-3 space-y-0.5 overflow-y-auto" aria-label="Main navigation">
-        <p className="px-3 pt-2 pb-2 text-label">Workspace</p>
+        <p className="px-3 pt-2 pb-2 text-label">Menu</p>
         {mainLinks.map(link => (
           <NavItem key={link.to} link={link} onNavigate={closeDrawer} />
         ))}
@@ -201,9 +460,9 @@ export default function Layout() {
                 onClick={() => setAdminExpanded(!adminExpanded)}
                 className="flex items-center gap-2 px-3 w-full focus-ring rounded-md"
                 aria-expanded={adminExpanded}
-                aria-controls={id}
+                aria-controls="admin-nav"
               >
-                <span className="text-label">Studio management</span>
+                <p className="text-label">Admin</p>
                 <ChevronDown
                   size={12}
                   aria-hidden="true"
@@ -212,7 +471,7 @@ export default function Layout() {
               </button>
             </div>
             {adminExpanded && (
-              <div id={id} className="space-y-0.5 animate-slide-up">
+              <div id="admin-nav" className="space-y-0.5 animate-slide-up">
                 {adminLinks.map(link => (
                   <NavItem key={link.to} link={link} onNavigate={closeDrawer} />
                 ))}
@@ -229,25 +488,13 @@ export default function Layout() {
   return (
     <DmDockProvider>
     <div
-      className="dashboard-shell workspace-shell"
+      className="dashboard-shell flex flex-col"
+      style={{ minHeight: 'calc(100vh - var(--shell-gap) * 2)' }}
     >
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
-      <aside className="workspace-sidebar hidden lg:flex" aria-label="Workspace sidebar">
-        <NavLink to="/" className="workspace-brand focus-ring">
-          {/* Preserve the original headphones-and-microphone logo and brand name. */}
-          <img src={checkmarkLogo} alt="Checkmark Audio logo" className="logo-themed h-10 w-10 shrink-0 object-contain" />
-          <span><strong>Checkmark Audio</strong><small>Workspace</small></span>
-        </NavLink>
-        {renderSidebar('desktop-admin-nav')}
-        <button className="workspace-account focus-ring" onClick={() => profile?.id && navigate(`/profile/${profile.id}`)} disabled={!profile?.id}>
-          <MemberAvatar member={profile} size="sm" />
-          <span><strong>{profile?.display_name ?? 'Your profile'}</strong><small>{appRole} · Account</small></span>
-        </button>
-      </aside>
-      <div className="workspace-body">
-      {/* Workspace tools and the existing configurable site banner. */}
-      <header className="workspace-header relative border-b border-border shrink-0 z-40 bg-surface">
+      {/* ── Top header (two-row: logo/controls + horizontal nav) ── */}
+      <header className="relative overflow-hidden border-b border-border/60 shrink-0 z-40 sticky top-0 backdrop-blur-md bg-surface/78">
         <div className="pointer-events-none absolute inset-0" aria-hidden="true">
           {siteBranding?.site_banner_url ? (
             <>
@@ -279,12 +526,14 @@ export default function Layout() {
           <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-gold/28 to-transparent" />
         </div>
         {/* Row 1: logo · (mobile hamburger) · right-aligned controls */}
-
-        <div className="workspace-toolbar relative z-10">
+        {/* 2026-07-26 — h-16 → h-24: HeaderActivityBar's 72px-tall
+            timeline control needs real vertical room to read clearly
+            (director: "make the header wider vertically"). */}
+        <div className="relative z-10 h-24 flex items-center px-4 lg:px-6">
           {/* Mobile hamburger */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="workspace-mobile-trigger p-2 rounded-xl hover:bg-surface-hover transition-colors text-text-muted lg:hidden mr-2"
+            className="p-2 rounded-xl hover:bg-surface-hover transition-colors text-text-muted lg:hidden mr-2"
             aria-label="Open navigation menu"
           >
             <Menu size={20} aria-hidden="true" />
@@ -294,7 +543,7 @@ export default function Layout() {
               so the logo alone stays visible at narrow widths — matches
               GitHub's approach of compressing the brand chrome before
               compressing the nav. */}
-          <div className="workspace-mobile-brand flex items-center gap-3 min-w-0 shrink-0 lg:hidden">
+          <div className="flex items-center gap-3 min-w-0 shrink-0">
             <img
               src={checkmarkLogo}
               alt="Checkmark Audio logo"
@@ -306,12 +555,8 @@ export default function Layout() {
             </div>
           </div>
 
-          <WorkspaceJump links={[...mainLinks, appearanceLink, ...(canAccessAdmin ? [...adminLinks, settingsLink,
-            { to: APP_ROUTES.admin.templateLibrary, icon: ClipboardList, label: 'Template library' },
-            { to: APP_ROUTES.admin.assignClassic, icon: ClipboardList, label: 'Classic assignment tools' },
-          ] : [])]} />
-          {/* Cross-workspace controls */}
-          <div className="workspace-utilities flex items-center gap-3 min-w-0">
+          {/* Right section: Theme toggle + Clock + Profile + Bell */}
+          <div className="ml-auto flex items-center gap-3 lg:gap-4 min-w-0">
             {/* Skin pass 2026-05-06 — SocialLinks (the small Instagram /
                 TikTok / YouTube icons that were here as frontend-only
                 stubs) removed per user direction "remove the small
@@ -326,8 +571,20 @@ export default function Layout() {
                 Layout's top-bar reserves space for cross-app utilities
                 only (activity bar, theme toggle, profile, bell). */}
 
-
-
+            {/* 2026-07-26 — Clock In/Out (PR #50) retired. Presence is
+                heartbeat-driven now (usePresenceHeartbeat, mounted
+                above), not a manual punch. HeaderActivityBar replaces
+                the button with a passive glance-only indicator — click
+                through to Overview for the full My Activity card. Sign
+                out lives on the member's own Profile page now (the
+                Clock Out modal's Log Out path was the only other
+                entry point, and it's gone with the button); presence
+                is closed centrally in AuthContext.signOut() so every
+                remaining sign-out path gets it automatically.
+                Placed BEFORE the theme toggle per director direction
+                ("the bar needs to be to the left of the dark mode
+                light mode button"). */}
+            <HeaderActivityBar />
 
             {/* Theme toggle — light/dark. System preference stays accessible
                 via ThemeContext for anyone who wants a future Settings UI. */}
@@ -341,18 +598,11 @@ export default function Layout() {
               {resolvedTheme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
             </button>
 
-            {/* Communication shortcuts stay together beside the account control. */}
-            <SamplePreviewBadge />
-            <AppearanceLink />
-            <MessagesBell />
-            <NotificationsBell />
-
             {/* Profile — clickable to the signed-in user's own profile */}
             <button
               onClick={() => profile?.id && navigate(`/profile/${profile.id}`)}
               disabled={!profile?.id}
-              aria-label="Open my profile"
-              className="workspace-profile flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer focus-ring rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer focus-ring rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {/* Avatar — Lean 7 super-PR uses the canonical
                   `<MemberAvatar />` so an uploaded profile photo
@@ -363,9 +613,9 @@ export default function Layout() {
                 className="ring-[3px] ring-white/12 rounded-full shrink-0 inline-flex"
                 title={profile?.email ?? 'Signed in'}
               >
-                <MemberAvatar member={profile} size="md" />
+                <MemberAvatar member={profile} size="lg" />
               </span>
-              <div className="workspace-profile-name text-right hidden sm:block">
+              <div className="text-right hidden sm:block">
                 <p className="text-[13px] font-semibold text-text tracking-tight truncate max-w-[140px]">
                   {profile?.display_name ?? 'User'}
                 </p>
@@ -374,18 +624,48 @@ export default function Layout() {
                 </p>
               </div>
             </button>
+
+            {/* PR #67 — Notifications bell moved to the rightmost slot of
+                the top bar, replacing the standalone Sign out button.
+                Originally the Clock Out modal's Log Out path made a
+                dedicated icon redundant; as of the 2026-07-26 clock
+                retirement, sign-out lives on the member's own Profile
+                page instead (reachable via the avatar button below).
+                The bell's dropdown uses `getBoundingClientRect` to
+                anchor to its actual position, so the panel still opens
+                flush against the right edge. */}
+            {/* Direct Messages — sits just left of the notifications
+                bell. Same dropdown interaction model; its unread badge
+                counts DM/group threads (forum channels stay on the
+                notifications bell). */}
+            <SamplePreviewBadge />
+            <AppearanceLink />
+            <MessagesBell />
+            <NotificationsBell />
           </div>
         </div>
-        <div className="workspace-time-zone relative z-10" aria-label="Activity timeline">
-          <div className="workspace-time-zone-inner">
-            <div className="workspace-activity"><HeaderActivityBar /></div>
-          </div>
-        </div>
+
+        {/* Row 2: horizontal top nav (desktop) — responsive with
+            GitHub-style overflow dropdown. Tail items collapse into a
+            "More" menu when they don't fit instead of spawning a
+            horizontal scrollbar. */}
+        <ResponsiveTopNav
+          entries={[
+            ...mainLinks.map<TopNavEntry>((link) => ({ kind: 'link', link })),
+            ...(canAccessAdmin
+              ? [
+                  { kind: 'divider' } as TopNavEntry,
+                  ...adminLinks.map<TopNavEntry>((link) => ({ kind: 'link', link })),
+                  { kind: 'link', link: settingsLink } as TopNavEntry,
+                ]
+              : []),
+          ]}
+        />
       </header>
 
       {/* ── Mobile drawer (unchanged — uses vertical sidebar JSX) ── */}
       {sidebarOpen && (
-        <div className="workspace-mobile-drawer fixed inset-0 z-50 lg:hidden" ref={drawerRef} role="dialog" aria-modal="true" aria-label="Navigation menu">
+        <div className="fixed inset-0 z-50 lg:hidden" ref={drawerRef} role="dialog" aria-modal="true" aria-label="Navigation menu">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" role="presentation" onClick={() => setSidebarOpen(false)} />
           <aside className="relative w-[220px] bg-surface h-full shadow-2xl animate-slide-in">
             <button
@@ -395,14 +675,14 @@ export default function Layout() {
             >
               <X size={18} aria-hidden="true" />
             </button>
-            {renderSidebar('mobile-admin-nav')}
+            {sidebar}
           </aside>
         </div>
       )}
 
-      {/* Routed pages retain their existing state, permissions, and actions. */}
-      <main ref={mainRef} id="main-content" className="workspace-main flex-1 flex flex-col min-w-0" tabIndex={-1}>
-        <div className="workspace-content flex-1 p-4 lg:p-7">
+      {/* ── Main content (now full-width — nav lives in the top header) ── */}
+      <main id="main-content" className="flex-1 flex flex-col min-w-0 overflow-hidden" tabIndex={-1}>
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8">
           <ErrorBoundary key={location.pathname} label="This page">
             <Suspense fallback={<RouteLoadingFallback />}>
               <Outlet />
@@ -410,7 +690,6 @@ export default function Layout() {
           </ErrorBoundary>
         </div>
       </main>
-      </div>
 
       <ForcePasswordChangeModal />
 

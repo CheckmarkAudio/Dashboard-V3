@@ -1,3 +1,4 @@
+import { isSampleMode } from '../preview/sampleMode'
 // 2026-05-20 — Direct browser → Dropbox chunked uploader.
 //
 // Used by the Media page (src/pages/AddMedia.tsx). Replaces the old
@@ -85,6 +86,7 @@ export async function uploadFileToDropbox(
   file: File,
   opts: UploadOptions = {},
 ): Promise<UploadedSubmission> {
+  if (import.meta.env.DEV && isSampleMode()) throw new Error('Sample preview is read-only. No files were uploaded.')
   const sessionId = await streamFileToDropboxSession(file, opts)
 
   // Ask the edge function to commit the session + create the share
@@ -121,6 +123,7 @@ export async function uploadForumFileToDropbox(
   file: File,
   opts: UploadForumFileToDropboxOpts,
 ): Promise<ForumDropboxAttachment> {
+  if (import.meta.env.DEV && isSampleMode()) throw new Error('Sample preview is read-only. No files were uploaded.')
   const sessionId = await streamFileToDropboxSession(file, opts)
 
   const { data, error } = await supabase.functions.invoke<{

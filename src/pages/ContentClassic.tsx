@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
@@ -32,7 +32,7 @@ import {
 import { useToast } from '../components/Toast'
 import { OWNER_EMAIL } from '../domain/permissions'
 import type { ChatAttachment } from '../lib/forum/attachments'
-import { AlertCircle, AtSign, Check, Clock, Edit2, Hash, MessageSquare, MoreHorizontal, Search, Pin, PinOff, Plus, Send, Smile, Trash2, Users } from 'lucide-react'
+import { AlertCircle, AtSign, Check, Clock, Edit2, Hash, MessageSquare, MoreHorizontal, Pin, PinOff, Plus, Send, Smile, Trash2, Users } from 'lucide-react'
 import type { TeamMember } from '../types'
 
 type Channel = {
@@ -80,8 +80,6 @@ export default function Content() {
   // a synthetic active channel from the DM thread list (below).
   const requestedDm = searchParams.get('dm')
   const [showNewMessage, setShowNewMessage] = useState(false)
-  const [conversationFilter, setConversationFilter] = useState('')
-  const [conversationView, setConversationView] = useState('All')
   const dmThreadsQuery = useDmThreads()
   const dmThreads = dmThreadsQuery.data ?? []
   const [channels, setChannels] = useState<Channel[]>([])
@@ -730,27 +728,13 @@ export default function Content() {
 
   const canSend = (input.trim().length > 0 || pendingAttachments.length > 0) && !sending
 
-  const visibleChannels = channels.filter(ch => ch.name.toLowerCase().includes(conversationFilter.trim().toLowerCase()))
-  const visibleDmThreads = dmThreads.filter(t => dmThreadLabel(t).toLowerCase().includes(conversationFilter.trim().toLowerCase()))
-
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-6 w-6 border-2 border-gold/20 border-t-gold" /></div>
   }
 
   return (
-    <div className="forum-page mx-auto animate-fade-in" data-conversation-kind={activeIsDm ? 'dm' : 'channel'}>
-      <header className="studio-page-heading">
-        <div><h1>Forum</h1>
-          </div>
-        <div className="studio-page-actions">
-          {isAdmin && <button type="button" onClick={() => setShowCreateChannel(true)} className="studio-secondary focus-ring"><Hash size={15} /> New channel</button>}
-          <button type="button" onClick={() => setShowNewMessage(true)} className="studio-primary focus-ring"><Plus size={16} /> New message</button>
-        </div>
-      </header>
-      <div className="forum-filter-bar">            <div className="studio-filter-tabs" aria-label="Conversation filters">
-              {['All', 'Channels', 'Messages'].map(view => <button key={view} type="button" aria-pressed={conversationView === view} onClick={() => setConversationView(view)} className="focus-ring">{view}</button>)}
-            </div>
-</div>
+    <div className="max-w-6xl mx-auto animate-fade-in flex flex-col">
+      <h1 className="text-[28px] font-extrabold tracking-tight text-text mb-3">Forum</h1>
 
       {/* 2026-05-24 — Admin channel context menu (right-click on a
           channel row in the sidebar). Two actions: Pin/Unpin + Rename.
@@ -806,15 +790,11 @@ export default function Content() {
           h-[500px] before). Min-height keeps it usable on tiny
           screens. The Troubleshooting form moved to a global corner
           button (see TroubleshootingButton.tsx mounted in Layout). */}
-      <div className="forum-workspace">
+      <div className="flex h-[calc(100vh-180px)] min-h-[480px] bg-surface rounded-2xl border border-border overflow-hidden">
         {/* Sidebar: Channels + Members */}
-        <div className="forum-conversations">
-          <div className="forum-find">
-            <label className="studio-search"><Search size={15} aria-hidden="true" /><input value={conversationFilter} onChange={event => setConversationFilter(event.target.value)} placeholder="Find a conversation…" aria-label="Search channels and direct messages" /></label>
-            <p className="sr-only" role="status">{visibleChannels.length} matching channels, {visibleDmThreads.length} matching messages</p>
-          </div>
+        <div className="w-[220px] border-r border-border flex flex-col shrink-0">
           {/* Channels */}
-          <div className="forum-channel-section px-3 pt-4 pb-2" hidden={conversationView === 'Messages'}>
+          <div className="px-3 pt-4 pb-2">
             <div className="flex items-center justify-between mb-2">
               <p className="text-[10px] font-semibold text-text-light uppercase tracking-wider">Channels</p>
               {/* 2026-05-20 — Admin-only "+ New" trigger. Hidden
@@ -833,8 +813,7 @@ export default function Content() {
               )}
             </div>
             <div className="space-y-0.5">
-              {visibleChannels.length === 0 && <p className="px-2 py-4 text-xs text-text-muted">{conversationFilter ? 'No matching channels.' : 'No channels yet.'}</p>}
-              {visibleChannels.map((ch) => {
+              {channels.map((ch) => {
                 const isPinned = !!ch.pinned_at
                 const isRenaming = renamingChannelId === ch.id
                 if (isRenaming) {
@@ -881,8 +860,7 @@ export default function Content() {
                       setChannelMenu({ channel: ch, x: e.clientX, y: e.clientY })
                     }}
                     title={isAdmin ? 'Right-click for admin actions' : undefined}
-                    aria-current={activeChannel?.id === ch.id ? 'true' : undefined}
-                    className={`forum-conversation-row w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all ${
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all ${
                       activeChannel?.id === ch.id ? 'bg-gold/10 text-gold' : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
                     }`}
                   >
@@ -896,7 +874,7 @@ export default function Content() {
                     ) : (
                       <Hash size={13} className={`shrink-0 ${activeChannel?.id === ch.id ? 'text-gold' : 'text-text-light'}`} aria-hidden="true" />
                     )}
-                    <span className="forum-conversation-label"><strong>{ch.name}</strong>{ch.description && <small>{ch.description}</small>}</span>
+                    <span className="text-[13px] font-medium tracking-tight truncate">{ch.name}</span>
                   </button>
                 )
               })}
@@ -907,14 +885,14 @@ export default function Content() {
               from public #channels above: the stored channel name is an
               opaque token, so each row's label is derived from members
               (dmThreadLabel). "+ New" opens the member picker. */}
-          <div className="forum-dm-section px-3 pt-3 pb-2 border-t border-border/50" hidden={conversationView === 'Channels'}>
+          <div className="px-3 pt-3 pb-2 border-t border-border/50">
             <div className="flex items-center justify-between mb-2">
               <div className="min-w-0">
                 <p className="flex items-center gap-1.5 text-[10px] font-bold text-text uppercase tracking-wider">
                   <MessageSquare size={11} className="text-gold" aria-hidden="true" />
                   Direct Messages
                 </p>
-
+                <p className="text-[10px] text-text-light mt-0.5">Private teammate chats</p>
               </div>
               <button
                 type="button"
@@ -931,7 +909,7 @@ export default function Content() {
               {dmThreads.length === 0 && !dmThreadsQuery.isLoading && (
                 <div className="rounded-xl border border-border/70 bg-surface-alt/35 px-2.5 py-2">
                   <p className="text-[11px] font-semibold text-text">No direct messages yet.</p>
-
+                  <p className="mt-0.5 text-[10px] text-text-light">Start a private chat with a teammate.</p>
                   <button
                     type="button"
                     onClick={() => setShowNewMessage(true)}
@@ -942,8 +920,7 @@ export default function Content() {
                   </button>
                 </div>
               )}
-              {conversationFilter && visibleDmThreads.length === 0 && <p className="px-2 py-4 text-xs text-text-muted">No matching messages.</p>}
-              {visibleDmThreads.map((t) => {
+              {dmThreads.map((t) => {
                 const label = dmThreadLabel(t)
                 const lead = t.members[0] ?? null
                 const isActive = activeChannel?.id === t.channel_id
@@ -954,19 +931,19 @@ export default function Content() {
                     key={t.channel_id}
                     onClick={() => goToDm(t.channel_id)}
                     aria-label={`Open direct message with ${label}${unread ? `, ${t.unread_count} unread` : ''}`}
-                    aria-current={isActive ? 'true' : undefined}
-                    className={`forum-conversation-row w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all ${
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all ${
                       isActive ? 'bg-gold/10 text-gold' : 'text-text-muted hover:text-text hover:bg-white/[0.03]'
                     }`}
                   >
                     <span className="relative shrink-0">
-                      <MemberAvatar member={lead} displayName={label} size="md" />
+                      <MemberAvatar member={lead} displayName={label} size="xs" />
                       {unread && !isActive && (
                         <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-rose-500 ring-1 ring-surface" aria-hidden="true" />
                       )}
                     </span>
-                    <span className="forum-conversation-label"><strong>{label}</strong><small>{t.latest_content || (t.latest_id ? 'Attachment' : 'Start a conversation')}</small></span>
-                    {t.latest_created_at && <time className="forum-conversation-time" dateTime={t.latest_created_at}>{formatTime(t.latest_created_at)}</time>}
+                    <span className={`text-[12px] tracking-tight truncate ${unread && !isActive ? 'font-bold text-text' : 'font-medium'}`}>
+                      {label}
+                    </span>
                     {unread && !isActive && (
                       <span className="ml-auto shrink-0 inline-flex items-center justify-center min-w-[20px] h-[16px] px-1 rounded-full bg-rose-500/15 border border-rose-400/30 text-[9px] font-bold text-rose-400 tabular-nums">
                         {unreadLabel}
@@ -1000,7 +977,7 @@ export default function Content() {
             on this container so anywhere from header to composer
             accepts a file drop. */}
         <div
-          className="forum-chat flex-1 flex flex-col min-w-0 relative"
+          className="flex-1 flex flex-col min-w-0 relative"
           onDragEnter={onDragEnter}
           onDragLeave={onDragLeave}
           onDragOver={onDragOver}
@@ -1026,9 +1003,8 @@ export default function Content() {
           )}
 
           {/* Channel header */}
-          <div className="forum-chat-heading px-5 py-3 border-b border-border flex items-center justify-between shrink-0">
-            <span className="forum-thread-avatar">{activeIsDm ? <MemberAvatar member={dmThreads.find(t => t.channel_id === activeChannel?.id)?.members[0] ?? null} displayName={activeChannel?.name} size="lg" /> : <Hash size={24} aria-hidden="true" />}</span>
-            <div className="flex-1">
+          <div className="px-5 py-3 border-b border-border flex items-center justify-between shrink-0">
+            <div>
               <h2 className="text-[15px] font-bold text-text tracking-tight flex items-center gap-1.5">
                 {activeIsDm ? (
                   <Users size={14} className="text-gold" aria-hidden="true" />
@@ -1045,20 +1021,16 @@ export default function Content() {
           </div>
 
           {/* Messages */}
-          <div ref={messagesScrollRef} className="forum-message-stream flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
+          <div ref={messagesScrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
             {messages.length === 0 && (
               <p className="text-[13px] text-text-light text-center py-8">No messages yet. Start the conversation!</p>
             )}
-            {messages.map((msg, index) => {
+            {messages.map((msg) => {
               const isMe = profile?.id === msg.sender_id
               const member = memberById.get(msg.sender_id)
-              const messageDate = new Date(msg.created_at).toLocaleDateString()
-              const previousMessage = messages[index - 1]
-              const startsDay = !previousMessage || new Date(previousMessage.created_at).toLocaleDateString() !== messageDate
               return (
-                <Fragment key={msg.id}>
-                {startsDay && <p className="forum-day-label">{messageDate === new Date().toLocaleDateString() ? 'Today' : new Date(msg.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>}
                 <ChatBubble
+                  key={msg.id}
                   message={msg}
                   member={member}
                   isMe={isMe}
@@ -1071,7 +1043,6 @@ export default function Content() {
                   mentionNames={mentionNames}
                   mentionHref={profileHrefByMentionName}
                 />
-                </Fragment>
               )
             })}
             <div ref={messagesEndRef} />
@@ -1082,7 +1053,7 @@ export default function Content() {
               popover is open. Send is disabled until there's text
               OR at least one attachment. */}
           {activeChannel && (
-            <div className="forum-composer px-5 py-3 border-t border-border shrink-0 space-y-2">
+            <div className="px-5 py-3 border-t border-border shrink-0 space-y-2">
               <MediaPicker
                 channelId={activeChannel.id}
                 userId={profile?.id ?? 'anon'}
@@ -1125,7 +1096,6 @@ export default function Content() {
                       void sendMessage()
                     }
                   }}
-                  aria-label="Write a message"
                   placeholder={activeIsDm ? `Message ${activeChannel.name}...` : `Message #${activeChannel.name}...`}
                   className="flex-1 bg-surface-alt border border-border rounded-xl px-4 py-2.5 text-[14px] placeholder:text-text-light focus:border-gold"
                 />
@@ -1309,7 +1279,7 @@ function ChatBubble({
   return (
     <div
       id={`message-${message.id}`}
-      className={`forum-message ${isMe ? 'forum-message-own' : ''} group/msg flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'} ${
+      className={`group/msg flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'} ${
         isSending ? 'opacity-70' : ''
       }`}
     >
@@ -1325,7 +1295,7 @@ function ChatBubble({
           <span className={`text-[12px] font-semibold tracking-tight ${tokens.text}`}>
             {isMe ? 'You' : message.sender_name}
           </span>
-          {!message.content && <span className="text-[10px] text-text-light">{time}</span>}
+          <span className="text-[10px] text-text-light">{time}</span>
           {/* 2026-05-21 — optimistic status indicators. Discord-style:
               tiny clock next to the timestamp while sending; red
               alert dot when the insert errored. */}
@@ -1402,14 +1372,13 @@ function ChatBubble({
             {message.content && (
               <div className={`relative mt-0.5 ${isMe ? '' : ''}`}>
                 <div
-                  className={`forum-message-bubble px-3 py-2 rounded-2xl text-[14px] leading-relaxed break-words whitespace-pre-wrap ${
+                  className={`px-3 py-2 rounded-2xl text-[14px] leading-relaxed break-words whitespace-pre-wrap ${
                     isMe
                       ? 'bg-gold/15 text-text border border-gold/25 rounded-br-sm'
                       : 'bg-surface-alt text-text-muted border border-border rounded-bl-sm'
                   }`}
                 >
                   <LinkifiedText text={message.content} mentionNames={mentionNames} mentionHref={mentionHref} />
-                  <span className="forum-bubble-time">{time}</span>
                 </div>
               </div>
             )}

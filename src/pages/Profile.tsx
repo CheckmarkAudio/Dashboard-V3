@@ -1,3 +1,7 @@
+import { useAppearance } from '../contexts/AppearanceContext'
+import { useDmDock } from '../components/messages/DmDockContext'
+import { findOrCreateDm } from '../lib/queries/dms'
+import { MessageSquare } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -49,6 +53,10 @@ export default function Profile() {
   const { memberId } = useParams<{ memberId: string }>()
   const navigate = useNavigate()
   const { profile: viewerProfile, signOut } = useAuth()
+  const { style } = useAppearance()
+  const { openThread } = useDmDock()
+  const [messageError, setMessageError] = useState<string | null>(null)
+  const [openingMessage, setOpeningMessage] = useState(false)
   const [editing, setEditing] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
@@ -100,6 +108,14 @@ export default function Profile() {
   const positionLabel = getPositionLabel(member.position)
   const positionVariant = getPositionVariant(member.position)
 
+  const openConversation = async () => {
+    setOpeningMessage(true)
+    setMessageError(null)
+    try { openThread(await findOrCreateDm(member.id)) }
+    catch (error) { setMessageError(error instanceof Error ? error.message : 'Could not open conversation') }
+    finally { setOpeningMessage(false) }
+  }
+
   const handleSignOut = async () => {
     setSigningOut(true)
     try {
@@ -111,10 +127,10 @@ export default function Profile() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto animate-fade-in">
+    <div className="portal-profile max-w-5xl mx-auto animate-fade-in">
       {/* Back link */}
       <Link to="/" className="flex items-center gap-1 text-[12px] text-text-light hover:text-gold transition-colors mb-6">
-        <ChevronLeft size={14} /> Back to Dashboard
+        <ChevronLeft size={14} /> Back to Overview
       </Link>
 
       {/* Profile card — banner + hero live INSIDE this card. */}
@@ -188,6 +204,7 @@ export default function Profile() {
                         <LiveStatus memberId={member.id} />
                       </div>
                     </div>
+                    {!isOwnProfile && style !== 'classic' && <Button loading={openingMessage} onClick={() => void openConversation()} iconLeft={<MessageSquare size={15} />}>Message</Button>}
                     {isOwnProfile && (
                       <div className="flex items-center gap-2 shrink-0">
                         <Button
@@ -214,8 +231,9 @@ export default function Profile() {
               </div>
             </div>
 
+            {messageError && <p role="alert" className="px-8 pb-4 text-sm text-red-500">{messageError}</p>}
             {/* Body — 2-column grid below the hero */}
-            <div className="px-8 pb-8 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+            <div className="portal-profile-body px-8 pb-8 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
               {/* Left: main content */}
               <div className="space-y-6 min-w-0">
                 {/* Bio */}
@@ -253,7 +271,7 @@ export default function Profile() {
                 <ProfileWeeklySchedule memberId={member.id} />
 
                 {/* Self-serve change-password (Lean 3) — own profile only */}
-                {isOwnProfile && <ChangePasswordPanel />}
+                {isOwnProfile && (style === 'classic' ? <ChangePasswordPanel /> : <details className="portal-security"><summary className="focus-ring cursor-pointer py-3 font-semibold">Security</summary><ChangePasswordPanel /></details>)}
 
                 {/* Team list */}
                 {otherMembers.length > 0 && (

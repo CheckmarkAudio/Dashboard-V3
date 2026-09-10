@@ -1,182 +1,51 @@
-import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ArrowUpRight,
   BriefcaseBusiness,
   CheckSquare,
-  FolderUp,
+  FolderKanban,
   MessageCircle,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useMemberOverviewContext } from '../../contexts/MemberOverviewContext'
 import { localDateKey } from '../../lib/dates'
 import { fetchMemberAssignedTasks } from '../../lib/queries/assignments'
-import { supabase } from '../../lib/supabase'
 import type { AssignedTask } from '../../types/assignments'
+import { useOverviewProjects } from './OverviewProjectsPanel'
 import { useDmThreads } from '../messages/useDmThreads'
 
-export type OverviewScoreId = 'tasks' | 'messages' | 'sessions' | 'media'
-
-function AnimatedNumber({ value }: { value: number }) {
-  const [display, setDisplay] = useState(value)
-
-  useEffect(() => {
-    let frame = 0
-    const duration = 520
-    const start = window.performance.now()
-
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration)
-      setDisplay(Math.round(value * progress))
-      if (progress < 1) frame = window.requestAnimationFrame(tick)
-    }
-
-    setDisplay(0)
-    frame = window.requestAnimationFrame(tick)
-    return () => window.cancelAnimationFrame(frame)
-  }, [value])
-
-  return <>{display.toLocaleString()}</>
-}
-
-type ScoreTone = 'gold' | 'violet' | 'sky' | 'emerald'
-
-const SCORE_TONE_CLASSES: Record<
-  ScoreTone,
-  { icon: string; ring: string; active: string; bar: string; glow: string }
-> = {
-  gold: {
-    icon: 'bg-gold/12 text-gold ring-gold/25',
-    ring: 'hover:border-gold/45 hover:ring-gold/20',
-    active: 'border-gold/60 ring-gold/25',
-    bar: 'bg-gold',
-    glow: 'from-gold/12',
-  },
-  violet: {
-    icon: 'bg-violet-500/12 text-violet-300 ring-violet-400/25',
-    ring: 'hover:border-violet-400/45 hover:ring-violet-400/20',
-    active: 'border-violet-400/60 ring-violet-400/25',
-    bar: 'bg-violet-400',
-    glow: 'from-violet-500/10',
-  },
-  sky: {
-    icon: 'bg-sky-500/12 text-sky-300 ring-sky-400/25',
-    ring: 'hover:border-sky-400/45 hover:ring-sky-400/20',
-    active: 'border-sky-400/60 ring-sky-400/25',
-    bar: 'bg-sky-400',
-    glow: 'from-sky-500/10',
-  },
-  emerald: {
-    icon: 'bg-emerald-500/12 text-emerald-300 ring-emerald-400/25',
-    ring: 'hover:border-emerald-400/45 hover:ring-emerald-400/20',
-    active: 'border-emerald-400/60 ring-emerald-400/25',
-    bar: 'bg-emerald-400',
-    glow: 'from-emerald-500/10',
-  },
-}
+export type OverviewScoreId = 'tasks' | 'projects' | 'messages' | 'sessions'
 
 function OverviewScoreCard({
-  id,
-  label,
-  value,
-  total,
-  active,
-  onSelect,
-  icon: Icon,
-  tone,
-  loading = false,
-  error = false,
+  id, label, value, total, icon: Icon, loading = false, error = false, onSelect,
 }: {
   id: OverviewScoreId
   label: string
   value: number
   total?: number
-  active: boolean
-  onSelect: (id: OverviewScoreId) => void
   icon: typeof CheckSquare
-  tone: ScoreTone
   loading?: boolean
   error?: boolean
+  onSelect?: (id: OverviewScoreId) => void
 }) {
-  const toneClasses = SCORE_TONE_CLASSES[tone]
-  const percent = total && total > 0
-    ? Math.max(0, Math.min(100, ((total - value) / total) * 100))
-    : value > 0
-      ? 100
-      : 0
-  const showTotal = typeof total === 'number' && total > 0
-
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(id)}
-      aria-pressed={active}
-      className={[
-        'group relative cursor-pointer overflow-hidden rounded-xl border bg-surface p-3 text-left transition-all duration-200 ease-out',
-        'hover:-translate-y-1 hover:bg-surface-alt/55 hover:shadow-[0_14px_30px_rgba(0,0,0,0.12)] hover:ring-2 active:translate-y-0 active:scale-[0.985] focus-ring',
-        active
-          ? `-translate-y-1 scale-[1.01] shadow-[0_16px_34px_rgba(0,0,0,0.12)] ring-2 ${toneClasses.active}`
-          : 'border-border',
-        toneClasses.ring,
-      ].join(' ')}
-      aria-label={`${label}: ${value}${showTotal ? ` of ${total}` : ''}`}
-    >
-      <span
-        className={[
-          'pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent opacity-70',
-          toneClasses.glow,
-        ].join(' ')}
-        aria-hidden="true"
-      />
-      <span
-        className="pointer-events-none absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface/80 text-text-light opacity-0 shadow-sm transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100 group-focus-visible:opacity-100"
-        aria-hidden="true"
-      >
-        <ArrowUpRight size={12} strokeWidth={2.6} />
-      </span>
-      <div className="relative flex min-h-[112px] flex-col justify-between gap-4">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-text-muted">
-            {label}
-          </span>
-          <span
-            className={[
-              'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 transition-transform duration-200 group-hover:scale-110 group-active:scale-95',
-              toneClasses.icon,
-            ].join(' ')}
-            aria-hidden="true"
-          >
-            <Icon size={17} strokeWidth={2.3} />
-          </span>
-        </div>
-
-        <div>
-          <div className="flex items-baseline gap-1.5 text-text">
-            <span className="text-4xl font-black tracking-[-0.04em] leading-none tabular-nums">
-              {loading ? '0' : error ? '--' : <AnimatedNumber value={value} />}
-            </span>
-            {showTotal && !error && (
-              <span className="text-lg font-black tracking-[-0.03em] text-text-muted tabular-nums">
-                /{total}
-              </span>
-            )}
-          </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-alt">
-            <div
-              className={[
-                'h-full rounded-full transition-[width,filter] duration-700 ease-out group-hover:brightness-125',
-                loading || error ? 'bg-border' : toneClasses.bar,
-              ].join(' ')}
-              style={{ width: `${loading || error ? 0 : percent}%` }}
-            />
-          </div>
-          <div className="mt-2 flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-text-light opacity-70 transition-opacity group-hover:opacity-100">
-            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-            View details
-          </div>
+    <a href={id === 'tasks' || id === 'projects' ? '#overview-work' : `#overview-${id}`}
+      onClick={() => onSelect?.(id)}
+      className="overview-score focus-ring"
+      aria-label={`${label}: ${loading ? 'loading' : error ? 'unavailable' : value}`}>
+      <div className="overview-score-main flex items-center gap-3">
+        <span className="overview-score-icon shrink-0" aria-hidden="true"><Icon size={18} strokeWidth={1.6} /></span>
+        <div className="min-w-0">
+          <span className="overview-score-label block text-[10px] font-bold uppercase tracking-[.09em] text-text-muted">{label}</span>
+          <span className="block mt-2 overview-score-value">{loading ? '…' : error ? '—' : value.toLocaleString()}</span>
         </div>
       </div>
-    </button>
+      <span className="overview-score-note block mt-3 text-[11px] text-text-muted">
+        {loading ? 'Loading…' : error ? 'Could not load' : id === 'tasks'
+          ? `${(total ?? 0) - value} completed today` : id === 'messages' ? `${total ?? 0} conversations · ${value} unread`
+          : id === 'sessions' ? `${value} of ${total ?? 0} remaining today` : 'Open projects'}
+        <span className="float-right text-gold" aria-hidden="true">↗</span>
+      </span>
+    </a>
   )
 }
 
@@ -189,43 +58,19 @@ function completedToday(task: AssignedTask, todayKey: string): boolean {
   return Boolean(task.completed_at && localDateKey(new Date(task.completed_at)) === todayKey)
 }
 
-export default function OverviewScorePreview({
-  activeId,
-  onSelect,
-}: {
-  activeId: OverviewScoreId
-  onSelect: (id: OverviewScoreId) => void
-}) {
+export default function OverviewScorePreview({ onSelect }: { onSelect?: (id: OverviewScoreId) => void }) {
+  const projectsQuery = useOverviewProjects()
   const { profile } = useAuth()
   const { todaySessions, loading: overviewLoading, error: overviewError } = useMemberOverviewContext()
   const dmThreadsQuery = useDmThreads()
   const todayKey = localDateKey()
   const now = new Date()
   const nowMinutes = now.getHours() * 60 + now.getMinutes()
-  const monthStartIso = useMemo(() => {
-    const current = new Date()
-    return new Date(current.getFullYear(), current.getMonth(), 1).toISOString()
-  }, [todayKey])
-
   const tasksQuery = useQuery({
     queryKey: ['assigned-tasks', profile?.id ?? 'none'],
     queryFn: () => fetchMemberAssignedTasks(profile!.id, { includeCompleted: true }),
     enabled: Boolean(profile?.id),
     refetchInterval: 60_000,
-  })
-
-  const mediaMonthQuery = useQuery({
-    queryKey: ['overview-score-media-month', 'team', monthStartIso],
-    enabled: Boolean(profile?.id),
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('media_submissions')
-        .select('id', { count: 'exact', head: true })
-        .gte('created_at', monthStartIso)
-      if (error) throw error
-      return count ?? 0
-    },
-    staleTime: 60_000,
   })
 
   const tasks = tasksQuery.data ?? []
@@ -245,56 +90,39 @@ export default function OverviewScorePreview({
 
   return (
     <div
-      className="rounded-xl border border-gold/20 bg-gradient-to-br from-gold/10 via-surface to-surface p-2.5 shadow-[0_10px_24px_rgba(0,0,0,0.04)]"
+      className="overview-scores"
       aria-label="Overview score metrics"
     >
-      <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
+      <div className="overview-count-grid">
         <OverviewScoreCard
           id="tasks"
-          label="Tasks left"
+          onSelect={onSelect}
+          label="Open tasks"
           value={tasksLeft}
           total={taskLoopTotal}
-          active={activeId === 'tasks'}
-          onSelect={onSelect}
           icon={CheckSquare}
-          tone="gold"
           loading={tasksQuery.isLoading}
           error={tasksQuery.isError}
         />
+        <OverviewScoreCard id="projects" onSelect={onSelect} label="Active projects" value={projectsQuery.data?.length ?? 0}
+          icon={FolderKanban} loading={projectsQuery.isLoading} error={projectsQuery.isError} />
         <OverviewScoreCard
           id="messages"
-          label="Message follow-up"
+          label="Messages"
           value={messageThreadsLeft}
           total={messageThreadTotal}
-          active={activeId === 'messages'}
-          onSelect={onSelect}
           icon={MessageCircle}
-          tone="violet"
           loading={dmThreadsQuery.isLoading}
           error={dmThreadsQuery.isError}
         />
         <OverviewScoreCard
           id="sessions"
-          label="Sessions left today"
+          label="Sessions today"
           value={sessionsLeft}
           total={activeSessions.length}
-          active={activeId === 'sessions'}
-          onSelect={onSelect}
           icon={BriefcaseBusiness}
-          tone="sky"
           loading={overviewLoading}
           error={Boolean(overviewError)}
-        />
-        <OverviewScoreCard
-          id="media"
-          label="Media this month"
-          value={mediaMonthQuery.data ?? 0}
-          active={activeId === 'media'}
-          onSelect={onSelect}
-          icon={FolderUp}
-          tone="emerald"
-          loading={mediaMonthQuery.isLoading}
-          error={mediaMonthQuery.isError}
         />
       </div>
     </div>

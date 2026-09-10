@@ -1,4 +1,5 @@
 import { lazy, type ReactElement } from 'react'
+import { useAppearance } from '../../contexts/AppearanceContext'
 import { APP_ROUTES } from '../../app/routes'
 
 // Code-split member pages. Each lazy() call becomes its own JS chunk at
@@ -16,6 +17,19 @@ const Calendar       = lazy(() => import('../../pages/Calendar'))
 const Content        = lazy(() => import('../../pages/Content'))
 const AddMedia       = lazy(() => import('../../pages/AddMedia'))
 
+const Appearance = lazy(() => import('../../pages/Appearance'))
+const classicPages = {
+  Dashboard: lazy(() => import('../../pages/DashboardClassic')),
+  Calendar: lazy(() => import('../../pages/CalendarClassic')),
+  Content: lazy(() => import('../../pages/ContentClassic')),
+  AddMedia: lazy(() => import('../../pages/AddMediaClassic')),
+}
+function StyledPage({ name, children }: { name: keyof typeof classicPages; children: ReactElement }) {
+  const { style } = useAppearance()
+  const Classic = classicPages[name]
+  return style === 'classic' ? <Classic /> : children
+}
+
 export interface FeatureRouteDef {
   path?: string
   index?: boolean
@@ -23,12 +37,13 @@ export interface FeatureRouteDef {
 }
 
 export const MEMBER_ROUTES: FeatureRouteDef[] = [
-  { index: true, element: <Dashboard /> },
+  { path: "/appearance", element: <Appearance /> },
+  { index: true, element: <StyledPage name="Dashboard"><Dashboard /></StyledPage> },
   { path: APP_ROUTES.member.profile,  element: <Profile /> },
   { path: APP_ROUTES.member.tasks,    element: <DailyChecklist /> },
   { path: APP_ROUTES.member.projects, element: <Projects /> },
   { path: APP_ROUTES.member.booking,  element: <Sessions /> },
-  { path: APP_ROUTES.member.calendar, element: <Calendar /> },
-  { path: APP_ROUTES.member.content,  element: <Content /> },
-  { path: APP_ROUTES.member.addMedia, element: <AddMedia /> },
+  { path: APP_ROUTES.member.calendar, element: <StyledPage name="Calendar"><Calendar /></StyledPage> },
+  { path: APP_ROUTES.member.content,  element: <StyledPage name="Content"><Content /></StyledPage> },
+  { path: APP_ROUTES.member.addMedia, element: <StyledPage name="AddMedia"><AddMedia /></StyledPage> },
 ]

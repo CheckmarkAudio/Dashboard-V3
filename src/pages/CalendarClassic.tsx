@@ -493,14 +493,6 @@ export default function Calendar() {
   // is deferred) lives on its own tab so the two don't compete for the
   // same grid.
   const [activeTab, setActiveTab] = useState<'bookings' | 'schedule'>('bookings')
-  const [showWeekends, setShowWeekends] = useState(false)
-  const calendarDays = activeTab === 'schedule' || showWeekends ? WEEK : WEEK.filter(day => {
-    const weekday = new Date(`${day.key}T12:00:00`).getDay()
-    return weekday !== 0 && weekday !== 6
-  })
-  const weekendBookings = WEEK.filter(day => [0, 6].includes(new Date(`${day.key}T12:00:00`).getDay())).reduce((count, day) => count + (bookingsByDate[day.key]?.length ?? 0), 0)
-  const timeGutter = 56
-  const dayColumns = `${timeGutter}px repeat(${calendarDays.length}, minmax(0, 1fr))`
 
   // 2026-05-23 — Studio hours of operation overlay (Apple-Calendar-
   // style frame). Per-weekday rows from studio_hours_of_operation
@@ -512,13 +504,13 @@ export default function Calendar() {
   const { byWeekday: studioHoursByWeekday } = useStudioHours()
   // Grid math constants — kept in sync with the HOURS render below.
   // GRID_START_HOUR = first visible hour (7am); GRID_END_HOUR = first
-  // hour OFF the bottom of the grid (20=8pm). 76px per hour row.
+  // hour OFF the bottom of the grid (20=8pm). 48px per hour row.
   const GRID_START_HOUR = 7
   const GRID_END_HOUR = 20
-  const HOUR_PX = 76
+  const HOUR_PX = 48
 
   return (
-    <div className="calendar-page max-w-6xl mx-auto animate-fade-in">
+    <div className="max-w-6xl mx-auto animate-fade-in">
       {showBooking && (
         <CreateBookingModal
           onClose={() => { setShowBooking(false); setBookingPrefillDate(''); setBookingPrefillTime(''); void refetch() }}
@@ -651,12 +643,9 @@ export default function Calendar() {
           left-aligned flow: title, then the toggle (fixed position,
           never depends on what pills render after it), then Request
           schedule, then the filter pills last. */}
-      <header className="studio-page-heading">
-        <div><h1>Calendar</h1></div>
-        <button type="button" onClick={() => setShowBooking(true)} className="studio-primary focus-ring"><Plus size={16} /> New booking</button>
-      </header>
-      <div className="calendar-filter-bar flex items-center gap-3 flex-wrap mb-3 min-w-0">
+      <div className="flex items-center gap-3 flex-wrap mb-3 min-w-0">
         <div className="flex items-center gap-2">
+          <h1 className="text-[28px] font-extrabold tracking-tight text-text">Calendar</h1>
           {loading && <Loader2 size={14} className="animate-spin text-text-light" aria-label="Loading calendar" />}
           {error && (
             <span className="flex items-center gap-1 text-xs text-amber-300">
@@ -820,7 +809,7 @@ export default function Calendar() {
           mini month-picker (added 2026-05-26) above the shared
           CalendarDayCard (PR #22). Right column is the week grid
           unique to this page. */}
-      <div className="calendar-page-grid">
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-3 items-stretch">
 
         {/* ── Left column: Today card stretches to fill, mini-month
             anchored at the bottom ──
@@ -833,7 +822,7 @@ export default function Calendar() {
             on the right is consuming. `min-h-0` keeps the flex math
             from over-sizing when the card has more content than the
             available space. */}
-        <div className="calendar-supporting-panels">
+        <div className="flex flex-col gap-3 h-full">
           <CalendarDayCard
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
@@ -865,13 +854,13 @@ export default function Calendar() {
         </div>
 
         {/* ── Right column: This Week grid ── */}
-        <div className="calendar-week-panel bg-surface rounded-2xl border border-border overflow-hidden">
+        <div className="bg-surface rounded-2xl border border-border overflow-hidden">
           {/* 2026-05-26 — Week-nav lives INSIDE the grid card now (per
               user feedback: "put the [this week] and date ranges shown
               in image two on the actual calendar box"). Chevrons +
               "This Week" link reset to today's week; the date-range
               label sits to the right. */}
-          <div className="calendar-week-heading px-4 py-3 border-b border-border flex items-center gap-2 text-text-muted">
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2 text-text-muted">
             <button
               type="button"
               onClick={() => { if (weekOffset > -1) setWeekOffset(weekOffset - 1) }}
@@ -886,7 +875,7 @@ export default function Calendar() {
               className="text-[13px] font-bold text-gold hover:underline"
               title="Jump to this week"
             >
-              {new Date(`${(WEEK[0]?.key ?? TODAY_KEY)}T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+              {weekLabel}
             </button>
             <button
               type="button"
@@ -896,19 +885,15 @@ export default function Calendar() {
             >
               <ChevronRight size={16} />
             </button>
-            <span className="text-[12px] text-text-light ml-1">{weekLabel} · {weekStart} – {weekEnd}</span>
-            {activeTab === 'bookings' && <div className="calendar-day-options" aria-label="Days shown">
-              <button type="button" aria-pressed={!showWeekends} onClick={() => setShowWeekends(false)}>5 days</button>
-              <button type="button" aria-pressed={showWeekends} onClick={() => setShowWeekends(true)}>7 days{!showWeekends && weekendBookings > 0 ? ` · ${weekendBookings} weekend` : ''}</button>
-            </div>}
+            <span className="text-[12px] text-text-light ml-1">{weekStart} – {weekEnd}</span>
           </div>
 
-          <div className="calendar-grid-scroll">
-            <div className="calendar-grid-canvas">
+          <div>
+            <div>
               {/* Day headers — clickable */}
-              <div className="grid border-b border-border" style={{ gridTemplateColumns: dayColumns }}>
+              <div className="grid grid-cols-[36px_repeat(7,1fr)] border-b border-border">
                 <div />
-                {calendarDays.map((wd) => {
+                {WEEK.map((wd) => {
                   const isActualToday = wd.key === TODAY_KEY
                   const isSelected = wd.key === selectedDate
                   return (
@@ -932,14 +917,14 @@ export default function Calendar() {
                   (docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md). Bookings'
                   Google-Calendar-style grid is explicitly unchanged. */}
               {activeTab === 'bookings' && (
-              <div className="relative" style={{ height: HOURS.length * HOUR_PX }}>
+              <div className="relative" style={{ height: HOURS.length * 48 }}>
                 {/* Grid lines */}
                 {HOURS.map(hour => (
-                  <div key={hour} className="absolute left-0 right-0 grid border-b border-border" style={{ gridTemplateColumns: dayColumns, top: (hour - 7) * HOUR_PX, height: HOUR_PX }}>
+                  <div key={hour} className="absolute left-0 right-0 grid grid-cols-[36px_repeat(7,1fr)] h-[48px] border-b border-border" style={{ top: (hour - 7) * 48 }}>
                     <div className="text-[9px] text-text-light font-medium pr-2 text-right pt-0.5">
                       {hour > 12 ? hour - 12 : hour} {hour >= 12 ? 'PM' : 'AM'}
                     </div>
-                    {calendarDays.map((wd, di) => {
+                    {WEEK.map((wd, di) => {
                       const isSel = wd.key === selectedDate
                       return (
                         <div
@@ -976,13 +961,13 @@ export default function Calendar() {
                     later layers (schedule chips z-0 + bookings z-30)
                     nest visibly on top. pointer-events-none — clicks
                     pass through to the +Book affordance. */}
-                {calendarDays.map((wd, dayIndex) => {
+                {WEEK.map((wd, dayIndex) => {
                   const weekday = new Date(`${wd.key}T12:00:00`).getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6
                   const studioRow = studioHoursByWeekday[weekday]
-                  const colWidth = `((100% - ${timeGutter}px) / ${calendarDays.length})`
-                  const colLeft = `(${timeGutter}px + ${colWidth} * ${dayIndex})`
+                  const colWidth = `((100% - 36px) / 7)`
+                  const colLeft = `(36px + ${colWidth} * ${dayIndex})`
                   const isClosedDay = !studioRow || !studioRow.active
-                  const gridHeightPx = (GRID_END_HOUR - GRID_START_HOUR) * HOUR_PX // 13 hours at the shared row height
+                  const gridHeightPx = (GRID_END_HOUR - GRID_START_HOUR) * HOUR_PX // 13 * 48 = 624
                   if (isClosedDay) {
                     // Whole column dim — studio is closed this day.
                     return (
@@ -1063,18 +1048,18 @@ export default function Calendar() {
                     underneath. Only renders on the Bookings tab
                     (2026-07-24 — split out from the Team Schedule
                     tab so the two views don't overlay each other). */}
-                {activeTab === 'bookings' && calendarDays.map((wd, dayIndex) => {
+                {activeTab === 'bookings' && WEEK.map((wd, dayIndex) => {
                   const dayBookings = bookingsByDate[wd.key] ?? []
                   const laned = assignBookingLanes(dayBookings)
                   return laned.map(({ booking: b, lane, groupSize }) => {
                     const startMin = timeToMinutes(b.startTime)
                     const endMin = timeToMinutes(b.endTime)
                     const gridStart = 7 * 60
-                    const topPx = ((startMin - gridStart) / 60) * HOUR_PX
-                    const heightPx = ((endMin - startMin) / 60) * HOUR_PX
+                    const topPx = ((startMin - gridStart) / 60) * 48
+                    const heightPx = ((endMin - startMin) / 60) * 48
                     // Day column width within the 7-column grid.
-                    const colWidth = `((100% - ${timeGutter}px) / ${calendarDays.length})`
-                    const colLeft = `(${timeGutter}px + ${colWidth} * ${dayIndex})`
+                    const colWidth = `((100% - 36px) / 7)`
+                    const colLeft = `(36px + ${colWidth} * ${dayIndex})`
                     // Lane width within this day's column. groupSize=1
                     // collapses to the full column.
                     const laneWidth = `(${colWidth} / ${groupSize})`
@@ -1104,21 +1089,19 @@ export default function Calendar() {
                           setContextMenu({ booking: b, x: e.clientX, y: e.clientY })
                         }}
                         title={`${b.client} · ${formatTime12(b.startTime)}–${formatTime12(b.endTime)} · ${b.assignee}${isAdmin ? ' · Right-click for actions' : ''}`}
-                        data-compact={heightPx < 60 ? 'true' : undefined}
-                        className={`calendar-booking absolute ${color.bg} ${color.border} border rounded-md px-1.5 py-0.5 overflow-hidden text-left cursor-pointer z-30 hover:ring-2 hover:ring-gold/50 hover:z-40 transition-all focus-ring`}
+                        className={`absolute ${color.bg} ${color.border} border rounded-md px-1.5 py-0.5 overflow-hidden text-left cursor-pointer z-30 hover:ring-2 hover:ring-gold/50 hover:z-40 transition-all focus-ring`}
                         style={{
                           top: topPx + 1,
                           height: Math.max(heightPx - 2, 18),
-                          left: `calc(${laneLeft} + 6px)`,
-                          width: `calc(${laneWidth} - 12px)`,
+                          left: `calc(${laneLeft} + 1px)`,
+                          width: `calc(${laneWidth} - 2px)`,
                         }}
                       >
-                        {heightPx > 56 && <p className="calendar-event-time">{formatTime12(b.startTime)}</p>}
                         <div className="flex items-center gap-1">
                           {b.status === 'Confirmed' && <span className={`w-1.5 h-1.5 rounded-full ${color.accent} shrink-0`} />}
-                          <p className="calendar-event-title truncate">{b.client}</p>
+                          <p className={`text-[10px] font-semibold ${color.text} truncate leading-tight`}>{b.client}</p>
                         </div>
-                        {heightPx > 100 && (
+                        {heightPx > 28 && (
                           <div className="flex items-center gap-1 mt-0.5">
                             {assigneeMember && (
                               <span className="shrink-0">
@@ -1128,8 +1111,8 @@ export default function Calendar() {
                             <p className="text-[8px] text-text-muted truncate leading-tight">{b.assignee}</p>
                           </div>
                         )}
-                        {heightPx > 100 && groupSize === 1 && (
-                          <p className="calendar-event-location truncate">{b.studio} · until {formatTime12(b.endTime)}</p>
+                        {heightPx > 56 && groupSize === 1 && (
+                          <p className="text-[8px] text-text-light truncate leading-tight mt-0.5">{formatTime12(b.startTime)}–{formatTime12(b.endTime)}</p>
                         )}
                       </button>
                     )

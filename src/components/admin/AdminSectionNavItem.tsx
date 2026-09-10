@@ -43,7 +43,7 @@ export function AdminSectionNavItem<K extends string>({
       </span>
       <span className="min-w-0 leading-tight">
         <span className="block text-sm font-semibold text-text">{section.title}</span>
-        <span className="block text-[12px] text-text-muted truncate">{section.subtitle}</span>
+        <span className="admin-section-subtitle block text-[12px] text-text-muted truncate">{section.subtitle}</span>
       </span>
     </button>
   )

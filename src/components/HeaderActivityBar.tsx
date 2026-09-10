@@ -204,7 +204,7 @@ export default function HeaderActivityBar() {
       // the container, not the data; the timeline inside stays fully
       // solid so nothing that represents real activity is ever hard
       // to read.
-      className="hidden shrink-0 items-center gap-4 h-[72px] px-5 rounded-xl bg-gold/16 backdrop-blur-md border border-gold/35 hover:bg-gold/22 hover:border-gold/50 transition-colors focus-ring lg:flex"
+      className="workspace-timekeeper hidden shrink-0 items-center gap-4 h-[72px] px-5 rounded-xl bg-gold/16 backdrop-blur-md border border-gold/35 hover:bg-gold/22 hover:border-gold/50 transition-colors focus-ring lg:flex"
       title={title}
       aria-label={title}
     >
@@ -215,7 +215,7 @@ export default function HeaderActivityBar() {
         )}
       </span>
 
-      <div className="flex flex-col items-start gap-1.5">
+      <div className="workspace-timekeeper-content flex flex-col items-start gap-1.5">
         <span className="text-[13px] font-bold text-text tracking-tight tabular-nums whitespace-nowrap">
           {title}
         </span>
@@ -225,7 +225,7 @@ export default function HeaderActivityBar() {
             (dark border #34343d is lighter than the card behind it;
             light border #dedee5 is darker than the white card), vs.
             a hardcoded hex that only ever reads right in one theme. */}
-        <div className="relative h-[11px] w-[520px] rounded-md bg-border shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)]">
+        <div className="workspace-timekeeper-track relative h-[11px] w-[520px] rounded-md bg-border shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)]">
           {model.scheduledWindow && (
             // Fully solid — a committed scheduled window is data, not
             // decoration, so (unlike the glass container) it gets no
@@ -290,7 +290,7 @@ export default function HeaderActivityBar() {
           />
         </div>
 
-        <div className="flex justify-between w-[520px] text-[9px] text-text-light tracking-wide">
+        <div className="workspace-timekeeper-axis flex justify-between w-[520px] text-[9px] text-text-light tracking-wide">
           {AXIS_TICKS.map((h) => (
             <span key={h}>{hourLabel(h)}</span>
           ))}

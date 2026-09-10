@@ -82,24 +82,26 @@ export default function DailyChecklist() {
   const showingWidgetView = viewMode === 'widgets'
 
   return (
-    <div className="max-w-[1440px] mx-auto animate-fade-in space-y-5">
-      <PageHeader
-        icon={ListChecks}
-        title="Tasks"
-        actions={
-          <Button
-            variant="secondary"
-            onClick={() => setViewMode(showingWidgetView ? 'focused' : 'widgets')}
-            iconLeft={
-              showingWidgetView
-                ? <ListChecks size={16} aria-hidden="true" />
-                : <LayoutGrid size={16} aria-hidden="true" />
-            }
-          >
-            {showingWidgetView ? 'Main View' : 'Widget View'}
-          </Button>
-        }
-      />
+    <div className="portal-task-page max-w-[1440px] mx-auto animate-fade-in space-y-5">
+      <div className={showingWidgetView ? undefined : 'max-w-[1084px] mx-auto'}>
+        <PageHeader
+          icon={ListChecks}
+          title="Tasks"
+          actions={
+            <Button
+              variant="secondary"
+              onClick={() => setViewMode(showingWidgetView ? 'focused' : 'widgets')}
+              iconLeft={
+                showingWidgetView
+                  ? <ListChecks size={16} aria-hidden="true" />
+                  : <LayoutGrid size={16} aria-hidden="true" />
+              }
+            >
+              {showingWidgetView ? 'Main View' : 'Widget View'}
+            </Button>
+          }
+        />
+      </div>
 
       {showingWidgetView ? (
         <WorkspacePanel
@@ -111,7 +113,7 @@ export default function DailyChecklist() {
           showControls={false}
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
+        <div className="task-pane-layout max-w-[1084px] mx-auto grid grid-cols-1 lg:grid-cols-[240px_minmax(0,820px)] gap-6 items-stretch">
           <aside
             className="bg-surface rounded-xl border border-border p-2 space-y-1 h-full"
             aria-label="Task sections"
@@ -138,10 +140,10 @@ export default function DailyChecklist() {
                 </span>
                 <div className="min-w-0">
                   <h2 className="text-base font-bold text-text truncate">{activePane.title}</h2>
-                  <p className="text-[12px] text-text-muted truncate">{activePane.subtitle}</p>
+                  <p className="task-pane-subtitle text-[12px] text-text-muted truncate">{activePane.subtitle}</p>
                 </div>
               </div>
-              <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-2.5 py-1 text-[11px] font-semibold text-gold">
+              <span className="task-pane-group-label hidden sm:inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-2.5 py-1 text-[11px] font-semibold text-gold">
                 <ClipboardList size={12} aria-hidden="true" />
                 One group
               </span>
