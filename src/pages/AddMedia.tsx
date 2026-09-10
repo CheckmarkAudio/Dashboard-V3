@@ -18,8 +18,12 @@ import {
   CheckCircle2,
   ExternalLink,
   FileUp,
-  Play,
-  Plus,
+  Camera,
+  Headphones,
+  Video,
+  FileText,
+  FileArchive,
+  FileSpreadsheet,
   SlidersHorizontal,
   FolderOpen,
   Inbox,
@@ -71,7 +75,7 @@ interface MediaSubmissionRow {
 // Image extensions used as a fallback when content_type is null on
 // legacy rows. Matches the set served by Dropbox raw URLs without
 // transcoding.
-const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'heic', 'heif', 'tiff', 'tif', 'bmp']
+const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'heic', 'heif', 'tiff', 'tif', 'bmp', 'svg', 'ico']
 
 function isImageRow(row: MediaSubmissionRow): boolean {
   if (row.content_type?.startsWith('image/')) return true
@@ -82,8 +86,8 @@ function isImageRow(row: MediaSubmissionRow): boolean {
 function getMediaKind(row: MediaSubmissionRow): string {
   if (isImageRow(row)) return 'Images'
   const ext = row.original_filename.split('.').pop()?.toLowerCase() ?? ''
-  if (row.content_type?.startsWith('audio/') || ['wav', 'mp3', 'aiff', 'aif', 'flac', 'm4a', 'ogg'].includes(ext)) return 'Audio'
-  if (row.content_type?.startsWith('video/') || ['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(ext)) return 'Video'
+  if (row.content_type?.startsWith('audio/') || ['wav', 'mp3', 'aiff', 'aif', 'flac', 'm4a', 'ogg', 'aac', 'opus', 'wma'].includes(ext)) return 'Audio'
+  if (row.content_type?.startsWith('video/') || ['mp4', 'mov', 'webm', 'mkv', 'avi', 'm4v', 'mpeg', 'mpg'].includes(ext)) return 'Video'
   return 'Documents'
 }
 
@@ -104,54 +108,89 @@ function toRawDropboxUrl(shareUrl: string): string {
   }
 }
 
-/**
- * Fetch a properly-sized JPEG thumbnail from Dropbox via our edge
- * function. Returns a `data:` URL ready to use as `<img src=…>`.
- *
- * Why: row thumbnails are 48px squares, but the raw share URL gives
- * the full original file (the biggest entry in current data is ~14
- * MB). At 18 rows that's ~36 MB downloaded per page-open just to
- * downsize in CSS. Dropbox's `files/get_thumbnail_v2` returns a
- * ~20 KB JPEG at w256h256, so this drops thumbnail bandwidth ~100×.
- *
- * staleTime: Infinity — file contents don't change once uploaded.
- * retry: 1 — single transient retry; row falls back to icon either
- * way if it stays broken.
- * The edge function returns `{ ok: false, error: 'not_thumbnailable' }`
- * at HTTP 200 when Dropbox can't render a preview (rare for the
- * supported MIMEs but possible for unusual encodings), so the hook
- * returns null rather than throwing.
- */
-// 2026-05-26 — w128h128 keeps row thumbnails in the ~5 KB range, plenty
-// of detail for a 48px-square cell even on 2× DPI screens. Dropping
-// further to w64h64 (~3 KB) starts looking soft on retina; w128 is the
-// sweet spot for "single-digit KB per row" without visible blur. The
-// lightbox stays on the full raw URL — that's where the user actually
-// wants real resolution.
-const ROW_THUMBNAIL_SIZE = 'w128h128' as const
-
-function useDropboxThumbnail(fileId: string | null | undefined): string | null {
-  const { data } = useQuery({
-    queryKey: ['dropbox-thumb', fileId, ROW_THUMBNAIL_SIZE] as const,
+/** Fetch a cached, size-appropriate thumbnail through the existing authorized endpoint. */
+function useDropboxThumbnail(fileId: string | null, grid: boolean) {
+  const size = grid ? 'w640h480' : 'w128h128'
+  return useQuery({
+    queryKey: ['dropbox-thumb', fileId, size],
     enabled: Boolean(fileId),
     staleTime: Infinity,
     gcTime: 1000 * 60 * 30,
     retry: 1,
     queryFn: async (): Promise<string | null> => {
-      const { data, error } = await supabase.functions.invoke<{
-        ok: boolean
-        b64?: string
-        mime?: string
-        error?: string
-      }>('upload-to-dropbox', {
-        body: { action: 'thumbnail', file_id: fileId, size: ROW_THUMBNAIL_SIZE },
+      const { data, error } = await supabase.functions.invoke<{ ok: boolean; b64?: string; mime?: string }>('upload-to-dropbox', {
+        body: { action: 'thumbnail', file_id: fileId, size },
       })
       if (error) throw new Error(error.message)
-      if (!data?.ok || !data.b64) return null
-      return `data:${data.mime ?? 'image/jpeg'};base64,${data.b64}`
+      return data?.ok && data.b64 ? `data:${data.mime ?? 'image/jpeg'};base64,${data.b64}` : null
     },
   })
-  return data ?? null
+}
+
+function MediaTypeIcon({ row, size = 30 }: { row: MediaSubmissionRow; size?: number }) {
+  const kind = getMediaKind(row)
+  const ext = row.original_filename.split('.').pop()?.toLowerCase() ?? ''
+  const Icon = kind === 'Images' ? Camera : kind === 'Audio' ? Headphones : kind === 'Video' ? Video
+    : ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) ? FileArchive
+    : ['xls', 'xlsx', 'csv', 'ods'].includes(ext) ? FileSpreadsheet : FileText
+  return <Icon size={size} strokeWidth={1.5} />
+}
+
+function MediaArtwork({ row, grid }: { row: MediaSubmissionRow; grid: boolean }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [visible, setVisible] = useState(false)
+  const [failed, setFailed] = useState<string[]>([])
+  const [loaded, setLoaded] = useState('')
+  const kind = getMediaKind(row)
+  const visual = kind === 'Images' || kind === 'Video'
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    if (!('IntersectionObserver' in window)) { setVisible(true); return }
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { setVisible(true); observer.disconnect() }
+    }, { rootMargin: '150px' })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  const fileId = visible && visual ? row.drive_file_id || null : null
+  const thumbnail = useDropboxThumbnail(fileId, grid)
+  const raw = row.drive_view_url ? toRawDropboxUrl(row.drive_view_url) : ''
+  const thumb = thumbnail.data && !failed.includes(thumbnail.data) ? thumbnail.data : ''
+  // Try the original only after the thumbnail is unavailable; never loop on failures.
+  const original = visible && (!fileId || !thumbnail.isPending) && !thumb && !failed.includes(raw) ? raw : ''
+  const imageSource = thumb || (kind === 'Images' ? original : '')
+  const videoSource = kind === 'Video' && !thumb ? original : ''
+  const fail = (source: string) => setFailed(previous => [...previous, source])
+  return <span ref={ref} aria-hidden="true" className="media-artwork shrink-0 w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
+    <span className="media-artwork-glyph" style={{ visibility: (imageSource && loaded === imageSource) || (videoSource && loaded === videoSource) ? 'hidden' : 'visible' }}><MediaTypeIcon row={row} size={grid ? 36 : 24} /></span>
+    {imageSource && <img key={imageSource} src={imageSource} alt="" loading="lazy" decoding="async"
+      className="media-photo-thumbnail" style={{ opacity: loaded === imageSource ? 1 : 0 }}
+      onLoad={() => setLoaded(imageSource)} onError={() => fail(imageSource)} />}
+    {videoSource && <video key={videoSource} src={videoSource} muted playsInline preload="metadata" tabIndex={-1}
+      className="media-photo-thumbnail" style={{ opacity: loaded === videoSource ? 1 : 0 }}
+      onLoadedData={() => setLoaded(videoSource)} onError={() => fail(videoSource)} />}
+    <span className="media-extension">{row.original_filename.includes('.') ? row.original_filename.split('.').pop()?.slice(0, 7).toUpperCase() : 'FILE'}</span>
+  </span>
+}
+
+function MediaPreviewContent({ row }: { row: MediaSubmissionRow }) {
+  const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const src = toRawDropboxUrl(row.drive_view_url!)
+  const kind = getMediaKind(row)
+  return <div className="media-rendered-preview">
+    {(!loaded || failed || kind === 'Audio') && <div className="media-preview-fallback" role={failed ? 'status' : undefined}>
+      <MediaTypeIcon row={row} size={48} />
+      {failed && <span>Preview unavailable</span>}
+    </div>}
+    {!failed && (kind === 'Audio' ? <audio controls preload="metadata" src={src} aria-label={row.original_filename}
+      onLoadedMetadata={() => setLoaded(true)} onError={() => setFailed(true)} className="w-[min(520px,80vw)]" />
+      : kind === 'Video' ? <video controls playsInline preload="metadata" src={src} aria-label={row.original_filename}
+        onLoadedData={() => setLoaded(true)} onError={() => setFailed(true)} className="max-w-full max-h-[74vh]" />
+      : <img src={src} alt={row.original_filename} onLoad={() => setLoaded(true)} onError={() => setFailed(true)}
+          className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl" />)}
+  </div>
 }
 
 interface PendingUpload {
@@ -592,12 +631,7 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
             onClick={(e) => e.stopPropagation()}
             className="max-w-[92vw] max-h-[88vh] flex flex-col items-center gap-3 cursor-default"
           >
-            {getMediaKind(lightbox) === 'Audio' ? <audio controls preload="metadata" src={toRawDropboxUrl(lightbox.drive_view_url)} aria-label={lightbox.original_filename} className="w-[min(520px,80vw)]" /> :
-              getMediaKind(lightbox) === 'Video' ? <video controls preload="metadata" src={toRawDropboxUrl(lightbox.drive_view_url)} aria-label={lightbox.original_filename} className="max-w-full max-h-[74vh]" /> : <img
-              src={toRawDropboxUrl(lightbox.drive_view_url)}
-              alt={lightbox.original_filename}
-              className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl"
-            />}
+            <MediaPreviewContent key={lightbox.id} row={lightbox} />
             <a href={lightbox.drive_view_url} target="_blank" rel="noopener noreferrer" className="text-sm text-white underline">Open original file ↗</a>
             <figcaption className="media-preview-caption text-[12px] text-center">
               <span className="font-semibold text-text">{lightbox.original_filename}</span>
@@ -649,13 +683,8 @@ interface MediaRowProps {
 }
 
 function MediaRow({ row, onPreview, grid }: MediaRowProps) {
-  const isImage = isImageRow(row)
   const mediaKind = getMediaKind(row)
   const canPreview = ['Images', 'Audio', 'Video'].includes(mediaKind) && Boolean(row.drive_view_url)
-  // Always call the hook (rules of hooks); the hook itself skips the
-  // fetch when fileId is null (e.g. on the rare row where the column
-  // is null) or when isImage is false.
-  const thumbnailDataUrl = useDropboxThumbnail(!grid && isImage && canPreview ? row.drive_file_id : null)
   const submitterName = row.submitter?.display_name?.trim() || 'Unknown'
   const onRowActivate = canPreview ? () => onPreview(row) : undefined
 
@@ -681,16 +710,7 @@ function MediaRow({ row, onPreview, grid }: MediaRowProps) {
           : ''
       }`}
     >
-      {/* Thumbnail comes from Dropbox's files/get_thumbnail_v2 endpoint
-          via our edge function (~20 KB JPEG, vs. multi-MB if we
-          hot-linked the original). While the hook is loading we show
-          the icon glyph; on permanent failure we keep the icon and
-          never retry. */}
-      <span aria-hidden="true" className="media-artwork shrink-0 w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
-        {thumbnailDataUrl && <img src={thumbnailDataUrl} alt="" className="media-photo-thumbnail w-full h-full object-cover" />}
-          <span className="media-artwork-glyph">{isImage ? <Plus size={22} /> : mediaKind === 'Audio' || mediaKind === 'Video' ? <Play size={22} /> : <Plus size={22} />}</span>
-        <span className="media-extension">{row.original_filename.includes('.') ? row.original_filename.split('.').pop()?.slice(0, 7).toUpperCase() : 'FILE'}</span>
-      </span>
+      <MediaArtwork key={row.id} row={row} grid={grid} />
 
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-bold text-text truncate" title={row.original_filename}>
