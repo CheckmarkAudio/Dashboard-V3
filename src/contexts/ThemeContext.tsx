@@ -20,7 +20,7 @@ import { setUserPreference } from '../lib/preferences'
  *   - localStorage is the synchronous fast-path so first paint is
  *     instant + correct (no theme flash).
  *   - When signed in, the choice ALSO writes to
- *     `team_members.preferences.theme` so it follows the user
+ *     `team_members.preferences.theme_v2` so it follows the user
  *     across devices. On sign-in, the DB value takes precedence
  *     and overrides the local cache (so device A reflects the
  *     change made on device B as soon as auth resolves).
@@ -37,8 +37,10 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
-const STORAGE_KEY = 'checkmark-theme-preference'
-const PREFERENCE_KEY = 'theme'
+// Start the approved redesign in light mode on existing and new browsers.
+// Versioned keys preserve prior choices for rollback and allow subsequent overrides.
+const STORAGE_KEY = 'checkmark-theme-preference-v2'
+const PREFERENCE_KEY = 'theme_v2'
 
 function readStoredPreference(): ThemePreference {
   try {

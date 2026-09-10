@@ -6,7 +6,7 @@ const AppearanceContext = createContext<{ style: PortalStyle; setStyle: (style: 
 
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const [style, setStyleState] = useState<PortalStyle>(() => {
-    try { return resolvePortalStyle(localStorage.getItem(APPEARANCE_KEY)) } catch { return 'classic' }
+    try { return resolvePortalStyle(localStorage.getItem(APPEARANCE_KEY)) } catch { return 'soft-gold' }
   })
   const [reducedMotion, setMotionState] = useState(() => {
     try { return localStorage.getItem('checkmark-reduce-motion') !== 'false' } catch { return true }
