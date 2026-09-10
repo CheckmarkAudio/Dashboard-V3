@@ -206,7 +206,7 @@ export default function AdminHub() {
             showControls={false}
           />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
+          <div className="portal-section-layout grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
             <aside
               className="bg-surface rounded-xl border border-border p-2 h-full flex flex-col"
               aria-label="Dashboard sections"

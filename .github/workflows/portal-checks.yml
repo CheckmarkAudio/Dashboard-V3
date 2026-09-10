@@ -1,0 +1,32 @@
+name: Portal checks
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, codex/portal-style-integration]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  portal-checks:
+    name: Portal checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build with production authentication
+        run: npm run build
+        env:
+          VERCEL_ENV: production
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-public-placeholder
+          VITE_PREVIEW_LOGIN_ALLOWED: 'true'
+          VITE_PREVIEW_LOGIN_EMAIL: preview-login-sentinel@example.test
+          VITE_PREVIEW_LOGIN_PASSWORD: preview-password-sentinel
+      - run: npm run check:release

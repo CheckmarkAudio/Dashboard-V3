@@ -1,3 +1,4 @@
+import { isSampleMode } from '../preview/sampleMode'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'http://localhost'
@@ -28,11 +29,16 @@ if (!import.meta.env.DEV && (!import.meta.env.VITE_SUPABASE_URL || !import.meta.
  *     lock's guarantees buy very little vs the blocking errors it can
  *     produce. supabase-js tolerates parallel refreshes idempotently.
  */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+const samplePreview = import.meta.env.DEV && isSampleMode()
+export const supabase = createClient(samplePreview ? window.location.origin : supabaseUrl, samplePreview ? 'sample-preview' : supabaseAnonKey, {
+  ...(import.meta.env.DEV && samplePreview ? { global: { fetch: (async (...args: Parameters<typeof fetch>) => {
+    const { sampleFetch } = await import('../preview/sampleFetch')
+    return sampleFetch(...args)
+  }) as typeof fetch } } : {}),
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
+    persistSession: !samplePreview,
+    autoRefreshToken: !samplePreview,
+    detectSessionInUrl: !samplePreview,
     // Explicit: implicit flow keeps recovery tokens as `#type=recovery&access_token=…`
     // hash fragments, which our index.html script catches before any JS loads.
     // PKCE encodes them as `?code=…` query params, which breaks that detection.

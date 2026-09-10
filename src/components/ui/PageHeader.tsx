@@ -38,7 +38,7 @@ export function PageHeader({
   className = '',
 }: PageHeaderProps) {
   return (
-    <header className={['flex flex-col gap-4', className].filter(Boolean).join(' ')}>
+    <header className={['portal-page-header flex flex-col gap-4', className].filter(Boolean).join(' ')}>
       {/* PR #72 — outer flex switched to `items-center` so the action
           button vertically centers with the title block. Was
           `items-start` which top-aligned the action with the icon

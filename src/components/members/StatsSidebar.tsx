@@ -165,7 +165,7 @@ export default function StatsSidebar({ member }: StatsSidebarProps) {
       {/* Achievements placeholder (real in Tier 2). Showing the shape
           now so the layout reads as "this is intentional" instead of
           "missing section." */}
-      <div className="rounded-xl border border-border border-dashed bg-surface-alt/20 px-4 py-4">
+      <div className="profile-achievements-placeholder rounded-xl border border-border border-dashed bg-surface-alt/20 px-4 py-4">
         <div className="flex items-center gap-2 mb-2">
           <Trophy size={14} className="text-gold/60" aria-hidden="true" />
           <p className="text-[11px] font-semibold tracking-wider uppercase text-text-light">

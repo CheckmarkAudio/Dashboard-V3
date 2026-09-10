@@ -351,7 +351,7 @@ export default function AdminSettings() {
       </div>
 
       {/* Two-pane layout: left section nav + right content */}
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
+      <div className="portal-section-layout grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
         {/* ── Left: section nav ── */}
         <aside className="bg-surface rounded-xl border border-border p-2 space-y-1" aria-label="Settings sections">
           <p className="px-3 pt-3 pb-2 text-label">Settings</p>

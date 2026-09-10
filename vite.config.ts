@@ -39,7 +39,8 @@ const defineEnv: Record<string, string> = {
   'import.meta.env.VITE_DEPLOY_ENV': JSON.stringify(vercelEnv),
 }
 
-if (isVercelProductionBuild) {
+// Release previews exercise real sign-in; shared preview credentials are never bundled.
+if (isVercelProductionBuild || vercelEnv === 'preview') {
   defineEnv['import.meta.env.VITE_PREVIEW_LOGIN_EMAIL'] = 'undefined'
   defineEnv['import.meta.env.VITE_PREVIEW_LOGIN_PASSWORD'] = 'undefined'
   defineEnv['import.meta.env.VITE_PREVIEW_LOGIN_ALLOWED'] = 'undefined'

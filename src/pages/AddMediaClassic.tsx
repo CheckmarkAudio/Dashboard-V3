@@ -1,4 +1,3 @@
-import { useFocusTrap } from '../hooks/useFocusTrap'
 // Add Media page — `/add-media`
 //
 // User ask (2026-05-14): "make a folder that you can drag in photos and
@@ -18,21 +17,17 @@ import {
   CheckCircle2,
   ExternalLink,
   FileUp,
-  Play,
-  Plus,
-  SlidersHorizontal,
   FolderOpen,
+  ImageIcon,
   Inbox,
   Loader2,
-  LayoutGrid,
-  List,
-  Search,
   UploadCloud,
   X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
+import { Badge, PageHeader } from '../components/ui'
 import { uploadFileToDropbox, UploadCancelledError } from '../lib/dropboxUpload'
 import { emitFlywheelEvent } from '../lib/queries/flywheelEvents'
 
@@ -79,14 +74,6 @@ function isImageRow(row: MediaSubmissionRow): boolean {
   return IMAGE_EXTS.includes(ext)
 }
 
-function getMediaKind(row: MediaSubmissionRow): string {
-  if (isImageRow(row)) return 'Images'
-  const ext = row.original_filename.split('.').pop()?.toLowerCase() ?? ''
-  if (row.content_type?.startsWith('audio/') || ['wav', 'mp3', 'aiff', 'aif', 'flac', 'm4a', 'ogg'].includes(ext)) return 'Audio'
-  if (row.content_type?.startsWith('video/') || ['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(ext)) return 'Video'
-  return 'Documents'
-}
-
 /**
  * Turn a Dropbox share URL (`?dl=0`) into a hot-linkable form so an
  * `<img src=...>` can stream pixels straight from Dropbox's CDN. The
@@ -95,7 +82,6 @@ function getMediaKind(row: MediaSubmissionRow): string {
 function toRawDropboxUrl(shareUrl: string): string {
   try {
     const u = new URL(shareUrl)
-    if (u.hostname !== 'www.dropbox.com' && u.hostname !== 'dropbox.com') return shareUrl
     u.searchParams.delete('dl')
     u.searchParams.set('raw', '1')
     return u.toString()
@@ -167,19 +153,9 @@ interface PendingUpload {
 
 export default function AddMedia() {
   useDocumentTitle('Media - Checkmark Workspace')
-  return <MediaWorkspace />
-}
-
-/** Reuse the real upload queue and file previews on Overview. */
-export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
 
-  const [view, setView] = useState<'grid' | 'list'>('grid')
-  const [filter, setFilter] = useState('')
-  const [mediaKind, setMediaKind] = useState('All')
-  const [showFilters, setShowFilters] = useState(false)
-  const uploadInputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
   const [pending, setPending] = useState<PendingUpload[]>([])
 
@@ -210,8 +186,6 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
   // 2026-05-26 — Lightbox for clicked image previews. Single state
   // is enough — only one image is "zoomed" at a time.
   const [lightbox, setLightbox] = useState<MediaSubmissionRow | null>(null)
-  const previewRef = useRef<HTMLDivElement>(null)
-  useFocusTrap(previewRef, Boolean(lightbox))
   // Close on Escape so the modal feels native.
   useEffect(() => {
     if (!lightbox) return
@@ -221,12 +195,6 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [lightbox])
-
-  const filteredMedia = (history.data ?? []).filter(row =>
-    `${row.original_filename} ${row.submitter?.display_name ?? ''}`.toLowerCase().includes(filter.trim().toLowerCase()) &&
-    (mediaKind === 'All' || getMediaKind(row) === mediaKind),
-  )
-
 
   // ─── Upload pipeline ──────────────────────────────────────────
   const enqueueFiles = useCallback(
@@ -305,7 +273,6 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
               : p,
           ),
         )
-        void queryClient.invalidateQueries({ queryKey: ['overview-score-media-month'] })
         // Fold the new submission into the history cache so the row
         // appears instantly without waiting for refetch.
         queryClient.setQueryData<MediaSubmissionRow[]>(historyKey, (prev) => {
@@ -376,29 +343,26 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
   )
 
   return (
-    <div className={compact ? "overview-submissions" : "media-workspace mx-auto animate-fade-in"}>
-      {!compact && <>
-        <header className="media-page-heading studio-page-heading">
-          <div><h1>Media library</h1>
-            </div>
-          <div className="studio-page-actions">
-            <button type="button" onClick={() => setView(view === 'grid' ? 'list' : 'grid')} className="studio-secondary focus-ring" aria-label={`Switch to ${view === 'grid' ? 'list' : 'grid'} view`}><List size={15} /> View</button>
-            {PARENT_FOLDER_LINK && <a href={PARENT_FOLDER_LINK} target="_blank" rel="noopener noreferrer" className="studio-secondary focus-ring"><FolderOpen size={15} /> Browse all submissions <ExternalLink size={12} /></a>}
-            <button type="button" onClick={() => uploadInputRef.current?.click()} className="studio-primary focus-ring"><UploadCloud size={16} /> Upload media</button>
-          </div>
-        </header>
-        <div className="media-filter-bar">
-          <div className="studio-filter-tabs" aria-label="File type filters">
-            {['All', 'Audio', 'Video', 'Images', 'Documents'].map(kind => <button key={kind} type="button" aria-pressed={mediaKind === kind} onClick={() => setMediaKind(kind)} className="focus-ring">{kind}</button>)}
-          </div>
-          <button type="button" onClick={() => setShowFilters(value => !value)} aria-expanded={showFilters} aria-controls="media-search-filters" className="studio-secondary focus-ring"><SlidersHorizontal size={14} /> Filters{filter ? ' · 1' : ''}</button>
-          <label id="media-search-filters" hidden={!showFilters} className="studio-search"><Search size={15} aria-hidden="true" /><input value={filter} onChange={event => setFilter(event.target.value)} placeholder="Find files or people…" aria-label="Search loaded media" /></label>
-        </div>
-      </>}
+    <div className="max-w-[1100px] mx-auto space-y-6 animate-fade-in">
+      <PageHeader
+        icon={FolderOpen}
+        title="Media"
+        actions={
+          PARENT_FOLDER_LINK ? (
+            <a
+              href={PARENT_FOLDER_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-surface-alt text-text border border-border hover:border-border-light hover:text-gold transition-colors text-[13px] font-semibold"
+            >
+              <FolderOpen size={14} aria-hidden="true" />
+              Browse all submissions
+              <ExternalLink size={12} aria-hidden="true" />
+            </a>
+          ) : null
+        }
+      />
 
-      <aside className="media-upload-panel">
-      {!compact && <><p className="overview-date">Quick upload</p>
-      <h2 className="media-upload-title">Upload media</h2></>}
       {/* ─── Dropzone ───────────────────────────────────────── */}
       <label
         onDragOver={(e) => {
@@ -415,7 +379,6 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
         ].join(' ')}
       >
         <input
-          ref={uploadInputRef}
           type="file"
           multiple
           onChange={onPick}
@@ -428,7 +391,7 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
           </div>
           <div>
             <p className="text-[15px] font-bold text-text">
-              Choose or drop files
+              Drop media here, or click to choose
             </p>
             <p className="text-[12px] text-text-muted mt-1">
               Files go to <span className="font-semibold text-text">Checkmark Media Drop › {memberName}</span> · cap {MAX_FILE_LABEL} per file
@@ -437,10 +400,9 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
         </div>
       </label>
 
-      </aside>
       {/* ─── Pending uploads ────────────────────────────────── */}
       {pending.length > 0 && (
-        <div className="media-upload-queue rounded-2xl border border-border bg-surface overflow-hidden">
+        <div className="rounded-2xl border border-border bg-surface-alt/40 overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
             <p className="text-[11px] font-semibold tracking-[0.06em] uppercase text-text-light">
               This batch
@@ -534,13 +496,14 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
       )}
 
       {/* ─── Team submissions ───────────────────────────────── */}
-      <section className="media-library-panel rounded-2xl border border-border-strong bg-surface overflow-hidden">
+      <section className="rounded-2xl border border-border bg-surface-alt/40 overflow-hidden">
         <header className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <div><h2 className="text-[15px] font-bold text-text">{compact ? 'Recent uploads' : history.isLoading ? 'Loading library…' : history.isError ? 'Media library' : `${filteredMedia.length}${filter || mediaKind !== 'All' ? ` of ${history.data?.length ?? 0}` : ''} files`}</h2><p className="mt-1 text-[11px] text-text-muted">{compact ? 'Team submissions' : `${formatBytes((history.data ?? []).reduce((total, row) => total + row.size_bytes, 0))} in loaded files · latest 200 uploads`}</p></div>
-          {!compact && <div className="flex items-center gap-1 ml-auto mr-3" aria-label="Media layout">
-            <button type="button" onClick={() => setView('grid')} aria-pressed={view === 'grid'} aria-label="Grid view" className={`p-2 rounded focus-ring ${view === 'grid' ? 'bg-gold/20 text-gold' : 'text-text-muted'}`}><LayoutGrid size={16} /></button>
-            <button type="button" onClick={() => setView('list')} aria-pressed={view === 'list'} aria-label="List view" className={`p-2 rounded focus-ring ${view === 'list' ? 'bg-gold/20 text-gold' : 'text-text-muted'}`}><List size={16} /></button>
-          </div>}
+          <h2 className="text-[15px] font-bold text-text">Team submissions</h2>
+          {history.data && history.data.length > 0 && (
+            <Badge variant="neutral" size="sm">
+              {history.data.length}
+            </Badge>
+          )}
         </header>
 
         {history.error ? (
@@ -552,15 +515,14 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
           </div>
         ) : (history.data?.length ?? 0) === 0 ? (
-          <div className="media-empty-state px-4 py-10 flex flex-col items-center justify-center text-center text-text-light">
+          <div className="px-4 py-10 flex flex-col items-center text-center text-text-light">
             <Inbox size={20} className="mb-1.5" aria-hidden="true" />
-            <p className="text-[12px] italic">No submissions yet. Choose files or drop them into Quick upload.</p>
+            <p className="text-[12px] italic">No submissions yet — drop something above.</p>
           </div>
         ) : (
-          <ul className={!compact && view === 'grid' ? 'media-card-grid' : 'divide-y divide-theme max-h-[680px] overflow-y-auto'}>
-            {filteredMedia.length === 0 && <li className="p-5 text-sm text-text-muted">No matching files. Try another name.</li>}
-            {(compact ? filteredMedia.slice(0, 6) : filteredMedia).map((row) => (
-              <MediaRow key={row.id} row={row} onPreview={setLightbox} grid={!compact && view === 'grid'} />
+          <ul className="divide-y divide-theme max-h-[560px] overflow-y-auto">
+            {history.data!.map((row) => (
+              <MediaRow key={row.id} row={row} onPreview={setLightbox} />
             ))}
           </ul>
         )}
@@ -573,7 +535,6 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
          zoom or right-click → save without accidental dismissal. */}
       {lightbox && lightbox.drive_view_url && (
         <div
-          ref={previewRef}
           role="dialog"
           aria-modal="true"
           aria-label={`Preview ${lightbox.original_filename}`}
@@ -592,14 +553,12 @@ export function MediaWorkspace({ compact = false }: { compact?: boolean }) {
             onClick={(e) => e.stopPropagation()}
             className="max-w-[92vw] max-h-[88vh] flex flex-col items-center gap-3 cursor-default"
           >
-            {getMediaKind(lightbox) === 'Audio' ? <audio controls preload="metadata" src={toRawDropboxUrl(lightbox.drive_view_url)} aria-label={lightbox.original_filename} className="w-[min(520px,80vw)]" /> :
-              getMediaKind(lightbox) === 'Video' ? <video controls preload="metadata" src={toRawDropboxUrl(lightbox.drive_view_url)} aria-label={lightbox.original_filename} className="max-w-full max-h-[74vh]" /> : <img
+            <img
               src={toRawDropboxUrl(lightbox.drive_view_url)}
               alt={lightbox.original_filename}
               className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl"
-            />}
-            <a href={lightbox.drive_view_url} target="_blank" rel="noopener noreferrer" className="text-sm text-white underline">Open original file ↗</a>
-            <figcaption className="media-preview-caption text-[12px] text-center">
+            />
+            <figcaption className="text-[12px] text-text-light text-center">
               <span className="font-semibold text-text">{lightbox.original_filename}</span>
               <span className="mx-1.5 text-text-muted">·</span>
               {lightbox.submitter?.display_name?.trim() || 'Unknown'}
@@ -643,19 +602,17 @@ function formatRelative(iso: string): string {
 // hooks at the top level of a component.
 
 interface MediaRowProps {
-  grid: boolean
   row: MediaSubmissionRow
   onPreview: (row: MediaSubmissionRow) => void
 }
 
-function MediaRow({ row, onPreview, grid }: MediaRowProps) {
+function MediaRow({ row, onPreview }: MediaRowProps) {
   const isImage = isImageRow(row)
-  const mediaKind = getMediaKind(row)
-  const canPreview = ['Images', 'Audio', 'Video'].includes(mediaKind) && Boolean(row.drive_view_url)
+  const canPreview = isImage && Boolean(row.drive_view_url)
   // Always call the hook (rules of hooks); the hook itself skips the
   // fetch when fileId is null (e.g. on the rare row where the column
   // is null) or when isImage is false.
-  const thumbnailDataUrl = useDropboxThumbnail(!grid && isImage && canPreview ? row.drive_file_id : null)
+  const thumbnailDataUrl = useDropboxThumbnail(canPreview ? row.drive_file_id : null)
   const submitterName = row.submitter?.display_name?.trim() || 'Unknown'
   const onRowActivate = canPreview ? () => onPreview(row) : undefined
 
@@ -667,7 +624,7 @@ function MediaRow({ row, onPreview, grid }: MediaRowProps) {
             tabIndex: 0,
             onClick: onRowActivate,
             onKeyDown: (e: React.KeyboardEvent<HTMLLIElement>) => {
-              if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+              if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
                 onRowActivate()
               }
@@ -675,7 +632,7 @@ function MediaRow({ row, onPreview, grid }: MediaRowProps) {
             'aria-label': `Preview ${row.original_filename}`,
           }
         : {})}
-      className={`media-file px-4 py-2.5 flex items-center gap-3 ${
+      className={`px-4 py-2.5 flex items-center gap-3 ${
         canPreview
           ? 'cursor-zoom-in hover:bg-surface-hover/60 focus-ring transition-colors'
           : ''
@@ -686,11 +643,25 @@ function MediaRow({ row, onPreview, grid }: MediaRowProps) {
           hot-linked the original). While the hook is loading we show
           the icon glyph; on permanent failure we keep the icon and
           never retry. */}
-      <span aria-hidden="true" className="media-artwork shrink-0 w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
-        {thumbnailDataUrl && <img src={thumbnailDataUrl} alt="" className="media-photo-thumbnail w-full h-full object-cover" />}
-          <span className="media-artwork-glyph">{isImage ? <Plus size={22} /> : mediaKind === 'Audio' || mediaKind === 'Video' ? <Play size={22} /> : <Plus size={22} />}</span>
-        <span className="media-extension">{row.original_filename.includes('.') ? row.original_filename.split('.').pop()?.slice(0, 7).toUpperCase() : 'FILE'}</span>
-      </span>
+      {canPreview ? (
+        thumbnailDataUrl ? (
+          <span className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-surface ring-1 ring-border">
+            <img
+              src={thumbnailDataUrl}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </span>
+        ) : (
+          <span className="shrink-0 w-12 h-12 rounded-lg bg-violet-500/15 ring-1 ring-violet-500/30 text-violet-300 flex items-center justify-center">
+            <ImageIcon size={18} aria-hidden="true" />
+          </span>
+        )
+      ) : (
+        <span className="shrink-0 w-12 h-12 rounded-lg bg-violet-500/15 ring-1 ring-violet-500/30 text-violet-300 flex items-center justify-center">
+          <FileUp size={18} aria-hidden="true" />
+        </span>
+      )}
 
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-bold text-text truncate" title={row.original_filename}>
@@ -708,10 +679,9 @@ function MediaRow({ row, onPreview, grid }: MediaRowProps) {
           // Stop propagation so clicking "Open" goes straight to
           // Dropbox without also opening the lightbox.
           onClick={(e) => e.stopPropagation()}
-          aria-label={`Open original ${row.original_filename}`}
-          className="media-open-original shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gold hover:text-gold/80 transition-colors"
+          className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gold hover:text-gold/80 transition-colors"
         >
-          <span>Open</span>
+          Open
           <ExternalLink size={10} aria-hidden="true" />
         </a>
       )}

@@ -10,6 +10,8 @@ import { ToastProvider } from './components/Toast'
 import { mark as perfMark } from './lib/perfTrace'
 import App from './App'
 import './index.css'
+import './appearance.css'
+import { AppearanceProvider } from './contexts/AppearanceContext'
 
 // Earliest possible timestamp — fires before React mounts so the flush
 // report can show every downstream checkpoint as an offset from here.
@@ -92,6 +94,7 @@ createRoot(document.getElementById('root')!).render(
             localStorage until profile resolves. */}
         <AuthProvider>
           <ThemeProvider>
+          <AppearanceProvider>
             <PresenceProvider>
               <TaskProvider>
                 <ToastProvider>
@@ -99,6 +102,7 @@ createRoot(document.getElementById('root')!).render(
                 </ToastProvider>
               </TaskProvider>
             </PresenceProvider>
+          </AppearanceProvider>
           </ThemeProvider>
         </AuthProvider>
       </QueryClientProvider>

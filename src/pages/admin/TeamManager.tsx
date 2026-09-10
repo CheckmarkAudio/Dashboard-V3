@@ -818,7 +818,7 @@ export default function TeamManager() {
           same height as the right pane and the bottom borders are flush.
           (User asked for this even though the rail only has 2 entries
           today — more sections coming.) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
+      <div className="portal-section-layout grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-stretch">
         {/* ── Left: section nav ── */}
         <aside className="bg-surface rounded-xl border border-border p-2 space-y-1" aria-label="Members sections">
           <p className="px-3 pt-3 pb-2 text-label">Members</p>
