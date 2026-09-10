@@ -1,0 +1,59 @@
+.personal-schedule {
+  container-type: inline-size;
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong, var(--color-border));
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+.personal-schedule-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+.personal-schedule-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.personal-schedule-heading svg { color: var(--workspace-accent, var(--color-gold)); }
+.personal-schedule-heading > span { color: var(--color-text-muted); font-size: 11px; white-space: nowrap; }
+.personal-schedule-days, .personal-schedule-entries { list-style: none; margin: 0; padding: 0; }
+.personal-schedule-day {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding: 15px 20px;
+}
+.personal-schedule-day + .personal-schedule-day { border-top: 1px solid var(--color-border-light, var(--color-border)); }
+.personal-schedule-day[data-today] {
+  background: color-mix(in srgb, var(--color-gold) 8%, var(--color-surface));
+  box-shadow: inset 3px 0 var(--workspace-accent, var(--color-gold));
+}
+.personal-schedule-date { display: flex; flex-direction: column; gap: 3px; line-height: 1.35; }
+.personal-schedule-date strong { color: var(--color-text); font-size: 12px; font-weight: 600; }
+.personal-schedule-date > span { color: var(--color-text-muted); font-size: 10px; }
+.personal-schedule-date .personal-schedule-today { color: var(--workspace-accent, var(--color-gold)); font-weight: 600; }
+.personal-schedule-entries { display: grid; gap: 10px; min-width: 0; }
+.personal-schedule-entry { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 12px; }
+.personal-schedule-time { color: var(--color-text); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.personal-schedule-status { display: inline-flex; align-items: center; gap: 5px; color: var(--color-text-muted); font-size: 10px; }
+.personal-schedule-status[data-pending] { color: var(--workspace-accent, var(--color-gold)); }
+.personal-schedule-status[data-pending]::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+.personal-schedule-empty { align-self: center; color: var(--color-text-muted); font-size: 11px; }
+.personal-schedule-day[data-empty] { padding-block: 10px; }
+.personal-schedule-loading { display: flex; justify-content: center; align-items: center; min-height: 170px; color: var(--color-text-muted); }
+.personal-schedule-error { padding: 20px; color: var(--color-text-muted); font-size: 12px; }
+@container (max-width: 340px) {
+  .personal-schedule-heading { padding: 16px; }
+  .personal-schedule-day { padding-inline: 16px; gap: 12px; grid-template-columns: 44px minmax(0, 1fr); }
+  .personal-schedule-entry { flex-direction: column; }
+}
