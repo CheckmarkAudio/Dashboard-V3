@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
-import { CalendarRange, Clock, Loader2 } from 'lucide-react'
+import { CalendarRange, Loader2 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { formatTimeRange, toLocalDateString, weekdayLabel } from '../../lib/schedule/expand'
 import { useTeamSchedule } from '../../lib/schedule/useTeamSchedule'
 import type { ExpandedSchedule, Weekday } from '../../types'
+import './OverviewPersonalScheduleCard.css'
 
 function startOfSundayWeek(date: Date): Date {
   const d = new Date(date)
@@ -74,105 +75,61 @@ export default function OverviewPersonalScheduleCard() {
 
   const weekLabel = `${dayNumberLabel(weekStart)} - ${dayNumberLabel(endOfSaturdayWeek(weekStart))}`
 
+  const today = toLocalDateString(new Date())
+
   return (
-    <section
-      className="rounded-xl border border-border bg-surface p-3 shadow-[0_8px_20px_rgba(0,0,0,0.04)]"
-      aria-label="Personal work schedule"
-    >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/10 text-gold ring-1 ring-gold/25"
-            aria-hidden="true"
-          >
-            <CalendarRange size={16} strokeWidth={2.2} />
-          </span>
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-extrabold text-text">Work Schedule</h2>
-            <p className="truncate text-[11px] font-semibold text-text-muted">{weekLabel}</p>
-          </div>
-        </div>
-      </div>
+    <section className="personal-schedule" aria-label="Personal work schedule">
+      <header className="personal-schedule-heading">
+        <h2><CalendarRange size={17} aria-hidden="true" />Work Schedule</h2>
+        <span>{weekLabel}</span>
+      </header>
 
       {loading ? (
-        <div className="flex min-h-[170px] items-center justify-center text-text-muted">
+        <div className="personal-schedule-loading" role="status">
           <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+          <span className="sr-only">Loading schedule</span>
         </div>
       ) : error ? (
-        <div className="overflow-hidden rounded-xl bg-surface-alt/25 ring-1 ring-border/40">
-          <p className="border-b border-border/30 px-3 py-2 text-[11px] font-bold text-amber-500">
-            Could not load schedule.
-          </p>
-          <div className="divide-y divide-border/35">
-            {days.map(({ date }) => {
-              const weekday = date.getDay() as Weekday
-              const closedDefault = weekday === 0 || weekday === 1
-              return (
-                <div
-                  key={toLocalDateString(date)}
-                  className="grid grid-cols-[52px_minmax(0,1fr)] items-center gap-2 px-3 py-2.5"
-                >
-                  <div>
-                    <p className="text-[12px] font-black uppercase tracking-[0.08em] text-text">
-                      {weekdayLabel(weekday)}
-                    </p>
-                    <p className="text-[10px] font-semibold text-text-muted">{dayNumberLabel(date)}</p>
-                  </div>
-                  <div className="text-[11px] font-semibold text-text-muted">
-                    {closedDefault ? 'Studio closed' : 'Unavailable'}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        <p className="personal-schedule-error" role="status">Could not load schedule.</p>
       ) : (
-        <div className="overflow-hidden rounded-xl bg-surface-alt/25 ring-1 ring-border/40 divide-y divide-border/35">
+        <ol className="personal-schedule-days">
           {days.map(({ date, entries }) => {
+            const dateKey = toLocalDateString(date)
             const weekday = date.getDay() as Weekday
+            const isToday = dateKey === today
             const closedDefault = weekday === 0 || weekday === 1
 
             return (
-              <div
-                key={toLocalDateString(date)}
-                className="grid grid-cols-[52px_minmax(0,1fr)] items-start gap-2 px-3 py-2.5"
+              <li
+                key={dateKey}
+                className="personal-schedule-day"
+                data-today={isToday || undefined}
+                data-empty={entries.length === 0 || undefined}
+                aria-current={isToday ? 'date' : undefined}
               >
-                <div className="pt-0.5">
-                  <p className="text-[12px] font-black uppercase tracking-[0.08em] text-text">
-                    {weekdayLabel(weekday)}
-                  </p>
-                  <p className="text-[10px] font-semibold text-text-muted">{dayNumberLabel(date)}</p>
-                </div>
-
-                <div className="min-w-0 space-y-1">
-                  {entries.length > 0 ? (
-                    entries.map((entry) => (
-                      <div
-                        key={entry.key}
-                        className={[
-                          'flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-bold',
-                          entry.status === 'pending'
-                            ? 'bg-amber-500/10 text-amber-600'
-                            : 'bg-gold/10 text-text',
-                        ].join(' ')}
-                      >
-                        <Clock size={11} className="shrink-0 text-gold" aria-hidden="true" />
-                        <span className="min-w-0 truncate">{timeRangeForEntry(entry)}</span>
-                        <span className="ml-auto shrink-0 rounded-full bg-surface px-1.5 py-0.5 text-[9px] uppercase tracking-[0.08em] text-text-muted">
+                <time className="personal-schedule-date" dateTime={dateKey}>
+                  <strong>{weekdayLabel(weekday)}</strong>
+                  <span>{dayNumberLabel(date)}</span>
+                  {isToday && <span className="personal-schedule-today">Today</span>}
+                </time>
+                {entries.length > 0 ? (
+                  <ul className="personal-schedule-entries">
+                    {entries.map((entry) => (
+                      <li className="personal-schedule-entry" key={entry.key}>
+                        <span className="personal-schedule-time">{timeRangeForEntry(entry)}</span>
+                        <span className="personal-schedule-status" data-pending={entry.status === 'pending' || undefined}>
                           {entry.status === 'pending' ? 'Pending' : locationLabel(entry)}
                         </span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-2 py-1.5 text-[11px] font-semibold text-text-muted">
-                      {closedDefault ? 'Studio closed' : 'Not scheduled'}
-                    </div>
-                  )}
-                </div>
-              </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="personal-schedule-empty">{closedDefault ? 'Studio closed' : 'Not scheduled'}</span>
+                )}
+              </li>
             )
           })}
-        </div>
+        </ol>
       )}
     </section>
   )
