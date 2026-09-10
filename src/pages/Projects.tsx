@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode, useId } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -12,11 +12,10 @@ import {
   Circle,
   Clock3,
   FileText,
+  Ellipsis,
   FolderKanban,
   Pencil,
-  ListTodo,
   ListPlus,
-  MessageSquarePlus,
   Plus,
   Trash2,
   Target,
@@ -49,6 +48,7 @@ import {
   type ProjectObjective,
   type ProjectTask,
 } from '../lib/queries/projects'
+import './ProjectsChecklist.css'
 import { memberActivityKeys } from '../lib/activity/queries'
 import { emitFlywheelEvent, flywheelKeys } from '../lib/queries/flywheelEvents'
 
@@ -183,6 +183,31 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
 }
 
 
+function ChecklistActions({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const id = useId()
+  const trigger = useRef<HTMLButtonElement>(null)
+  return (
+    <>
+      <button ref={trigger} type="button" className="checklist-more focus-ring"
+        aria-label={label} title="More actions" aria-expanded={open} aria-controls={open ? id : undefined}
+        onClick={() => setOpen(value => !value)}>
+        <Ellipsis size={18} aria-hidden="true" />
+      </button>
+      {open && (
+        <div id={id} className="checklist-actions-row" role="group" aria-label={label}
+          onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); trigger.current?.focus() } }}
+          onClick={event => {
+            const button = (event.target as HTMLElement).closest('button')
+            if (button && !button.disabled) { setOpen(false); trigger.current?.focus() }
+          }}>
+          {children}
+        </div>
+      )}
+    </>
+  )
+}
+
 function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objectiveId: string }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -202,15 +227,15 @@ function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objecti
 
   if (!open) {
     return (
-      <div className="border-t border-dashed border-sky-500/20 px-3 py-2.5">
+      <div className="checklist-add-subtask">
         <Button
           variant="secondary"
           size="sm"
-          className="border-sky-500/35 bg-sky-500/5 text-sky-300 hover:bg-sky-500/10"
+          className="checklist-add-button"
           iconLeft={<ListPlus size={14} />}
           onClick={() => setOpen(true)}
         >
-          Add subtask inside this objective
+          Add subtask
         </Button>
       </div>
     )
@@ -218,7 +243,7 @@ function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objecti
 
   return (
     <form
-      className="flex flex-col gap-2 border-t border-dashed border-sky-500/25 bg-sky-500/5 p-3 sm:flex-row"
+      className="flex flex-col gap-2 px-3 pb-3 sm:flex-row"
       onSubmit={(event) => {
         event.preventDefault()
         if (title.trim()) mutation.mutate({ projectId, objectiveId, title: title.trim() })
@@ -227,7 +252,8 @@ function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objecti
       <Input
         wrapperClassName="flex-1"
         aria-label="New objective subtask"
-        placeholder="Add a concrete subtask…"
+        placeholder="Subtask title"
+        autoFocus
         value={title}
         onChange={(event) => setTitle(event.target.value)}
       />
@@ -237,7 +263,6 @@ function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objecti
           type="submit"
           loading={mutation.isPending}
           disabled={!title.trim()}
-          className="bg-sky-400 text-slate-950 hover:bg-sky-300"
           iconLeft={<ListPlus size={15} />}
         >
           Save subtask
@@ -372,54 +397,27 @@ function ProjectTaskRow({
           </div>
         </form>
       ) : (
-      <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
-        <button
-          type="button"
+      <div className="checklist-task-head">
+        <button type="button" role="checkbox" aria-checked={task.is_completed}
           onClick={() => completeMutation.mutate(!task.is_completed)}
           disabled={!canCompleteWork || completeMutation.isPending}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-ring disabled:opacity-50"
-          aria-label={`${task.is_completed ? 'Mark incomplete' : 'Complete'} ${task.title}`}
-          title={!canCompleteWork ? 'Only project members can complete this task' : undefined}
-        >
-          {task.is_completed
-            ? <CheckCircle2 size={22} className="shrink-0 text-emerald-400" />
-            : <Circle size={22} className="shrink-0 text-text-light" />}
-          <span className={task.is_completed ? 'truncate text-sm text-text-muted line-through' : 'truncate text-sm font-semibold text-text'}>
-            {task.title}
-          </span>
+          className="checklist-complete focus-ring"
+          aria-label={`${task.is_completed ? 'Mark incomplete' : 'Complete'} subtask: ${task.title}`}
+          title={!canCompleteWork ? 'Only project members can complete this task' : undefined}>
+          {task.is_completed ? <CheckCircle2 size={17} aria-hidden="true" /> : <Circle size={17} aria-hidden="true" />}
         </button>
-        <Button
-          variant="secondary"
-          size="sm"
-          className="sm:shrink-0 border-gold/35 text-gold"
-          iconLeft={<MessageSquarePlus size={14} />}
-          onClick={() => setWriting((value) => !value)}
-        >
-          Add progress note
-        </Button>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="p-2 rounded-lg text-text-light hover:bg-surface-hover hover:text-text focus-ring"
-          aria-label={`Edit ${task.title}`}
-          title="Edit subtask"
-        >
-          <Pencil size={14} />
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (window.confirm(`Delete subtask “${task.title}”? Its progress notes will remain in the project timeline.`)) {
-              deleteMutation.mutate(task.id)
-            }
-          }}
-          disabled={deleteMutation.isPending}
-          className="p-2 rounded-lg text-text-light hover:bg-red-500/10 hover:text-red-400 focus-ring disabled:opacity-50"
-          aria-label={`Delete ${task.title}`}
-          title="Delete subtask"
-        >
-          <Trash2 size={14} />
-        </button>
+        <div className="checklist-task-content">
+          <span className="checklist-task-title" data-completed={task.is_completed || undefined}>{task.title}</span>
+          <button type="button" className="checklist-note focus-ring" onClick={() => setWriting(value => !value)} aria-expanded={writing}>
+            Add note
+          </button>
+        </div>
+        <ChecklistActions label={`Actions for subtask: ${task.title}`}>
+          <button type="button" onClick={() => setEditing(true)}><Pencil size={14} aria-hidden="true" />Edit subtask</button>
+          <button type="button" className="checklist-delete" disabled={deleteMutation.isPending} onClick={() => {
+            if (window.confirm(`Delete subtask “${task.title}”? Its progress notes will remain in the project timeline.`)) deleteMutation.mutate(task.id)
+          }}><Trash2 size={14} aria-hidden="true" />Delete subtask</button>
+        </ChecklistActions>
       </div>
       )}
       {writing && (
@@ -433,9 +431,8 @@ function ProjectTaskRow({
           <Textarea
             autoFocus
             label={`Progress on “${task.title}”`}
-            hint="This note will appear here and as a clickable marker on your activity bar."
             rows={3}
-            placeholder="What changed, what did you learn, or what will you do next?"
+            placeholder="Progress note"
             value={note}
             onChange={(event) => setNote(event.target.value)}
           />
@@ -527,7 +524,7 @@ function ProjectObjectiveSection({
 
   return (
     <article
-      className="border-b border-border last:border-b-0"
+      className="checklist-objective"
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
@@ -552,112 +549,46 @@ function ProjectObjectiveSection({
           </div>
         </form>
       ) : null}
-      <header className="flex flex-col gap-3 bg-surface-alt/45 px-4 py-4 sm:flex-row sm:items-center">
-        <div className="flex shrink-0 items-center gap-0.5" aria-label={`Reorder objective ${objective.title}`}>
-          <button
-            type="button"
-            draggable
-            onDragStart={onDragStart}
-            className="cursor-grab rounded-lg p-2 text-text-light hover:bg-surface-hover hover:text-gold focus-ring active:cursor-grabbing"
-            aria-label={`Drag to reorder ${objective.title}`}
-            title="Drag to move objective"
-          >
-            <ListTodo size={16} />
-          </button>
-          <div className="flex flex-col">
-            <button
-              type="button"
-              onClick={() => onMove(position, position - 1)}
-              disabled={position === 0}
-              className="rounded p-0.5 text-text-light hover:bg-surface-hover hover:text-gold focus-ring disabled:opacity-20"
-              aria-label={`Move ${objective.title} up`}
-              title="Move objective up"
-            >
-              <ChevronUp size={13} />
-            </button>
-            <button
-              type="button"
-              onClick={() => onMove(position, position + 1)}
-              disabled={position === objectiveCount - 1}
-              className="rounded p-0.5 text-text-light hover:bg-surface-hover hover:text-gold focus-ring disabled:opacity-20"
-              aria-label={`Move ${objective.title} down`}
-              title="Move objective down"
-            >
-              <ChevronDown size={13} />
-            </button>
-          </div>
-        </div>
+      <header className="checklist-objective-head">
         <button
-          type="button"
+          type="button" role="checkbox" aria-checked={objective.is_completed}
+          aria-label={`${objective.is_completed ? 'Reopen' : 'Complete'} objective: ${objective.title}`}
           disabled={!canCompleteWork || mutation.isPending || (!objective.is_completed && !canComplete)}
           onClick={() => mutation.mutate(!objective.is_completed)}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-ring disabled:cursor-not-allowed"
-          title={!objective.is_completed && !canComplete ? 'Complete every subtask first' : undefined}
+          className="checklist-complete focus-ring"
+          title={!canCompleteWork ? 'Only project members can complete this objective' : !objective.is_completed && !canComplete ? 'Complete every subtask first' : undefined}
         >
-          {objective.is_completed ? (
-            <CheckCircle2 size={24} className="shrink-0 text-emerald-400" />
-          ) : (
-            <Circle
-              size={24}
-              className={canComplete ? 'shrink-0 text-gold' : 'shrink-0 text-text-light opacity-55'}
-            />
-          )}
-          <span className="min-w-0">
-            <span className={objective.is_completed
-              ? 'block whitespace-pre-wrap break-words text-sm font-bold leading-6 text-text-muted line-through'
-              : 'block whitespace-pre-wrap break-words text-sm font-bold leading-6 text-text'}
-            >
-              {objective.title}
-            </span>
-            <span className="mt-0.5 block text-[11px] text-text-light">
-              {tasks.length > 0 ? `${completedTasks}/${tasks.length} subtasks complete` : 'No subtasks'}
-              {!objective.is_completed && canComplete ? ' · Ready to check off' : ''}
-            </span>
-          </span>
+          {objective.is_completed ? <CheckCircle2 size={20} aria-hidden="true" /> : <Circle size={20} aria-hidden="true" />}
         </button>
-        {!objective.is_completed && !canComplete && (
-          <span className="text-[11px] font-semibold text-text-light">
-            Finish subtasks to unlock
-          </span>
-        )}
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="p-2 rounded-lg text-text-light hover:bg-surface-hover hover:text-text focus-ring"
-            aria-label={`Edit objective ${objective.title}`}
-            title="Edit objective"
-          >
-            <Pencil size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const nestedWarning = tasks.length
-                ? ` This will also delete its ${tasks.length} nested subtask${tasks.length === 1 ? '' : 's'}.`
-                : ''
-              if (window.confirm(`Delete objective “${objective.title}”?${nestedWarning} Progress notes will remain in the project timeline.`)) {
-                deleteMutation.mutate(objective.id)
-              }
-            }}
-            disabled={deleteMutation.isPending}
-            className="p-2 rounded-lg text-text-light hover:bg-red-500/10 hover:text-red-400 focus-ring disabled:opacity-50"
-            aria-label={`Delete objective ${objective.title}`}
-            title="Delete objective"
-          >
-            <Trash2 size={14} />
-          </button>
+        <div className="checklist-objective-content" draggable onDragStart={onDragStart} title="Drag to reorder objective">
+          <h3 className="checklist-objective-title" data-completed={objective.is_completed || undefined}>{objective.title}</h3>
+          {tasks.length > 0 && <span className="checklist-progress">{completedTasks}/{tasks.length} subtasks</span>}
         </div>
+        <ChecklistActions label={`Actions for objective: ${objective.title}`}>
+          <button type="button" onClick={() => setEditing(true)}><Pencil size={14} aria-hidden="true" />Edit objective</button>
+          <button type="button" onClick={() => onMove(position, position - 1)} disabled={position === 0}>
+            <ChevronUp size={14} aria-hidden="true" />Move up
+          </button>
+          <button type="button" onClick={() => onMove(position, position + 1)} disabled={position === objectiveCount - 1}>
+            <ChevronDown size={14} aria-hidden="true" />Move down
+          </button>
+          <button type="button" className="checklist-delete" disabled={deleteMutation.isPending} onClick={() => {
+            const nestedWarning = tasks.length ? ` This will also delete its ${tasks.length} nested subtask${tasks.length === 1 ? '' : 's'}.` : ''
+            if (window.confirm(`Delete objective “${objective.title}”?${nestedWarning} Progress notes will remain in the project timeline.`)) {
+              deleteMutation.mutate(objective.id)
+            }
+          }}><Trash2 size={14} aria-hidden="true" />Delete objective</button>
+        </ChecklistActions>
       </header>
       {tasks.length > 0 && (
-        <div className="pl-4 sm:pl-8">
+        <div className="checklist-objective-children">
           {tasks.map((task) => (
             <ProjectTaskRow key={task.id} projectId={projectId} task={task} canCompleteWork={canCompleteWork} />
           ))}
         </div>
       )}
       {!objective.is_completed && (
-        <div className="pl-4 sm:pl-8">
+        <div className="checklist-objective-children">
           <AddSubtaskForm projectId={projectId} objectiveId={objective.id} />
         </div>
       )}
@@ -999,17 +930,14 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
         <header className="border-b border-border px-4 py-3.5">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-bold text-text">
-              <ListTodo size={16} className="text-gold" /> Objective checklist
+              Objectives
             </h2>
-            <p className="mt-1 text-xs text-text-muted">Complete the subtasks, then check off their objective.</p>
           </div>
         </header>
         {objectives.length === 0 ? (
           <>
             <div className="p-6 text-center">
-              <Target size={26} className="mx-auto text-gold" />
-              <p className="mt-2 text-sm font-semibold text-text">What is the first major objective?</p>
-              <p className="mt-1 text-xs text-text-muted">Add an objective umbrella, then place its subtasks underneath.</p>
+              <p className="text-sm text-text-muted">No objectives yet.</p>
             </div>
             {addingObjective && (
               <div ref={objectiveComposerRef}>
@@ -1042,7 +970,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
             {ungroupedTasks.length > 0 && (
               <div className="border-t border-border">
                 <div className="bg-amber-500/5 px-4 py-3 text-xs font-semibold text-amber-300">
-                  Earlier project tasks · add new work inside an objective
+                  Other tasks
                 </div>
                 <div className="pl-4 sm:pl-8">
                   {ungroupedTasks.map((task) => (
@@ -1056,7 +984,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
         {!addingObjective && (
           <div className="border-t border-border bg-gold/5 p-4">
             <Button iconLeft={<Target size={15} />} onClick={() => setAddingObjective(true)}>
-              Add next objective
+              Add objective
             </Button>
           </div>
         )}
