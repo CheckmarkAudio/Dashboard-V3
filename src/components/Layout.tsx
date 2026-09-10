@@ -29,7 +29,7 @@ import {
   LayoutDashboard, Users, Calendar, Settings, Gauge,
   Menu, X, ChevronDown, ClipboardList, CheckSquare,
   BarChart3, Briefcase, MessageSquare, Sun, Moon,
-  Loader2, FolderUp, FolderKanban, Palette,
+  Loader2, FolderUp, FolderKanban, Palette, Pencil,
 } from 'lucide-react'
 
 /**
@@ -248,7 +248,8 @@ export default function Layout() {
       <div className="workspace-body">
       {/* Workspace tools and the existing configurable site banner. */}
       <header className="workspace-header relative border-b border-border shrink-0 z-40 bg-surface">
-        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="workspace-header-banner relative">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
           {siteBranding?.site_banner_url ? (
             <>
               <img
@@ -278,7 +279,17 @@ export default function Layout() {
           )}
           <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-gold/28 to-transparent" />
         </div>
-        {/* Row 1: logo · (mobile hamburger) · right-aligned controls */}
+        {canAccessAdmin && (
+          <NavLink
+            to={`${APP_ROUTES.admin.settings}?section=branding`}
+            className="workspace-edit-header focus-ring"
+            aria-label="Edit header"
+            title="Edit header"
+          >
+            <Pencil size={12} aria-hidden="true" />
+            <span>Edit header</span>
+          </NavLink>
+        )}
 
         <div className="workspace-toolbar relative z-10">
           {/* Mobile hamburger */}
@@ -375,6 +386,7 @@ export default function Layout() {
               </div>
             </button>
           </div>
+        </div>
         </div>
         <div className="workspace-time-zone relative z-10" aria-label="Activity timeline">
           <div className="workspace-time-zone-inner">
