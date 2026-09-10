@@ -471,3 +471,16 @@ body, :root[data-theme='light'] body {
   .media-card-grid .media-file > div { padding: 12px 8px; }
   .media-card-grid .media-file > div p { font-size: 12px; }
 }
+
+/* The team banner belongs to the tool row; the timeline has its own surface. */
+.workspace-header-banner { isolation: isolate; }
+.workspace-header-banner .workspace-toolbar { min-height: 112px; padding-top: 36px; padding-bottom: 24px; }
+.workspace-header-banner .workspace-jump { max-width: 532px; background: color-mix(in srgb, var(--color-surface) 94%, transparent); }
+.workspace-header-banner .workspace-utilities { padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 12px; background: color-mix(in srgb, var(--color-surface) 94%, transparent); }
+.workspace-edit-header { position: absolute; top: 7px; right: 16px; z-index: 20; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text-muted); font-size: 10px; line-height: 16px; }
+.workspace-edit-header:hover { color: var(--workspace-accent); border-color: var(--workspace-accent); }
+@media (max-width: 759px) {
+  .workspace-header-banner .workspace-toolbar { padding-top: 36px; padding-bottom: 12px; }
+  .workspace-header-banner .workspace-utilities { padding: 4px; gap: 4px; }
+  .workspace-header-banner .workspace-jump { max-width: none; }
+}

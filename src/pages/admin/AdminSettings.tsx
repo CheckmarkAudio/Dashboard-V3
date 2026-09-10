@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
@@ -112,7 +113,15 @@ export default function AdminSettings() {
   const { profile, refreshProfile } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
-  const [activeSection, setActiveSection] = useState<SectionKey>('account-access')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeSection = SECTIONS.find(section => section.key === searchParams.get('section'))?.key ?? 'account-access'
+  const setActiveSection = (section: SectionKey) => {
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous)
+      next.set('section', section)
+      return next
+    })
+  }
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
