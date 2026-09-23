@@ -29,7 +29,26 @@ export type ReactionSummary = {
   names: string[]
 }
 
-export const QUICK_REACTIONS = ['👍', '❤️', '✅', '😂', '👀'] as const
+// ✅ is handled separately from casual reactions — it gets its own
+// labeled "Completed" pill (see ChatBubble in Content.tsx) instead of
+// rendering as a bare emoji+count bubble, since it means "this is done"
+// rather than "lol" or "nice". Kept out of QUICK_REACTIONS so it isn't
+// duplicated between the casual row and the dedicated Completed button.
+export const COMPLETED_EMOJI = '✅'
+
+export const QUICK_REACTIONS = ['👍', '❤️', '😂', '👀', '🔥', '🎵', '✨'] as const
+
+// Wider curated set for the full picker (Smile button). Deliberately a
+// hand-picked grid rather than a full emoji library — this is an
+// internal team tool, not a public chat product, so a few dozen common
+// options cover it without adding a dependency or bloating the bundle.
+export const EMOJI_PICKER_OPTIONS = [
+  '👍', '👎', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍',
+  '😂', '😅', '😊', '😍', '🥳', '😎', '🤔', '😮', '😢', '😭',
+  '👀', '👏', '🙌', '🙏', '💪', '🤝', '✌️', '🤘', '👊', '✋',
+  '🔥', '✨', '⭐', '💯', '🎉', '🎊', '🎵', '🎶', '🎧', '🎤',
+  '🚀', '⚡', '💡', '☕', '🍕', '🎂', '🎯', '👑', '💀', '😴',
+] as const
 
 export function mentionToken(member: Pick<TeamMember, 'display_name'>): string {
   return `@${member.display_name}`
