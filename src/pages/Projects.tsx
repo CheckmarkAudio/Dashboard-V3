@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode, useId } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode, useId } from 'react'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -49,8 +49,16 @@ import {
   type ProjectTask,
 } from '../lib/queries/projects'
 import './ProjectsChecklist.css'
+import ProjectToolsBoard from '../components/projects/ProjectToolsBoard'
+import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 import { memberActivityKeys } from '../lib/activity/queries'
 import { emitFlywheelEvent, flywheelKeys } from '../lib/queries/flywheelEvents'
+
+const projectTaskCachePrefixes = ['assigned-tasks', 'admin-assigned-tasks', 'team-assigned-tasks', 'studio-assigned-tasks', 'assign-page-member-tasks']
+function refreshTaskSurfaces(client: QueryClient) {
+  for (const prefix of projectTaskCachePrefixes) void client.invalidateQueries({ queryKey: [prefix] })
+}
 
 function dateLabel(value: string | null): string {
   if (!value) return 'No target date'
@@ -219,6 +227,7 @@ function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objecti
       setTitle('')
       setOpen(false)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
       toast('Subtask added.', 'success')
     },
@@ -288,6 +297,7 @@ function AddObjectiveForm({
       setTitle('')
       onClose()
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       toast('Objective added.', 'success')
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -323,10 +333,12 @@ function ProjectTaskRow({
   projectId,
   task,
   canCompleteWork,
+  embedded = false,
 }: {
   projectId: string
   task: ProjectTask
   canCompleteWork: boolean
+  embedded?: boolean
 }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -339,6 +351,7 @@ function ProjectTaskRow({
     mutationFn: (next: boolean) => completeProjectTask(task.id, next),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       void queryClient.invalidateQueries({ queryKey: memberActivityKeys.all })
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -349,6 +362,7 @@ function ProjectTaskRow({
       setNote('')
       setWriting(false)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
       void queryClient.invalidateQueries({ queryKey: memberActivityKeys.all })
       toast('Progress recorded on the project timeline.', 'success')
@@ -360,6 +374,7 @@ function ProjectTaskRow({
     onSuccess: () => {
       setEditing(false)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       toast('Subtask updated.', 'success')
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -368,6 +383,7 @@ function ProjectTaskRow({
     mutationFn: deleteProjectTask,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
       toast('Subtask deleted.', 'success')
     },
@@ -375,7 +391,7 @@ function ProjectTaskRow({
   })
 
   return (
-    <div id={`task-${task.id}`} className="border-b border-border last:border-b-0 scroll-mt-28">
+    <div id={embedded ? undefined : `task-${task.id}`} className="border-b border-border last:border-b-0 scroll-mt-28">
       {editing ? (
         <form
           className="flex flex-col gap-2 bg-surface-alt/50 p-3 sm:flex-row"
@@ -488,6 +504,7 @@ function ProjectObjectiveSection({
     mutationFn: (next: boolean) => completeProjectObjective(objective.id, next),
     onSuccess: (_updated, next) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       if (next) {
         void emitFlywheelEvent({
           stage: 'production',
@@ -508,6 +525,7 @@ function ProjectObjectiveSection({
     onSuccess: () => {
       setEditing(false)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       toast('Objective updated.', 'success')
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -516,6 +534,7 @@ function ProjectObjectiveSection({
     mutationFn: deleteProjectObjective,
     onSuccess: (deletedTasks) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
       toast(`Objective deleted${deletedTasks ? ` with ${deletedTasks} subtask${deletedTasks === 1 ? '' : 's'}` : ''}.`, 'success')
     },
@@ -703,6 +722,7 @@ function ProjectTeam({
     mutationFn: setProjectMember,
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       toast(input.isMember ? 'Member added to the project.' : 'Member removed from the project.', 'success')
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -744,7 +764,41 @@ function ProjectTeam({
   )
 }
 
+function AddWorkspaceTask({ projectId }: { projectId: string }) {
+  const [title, setTitle] = useState('')
+  const client = useQueryClient()
+  const { toast } = useToast()
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc('add_project_task', { p_project_id: projectId, p_title: title.trim() })
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => { setTitle(''); void client.invalidateQueries({ queryKey: projectKeys.all }); refreshTaskSurfaces(client) },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+  return <form className="pt-add-form" onSubmit={e => { e.preventDefault(); if (title.trim() && !mutation.isPending) mutation.mutate() }}>
+    <Input label="New task" value={title} maxLength={160} onChange={e => setTitle(e.target.value)} />
+    <Button type="submit" disabled={!title.trim()} loading={mutation.isPending}>Add</Button>
+  </form>
+}
+
 function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () => void }) {
+  const { user } = useAuth()
+  const [toolsDirty, setToolsDirty] = useState(false)
+  const onToolsDirty = useCallback((dirty: boolean) => setToolsDirty(dirty), [])
+  useEffect(() => {
+    if (!toolsDirty) return
+    const leave = (event: Event) => { if (!window.confirm('Leave without saving your workspace changes?')) event.preventDefault() }
+    const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    const link = (event: MouseEvent) => {
+      const anchor = (event.target as HTMLElement).closest('a[href]')
+      if (anchor && !anchor.getAttribute('href')?.startsWith('#') && !window.confirm('Leave without saving your workspace changes?')) { event.preventDefault(); event.stopPropagation() }
+    }
+    window.addEventListener('project-tools-leave', leave)
+    window.addEventListener('beforeunload', unload)
+    document.addEventListener('click', link, true)
+    return () => { window.removeEventListener('project-tools-leave', leave); window.removeEventListener('beforeunload', unload); document.removeEventListener('click', link, true) }
+  }, [toolsDirty])
   const [addingObjective, setAddingObjective] = useState(false)
   const [editingProject, setEditingProject] = useState(false)
   const [draggedObjectiveId, setDraggedObjectiveId] = useState<string | null>(null)
@@ -780,6 +834,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
     onSettled: () => {
       setDraggedObjectiveId(null)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
     },
   })
   const projectCompletionMutation = useMutation({
@@ -839,7 +894,8 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
     )
   }
 
-  const { project, objectives, tasks, updates, members, teamMembers, currentMemberId } = query.data
+  const { project, objectives, tasks, updates, members, teamMembers } = query.data
+  const currentMemberId = user?.id ?? query.data.currentMemberId
   const canCompleteWork = Boolean(currentMemberId && members.some((member) => member.member_id === currentMemberId))
   const currentTeamMember = teamMembers.find((member) => member.id === currentMemberId)
   const canManageMembers = currentMemberId === project.owner_id || currentTeamMember?.role === 'admin' || currentTeamMember?.role === 'owner'
@@ -851,9 +907,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
 
   return (
     <div className="space-y-4">
-      <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold text-text-muted hover:bg-surface-hover hover:text-text focus-ring lg:hidden">
-        <ArrowLeft size={15} /> All projects
-      </button>
+
 
       {editingProject && (
         <EditProjectForm
@@ -882,7 +936,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
                 {project.objective || 'No project description yet.'}
               </p>
             </div>
-            <div className="flex shrink-0 items-start gap-2">
+            <div className="project-detail-actions flex flex-wrap items-start gap-2">
               {project.status === 'completed' ? (
                 <Button
                   variant="secondary"
@@ -919,6 +973,21 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
         </div>
       </section>
 
+      <ProjectToolsBoard
+        key={project.id}
+        projectId={project.id}
+        canEdit={project.status !== 'archived' && (canCompleteWork || canManageMembers)}
+        objectives={objectives}
+        onDirtyChange={onToolsDirty}
+        renderTasks={objectiveId => <>
+          {tasks.filter(task => !objectiveId || task.project_objective_id === objectiveId).map(task => <ProjectTaskRow key={task.id} projectId={project.id} task={task} canCompleteWork={canCompleteWork} embedded />)}
+          {objectiveId ? <AddSubtaskForm projectId={project.id} objectiveId={objectiveId} /> : <AddWorkspaceTask projectId={project.id} />}
+        </>}
+      />
+
+      <details open={new URLSearchParams(window.location.search).has('task')} className="rounded-xl border border-border p-4">
+        <summary className="cursor-pointer text-section">Objectives, team &amp; progress</summary>
+        <div className="mt-4 space-y-4">
       <ProjectTeam
         projectId={project.id}
         members={members}
@@ -1022,6 +1091,8 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
           </ol>
         )}
       </section>
+        </div>
+      </details>
     </div>
   )
 }
@@ -1035,11 +1106,12 @@ export default function Projects() {
   const projects = projectsQuery.data ?? []
 
   function selectProject(id: string | null) {
+    if (!window.dispatchEvent(new Event('project-tools-leave', { cancelable: true }))) return
     setSearchParams(id ? { project: id } : {})
   }
 
   return (
-    <div className="mx-auto max-w-[900px] animate-fade-in space-y-6">
+    <div className="mx-auto max-w-[1200px] animate-fade-in space-y-6">
       <PageHeader
         icon={FolderKanban}
         title="Projects"
@@ -1116,9 +1188,10 @@ function ProjectExpandableCard({
       <button
         type="button"
         onClick={onToggleExpand}
+        aria-expanded={isExpanded}
         className="w-full p-4 text-left hover:bg-surface-hover focus-ring transition-colors sm:p-5"
       >
-        <div className="flex items-start gap-4">
+        {isExpanded ? <span className="inline-flex items-center gap-2 text-sm text-text-muted"><ArrowLeft size={16} /> All projects</span> : <div className="flex items-start gap-4">
           {/* Chevron */}
           <div className="shrink-0 pt-1">
             <ChevronDown
@@ -1168,7 +1241,7 @@ function ProjectExpandableCard({
               </div>
             )}
           </div>
-        </div>
+        </div>}
       </button>
 
       {/* Expanded detail — shown below header when expanded */}

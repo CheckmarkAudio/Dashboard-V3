@@ -24,3 +24,14 @@ for (const thread of sampleThreads) {
 Object.assign(sampleTables.media_submissions![0]!, { drive_view_url: sampleAudio, size_bytes: 16044 })
 Object.assign(sampleTables.media_submissions![2]!, { original_filename: 'AfterHours_Cover03.svg', content_type: 'image/svg+xml', drive_view_url: sampleArtwork, size_bytes: 706 })
 sampleTables.project_objectives = sampleProjects.flatMap((project,index) => ['Prepare','Review','Deliver'].map((title,step) => ({id:`${project.id}-objective-${step}`,project_id:project.id,title,sort_order:step,is_completed:step<index+1,completed_at:step<index+1?stamp:null,created_at:stamp})))
+
+sampleTables.project_members = sampleProjects.map(p => ({ project_id:p.id, member_id:'dev-user', member:{display_name:'Dev Admin',avatar_url:null} }))
+
+// Project-tool UI fixtures only; sample edits live in memory and reset on reload.
+sampleTables.project_toolboards = [{project_id:'sample-project-0',revision:1,updated_at:stamp,content:{version:1,tools:[
+  {id:'fixture-measure',type:'measurements',title:'Measurements',wide:false,entries:[{id:'fixture-closet',name:'Closet opening',width:'34',depth:'18',height:'72',unit:'in',notes:'Leave room for the door.'}]},
+  {id:'fixture-shopping',type:'shopping',title:'Shopping list',wide:false,items:[{id:'fixture-shelf',name:'Storage shelf',done:false,measurementId:'fixture-closet'}]},
+  {id:'fixture-note',type:'note',title:'Studio ideas',wide:false,text:'Warm lighting. Clear floors. Everything has a home.'},
+  {id:'fixture-tasks',type:'tasks',title:'Next steps',wide:false,objectiveId:null},
+  {id:'fixture-sketch',type:'sketch',title:'Room sketch',wide:true,strokes:[],text:''},
+]}}]

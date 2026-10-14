@@ -1,7 +1,9 @@
+import { sampleProjectToolRpc } from './projectToolsSample.ts'
 import { sampleTables, sampleTasks, sampleSessions, sampleThreads, today } from './fixtures.ts'
 
 // Deliberately no network fallback. Unknown reads are empty; all writes fail
-// explicitly. This adapter cannot upload, send messages, or modify live records.
+// explicitly, except project toolboard edits held in memory. This adapter cannot
+// upload, send messages, or modify live records.
 export const sampleFetch: typeof fetch = async (input, init) => {
   const request = input instanceof Request ? input : new Request(input, init)
   const url = new URL(request.url)
@@ -11,6 +13,11 @@ export const sampleFetch: typeof fetch = async (input, init) => {
   const blocked = () => respond({ message:'Sample preview is read-only. No changes were saved.', code:'SAMPLE_READ_ONLY' }, 403)
   if (url.pathname.includes('/rpc/')) {
     const rpc = url.pathname.split('/').pop()
+    if (rpc === 'save_project_toolboard') {
+      const args = JSON.parse(typeof init?.body === 'string' ? init.body : await request.text())
+      const result = sampleProjectToolRpc(rpc, args)!
+      return respond(result.body, result.status)
+    }
     if (rpc === 'get_dm_threads') return respond(sampleThreads)
     if (rpc === 'find_or_create_dm') {
       const body = JSON.parse(typeof init?.body === 'string' ? init.body : await request.text())

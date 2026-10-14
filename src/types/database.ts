@@ -14,6 +14,17 @@ export type Database = {
   }
   public: {
     Tables: {
+      project_toolboards: {
+        Row: { project_id: string; team_id: string; content: Json; revision: number; updated_at: string; updated_by: string | null }
+        Insert: { project_id: string; team_id: string; content?: Json; revision?: number; updated_at?: string; updated_by?: string | null }
+        Update: { content?: Json; revision?: number; updated_at?: string; updated_by?: string | null }
+        Relationships: [
+          { foreignKeyName: "project_toolboards_project_id_fkey"; columns: ["project_id"]; isOneToOne: true; referencedRelation: "projects"; referencedColumns: ["id"] },
+          { foreignKeyName: "project_toolboards_team_id_fkey"; columns: ["team_id"]; isOneToOne: false; referencedRelation: "teams"; referencedColumns: ["id"] },
+          { foreignKeyName: "project_toolboards_updated_by_fkey"; columns: ["updated_by"]; isOneToOne: false; referencedRelation: "team_members"; referencedColumns: ["id"] }
+        ]
+      }
+
       artist_pipeline: {
         Row: {
           artist_name: string
@@ -3907,6 +3918,11 @@ export type Database = {
       }
     }
     Functions: {
+      save_project_toolboard: {
+        Args: { p_project_id: string; p_revision: number; p_content: Json }
+        Returns: Database["public"]["Tables"]["project_toolboards"]["Row"]
+      }
+
       add_task_template_item: {
         Args: {
           p_category?: string
