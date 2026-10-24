@@ -1038,3 +1038,14 @@ Open: migration approval under .cursor/skills/supabase-migrate/SKILL.md; deploym
 
 Token note: exact token total not visible.
 Signature: CODEX:
+
+## 2026-10-24 MDT - CODEX - Projects beta database rollout
+
+Director explicitly approved the prepared database update. Applied only `20261014120000_project_toolboards.sql` to linked CM-Audio Workspace (`ncljfjdcyswoeitsooty`) with `supabase db query --linked --file`; recorded it with `supabase migration repair 20261014120000 --status applied --linked`.
+
+Live verification: RLS enabled; authenticated SELECT and save RPC allowed; direct INSERT and anonymous read/save denied. Exercised an authenticated project-owner save, readback, and stale-revision rejection inside a rolled-back transaction. Verified zero toolboards afterward, so test content did not persist.
+
+PR #346 remains draft. Code CI passed; the existing Vercel preview deployment failed. CLI reports an invalid saved token; Chrome GitHub sign-in reached Vercel authenticator verification. User asked to finish sign-in before deployment diagnosis can continue. No production frontend release claimed. Existing unrelated priority queue, CLI temp file and public-site handoff changes preserved.
+
+Files: Project Spaces plan, Project State, checkpoint ledger. No application code changed in this checkpoint. Token note: exact token total not visible.
+Signature: CODEX:
