@@ -894,3 +894,158 @@ Open gaps:
 
 Signature:
 - CLAUDE:
+
+
+## 2026-09-29 12:55 MDT - CODEX - Project spaces direction and interaction concept
+
+Lane:
+- Codex: local project-code inspection, product/data architecture draft, responsive interaction concept.
+
+Summary:
+- Captured the director's installed computer/phone-first direction for Studio Glow-Up: nested spaces, tasks, notes, measurements, room images, and prompt-based starters.
+- Linked the focused draft from Phase 3 of the existing app roadmap; auth/shell release prerequisites remain in place.
+- Built an in-conversation sample concept with nested navigation, task-to-space promotion, focus/completion, task and idea capture, measurement editing, image preview, and a clearly labeled starter preset.
+
+Files changed:
+- `docs/ux/PROJECT_SPACES_PLAN.md` (new DRAFT)
+- `docs/pwa/APP_BUILD_ROADMAP.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+- Conversation visual: `/Users/bridges/.codex/visualizations/2026/09/29/01a0ee75-9227-7ec0-9991-87300829ea9e/studio-project-space.html`
+
+Verification:
+- Local browser walkthrough: Cleaning → Closet, task-to-space promotion, Focus completion and next step, quick task creation, starter preview, and measurement retained across navigation.
+- Visual inspection at desktop and 390px/320px phone viewport widths; root scroll width matched client width at both phone sizes.
+- JavaScript syntax check passed. Browser reported no error/warning logs at final inspection.
+- Found and fixed preview sandbox form submission handling before delivery.
+- `git diff --check` passed. No app runtime changes; no application build or production checks performed.
+
+Open gaps:
+- This is sample content held in memory, not saved project data. Actual AI is not connected; starter layout is explicitly a preset.
+- Private uploads, backend schema/RLS, real persistence, concurrent editing, installed-device behavior, and production rollout remain unimplemented.
+- Image picker and light theme have not received a browser walkthrough in this pass.
+- NEEDS-WORKER-TEST: director/employee validation of navigation and task-to-space behavior.
+- NEEDS-DIRECTOR before live AI integration: provider/account, budget cap, and acceptable project-data handling.
+- Existing unrelated priority-queue, Supabase temp, and public-site handoff changes were preserved.
+
+Token/source note:
+- Exact token total not visible. Inputs: director request/screenshot, Project OS, existing Projects source/query layer, and W3C dragging-movements guidance linked in the draft.
+
+Signature:
+- CODEX:
+
+
+## 2026-09-29 13:20 MDT - CODEX - Furniture dimensions and shopping mockup refinement
+
+Lane:
+- Codex: scoped interaction design and visual verification; no app runtime or backend changes.
+
+Summary:
+- Matched the current Soft Gold palette from workspace.css, Inter/serif typography, and compact shared desktop button sizing with larger phone touch targets.
+- Built three arrangements in one interactive conversation mockup: measurements beside Shopping, inside Shopping, and linked directly beneath shopping items on phone.
+- Added quick furniture entry with Add/Return, reopening entries for details, editable notes and units, shopping-item creation, and links to shared measurements.
+- Captured the director's refinements in the existing project-spaces draft.
+
+Files changed:
+- `docs/ux/PROJECT_SPACES_PLAN.md`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+- Conversation visual: `/Users/bridges/.codex/visualizations/2026/09/29/01a0ee75-9227-7ec0-9991-87300829ea9e/shopping-and-measurements.html`
+
+Verification:
+- JavaScript syntax check passed.
+- Browser: Return added a named furniture entry with dimensions; entry reopened; room/notes saved in memory and survived placement changes.
+- Browser: inches-to-cm converted 30 x 14 x 20 to 76.2 x 35.56 x 50.8; linked shopping reference updated after Save.
+- Browser: shopping item added, measurement linked, bought state updated; Add inside placement worked.
+- Visual inspection at desktop, 1024px, 390px, and 320px; 320px root width/scroll width both 288px inside the preview frame.
+- Native drag gesture did not change placement in the automated in-app browser. Click/tap placement is verified; native drag remains unverified.
+
+Open gaps:
+- All entries are explicit sample data held in memory; reload resets them. No production persistence, app release, or Supabase changes.
+- NEEDS-WORKER-TEST: review with the director before promoting any arrangement to a production design standard.
+- Existing unrelated changes preserved.
+
+Token/source note:
+- Exact token total not visible. Sources: director's refinement, workspace.css, index.css, shared Button, and existing project-spaces draft.
+
+Signature:
+- CODEX:
+
+
+## 2026-09-29 13:32 MDT - CODEX - Full Studio Glow-Up project-page concept
+
+Lane:
+- Codex: visual concept integration, no production application changes.
+
+Summary:
+- Integrated the reviewed Shopping/dimensions interactions into a complete Soft Gold project page: workspace sidebar, project heading/team/progress, project views, shortcuts, Cleaning subspaces, tasks, room plans, and ideas.
+- Preserved the existing conversation mockups and created a separate full-page version.
+
+Files changed:
+- Conversation visual: `/Users/bridges/.codex/visualizations/2026/09/29/01a0ee75-9227-7ec0-9991-87300829ea9e/studio-glow-up-project.html`
+- `docs/00_PROJECT_OS/CHECKPOINT_LEDGER.md`
+
+Verification:
+- JavaScript syntax check passed.
+- Browser walkthrough verified Add to project → furniture → Return creates an entry; room-reference view; Closet task completion updates project progress; At the store and All dimensions shortcuts.
+- Visual checks at desktop 1024px and phone 390px; root width equaled scroll width at 390px and 320px. No browser errors/warnings in inspected logs.
+- All data is sample/in-memory. No backend, persistence, upload, or installed-device validation claimed. File-picker upload preview was not exercised.
+
+Open gaps:
+- NEEDS-WORKER-TEST: director review of the full project composition. Native drag remains unverified as recorded in the prior concept checkpoint.
+
+Token/source note:
+- Exact token total not visible. Reused the approved-direction Soft Gold prototype and previously inspected app styling.
+
+Signature:
+- CODEX:
+
+
+## 2026-09-29 14:18 MDT - CODEX - Project mockup readability refinement
+
+Summary:
+- Simplified project labels, removed duplicate navigation/captions, and preserved Soft Gold styling.
+- Left-aligned text and reflowed narrow task actions; measurement units appear once with explicit Width, Depth, and Height labels.
+
+Verification:
+- JavaScript syntax passed. Desktop 1024px and phone 320px inspected; no horizontal overflow in the checked controls.
+- Return added a measurement with details deferred. Phone shopping references remained readable. No browser errors in inspected logs.
+
+Scope:
+- Updated conversation visual `studio-glow-up-project.html` only, plus this ledger. Sample data remains in memory; no production changes.
+- Native drag remains unverified.
+
+Signature:
+- CODEX:
+
+
+## 2026-10-14 - CODEX - Modular Project tools beta
+
+Lane: scoped implementation, database contract, accessibility and release verification.
+
+Summary:
+- Implemented the real Projects workspace with a searchable Tool bank and five typed tools: Measurements, Shopping list, Task list, Notes, Sketchpad.
+- Reused existing task mutations/permissions and widget chrome. Added drag/tap insertion, pointer/keyboard reorder, move controls, wide cards, explicit saving, conflict/error recovery and account-scoped in-memory drafts.
+- Added the additive project_toolboards migration, read/write permissions, bounded JSON validation, optimistic concurrency, and mirrored database types. Existing project records/tasks are unchanged.
+
+Verification:
+- 43 Node tests, TypeScript/build and release-marker check passed; existing Vite bundle warning remains.
+- Isolated PostgreSQL tests cover validation, references, revisions, RLS/roles, inactive/unknown users and cascading cleanup.
+- Browser verified bank drag, keyboard reorder, move buttons, measurements/links, saving/error recovery, mouse drawing/undo and narrow light/dark layouts. iPad pencil validation remains open.
+- Read-only production schema audit confirmed dependencies and no existing toolboards table. No migration applied and no live data edited.
+
+Files: src/components/projects/, src/domain/projectTools/, src/lib/queries/projectTools.ts, src/pages/Projects.tsx, database types, development-only sample fixtures/adapter, SQL migration/test runner, Project Spaces plan and app roadmap.
+
+Open: migration approval under .cursor/skills/supabase-migrate/SKILL.md; deployment and authorized-device smoke test. Nested spaces/images/AI remain later slices. Existing unrelated priority queue, website handoff and CLI temp changes preserved.
+
+Token note: exact token total not visible.
+Signature: CODEX:
+
+## 2026-10-24 MDT - CODEX - Projects beta database rollout
+
+Director explicitly approved the prepared database update. Applied only `20261014120000_project_toolboards.sql` to linked CM-Audio Workspace (`ncljfjdcyswoeitsooty`) with `supabase db query --linked --file`; recorded it with `supabase migration repair 20261014120000 --status applied --linked`.
+
+Live verification: RLS enabled; authenticated SELECT and save RPC allowed; direct INSERT and anonymous read/save denied. Exercised an authenticated project-owner save, readback, and stale-revision rejection inside a rolled-back transaction. Verified zero toolboards afterward, so test content did not persist.
+
+PR #346 remains draft. Code CI passed; the existing Vercel preview deployment failed. CLI reports an invalid saved token; Chrome GitHub sign-in reached Vercel authenticator verification. User asked to finish sign-in before deployment diagnosis can continue. No production frontend release claimed. Existing unrelated priority queue, CLI temp file and public-site handoff changes preserved.
+
+Files: Project Spaces plan, Project State, checkpoint ledger. No application code changed in this checkpoint. Token note: exact token total not visible.
+Signature: CODEX:
