@@ -14,6 +14,7 @@ export interface Project {
   updated_at: string
   completed_at: string | null
   is_pinned?: boolean
+  cover_url?: string | null
 }
 
 export interface ProjectMember {

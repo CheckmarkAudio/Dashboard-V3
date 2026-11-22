@@ -4,7 +4,6 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 import {
   ArrowLeft,
   Archive,
-  CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -51,7 +50,7 @@ import {
 } from '../lib/queries/projects'
 import './ProjectsChecklist.css'
 import ProjectToolsBoard from '../components/projects/ProjectToolsBoard'
-import { NewProjectTile, ProjectCard, ProjectGridSkeleton, type ProjectCardModel } from '../components/projects/ProjectCard'
+import { NewProjectTile, ProjectCard, ProjectGridSkeleton, ProjectHero, type ProjectCardModel } from '../components/projects/ProjectCard'
 import { PROJECT_LIST_FILTERS, matchesProjectFilter, type ProjectListFilter } from '../components/projects/projectListFilter'
 import { legacyProjectSearchRedirect, projectDetailPath, projectsListPath } from '../app/projectPaths'
 import { useAuth } from '../contexts/AuthContext'
@@ -64,14 +63,6 @@ function refreshTaskSurfaces(client: QueryClient) {
   for (const prefix of projectTaskCachePrefixes) void client.invalidateQueries({ queryKey: [prefix] })
 }
 
-function dateLabel(value: string | null): string {
-  if (!value) return 'No target date'
-  return new Date(`${value}T12:00:00`).toLocaleDateString([], {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
 
 function timeLabel(value: string): string {
   return new Date(value).toLocaleString([], {
@@ -922,26 +913,16 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
         />
       )}
 
-      <section className="overflow-hidden rounded-xl border border-border bg-surface">
-        <div className="p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <div className="mb-2 flex items-center gap-2">
-                <span className={project.status === 'completed'
-                  ? 'rounded-full bg-blue-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-300'
-                  : 'rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-400'}>
-                  {project.status}
-                </span>
-                <span className="flex items-center gap-1 text-xs text-text-light">
-                  <CalendarDays size={13} /> {dateLabel(project.target_date)}
-                </span>
-              </div>
-              <h1 className="text-xl font-bold tracking-tight text-text sm:text-2xl">{project.title}</h1>
-              <p className="mt-2 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-text-muted">
-                {project.objective || 'No project description yet.'}
-              </p>
+      <ProjectHero
+        project={project}
+        progress={progress}
+        actions={
+          <>
+            <div className="rounded-xl border border-gold/25 px-4 py-3 text-left">
+              <div className="text-2xl font-bold tabular-nums" style={{ color: '#f8f0d8' }}>{completedObjectives}/{objectives.length}</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#cbb995' }}>objectives complete</div>
             </div>
-            <div className="project-detail-actions flex flex-wrap items-start gap-2">
+            <div className="project-detail-actions flex flex-wrap items-center gap-2">
               {project.status === 'completed' ? (
                 <Button
                   variant="secondary"
@@ -966,17 +947,10 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
               <Button variant="secondary" size="sm" iconLeft={<Pencil size={14} />} onClick={() => setEditingProject(true)}>
                 Edit project
               </Button>
-              <div className="rounded-xl border border-border bg-surface-alt px-4 py-3 text-right">
-                <div className="text-2xl font-bold tabular-nums text-text">{completedObjectives}/{objectives.length}</div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-text-light">objectives complete</div>
-              </div>
             </div>
-          </div>
-          <div className="mt-5 h-2 overflow-hidden rounded-full bg-border">
-            <div className="h-full rounded-full bg-gold transition-all" style={{ width: `${progress}%` }} />
-          </div>
-        </div>
-      </section>
+          </>
+        }
+      />
 
       <ProjectToolsBoard
         key={project.id}
@@ -1224,7 +1198,7 @@ function ProjectsGallery() {
                   completedCount: meta?.completedCount ?? 0,
                   members: meta?.members ?? [],
                 }
-                return <ProjectCard key={project.id} project={card} href={projectDetailPath(project.id, searchParams)} />
+                return <ProjectCard key={project.id} project={card} href={projectDetailPath(project.id, searchParams)} previewHover={import.meta.env.DEV && searchParams.get('previewHover') === project.id} />
               })}
               <NewProjectTile onClick={openCreateForm} />
             </div>

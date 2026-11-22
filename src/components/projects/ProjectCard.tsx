@@ -1,7 +1,10 @@
 import { CalendarDays, Plus } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import type { Project, ProjectMember } from '../../lib/queries/projects'
-import { projectCover } from './projectCover'
+import { artTransitionName, resolveProjectArt } from './projectArt'
+import { useCardTilt } from './useCardTilt'
+import { navigateWithTransition } from './navigateWithTransition'
 import './ProjectGrid.css'
 
 export interface ProjectCardModel extends Project {
@@ -18,34 +21,6 @@ function dateLabel(value: string | null): string {
     day: 'numeric',
     year: 'numeric',
   })
-}
-
-function ProgressRing({ value }: { value: number }) {
-  const size = 52
-  const stroke = 4.5
-  const radius = (size - stroke) / 2
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference - (Math.min(100, Math.max(0, value)) / 100) * circumference
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="project-card-ring" aria-hidden="true">
-      <circle cx={size / 2} cy={size / 2} r={radius} fill="rgba(20,14,8,.32)" stroke="rgba(255,255,255,.28)" strokeWidth={stroke} />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-      <text x="50%" y="52%" textAnchor="middle" dominantBaseline="middle" className="project-card-ring-label">
-        {value}%
-      </text>
-    </svg>
-  )
 }
 
 function MemberAvatars({ members }: { members: ProjectMember[] }) {
@@ -68,8 +43,10 @@ function MemberAvatars({ members }: { members: ProjectMember[] }) {
   )
 }
 
-export function ProjectCard({ project, href }: { project: ProjectCardModel; href: string }) {
-  const cover = projectCover(project.id, project.title)
+export function ProjectCard({ project, href, previewHover = false }: { project: ProjectCardModel; href: string; previewHover?: boolean }) {
+  const navigate = useNavigate()
+  const tilt = useCardTilt()
+  const art = resolveProjectArt(project)
   const progress = project.objectiveCount ? Math.round((project.completedCount / project.objectiveCount) * 100) : 0
   const description = project.objective?.trim() || 'No description yet'
   const label = [
@@ -80,42 +57,68 @@ export function ProjectCard({ project, href }: { project: ProjectCardModel; href
   ].join(', ')
 
   return (
-    <Link to={href} className="project-card focus-ring" aria-label={label}>
-      <div className="project-card-cover" style={project.cover_url ? undefined : { backgroundImage: cover.background }}>
-        {project.cover_url ? (
-          <img src={project.cover_url} alt="" className="project-card-cover-image" />
-        ) : (
-          <span className="project-card-monogram">{cover.initials}</span>
-        )}
-        <span className="project-card-status" data-status={project.status}>{project.status}</span>
-        {project.objectiveCount > 0 && <ProgressRing value={progress} />}
-      </div>
-      <div className="project-card-body">
+    <Link
+      ref={tilt.ref as never}
+      to={href}
+      className={`project-card focus-ring${previewHover ? ' is-preview-hover' : ''}`}
+      aria-label={label}
+      onPointerMove={tilt.onPointerMove}
+      onPointerLeave={tilt.onPointerLeave}
+      onClick={(event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
+        event.preventDefault()
+        navigateWithTransition(navigate, href)
+      }}
+    >
+      <span className="project-card-art">
+        <img
+          src={art.src}
+          alt=""
+          style={{ viewTransitionName: artTransitionName(project.id) }}
+        />
+      </span>
+      <span className="project-card-corners" aria-hidden="true" />
+      <span className="project-card-gem" data-status={project.status}>{project.status}</span>
+      <span className="project-card-plate">
         <h2 className="project-card-title">{project.title}</h2>
         <p className="project-card-copy">{description}</p>
-        <div className="project-card-meta">
-          <div className="project-card-meta-start">
+        <span className="project-card-meta">
+          <span className="project-card-meta-start">
             <span>
-              <strong className="text-text">{project.completedCount}/{project.objectiveCount}</strong>
+              <strong>{project.completedCount}/{project.objectiveCount}</strong>
               {' '}objectives
             </span>
             <span>
-              <CalendarDays size={14} aria-hidden="true" />
+              <CalendarDays size={12} aria-hidden="true" />
               {dateLabel(project.target_date)}
             </span>
-          </div>
+          </span>
           <MemberAvatars members={project.members} />
-        </div>
-      </div>
+        </span>
+      </span>
+      {project.objectiveCount > 0 && (
+        <span className="project-card-progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></span>
+      )}
     </Link>
   )
 }
 
 export function NewProjectTile({ onClick }: { onClick: () => void }) {
+  const tilt = useCardTilt()
   return (
-    <button type="button" className="project-card-add focus-ring" onClick={onClick}>
+    <button
+      ref={tilt.ref as never}
+      type="button"
+      className="project-card-add focus-ring"
+      onClick={onClick}
+      onPointerMove={tilt.onPointerMove}
+      onPointerLeave={tilt.onPointerLeave}
+    >
+      <span className="project-card-art" aria-hidden="true" />
+      <span className="project-card-add-slot" aria-hidden="true" />
+      <span className="project-card-corners" aria-hidden="true" />
       <span className="project-card-add-icon" aria-hidden="true"><Plus size={26} /></span>
-      New project
+      <span className="project-card-add-label">New project</span>
     </button>
   )
 }
@@ -129,3 +132,43 @@ export function ProjectGridSkeleton() {
     </div>
   )
 }
+
+export function ProjectHero({
+  project,
+  actions,
+  progress = 0,
+}: {
+  project: Pick<Project, 'id' | 'title' | 'objective' | 'status' | 'target_date'> & { cover_url?: string | null }
+  actions?: ReactNode
+  progress?: number
+}) {
+  const art = resolveProjectArt(project)
+  return (
+    <header className="project-hero">
+      <div className="project-hero-art">
+        <img
+          src={art.src}
+          alt=""
+          style={{ viewTransitionName: artTransitionName(project.id) }}
+        />
+        <span className="project-card-corners" aria-hidden="true" />
+        <div className="project-hero-plate">
+          <span className="project-card-gem" data-status={project.status}>{project.status}</span>
+          <h1 className="project-hero-title">{project.title}</h1>
+          <p className="project-hero-copy">{project.objective?.trim() || 'No project description yet.'}</p>
+          <p className="project-card-meta">
+            <span className="project-card-meta-start">
+              <span>
+                <CalendarDays size={13} aria-hidden="true" />
+                {dateLabel(project.target_date)}
+              </span>
+            </span>
+          </p>
+        </div>
+        <span className="project-card-progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></span>
+      </div>
+      {actions && <div className="project-hero-actions">{actions}</div>}
+    </header>
+  )
+}
+
