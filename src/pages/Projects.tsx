@@ -13,6 +13,7 @@ import {
   FileText,
   Ellipsis,
   FolderKanban,
+  ImagePlus,
   Pencil,
   ListPlus,
   Plus,
@@ -54,6 +55,7 @@ import {
 import './ProjectsChecklist.css'
 import ProjectToolsBoard from '../components/projects/ProjectToolsBoard'
 import ProjectExplorer from '../components/projects/ProjectExplorer'
+import { fetchProjectInspo, projectMediaKeys, setProjectCover } from '../lib/queries/projectMedia'
 import { NewProjectTile, ProjectCard, ProjectGridSkeleton, ProjectHero, type ProjectCardModel } from '../components/projects/ProjectCard'
 import { PROJECT_LIST_FILTERS, matchesProjectFilter, type ProjectListFilter } from '../components/projects/projectListFilter'
 import { legacyProjectSearchRedirect, projectDetailPath, projectsListPath } from '../app/projectPaths'
@@ -615,12 +617,131 @@ function ProjectObjectiveSection({
   )
 }
 
+
+function ProjectCoverEditor({
+  project,
+  teamId,
+  userId,
+}: {
+  project: Project
+  teamId: string
+  userId: string
+}) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const inspoQuery = useQuery({
+    queryKey: projectMediaKeys.inspo(project.id),
+    queryFn: () => fetchProjectInspo(project.id),
+  })
+  const available = inspoQuery.data?.available === true
+  const mutation = useMutation({
+    mutationFn: (file: File | null) => setProjectCover({
+      projectId: project.id,
+      teamId,
+      userId,
+      file,
+      currentUrl: project.cover_url,
+    }),
+    onSuccess: (_project, file) => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all })
+      toast(file ? 'Cover image saved.' : 'Cover reset to default art.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+  const inputRef = useRef<HTMLInputElement>(null)
+  if (inspoQuery.isLoading) return null
+  if (!available) return null
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-text-muted">Cover image</p>
+      <p className="text-xs text-text-light">JPEG, PNG, WEBP, or GIF, up to 5 MB. Leave empty to use the default clip art.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="sr-only"
+          disabled={mutation.isPending}
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (file) mutation.mutate(file)
+          }}
+        />
+        <Button variant="secondary" size="sm" iconLeft={<ImagePlus size={14} />} loading={mutation.isPending} onClick={() => inputRef.current?.click()}>
+          {project.cover_url ? 'Replace cover' : 'Upload cover'}
+        </Button>
+        {project.cover_url && (
+          <Button variant="ghost" size="sm" disabled={mutation.isPending} onClick={() => mutation.mutate(null)}>
+            Use default art
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProjectCoverButton({
+  project,
+  teamId,
+  userId,
+}: {
+  project: Project
+  teamId: string
+  userId: string
+}) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const inspoQuery = useQuery({
+    queryKey: projectMediaKeys.inspo(project.id),
+    queryFn: () => fetchProjectInspo(project.id),
+  })
+  const available = inspoQuery.data?.available === true
+  const mutation = useMutation({
+    mutationFn: (file: File) => setProjectCover({
+      projectId: project.id,
+      teamId,
+      userId,
+      file,
+      currentUrl: project.cover_url,
+    }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all })
+      toast('Cover image saved.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+  const inputRef = useRef<HTMLInputElement>(null)
+  if (!available) return null
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="sr-only"
+        disabled={mutation.isPending}
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (file) mutation.mutate(file)
+        }}
+      />
+      <Button variant="secondary" size="sm" iconLeft={<ImagePlus size={14} />} loading={mutation.isPending} onClick={() => inputRef.current?.click()}>
+        Change cover
+      </Button>
+    </>
+  )
+}
+
 function EditProjectForm({
   project,
+  userId,
   onClose,
   onArchived,
 }: {
   project: Project
+  userId?: string | null
   onClose: () => void
   onArchived: () => void
 }) {
@@ -681,6 +802,9 @@ function EditProjectForm({
         onChange={(event) => setDescription(event.target.value)}
       />
       <Input label="Target date (optional)" type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} />
+      {userId && (
+        <ProjectCoverEditor project={project} teamId={project.team_id} userId={userId} />
+      )}
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <Button
           variant="danger"
@@ -920,6 +1044,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
       {editingProject && (
         <EditProjectForm
           project={project}
+          userId={currentMemberId}
           onClose={() => setEditingProject(false)}
           onArchived={onBack}
         />
@@ -942,6 +1067,13 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
             <Button variant="secondary" size="sm" iconLeft={<Pencil size={14} />} onClick={() => setEditingProject(true)}>
               Edit
             </Button>
+            {canManageMembers && currentMemberId && (
+              <ProjectCoverButton
+                project={project}
+                teamId={project.team_id}
+                userId={currentMemberId}
+              />
+            )}
             <Button
               variant="secondary"
               size="sm"
@@ -999,8 +1131,11 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
       {deckTab !== 'visual' && (
         <ProjectExplorer
           projectId={project.id}
+          teamId={project.team_id}
+          userId={currentMemberId}
           summary={project.objective}
           canEdit={project.status !== 'archived' && (canCompleteWork || canManageMembers)}
+          onEditProject={() => setEditingProject(true)}
           objectives={objectives}
           tasks={tasks}
           stats={{ objectivesDone: completedObjectives, objectivesTotal: objectives.length }}
@@ -1220,6 +1355,10 @@ function ProjectsGallery() {
 
       {projectsQuery.isLoading ? (
         <ProjectGridSkeleton />
+      ) : projectsQuery.isError ? (
+        <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-6 text-sm text-red-300" role="alert">
+          {(projectsQuery.error as Error).message || 'Could not load projects.'}
+        </div>
       ) : projects.length === 0 ? (
         <EmptyState
           icon={FolderKanban}

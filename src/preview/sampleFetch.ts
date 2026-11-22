@@ -18,6 +18,13 @@ export const sampleFetch: typeof fetch = async (input, init) => {
       const result = sampleProjectToolRpc(rpc, args)!
       return respond(result.body, result.status)
     }
+    if (rpc === 'add_project_inspo_image' || rpc === 'delete_project_inspo_image' || rpc === 'set_project_cover') {
+      const { sampleProjectMediaRpc } = await import('./projectMediaSample.ts')
+      const args = JSON.parse(typeof init?.body === 'string' ? init.body : await request.text())
+      const result = sampleProjectMediaRpc(rpc, args)
+      if (!result) return blocked()
+      return respond(result.body, result.status)
+    }
     if (rpc === 'get_dm_threads') return respond(sampleThreads)
     if (rpc === 'find_or_create_dm') {
       const body = JSON.parse(typeof init?.body === 'string' ? init.body : await request.text())

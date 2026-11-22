@@ -263,3 +263,17 @@
   background: color-mix(in srgb, var(--color-gold) 11%, var(--color-surface-alt));
   color: var(--workspace-accent, var(--color-gold-dim));
 }
+
+.project-tile.is-add {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 148px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--color-surface-alt) 80%, transparent);
+}
+.project-tile.is-add span { font-size: 13px; font-weight: 700; }
+.project-tile.is-add.is-busy { opacity: .7; pointer-events: none; }
+.project-empty-add { margin-top: 10px; }

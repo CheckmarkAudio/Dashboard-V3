@@ -69,3 +69,8 @@ sampleTables.project_toolboards = [{project_id:'sample-project-0',revision:1,upd
   {id:'fixture-tasks',type:'tasks',title:'Next steps',wide:false,objectiveId:null},
   {id:'fixture-sketch',type:'sketch',title:'Room sketch',wide:true,strokes:[{width:4,points:[[80,80],[920,80],[920,520],[80,520],[80,80]]},{width:2,points:[[80,200],[400,200],[400,520]]}],text:'Rough floor plan for the vocal booth and closet.'},
 ]}}]
+
+sampleTables.project_inspo_images = [
+  {id:'inspo-gold',project_id:'sample-project-0',team_id:'sample-team',created_by:'dev-user',title:'Gold tone reference',public_url:'/project-art/gold-mic.svg',storage_path:'sample-team/sample-project-0/inspo/dev-user/gold-mic.svg',created_at:stamp},
+  {id:'inspo-vinyl',project_id:'sample-project-0',team_id:'sample-team',created_by:'dev-user',title:'Artwork mood',public_url:'/project-art/vinyl.svg',storage_path:'sample-team/sample-project-0/inspo/dev-user/vinyl.svg',created_at:stamp},
+]

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react'
-import { ImagePlus, LayoutTemplate, ListTodo, NotebookPen, Ruler, ShoppingBag, X } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ImagePlus, LayoutTemplate, ListTodo, NotebookPen, Ruler, ShoppingBag, Trash2, X } from 'lucide-react'
 import { Button, Input, Textarea } from '../ui'
-import { convertMeasurement, type ProjectTool } from '../../domain/projectTools/model'
+import { useToast } from '../Toast'
+import { convertMeasurement, createTool, type ProjectTool } from '../../domain/projectTools/model'
+import { fetchProjectInspo, projectMediaKeys, uploadProjectInspo, deleteProjectInspo, PROJECT_MEDIA_UNAVAILABLE, type ProjectInspoImage } from '../../lib/queries/projectMedia'
 import ProjectToolContent, { MeasurementValues } from './ProjectToolContent'
 import { useProjectToolBoard } from './useProjectToolBoard'
 import { EXPLORER_SECTIONS, collectExplorerItems, explorerStats, type ExplorerItem, type ExplorerSectionId, type ExplorerTask, type InspoImage } from './explorerItems'
 import './ProjectExplorer.css'
 
-const INSPO_KEY = 'checkmark-project-inspo-preview-v1'
 const SECTION_ICONS = {
   summary: NotebookPen,
   tasks: ListTodo,
@@ -18,22 +20,8 @@ const SECTION_ICONS = {
   notes: NotebookPen,
 } as const
 
-function readInspo(projectId: string): InspoImage[] {
-  try {
-    const raw = sessionStorage.getItem(`${INSPO_KEY}:${projectId}`)
-    if (raw) return JSON.parse(raw) as InspoImage[]
-  } catch { /* Preview-only memory. */ }
-  if (projectId.startsWith('sample-')) {
-    return [
-      { id: 'inspo-gold', title: 'Gold tone reference', src: '/project-art/gold-mic.svg' },
-      { id: 'inspo-vinyl', title: 'Artwork mood', src: '/project-art/vinyl.svg' },
-    ]
-  }
-  return []
-}
-
-function writeInspo(projectId: string, items: InspoImage[]) {
-  try { sessionStorage.setItem(`${INSPO_KEY}:${projectId}`, JSON.stringify(items)) } catch { /* Preview-only memory. */ }
+function toInspoImages(images: ProjectInspoImage[]): InspoImage[] {
+  return images.map((image) => ({ id: image.id, title: image.title, src: image.public_url }))
 }
 
 function SketchThumb({ tool }: { tool: Extract<ProjectTool, { type: 'sketch' }> }) {
@@ -61,6 +49,8 @@ function TileThumb({ item, tools, inspo }: { item: ExplorerItem; tools: ProjectT
 
 export default function ProjectExplorer({
   projectId,
+  teamId,
+  userId,
   summary,
   canEdit,
   objectives,
@@ -68,10 +58,13 @@ export default function ProjectExplorer({
   stats,
   renderTasks,
   onDirtyChange,
+  onEditProject,
   previewSelect,
   mode = 'cards',
 }: {
   projectId: string
+  teamId: string
+  userId?: string | null
   summary?: string | null
   canEdit: boolean
   objectives: { id: string; title: string }[]
@@ -79,28 +72,35 @@ export default function ProjectExplorer({
   stats: { objectivesDone: number; objectivesTotal: number }
   renderTasks: (objectiveId: string | null) => ReactNode
   onDirtyChange: (dirty: boolean) => void
+  onEditProject?: () => void
   previewSelect?: string | null
   mode?: 'cards' | 'stats'
 }) {
   const boardState = useProjectToolBoard(projectId, canEdit, onDirtyChange)
-  const { query, board, dirty, saving, saved, error, changeTool, save, reload, downloadDraft, disabled, stale } = boardState
-  const tools = board?.tools ?? []
-  const [inspo, setInspo] = useState<InspoImage[]>(() => readInspo(projectId))
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const inspoQuery = useQuery({
+    queryKey: projectMediaKeys.inspo(projectId),
+    queryFn: () => fetchProjectInspo(projectId),
+  })
+  const mediaAvailable = inspoQuery.data?.available === true
+  const inspo = useMemo(() => toInspoImages(inspoQuery.data?.images ?? []), [inspoQuery.data])
   const [section, setSection] = useState<ExplorerSectionId | 'all'>('all')
-  const tab = mode
   const [selectedId, setSelectedId] = useState<string | null>(previewSelect ?? null)
-
   useEffect(() => {
     if (previewSelect) setSelectedId(previewSelect)
   }, [previewSelect])
-
+  const tools = boardState.board?.tools ?? []
   const items = useMemo(
     () => collectExplorerItems({ summary, tasks, tools, inspo }),
     [summary, tasks, tools, inspo],
   )
   const counts = explorerStats(items, stats.objectivesDone, stats.objectivesTotal)
   const selected = items.find((item) => item.id === selectedId) ?? null
-  const visibleSections = EXPLORER_SECTIONS.filter((entry) => (section === 'all' || section === entry.id) && items.some((item) => item.section === entry.id))
+  const visibleSections = EXPLORER_SECTIONS.filter((entry) => (
+    (section === 'all' || section === entry.id)
+    && (items.some((item) => item.section === entry.id) || canEdit)
+  ))
 
   function closePanel() { setSelectedId(null) }
   useEffect(() => {
@@ -110,20 +110,81 @@ export default function ProjectExplorer({
     return () => window.removeEventListener('keydown', onKey)
   }, [selected])
 
-  function addInspo(event: ChangeEvent<HTMLInputElement>) {
+  const uploadInspo = useMutation({
+    mutationFn: (file: File) => {
+      if (!userId) throw new Error('Sign in to upload inspiration images.')
+      return uploadProjectInspo({ projectId, teamId, userId, file })
+    },
+    onSuccess: (image) => {
+      void queryClient.invalidateQueries({ queryKey: projectMediaKeys.inspo(projectId) })
+      setSelectedId(`inspo:${image.id}`)
+      toast('Inspiration image saved.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+  const removeInspo = useMutation({
+    mutationFn: (image: ProjectInspoImage) => deleteProjectInspo(image),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: projectMediaKeys.inspo(projectId) })
+      closePanel()
+      toast('Inspiration image removed.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+
+  function onInspoFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file || !file.type.startsWith('image/')) return
-    const src = URL.createObjectURL(file)
-    const next = [...inspo, { id: crypto.randomUUID(), title: file.name.replace(/\.[^.]+$/, ''), src, local: true }]
-    setInspo(next)
-    writeInspo(projectId, next)
+    if (file) uploadInspo.mutate(file)
   }
+
+  function addMeasurement() {
+    const board = boardState.board
+    if (!board) return
+    const existing = board.tools.find((tool): tool is Extract<ProjectTool, { type: 'measurements' }> => tool.type === 'measurements')
+    const tool = existing ?? createTool('measurements')
+    if (tool.type !== 'measurements') return
+    const entry = { id: crypto.randomUUID(), name: 'New measurement', width: '', depth: '', height: '', unit: 'in' as const, notes: '' }
+    const next = { ...tool, entries: [...tool.entries, entry] }
+    const tools = existing ? board.tools.map((item) => item.id === next.id ? next : item) : [...board.tools, next]
+    boardState.change({ ...board, tools })
+    setSelectedId(`measure:${entry.id}`)
+  }
+  function addShoppingItem() {
+    const board = boardState.board
+    if (!board) return
+    const existing = board.tools.find((tool): tool is Extract<ProjectTool, { type: 'shopping' }> => tool.type === 'shopping')
+    const tool = existing ?? createTool('shopping')
+    if (tool.type !== 'shopping') return
+    const item = { id: crypto.randomUUID(), name: 'New item', done: false, measurementId: null as string | null }
+    const next = { ...tool, items: [...tool.items, item] }
+    const tools = existing ? board.tools.map((entry) => entry.id === next.id ? next : entry) : [...board.tools, next]
+    boardState.change({ ...board, tools })
+    setSelectedId(`shop:${item.id}`)
+  }
+  function addNote() {
+    const board = boardState.board
+    if (!board) return
+    const tool = createTool('note')
+    boardState.change({ ...board, tools: [...board.tools, tool] })
+    setSelectedId(`tool:${tool.id}`)
+  }
+  function addSketch() {
+    const board = boardState.board
+    if (!board) return
+    const tool = createTool('sketch')
+    boardState.change({ ...board, tools: [...board.tools, tool] })
+    setSelectedId(`tool:${tool.id}`)
+  }
+
+  const { query, board, dirty, saving, saved, error, stale, save, reload, downloadDraft, changeTool, disabled } = boardState
+  const tab = mode
 
   if (query.isPending) return <section className="widget-card p-5" aria-busy="true">Loading project tools…</section>
   if (!board) return <section className="widget-card p-5"><h2 className="text-subtitle">Workspace · Beta</h2><p role="alert">{query.error?.message ?? 'Could not load project tools.'}</p><Button variant="secondary" onClick={() => void query.refetch()}>Retry</Button></section>
 
   const sheet = Boolean(selected && tab === 'cards')
+  const selectedRecord = selected?.inspoId ? inspoQuery.data?.images.find((image: ProjectInspoImage) => image.id === selected.inspoId) : undefined
 
   return (
     <div className="project-deck">
@@ -145,6 +206,7 @@ export default function ProjectExplorer({
         </div>
       )}
       {stale && <p role="status" className="pt-error">A newer version is available. Your draft is kept here; saving will check for a conflict.</p>}
+      {inspoQuery.isError && <p role="alert" className="pt-error">{(inspoQuery.error as Error).message}</p>}
 
       {tab === 'stats' && (
         <div className="project-stats-page">
@@ -202,18 +264,44 @@ export default function ProjectExplorer({
                           </span>
                         </button>
                       ))}
-                      {entry.id === 'inspo' && canEdit && (
-                        <label className="project-tile" style={{ cursor: 'pointer', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      {entry.id === 'inspo' && canEdit && mediaAvailable && (
+                        <label className={`project-tile is-add${uploadInspo.isPending ? ' is-busy' : ''}`}>
                           <ImagePlus size={22} />
-                          <span>Upload inspo</span>
-                          <input type="file" accept="image/*" className="sr-only" onChange={addInspo} />
+                          <span>{uploadInspo.isPending ? 'Uploading…' : 'Upload inspo'}</span>
+                          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" disabled={uploadInspo.isPending} onChange={onInspoFile} />
                         </label>
                       )}
+                      {entry.id === 'measurements' && canEdit && (
+                        <button type="button" className="project-tile is-add focus-ring" onClick={addMeasurement}>
+                          <Ruler size={22} /><span>Add measurement</span>
+                        </button>
+                      )}
+                      {entry.id === 'shopping' && canEdit && (
+                        <button type="button" className="project-tile is-add focus-ring" onClick={addShoppingItem}>
+                          <ShoppingBag size={22} /><span>Add item</span>
+                        </button>
+                      )}
+                      {entry.id === 'notes' && canEdit && (
+                        <button type="button" className="project-tile is-add focus-ring" onClick={addNote}>
+                          <NotebookPen size={22} /><span>Add note</span>
+                        </button>
+                      )}
+                      {entry.id === 'blueprints' && canEdit && (
+                        <button type="button" className="project-tile is-add focus-ring" onClick={addSketch}>
+                          <LayoutTemplate size={22} /><span>Add blueprint</span>
+                        </button>
+                      )}
+                      {entry.id === 'summary' && canEdit && !summary?.trim() && onEditProject && (
+                        <button type="button" className="project-tile is-add focus-ring" onClick={onEditProject}>
+                          <NotebookPen size={22} /><span>Add description</span>
+                        </button>
+                      )}
                     </div>
-                    {entry.id === 'inspo' && (
-                      <p className="text-caption text-text-muted" style={{ marginTop: 8 }}>
-                        Inspiration images are preview-only in this browser until a project media link exists.
-                      </p>
+                    {entry.id === 'inspo' && inspoQuery.isSuccess && !mediaAvailable && (
+                      <p className="text-caption text-text-muted" style={{ marginTop: 8 }}>{PROJECT_MEDIA_UNAVAILABLE}</p>
+                    )}
+                    {entry.id === 'tasks' && canEdit && group.length === 0 && (
+                      <div className="project-empty-add">{renderTasks(null)}</div>
                     )}
                   </section>
                 )
@@ -234,6 +322,11 @@ export default function ProjectExplorer({
                   changeTool={changeTool}
                   renderTasks={renderTasks}
                   objectives={objectives}
+                  canEdit={canEdit}
+                  inspoRecord={selectedRecord}
+                  onDeleteInspo={selectedRecord ? () => removeInspo.mutate(selectedRecord) : undefined}
+                  deletingInspo={removeInspo.isPending}
+                  onEditProject={onEditProject}
                 />
               ) : (
                 <ul className="project-panel-list">
@@ -260,7 +353,7 @@ export default function ProjectExplorer({
 }
 
 function ExplorerDetail({
-  item, tools, inspo, disabled, changeTool, renderTasks, objectives,
+  item, tools, inspo, disabled, changeTool, renderTasks, objectives, canEdit, inspoRecord, onDeleteInspo, deletingInspo, onEditProject,
 }: {
   item: ExplorerItem
   tools: ProjectTool[]
@@ -269,6 +362,11 @@ function ExplorerDetail({
   changeTool: (tool: ProjectTool) => void
   renderTasks: (objectiveId: string | null) => ReactNode
   objectives: { id: string; title: string }[]
+  canEdit: boolean
+  inspoRecord?: ProjectInspoImage
+  onDeleteInspo?: () => void
+  deletingInspo?: boolean
+  onEditProject?: () => void
 }) {
   const tool = tools.find((entry) => entry.id === item.toolId)
   const Icon = SECTION_ICONS[item.section]
@@ -279,6 +377,7 @@ function ExplorerDetail({
         <div className="project-panel-body">
           <h3>{item.title}</h3>
           <p>{item.subtitle}</p>
+          {canEdit && onEditProject && <Button variant="secondary" size="sm" onClick={onEditProject}>Edit description</Button>}
         </div>
       </>
     )
@@ -290,7 +389,11 @@ function ExplorerDetail({
         <div className="project-panel-art">{image ? <img src={image.src} alt="" /> : <Icon size={48} />}</div>
         <div className="project-panel-body">
           <h3>{item.title}</h3>
-          <p className="text-caption text-text-muted">Preview-only inspiration. A project-linked media field is needed to save this to the studio library.</p>
+          {canEdit && onDeleteInspo && inspoRecord && (
+            <Button variant="danger" size="sm" iconLeft={<Trash2 size={14} />} loading={deletingInspo} onClick={onDeleteInspo}>
+              Remove image
+            </Button>
+          )}
         </div>
       </>
     )
