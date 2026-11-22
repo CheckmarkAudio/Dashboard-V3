@@ -11,6 +11,7 @@
 //     narrows within the caller's own team, never across teams.
 // No writes live in this module.
 
+import { projectDetailPath } from '../../app/projectPaths'
 import { supabase } from '../supabase'
 import { describeFlywheelEvent } from '../queries/flywheelEvents'
 import type { FlywheelStage } from '../flywheel/stages'
@@ -84,7 +85,7 @@ export function flywheelRowToActivityEvent(row: RawMemberEventRow): ActivityEven
   const projectId = typeof row.metadata?.project_id === 'string' ? row.metadata.project_id : null
   const taskId = typeof row.metadata?.task_id === 'string' ? row.metadata.task_id : null
   const href = projectId
-    ? `/projects?project=${encodeURIComponent(projectId)}${taskId ? `&task=${encodeURIComponent(taskId)}` : ''}`
+    ? projectDetailPath(projectId, undefined, taskId ? { task: taskId } : undefined)
     : undefined
   return {
     id: row.id,

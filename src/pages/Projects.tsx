@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode, useId } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Archive,
@@ -36,6 +36,7 @@ import {
   createProject,
   deleteProjectObjective,
   deleteProjectTask,
+  fetchProjectCardMeta,
   fetchProjectDetail,
   fetchProjects,
   projectKeys,
@@ -50,6 +51,9 @@ import {
 } from '../lib/queries/projects'
 import './ProjectsChecklist.css'
 import ProjectToolsBoard from '../components/projects/ProjectToolsBoard'
+import { NewProjectTile, ProjectCard, ProjectGridSkeleton, type ProjectCardModel } from '../components/projects/ProjectCard'
+import { PROJECT_LIST_FILTERS, matchesProjectFilter, type ProjectListFilter } from '../components/projects/projectListFilter'
+import { legacyProjectSearchRedirect, projectDetailPath, projectsListPath } from '../app/projectPaths'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { memberActivityKeys } from '../lib/activity/queries'
@@ -81,7 +85,8 @@ function timeLabel(value: string): string {
 function CreateProjectForm({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
-  const [, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [objectives, setObjectives] = useState([''])
@@ -91,7 +96,7 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
     mutationFn: createProject,
     onSuccess: (project) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.all })
-      setSearchParams({ project: project.id })
+      navigate(projectDetailPath(project.id, searchParams))
       toast('Project created — add the first next task.', 'success')
       onClose()
     },
@@ -1079,9 +1084,9 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
                 </span>
                 <div className="min-w-0">
                   {update.task_id && (
-                    <a href={`?project=${project.id}&task=${update.task_id}`} className="text-xs font-bold text-gold hover:underline">
+                    <Link to={projectDetailPath(project.id, undefined, { task: update.task_id })} className="text-xs font-bold text-gold hover:underline">
                       {taskTitle.get(update.task_id) ?? 'Project task'}
-                    </a>
+                    </Link>
                   )}
                   <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-text">{update.note}</p>
                   <p className="mt-1.5 text-[11px] text-text-light">{timeLabel(update.created_at)}</p>
@@ -1098,159 +1103,131 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
 }
 
 export default function Projects() {
-  useDocumentTitle('Projects - Checkmark Workspace')
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [creating, setCreating] = useState(false)
-  const selectedId = searchParams.get('project')
-  const projectsQuery = useQuery({ queryKey: projectKeys.list(), queryFn: fetchProjects })
-  const projects = projectsQuery.data ?? []
+  const { projectId } = useParams()
+  const [searchParams] = useSearchParams()
+  const legacyPath = !projectId ? legacyProjectSearchRedirect(searchParams.toString()) : null
+  if (legacyPath) return <Navigate to={legacyPath} replace />
+  if (projectId) return <ProjectWorkspace projectId={projectId} />
+  return <ProjectsGallery />
+}
 
-  function selectProject(id: string | null) {
+function ProjectWorkspace({ projectId }: { projectId: string }) {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const listPath = projectsListPath(searchParams)
+  const projectsQuery = useQuery({ queryKey: projectKeys.list(), queryFn: fetchProjects })
+  const title = projectsQuery.data?.find((project) => project.id === projectId)?.title
+  useDocumentTitle(title ? `${title} - Checkmark Workspace` : 'Project - Checkmark Workspace')
+
+  function goBack() {
     if (!window.dispatchEvent(new Event('project-tools-leave', { cancelable: true }))) return
-    setSearchParams(id ? { project: id } : {})
+    navigate(listPath)
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] animate-fade-in space-y-6">
+    <div className="project-grid-page mx-auto animate-fade-in space-y-5">
+      <nav className="project-workspace-nav" aria-label="Project">
+        <Link to={listPath} className="project-back focus-ring">
+          <ArrowLeft size={16} aria-hidden="true" />
+          All projects
+        </Link>
+        <ol className="project-breadcrumb">
+          <li><Link to={listPath} className="focus-ring">Projects</Link></li>
+          <li aria-current="page">{title ?? 'Project'}</li>
+        </ol>
+      </nav>
+      <ProjectDetail projectId={projectId} onBack={goBack} />
+    </div>
+  )
+}
+
+function ProjectsGallery() {
+  useDocumentTitle('Projects - Checkmark Workspace')
+  const [searchParams] = useSearchParams()
+  const [creating, setCreating] = useState(false)
+  const [filter, setFilter] = useState<ProjectListFilter>('all')
+  const formRef = useRef<HTMLDivElement>(null)
+  const projectsQuery = useQuery({ queryKey: projectKeys.list(), queryFn: fetchProjects })
+  const projects = projectsQuery.data ?? []
+  const ids = projects.map((project) => project.id)
+  const metaQuery = useQuery({
+    queryKey: projectKeys.cardMeta(ids),
+    queryFn: () => fetchProjectCardMeta(ids),
+    enabled: ids.length > 0,
+  })
+  const visible = projects.filter((project) => matchesProjectFilter(project.status, filter))
+  const activeCount = projects.filter((project) => matchesProjectFilter(project.status, 'active')).length
+  const completedCount = projects.filter((project) => project.status === 'completed').length
+
+  function openCreateForm() {
+    setCreating(true)
+    window.setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
+
+  return (
+    <div className="project-grid-page animate-fade-in space-y-6">
       <PageHeader
         icon={FolderKanban}
         title="Projects"
         actions={
-          <Button iconLeft={<Plus size={16} />} onClick={() => setCreating(true)}>
+          <Button size="lg" iconLeft={<Plus size={16} />} onClick={openCreateForm}>
             New project
           </Button>
         }
       />
 
-      {creating && <CreateProjectForm onClose={() => setCreating(false)} />}
+      <div ref={formRef}>{creating && <CreateProjectForm onClose={() => setCreating(false)} />}</div>
 
-      {/* Single-column, expandable projects layout — ADHD-friendly */}
       {projectsQuery.isLoading ? (
-        <div className="space-y-3">
-          <div className="h-40 animate-pulse rounded-xl bg-surface" />
-          <div className="h-40 animate-pulse rounded-xl bg-surface" />
-        </div>
+        <ProjectGridSkeleton />
       ) : projects.length === 0 ? (
         <EmptyState
           icon={FolderKanban}
           title="No projects yet"
           description="Create one outcome, then add its next concrete task."
-          action={<Button size="sm" onClick={() => setCreating(true)} iconLeft={<Plus size={14} />}>Create project</Button>}
+          action={<Button size="sm" onClick={openCreateForm} iconLeft={<Plus size={14} />}>Create project</Button>}
         />
       ) : (
         <div className="space-y-4">
-          <div className="px-1">
-            <h2 className="text-sm font-bold text-text">All Projects</h2>
-            <p className="text-xs text-text-muted">
-              {projects.filter((p) => p.status !== 'completed').length} active · {projects.filter((p) => p.status === 'completed').length} completed
+          <div className="project-grid-toolbar">
+            <div className="project-filter" role="group" aria-label="Filter projects">
+              {PROJECT_LIST_FILTERS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="focus-ring"
+                  aria-pressed={filter === item.id}
+                  onClick={() => setFilter(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <p className="project-filter-count">
+              {activeCount} active · {completedCount} completed
             </p>
           </div>
-          {projects.map((project) => (
-            <ProjectExpandableCard
-              key={project.id}
-              project={project}
-              isExpanded={selectedId === project.id}
-              onToggleExpand={() => selectProject(selectedId === project.id ? null : project.id)}
+          {visible.length === 0 ? (
+            <EmptyState
+              icon={FolderKanban}
+              title={filter === 'completed' ? 'No completed projects' : 'No active projects'}
+              description="Try another filter, or start a new project."
+              action={<Button size="sm" onClick={() => setFilter('all')}>Show all projects</Button>}
             />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/**
- * Expandable project card — shows overview, expands inline to show full detail
- * ADHD-friendly: big click target, clear visual hierarchy, no navigation
- */
-function ProjectExpandableCard({
-  project,
-  isExpanded,
-  onToggleExpand,
-}: {
-  project: Project
-  isExpanded: boolean
-  onToggleExpand: () => void
-}) {
-  const projectQuery = useQuery({
-    queryKey: projectKeys.detail(project.id),
-    queryFn: () => fetchProjectDetail(project.id),
-    enabled: isExpanded,
-  })
-  const data = projectQuery.data
-  const objectives = data?.objectives ?? []
-  const completedObjectives = objectives.filter((o) => o.is_completed).length
-  const progress = objectives.length ? Math.round((completedObjectives / objectives.length) * 100) : 0
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-border bg-surface transition-all">
-      {/* Clickable header — always visible, big target */}
-      <button
-        type="button"
-        onClick={onToggleExpand}
-        aria-expanded={isExpanded}
-        className="w-full p-4 text-left hover:bg-surface-hover focus-ring transition-colors sm:p-5"
-      >
-        {isExpanded ? <span className="inline-flex items-center gap-2 text-sm text-text-muted"><ArrowLeft size={16} /> All projects</span> : <div className="flex items-start gap-4">
-          {/* Chevron */}
-          <div className="shrink-0 pt-1">
-            <ChevronDown
-              size={24}
-              className={`transition-transform text-gold ${isExpanded ? 'rotate-180' : ''}`}
-              aria-hidden="true"
-            />
-          </div>
-
-          {/* Project info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-              <h3 className="text-lg font-bold text-text">{project.title}</h3>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shrink-0 ${
-                project.status === 'completed'
-                  ? 'bg-blue-500/15 text-blue-300'
-                  : 'bg-emerald-500/15 text-emerald-400'
-              }`}>
-                {project.status}
-              </span>
-            </div>
-
-            <p className="text-sm text-text-muted line-clamp-2 mb-3">
-              {project.objective || 'No description yet'}
-            </p>
-
-            {/* Quick stats */}
-            <div className="flex flex-wrap gap-4 text-sm mb-3">
-              <div>
-                <span className="font-bold text-text">{objectives.length}</span>
-                <span className="text-text-light ml-1">objectives</span>
-              </div>
-              <div>
-                <span className="font-bold text-text">{completedObjectives}</span>
-                <span className="text-text-light ml-1">complete</span>
-              </div>
-              <div className="flex items-center gap-1 text-text-light">
-                <CalendarDays size={14} />
-                {dateLabel(project.target_date)}
-              </div>
-            </div>
-
-            {/* Progress bar */}
-            {objectives.length > 0 && (
-              <div className="h-2 w-full overflow-hidden rounded-full bg-border">
-                <div className="h-full rounded-full bg-gold transition-all" style={{ width: `${progress}%` }} />
-              </div>
-            )}
-          </div>
-        </div>}
-      </button>
-
-      {/* Expanded detail — shown below header when expanded */}
-      {isExpanded && (
-        <div className="border-t border-border bg-surface-alt/30">
-          {projectQuery.isLoading ? (
-            <div className="p-6 text-center text-text-light">Loading project details…</div>
           ) : (
-            <ProjectDetail projectId={project.id} onBack={() => onToggleExpand()} />
+            <div className="project-grid">
+              {visible.map((project) => {
+                const meta = metaQuery.data?.[project.id]
+                const card: ProjectCardModel = {
+                  ...project,
+                  objectiveCount: meta?.objectiveCount ?? 0,
+                  completedCount: meta?.completedCount ?? 0,
+                  members: meta?.members ?? [],
+                }
+                return <ProjectCard key={project.id} project={card} href={projectDetailPath(project.id, searchParams)} />
+              })}
+              <NewProjectTile onClick={openCreateForm} />
+            </div>
           )}
         </div>
       )}

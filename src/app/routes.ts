@@ -7,6 +7,7 @@ export const APP_ROUTES = {
     profile: '/profile/:memberId',
     tasks: '/daily',
     projects: '/projects',
+    project: '/projects/:projectId',
     booking: '/sessions',
     calendar: '/calendar',
     content: '/content',
