@@ -6,15 +6,15 @@ export interface ProjectArtOption {
 }
 
 export const PROJECT_ART_CATALOG: ProjectArtOption[] = [
-  { id: 'gold-mic', src: '/project-art/gold-mic.webp', phrases: ['echoes in gold', 'echoes'], keywords: ['gold', 'echo'] },
-  { id: 'after-hours', src: '/project-art/after-hours.webp', phrases: ['after hours'], keywords: ['night', 'club', 'late night', 'dj'] },
-  { id: 'vinyl', src: '/project-art/vinyl.webp', phrases: ['long way home', 'long way'], keywords: ['vinyl', 'album', 'turntable', 'lp', 'artwork'] },
-  { id: 'live-stage', src: '/project-art/live-stage.webp', phrases: ['northline'], keywords: ['live', 'sessions', 'session', 'stage', 'concert', 'performance'] },
-  { id: 'piano', src: '/project-art/piano.webp', phrases: ['holiday special', 'holiday'], keywords: ['festive', 'christmas', 'piano'] },
-  { id: 'studio-room', src: '/project-art/studio-room.webp', phrases: ['studio b', 'refresh'], keywords: ['renovat', 'closet', 'floor plan', 'storage'] },
-  { id: 'mix-desk', src: '/project-art/mix-desk.webp', phrases: ['mix and master', 'mix & master'], keywords: ['mix', 'master', 'console', 'mixing'] },
-  { id: 'headphones', src: '/project-art/headphones.webp', phrases: ['headphones'], keywords: ['listen', 'review', 'monitor'] },
-  { id: 'guitar', src: '/project-art/guitar.webp', phrases: [], keywords: ['guitar', 'amp', 'electric'] },
+  { id: 'gold-mic', src: '/project-art/gold-mic.svg', phrases: ['echoes in gold', 'echoes'], keywords: ['gold', 'echo'] },
+  { id: 'after-hours', src: '/project-art/after-hours.svg', phrases: ['after hours'], keywords: ['night', 'club', 'late night', 'dj'] },
+  { id: 'vinyl', src: '/project-art/vinyl.svg', phrases: ['long way home', 'long way'], keywords: ['vinyl', 'album', 'turntable', 'lp', 'artwork'] },
+  { id: 'live-stage', src: '/project-art/live-stage.svg', phrases: ['northline'], keywords: ['live', 'sessions', 'session', 'stage', 'concert', 'performance'] },
+  { id: 'piano', src: '/project-art/piano.svg', phrases: ['holiday special', 'holiday'], keywords: ['festive', 'christmas', 'piano'] },
+  { id: 'studio-room', src: '/project-art/studio-room.svg', phrases: ['studio b', 'refresh'], keywords: ['renovat', 'closet', 'floor plan', 'storage'] },
+  { id: 'mix-desk', src: '/project-art/mix-desk.svg', phrases: ['mix and master', 'mix & master'], keywords: ['mix', 'master', 'console', 'mixing'] },
+  { id: 'headphones', src: '/project-art/headphones.svg', phrases: ['headphones'], keywords: ['listen', 'review', 'monitor'] },
+  { id: 'guitar', src: '/project-art/guitar.svg', phrases: [], keywords: ['guitar', 'amp', 'electric'] },
 ]
 
 export interface ProjectArtInput {

@@ -14,6 +14,31 @@ export interface ProjectCardModel extends Project {
   members: ProjectMember[]
 }
 
+
+function ProjectCover({
+  project,
+  className,
+}: {
+  project: Pick<Project, 'id' | 'title' | 'objective'> & { cover_url?: string | null }
+  className?: string
+}) {
+  const art = resolveProjectArt(project)
+  const name = artTransitionName(project.id)
+  if (art.custom) {
+    return <img className={className} src={art.src} alt="" style={{ viewTransitionName: name }} />
+  }
+  return (
+    <span
+      className={`project-card-art-ink${className ? ` ${className}` : ''}`}
+      style={{
+        viewTransitionName: name,
+        WebkitMaskImage: `url("${art.src}")`,
+        maskImage: `url("${art.src}")`,
+      }}
+    />
+  )
+}
+
 function dateLabel(value: string | null): string {
   if (!value) return 'No target date'
   return new Date(`${value}T12:00:00`).toLocaleDateString([], {
@@ -43,10 +68,9 @@ function MemberAvatars({ members }: { members: ProjectMember[] }) {
   )
 }
 
-export function ProjectCard({ project, href, previewHover = false }: { project: ProjectCardModel; href: string; previewHover?: boolean }) {
+export function ProjectCard({ project, href, previewHover = false, layout = 'tile' }: { project: ProjectCardModel; href: string; previewHover?: boolean; layout?: 'tile' | 'row' }) {
   const navigate = useNavigate()
   const tilt = useCardTilt()
-  const art = resolveProjectArt(project)
   const progress = project.objectiveCount ? Math.round((project.completedCount / project.objectiveCount) * 100) : 0
   const description = project.objective?.trim() || 'No description yet'
   const label = [
@@ -60,7 +84,7 @@ export function ProjectCard({ project, href, previewHover = false }: { project: 
     <Link
       ref={tilt.ref as never}
       to={href}
-      className={`project-card focus-ring${previewHover ? ' is-preview-hover' : ''}`}
+      className={`project-card focus-ring${previewHover ? ' is-preview-hover' : ''}${layout === 'row' ? ' is-row' : ''}`}
       aria-label={label}
       onPointerMove={tilt.onPointerMove}
       onPointerLeave={tilt.onPointerLeave}
@@ -71,11 +95,7 @@ export function ProjectCard({ project, href, previewHover = false }: { project: 
       }}
     >
       <span className="project-card-art">
-        <img
-          src={art.src}
-          alt=""
-          style={{ viewTransitionName: artTransitionName(project.id) }}
-        />
+        <ProjectCover project={project} />
       </span>
       <span className="project-card-corners" aria-hidden="true" />
       <span className="project-card-gem" data-status={project.status}>{project.status}</span>
@@ -137,23 +157,21 @@ export function ProjectHero({
   project,
   actions,
   progress = 0,
+  eyebrow,
 }: {
   project: Pick<Project, 'id' | 'title' | 'objective' | 'status' | 'target_date'> & { cover_url?: string | null }
   actions?: ReactNode
   progress?: number
+  eyebrow?: ReactNode
 }) {
-  const art = resolveProjectArt(project)
   return (
     <header className="project-hero">
       <div className="project-hero-art">
-        <img
-          src={art.src}
-          alt=""
-          style={{ viewTransitionName: artTransitionName(project.id) }}
-        />
+        <ProjectCover project={project} />
         <span className="project-card-corners" aria-hidden="true" />
         <div className="project-hero-plate">
           <span className="project-card-gem" data-status={project.status}>{project.status}</span>
+          {eyebrow && <p className="project-hero-eyebrow">{eyebrow}</p>}
           <h1 className="project-hero-title">{project.title}</h1>
           <p className="project-hero-copy">{project.objective?.trim() || 'No project description yet.'}</p>
           <p className="project-card-meta">

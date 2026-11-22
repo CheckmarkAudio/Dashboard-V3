@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<!-- After MEDIA/ARTWORK/live-recording-guitar-amplifier.png, stacked for a portrait card -->
+  <g transform="translate(22,10) rotate(-6 80 170)">
+    <!-- headstock -->
+    <path d="M72 16c6-8 28-14 42 2l-8 22-28-8c-2-6-4-12-6-16z"/>
+    <circle cx="104" cy="18" r="3.2"/>
+    <circle cx="110" cy="30" r="3.2"/>
+    <circle cx="112" cy="42" r="3.2"/>
+    <line x1="94" y1="20" x2="104" y2="18"/>
+    <line x1="96" y1="32" x2="110" y2="30"/>
+    <line x1="96" y1="44" x2="112" y2="42"/>
+    <!-- neck -->
+    <path d="M78 46h28l6 158H76z"/>
+    <g stroke-width="2">
+      <line x1="77" y1="68" x2="107" y2="68"/>
+      <line x1="76" y1="90" x2="108" y2="90"/>
+      <line x1="76" y1="112" x2="108" y2="112"/>
+      <line x1="76" y1="134" x2="108" y2="134"/>
+      <line x1="76" y1="156" x2="108" y2="156"/>
+      <line x1="76" y1="178" x2="108" y2="178"/>
+    </g>
+    <!-- Strat-like body with horns -->
+    <path d="M76 200
+      c-8 2-28 8-40 28-10 16-8 36 10 48
+      c8 6 10 16 4 26
+      c-10 14 2 34 28 36
+      c16 2 28-6 34-18
+      c6 14 22 24 42 18
+      c26-6 32-28 16-40
+      c-8-10-4-20 6-26
+      c22-10 36-28 32-52
+      c-4-22-24-36-52-40
+      H86c-4 0-8 2-10 8z"/>
+    <rect x="84" y="232" width="32" height="11" rx="5"/>
+    <rect x="84" y="252" width="32" height="11" rx="5"/>
+    <rect x="84" y="272" width="32" height="11" rx="5"/>
+    <circle cx="130" cy="268" r="5"/>
+    <circle cx="144" cy="278" r="5"/>
+    <circle cx="128" cy="286" r="5"/>
+    <path d="M100 292l16 20"/>
+  </g>
+  <!-- combo amp, clear of the body -->
+  <g transform="translate(154,196)">
+    <path d="M44 8h52l10 16H34z"/>
+    <rect x="6" y="24" width="128" height="140" rx="8"/>
+    <circle cx="26" cy="46" r="6"/>
+    <circle cx="48" cy="46" r="6"/>
+    <circle cx="70" cy="46" r="6"/>
+    <circle cx="92" cy="46" r="6"/>
+    <circle cx="114" cy="46" r="6"/>
+    <defs><clipPath id="grille"><rect x="20" y="62" width="100" height="88" rx="3"/></clipPath></defs>
+    <rect x="20" y="62" width="100" height="88" rx="3"/>
+    <g stroke-width="1.7" clip-path="url(#grille)">
+      <path d="M20 84l20-22 20 22-20 22z"/>
+      <path d="M60 84l20-22 20 22-20 22z"/>
+      <path d="M100 84l20-22 20 22-20 22z"/>
+      <path d="M40 106l20-22 20 22-20 22z"/>
+      <path d="M80 106l20-22 20 22-20 22z"/>
+      <path d="M20 128l20-22 20 22-20 22z"/>
+      <path d="M60 128l20-22 20 22-20 22z"/>
+      <path d="M100 128l20-22 20 22-20 22z"/>
+    </g>
+  </g>
+  <path d="M70 348c36 16 90 20 148-4"/>
+</svg>

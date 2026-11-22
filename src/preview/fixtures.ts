@@ -56,9 +56,16 @@ sampleTables.project_members = [
 
 // Project-tool UI fixtures only; sample edits live in memory and reset on reload.
 sampleTables.project_toolboards = [{project_id:'sample-project-0',revision:1,updated_at:stamp,content:{version:1,tools:[
-  {id:'fixture-measure',type:'measurements',title:'Measurements',wide:false,entries:[{id:'fixture-closet',name:'Closet opening',width:'34',depth:'18',height:'72',unit:'in',notes:'Leave room for the door.'}]},
-  {id:'fixture-shopping',type:'shopping',title:'Shopping list',wide:false,items:[{id:'fixture-shelf',name:'Storage shelf',done:false,measurementId:'fixture-closet'}]},
+  {id:'fixture-measure',type:'measurements',title:'Measurements',wide:false,entries:[
+    {id:'fixture-closet',name:'Closet opening',width:'34',depth:'18',height:'72',unit:'in',notes:'Leave room for the door.'},
+    {id:'fixture-booth',name:'Vocal booth',width:'48',depth:'48',height:'96',unit:'in',notes:'Keep the ceiling clear of lights.'},
+  ]},
+  {id:'fixture-shopping',type:'shopping',title:'Shopping list',wide:false,items:[
+    {id:'fixture-shelf',name:'Storage shelf',done:false,measurementId:'fixture-closet'},
+    {id:'fixture-cable',name:'Gold patch cable',done:false,measurementId:null},
+    {id:'fixture-lamp',name:'Desk lamp',done:true,measurementId:null},
+  ]},
   {id:'fixture-note',type:'note',title:'Studio ideas',wide:false,text:'Warm lighting. Clear floors. Everything has a home.'},
   {id:'fixture-tasks',type:'tasks',title:'Next steps',wide:false,objectiveId:null},
-  {id:'fixture-sketch',type:'sketch',title:'Room sketch',wide:true,strokes:[],text:''},
+  {id:'fixture-sketch',type:'sketch',title:'Room sketch',wide:true,strokes:[{width:4,points:[[80,80],[920,80],[920,520],[80,520],[80,80]]},{width:2,points:[[80,200],[400,200],[400,520]]}],text:'Rough floor plan for the vocal booth and closet.'},
 ]}}]
