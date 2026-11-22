@@ -56,7 +56,7 @@ function TileThumb({ item, tools, inspo }: { item: ExplorerItem; tools: ProjectT
     const tool = tools.find((entry) => entry.id === item.toolId)
     if (tool?.type === 'sketch' && tool.strokes.length) return <SketchThumb tool={tool} />
   }
-  return <Icon size={32} strokeWidth={1.6} />
+  return <Icon size={40} strokeWidth={1.6} />
 }
 
 export default function ProjectExplorer({

@@ -114,19 +114,24 @@
   transition: transform .8s ease, filter .35s ease, background-color .35s ease;
 }
 .project-card-art img {
-  object-fit: cover;
+  box-sizing: border-box;
+  padding: 18px 18px 32%;
+  object-fit: contain;
+  object-position: center;
   filter: grayscale(1) sepia(.5) saturate(.85) hue-rotate(4deg) contrast(1.05);
 }
 .project-card-art-ink {
   position: absolute;
-  inset: 0;
+  inset: 16px 18px 34%;
+  width: auto;
+  height: auto;
   background-color: var(--art-ink);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  -webkit-mask-position: center 36%;
-  mask-position: center 36%;
-  -webkit-mask-size: 84% auto;
-  mask-size: 84% auto;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
   -webkit-mask-mode: alpha;
   mask-mode: alpha;
 }
@@ -162,13 +167,13 @@
 .project-card:hover .project-card-art-ink,
 .project-card:focus-visible .project-card-art-ink,
 .project-card.is-preview-hover .project-card-art-ink {
-  transform: scale(1.1);
+  transform: scale(1.07);
 }
 .project-card:hover .project-card-art-ink,
 .project-card:focus-visible .project-card-art-ink,
 .project-card.is-preview-hover .project-card-art-ink {
   background-color: var(--art-ink-soft);
-  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--color-gold) 80%, transparent));
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--color-gold) 70%, transparent));
 }
 .project-card:hover .project-card-art::after,
 .project-card:focus-visible .project-card-art::after,
@@ -390,20 +395,27 @@
   display: block;
 }
 .project-hero-art img {
-  object-fit: cover;
-  object-position: center 30%;
+  box-sizing: border-box;
+  padding: 20px 20px 20px 46%;
+  object-fit: contain;
+  object-position: center;
   filter: grayscale(1) sepia(.5) saturate(.85) hue-rotate(4deg) contrast(1.05);
 }
 .project-hero-art .project-card-art-ink {
   position: absolute;
-  inset: 0;
+  top: 20px;
+  right: 24px;
+  bottom: 20px;
+  left: 48%;
+  width: auto;
+  height: auto;
   background-color: var(--art-ink);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  -webkit-mask-position: 86% 42%;
-  mask-position: 86% 42%;
-  -webkit-mask-size: auto 92%;
-  mask-size: auto 92%;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
   -webkit-mask-mode: alpha;
   mask-mode: alpha;
 }
@@ -615,11 +627,15 @@
   min-height: 112px;
   border-radius: 0;
 }
+.project-card.is-row .project-card-art img {
+  padding: 10px;
+}
 .project-card.is-row .project-card-art-ink {
-  -webkit-mask-size: 78% auto;
-  mask-size: 78% auto;
-  -webkit-mask-position: center 46%;
-  mask-position: center 46%;
+  inset: 10px;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
 }
 .project-card.is-row .project-card-plate {
   position: relative;
@@ -700,4 +716,86 @@
   .project-stats-strip::-webkit-scrollbar { display: none; }
   .project-stat-chip { min-height: 32px; padding: 0 10px; font-size: 12px; flex: 0 0 auto; }
   .project-grid-toolbar { align-items: center; gap: 8px; }
+}
+
+/* Light mode only: cream/sand surfaces that match the Soft Gold portal.
+   Dark mode keeps the near-black grounds from the previous preview. */
+:root[data-theme='light'] .project-card,
+:root[data-theme='light'] .project-card-add,
+:root[data-theme='light'] .project-hero {
+  --art-ink: var(--workspace-accent, var(--color-gold-dim));
+  --art-ink-soft: var(--color-gold);
+  --art-ground: color-mix(in srgb, var(--color-gold) 8%, var(--color-surface-alt));
+  --frame-gold: color-mix(in srgb, var(--color-gold-muted) 35%, #fff);
+  color: var(--color-text);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-gold) 16%, var(--color-border)),
+    inset 0 0 0 1px color-mix(in srgb, #fff 75%, transparent),
+    0 8px 18px rgba(36, 27, 16, .07);
+}
+:root[data-theme='light'] .project-card:hover,
+:root[data-theme='light'] .project-card:focus-visible,
+:root[data-theme='light'] .project-card.is-preview-hover,
+:root[data-theme='light'] .project-card-add:hover,
+:root[data-theme='light'] .project-card-add:focus-visible {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-gold) 28%, var(--color-border)),
+    inset 0 0 0 1px color-mix(in srgb, #fff 75%, transparent),
+    0 16px 28px rgba(36, 27, 16, .1),
+    0 0 22px color-mix(in srgb, var(--color-gold) 28%, transparent);
+}
+:root[data-theme='light'] .project-card-plate {
+  background: linear-gradient(to top, var(--color-surface-alt) 0%, color-mix(in srgb, var(--color-surface-alt) 86%, transparent) 58%, transparent 100%);
+}
+:root[data-theme='light'] .project-card-title {
+  color: var(--color-text);
+  text-shadow: none;
+}
+:root[data-theme='light'] .project-card-copy,
+:root[data-theme='light'] .project-card-meta {
+  color: var(--color-text-muted);
+}
+:root[data-theme='light'] .project-card-gem {
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  color: var(--color-text);
+}
+:root[data-theme='light'] .project-card-avatar,
+:root[data-theme='light'] .project-card-avatar-more {
+  border-color: var(--color-surface);
+  background: var(--color-surface-hover);
+  color: var(--workspace-accent, var(--color-gold-dim));
+}
+:root[data-theme='light'] .project-card.is-row .project-card-plate {
+  background: linear-gradient(to right, color-mix(in srgb, var(--color-surface-alt) 20%, transparent), var(--color-surface-alt));
+}
+:root[data-theme='light'] .project-hero-plate {
+  background: linear-gradient(to right, var(--color-surface-alt) 0%, color-mix(in srgb, var(--color-surface-alt) 88%, transparent) 48%, transparent 72%);
+}
+:root[data-theme='light'] .project-hero-title {
+  color: var(--color-text);
+  text-shadow: none;
+}
+:root[data-theme='light'] .project-hero-copy,
+:root[data-theme='light'] .project-hero-eyebrow {
+  color: var(--color-text-muted);
+}
+:root[data-theme='light'] .project-hero-actions {
+  background: var(--color-surface-alt);
+  border-top-color: var(--color-border);
+}
+:root[data-theme='light'] .project-card-skeleton {
+  background: linear-gradient(90deg, var(--color-surface-alt) 0%, var(--color-surface-hover) 50%, var(--color-surface-alt) 100%);
+  background-size: 200% 100%;
+}
+
+@media (max-width: 639px) {
+  .project-card-art-ink { inset: 14px 14px 30%; }
+  .project-card-art img { padding: 14px 14px 28%; }
+  .project-hero-art img { padding: 14px 14px 14px 40%; }
+  .project-hero-art .project-card-art-ink {
+    top: 14px;
+    right: 14px;
+    bottom: 14px;
+    left: 40%;
+  }
 }
