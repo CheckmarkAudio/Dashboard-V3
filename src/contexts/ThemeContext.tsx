@@ -85,7 +85,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Apply resolved theme to `<html data-theme=…>` so CSS variable
   // overrides in index.css take effect. Runs on every resolve change.
   useEffect(() => {
-    document.documentElement.dataset.theme = resolved
+    const preview = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('previewTheme') : null
+    document.documentElement.dataset.theme = preview === 'dark' || preview === 'light' ? preview : resolved
   }, [resolved])
 
   // Re-resolve whenever preference changes.

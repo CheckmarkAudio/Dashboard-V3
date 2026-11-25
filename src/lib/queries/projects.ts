@@ -14,6 +14,7 @@ export interface Project {
   updated_at: string
   completed_at: string | null
   is_pinned?: boolean
+  cover_url?: string | null
 }
 
 export interface ProjectMember {
@@ -62,6 +63,7 @@ export interface ProjectUpdate {
 export const projectKeys = {
   all: ['projects'] as const,
   list: () => [...projectKeys.all, 'list'] as const,
+  cardMeta: (ids: string[]) => [...projectKeys.all, 'card-meta', ...ids] as const,
   detail: (id: string) => [...projectKeys.all, 'detail', id] as const,
 }
 
@@ -76,6 +78,44 @@ export async function fetchProjects(): Promise<Project[]> {
   return ((projectsResult.data ?? []) as Project[])
     .map((project) => ({ ...project, is_pinned: pinned.has(project.id) }))
     .sort((a, b) => Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned)))
+}
+
+export interface ProjectCardMeta {
+  objectiveCount: number
+  completedCount: number
+  members: ProjectMember[]
+}
+
+function memberFromJoin(row: any): ProjectMember {
+  const joined = Array.isArray(row.member) ? row.member[0] : row.member
+  return {
+    member_id: row.member_id as string,
+    display_name: joined?.display_name ?? 'Team member',
+    avatar_url: joined?.avatar_url ?? null,
+  }
+}
+
+export async function fetchProjectCardMeta(projectIds: string[]): Promise<Record<string, ProjectCardMeta>> {
+  const meta: Record<string, ProjectCardMeta> = {}
+  for (const id of projectIds) meta[id] = { objectiveCount: 0, completedCount: 0, members: [] }
+  if (projectIds.length === 0) return meta
+  const [objectivesResult, membersResult] = await Promise.all([
+    supabase.from('project_objectives').select('project_id, is_completed').in('project_id', projectIds),
+    supabase.from('project_members').select('project_id, member_id, member:team_members!project_members_member_id_fkey(display_name, avatar_url)').in('project_id', projectIds),
+  ])
+  const error = objectivesResult.error ?? membersResult.error
+  if (error) throw new Error(error.message)
+  for (const row of objectivesResult.data ?? []) {
+    const entry = meta[row.project_id as string]
+    if (!entry) continue
+    entry.objectiveCount += 1
+    if (row.is_completed) entry.completedCount += 1
+  }
+  for (const row of membersResult.data ?? []) {
+    const entry = meta[(row as { project_id: string }).project_id]
+    if (entry) entry.members.push(memberFromJoin(row))
+  }
+  return meta
 }
 
 export async function fetchProjectDetail(projectId: string): Promise<{
@@ -113,11 +153,7 @@ export async function fetchProjectDetail(projectId: string): Promise<{
   ])
   const error = projectResult.error ?? objectivesResult.error ?? tasksResult.error ?? updatesResult.error ?? membersResult.error ?? teamResult.error
   if (error) throw new Error(error.message)
-  const members = (membersResult.data ?? []).map((row: any) => ({
-    member_id: row.member_id as string,
-    display_name: (Array.isArray(row.member) ? row.member[0]?.display_name : row.member?.display_name) ?? 'Team member',
-    avatar_url: (Array.isArray(row.member) ? row.member[0]?.avatar_url : row.member?.avatar_url) ?? null,
-  }))
+  const members = (membersResult.data ?? []).map((row: any) => memberFromJoin(row))
   return {
     project: projectResult.data as Project,
     objectives: (objectivesResult.data ?? []) as ProjectObjective[],

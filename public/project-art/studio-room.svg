@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<!-- window -->
+  <rect x="78" y="36" width="144" height="88" rx="4"/>
+  <line x1="150" y1="36" x2="150" y2="124"/>
+  <line x1="78" y1="80" x2="222" y2="80"/>
+  <!-- left studio monitor -->
+  <g transform="translate(36,150) rotate(-8)">
+    <rect x="0" y="0" width="86" height="120" rx="6"/>
+    <circle cx="43" cy="40" r="22"/>
+    <circle cx="43" cy="40" r="8"/>
+    <circle cx="43" cy="88" r="16"/>
+    <circle cx="43" cy="88" r="5"/>
+  </g>
+  <!-- right studio monitor -->
+  <g transform="translate(178,142) rotate(8)">
+    <rect x="0" y="0" width="86" height="120" rx="6"/>
+    <circle cx="43" cy="40" r="22"/>
+    <circle cx="43" cy="40" r="8"/>
+    <circle cx="43" cy="88" r="16"/>
+    <circle cx="43" cy="88" r="5"/>
+  </g>
+  <!-- desk -->
+  <path d="M24 268h252"/>
+  <path d="M40 268v52"/>
+  <path d="M260 268v52"/>
+  <!-- small console on the desk -->
+  <rect x="108" y="232" width="84" height="36" rx="4"/>
+  <g stroke-width="2">
+    <line x1="122" y1="240" x2="122" y2="260"/>
+    <line x1="136" y1="240" x2="136" y2="260"/>
+    <line x1="150" y1="240" x2="150" y2="260"/>
+    <line x1="164" y1="240" x2="164" y2="260"/>
+    <line x1="178" y1="240" x2="178" y2="260"/>
+  </g>
+  <rect x="116" y="248" width="10" height="8" rx="1" fill="#fff" stroke="none"/>
+  <rect x="144" y="244" width="10" height="8" rx="1" fill="#fff" stroke="none"/>
+  <rect x="172" y="250" width="10" height="8" rx="1" fill="#fff" stroke="none"/>
+</svg>

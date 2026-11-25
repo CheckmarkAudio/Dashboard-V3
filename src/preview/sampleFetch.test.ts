@@ -34,3 +34,26 @@ test('sample personal queues do not show another member’s assigned tasks', asy
   const response = await sampleFetch('https://example.test/rest/v1/rpc/get_member_assigned_tasks', {method:'POST',body:JSON.stringify({p_user_id:'another-member'})})
   assert.deepEqual(await response.json(), [])
 })
+
+test('sample preview can read inspiration images and save them in memory', async () => {
+  const list = await sampleFetch('https://example.test/rest/v1/project_inspo_images?project_id=eq.sample-project-0')
+  const images = await list.json()
+  assert.ok(Array.isArray(images) && images.length >= 2)
+  assert.ok(images.every((row: {project_id:string}) => row.project_id === 'sample-project-0'))
+  const added = await sampleFetch('https://example.test/rest/v1/rpc/add_project_inspo_image', {
+    method: 'POST',
+    body: JSON.stringify({
+      p_project_id: 'sample-project-0',
+      p_title: 'Test upload',
+      p_storage_path: 'sample-team/sample-project-0/inspo/dev-user/test.png',
+      p_public_url: 'https://example.test/storage/v1/object/public/project-media/sample-team/sample-project-0/inspo/dev-user/test.png',
+    }),
+  })
+  assert.equal(added.status, 200)
+  const row = await added.json() as {id:string}
+  const deleted = await sampleFetch('https://example.test/rest/v1/rpc/delete_project_inspo_image', {
+    method: 'POST',
+    body: JSON.stringify({ p_image_id: row.id }),
+  })
+  assert.equal(deleted.status, 200)
+})

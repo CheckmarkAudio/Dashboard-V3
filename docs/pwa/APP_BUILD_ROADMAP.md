@@ -137,6 +137,12 @@ Exit criteria:
 
 ## Phase 3: Daily Workflows
 
+2026-10-14 director override: implement the reviewed modular Project tools beta now within the existing website. Database approval and deployment are pending; see `docs/ux/PROJECT_SPACES_PLAN.md`. This does not change the installed-app safety gates.
+
+### Director direction — 2026-09-29
+
+Project and task work should become a visual project space designed for installed computer and phone use: nested areas, task references, notes, room images, measurements, and an editable starter from a project description. Studio Glow-Up is the first example. The scoped design and implementation draft is `docs/ux/PROJECT_SPACES_PLAN.md`; it extends this phase without bypassing auth/shell safety. The first interaction concept is sample-only; persistence, private attachments, and live AI are not shipped.
+
 Goal:
 
 - make the app useful for actual day-to-day studio work.

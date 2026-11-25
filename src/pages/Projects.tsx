@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode, useId } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode, useId } from 'react'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Archive,
-  CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -14,13 +13,17 @@ import {
   FileText,
   Ellipsis,
   FolderKanban,
+  ImagePlus,
   Pencil,
   ListPlus,
   Plus,
+  Share2,
   Trash2,
   Target,
   Users,
   X,
+  LayoutGrid,
+  Rows3,
 } from 'lucide-react'
 import { Button, EmptyState, Input, PageHeader, Textarea } from '../components/ui'
 import { useToast } from '../components/Toast'
@@ -36,6 +39,7 @@ import {
   createProject,
   deleteProjectObjective,
   deleteProjectTask,
+  fetchProjectCardMeta,
   fetchProjectDetail,
   fetchProjects,
   projectKeys,
@@ -49,17 +53,22 @@ import {
   type ProjectTask,
 } from '../lib/queries/projects'
 import './ProjectsChecklist.css'
+import ProjectToolsBoard from '../components/projects/ProjectToolsBoard'
+import ProjectExplorer from '../components/projects/ProjectExplorer'
+import { fetchProjectInspo, projectMediaKeys, setProjectCover } from '../lib/queries/projectMedia'
+import { NewProjectTile, ProjectCard, ProjectGridSkeleton, ProjectHero, type ProjectCardModel } from '../components/projects/ProjectCard'
+import { PROJECT_LIST_FILTERS, matchesProjectFilter, type ProjectListFilter } from '../components/projects/projectListFilter'
+import { legacyProjectSearchRedirect, projectDetailPath, projectsListPath } from '../app/projectPaths'
+import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 import { memberActivityKeys } from '../lib/activity/queries'
 import { emitFlywheelEvent, flywheelKeys } from '../lib/queries/flywheelEvents'
 
-function dateLabel(value: string | null): string {
-  if (!value) return 'No target date'
-  return new Date(`${value}T12:00:00`).toLocaleDateString([], {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+const projectTaskCachePrefixes = ['assigned-tasks', 'admin-assigned-tasks', 'team-assigned-tasks', 'studio-assigned-tasks', 'assign-page-member-tasks']
+function refreshTaskSurfaces(client: QueryClient) {
+  for (const prefix of projectTaskCachePrefixes) void client.invalidateQueries({ queryKey: [prefix] })
 }
+
 
 function timeLabel(value: string): string {
   return new Date(value).toLocaleString([], {
@@ -73,7 +82,8 @@ function timeLabel(value: string): string {
 function CreateProjectForm({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
-  const [, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [objectives, setObjectives] = useState([''])
@@ -83,7 +93,7 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
     mutationFn: createProject,
     onSuccess: (project) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.all })
-      setSearchParams({ project: project.id })
+      navigate(projectDetailPath(project.id, searchParams))
       toast('Project created — add the first next task.', 'success')
       onClose()
     },
@@ -219,6 +229,7 @@ function AddSubtaskForm({ projectId, objectiveId }: { projectId: string; objecti
       setTitle('')
       setOpen(false)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
       toast('Subtask added.', 'success')
     },
@@ -288,6 +299,7 @@ function AddObjectiveForm({
       setTitle('')
       onClose()
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       toast('Objective added.', 'success')
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -323,10 +335,12 @@ function ProjectTaskRow({
   projectId,
   task,
   canCompleteWork,
+  embedded = false,
 }: {
   projectId: string
   task: ProjectTask
   canCompleteWork: boolean
+  embedded?: boolean
 }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -339,6 +353,7 @@ function ProjectTaskRow({
     mutationFn: (next: boolean) => completeProjectTask(task.id, next),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       void queryClient.invalidateQueries({ queryKey: memberActivityKeys.all })
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -349,6 +364,7 @@ function ProjectTaskRow({
       setNote('')
       setWriting(false)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
       void queryClient.invalidateQueries({ queryKey: memberActivityKeys.all })
       toast('Progress recorded on the project timeline.', 'success')
@@ -360,6 +376,7 @@ function ProjectTaskRow({
     onSuccess: () => {
       setEditing(false)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       toast('Subtask updated.', 'success')
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -368,6 +385,7 @@ function ProjectTaskRow({
     mutationFn: deleteProjectTask,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
       toast('Subtask deleted.', 'success')
     },
@@ -375,7 +393,7 @@ function ProjectTaskRow({
   })
 
   return (
-    <div id={`task-${task.id}`} className="border-b border-border last:border-b-0 scroll-mt-28">
+    <div id={embedded ? undefined : `task-${task.id}`} className="border-b border-border last:border-b-0 scroll-mt-28">
       {editing ? (
         <form
           className="flex flex-col gap-2 bg-surface-alt/50 p-3 sm:flex-row"
@@ -488,6 +506,7 @@ function ProjectObjectiveSection({
     mutationFn: (next: boolean) => completeProjectObjective(objective.id, next),
     onSuccess: (_updated, next) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       if (next) {
         void emitFlywheelEvent({
           stage: 'production',
@@ -508,6 +527,7 @@ function ProjectObjectiveSection({
     onSuccess: () => {
       setEditing(false)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       toast('Objective updated.', 'success')
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -516,6 +536,7 @@ function ProjectObjectiveSection({
     mutationFn: deleteProjectObjective,
     onSuccess: (deletedTasks) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       void queryClient.invalidateQueries({ queryKey: projectKeys.list() })
       toast(`Objective deleted${deletedTasks ? ` with ${deletedTasks} subtask${deletedTasks === 1 ? '' : 's'}` : ''}.`, 'success')
     },
@@ -596,12 +617,131 @@ function ProjectObjectiveSection({
   )
 }
 
+
+function ProjectCoverEditor({
+  project,
+  teamId,
+  userId,
+}: {
+  project: Project
+  teamId: string
+  userId: string
+}) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const inspoQuery = useQuery({
+    queryKey: projectMediaKeys.inspo(project.id),
+    queryFn: () => fetchProjectInspo(project.id),
+  })
+  const available = inspoQuery.data?.available === true
+  const mutation = useMutation({
+    mutationFn: (file: File | null) => setProjectCover({
+      projectId: project.id,
+      teamId,
+      userId,
+      file,
+      currentUrl: project.cover_url,
+    }),
+    onSuccess: (_project, file) => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all })
+      toast(file ? 'Cover image saved.' : 'Cover reset to default art.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+  const inputRef = useRef<HTMLInputElement>(null)
+  if (inspoQuery.isLoading) return null
+  if (!available) return null
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-text-muted">Cover image</p>
+      <p className="text-xs text-text-light">JPEG, PNG, WEBP, or GIF, up to 5 MB. Leave empty to use the default clip art.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="sr-only"
+          disabled={mutation.isPending}
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (file) mutation.mutate(file)
+          }}
+        />
+        <Button variant="secondary" size="sm" iconLeft={<ImagePlus size={14} />} loading={mutation.isPending} onClick={() => inputRef.current?.click()}>
+          {project.cover_url ? 'Replace cover' : 'Upload cover'}
+        </Button>
+        {project.cover_url && (
+          <Button variant="ghost" size="sm" disabled={mutation.isPending} onClick={() => mutation.mutate(null)}>
+            Use default art
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProjectCoverButton({
+  project,
+  teamId,
+  userId,
+}: {
+  project: Project
+  teamId: string
+  userId: string
+}) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const inspoQuery = useQuery({
+    queryKey: projectMediaKeys.inspo(project.id),
+    queryFn: () => fetchProjectInspo(project.id),
+  })
+  const available = inspoQuery.data?.available === true
+  const mutation = useMutation({
+    mutationFn: (file: File) => setProjectCover({
+      projectId: project.id,
+      teamId,
+      userId,
+      file,
+      currentUrl: project.cover_url,
+    }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all })
+      toast('Cover image saved.', 'success')
+    },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+  const inputRef = useRef<HTMLInputElement>(null)
+  if (!available) return null
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="sr-only"
+        disabled={mutation.isPending}
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (file) mutation.mutate(file)
+        }}
+      />
+      <Button variant="secondary" size="sm" iconLeft={<ImagePlus size={14} />} loading={mutation.isPending} onClick={() => inputRef.current?.click()}>
+        Change cover
+      </Button>
+    </>
+  )
+}
+
 function EditProjectForm({
   project,
+  userId,
   onClose,
   onArchived,
 }: {
   project: Project
+  userId?: string | null
   onClose: () => void
   onArchived: () => void
 }) {
@@ -662,6 +802,9 @@ function EditProjectForm({
         onChange={(event) => setDescription(event.target.value)}
       />
       <Input label="Target date (optional)" type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} />
+      {userId && (
+        <ProjectCoverEditor project={project} teamId={project.team_id} userId={userId} />
+      )}
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <Button
           variant="danger"
@@ -703,6 +846,7 @@ function ProjectTeam({
     mutationFn: setProjectMember,
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
       toast(input.isMember ? 'Member added to the project.' : 'Member removed from the project.', 'success')
     },
     onError: (error: Error) => toast(error.message, 'error'),
@@ -744,9 +888,51 @@ function ProjectTeam({
   )
 }
 
+function AddWorkspaceTask({ projectId }: { projectId: string }) {
+  const [title, setTitle] = useState('')
+  const client = useQueryClient()
+  const { toast } = useToast()
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc('add_project_task', { p_project_id: projectId, p_title: title.trim() })
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => { setTitle(''); void client.invalidateQueries({ queryKey: projectKeys.all }); refreshTaskSurfaces(client) },
+    onError: (error: Error) => toast(error.message, 'error'),
+  })
+  return <form className="pt-add-form" onSubmit={e => { e.preventDefault(); if (title.trim() && !mutation.isPending) mutation.mutate() }}>
+    <Input label="New task" value={title} maxLength={160} onChange={e => setTitle(e.target.value)} />
+    <Button type="submit" disabled={!title.trim()} loading={mutation.isPending}>Add</Button>
+  </form>
+}
+
 function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () => void }) {
+  const { user } = useAuth()
+  const [toolsDirty, setToolsDirty] = useState(false)
+  const onToolsDirty = useCallback((dirty: boolean) => setToolsDirty(dirty), [])
+  useEffect(() => {
+    if (!toolsDirty) return
+    const leave = (event: Event) => { if (!window.confirm('Leave without saving your workspace changes?')) event.preventDefault() }
+    const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    const link = (event: MouseEvent) => {
+      const anchor = (event.target as HTMLElement).closest('a[href]')
+      if (anchor && !anchor.getAttribute('href')?.startsWith('#') && !window.confirm('Leave without saving your workspace changes?')) { event.preventDefault(); event.stopPropagation() }
+    }
+    window.addEventListener('project-tools-leave', leave)
+    window.addEventListener('beforeunload', unload)
+    document.addEventListener('click', link, true)
+    return () => { window.removeEventListener('project-tools-leave', leave); window.removeEventListener('beforeunload', unload); document.removeEventListener('click', link, true) }
+  }, [toolsDirty])
   const [addingObjective, setAddingObjective] = useState(false)
   const [editingProject, setEditingProject] = useState(false)
+  const [deckTab, setDeckTab] = useState<'cards' | 'visual' | 'stats'>(() => {
+    if (import.meta.env.DEV) {
+      const tab = new URLSearchParams(window.location.search).get('previewTab')
+      if (tab === 'visual' || tab === 'stats' || tab === 'cards') return tab
+    }
+    return 'cards'
+  })
+  const [moreOpen, setMoreOpen] = useState(false)
   const [draggedObjectiveId, setDraggedObjectiveId] = useState<string | null>(null)
   const objectiveComposerRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
@@ -780,6 +966,7 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
     onSettled: () => {
       setDraggedObjectiveId(null)
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      refreshTaskSurfaces(queryClient)
     },
   })
   const projectCompletionMutation = useMutation({
@@ -839,7 +1026,8 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
     )
   }
 
-  const { project, objectives, tasks, updates, members, teamMembers, currentMemberId } = query.data
+  const { project, objectives, tasks, updates, members, teamMembers } = query.data
+  const currentMemberId = user?.id ?? query.data.currentMemberId
   const canCompleteWork = Boolean(currentMemberId && members.some((member) => member.member_id === currentMemberId))
   const currentTeamMember = teamMembers.find((member) => member.id === currentMemberId)
   const canManageMembers = currentMemberId === project.owner_id || currentTeamMember?.role === 'admin' || currentTeamMember?.role === 'owner'
@@ -851,74 +1039,119 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
 
   return (
     <div className="space-y-4">
-      <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold text-text-muted hover:bg-surface-hover hover:text-text focus-ring lg:hidden">
-        <ArrowLeft size={15} /> All projects
-      </button>
+
 
       {editingProject && (
         <EditProjectForm
           project={project}
+          userId={currentMemberId}
           onClose={() => setEditingProject(false)}
           onArchived={onBack}
         />
       )}
 
-      <section className="overflow-hidden rounded-xl border border-border bg-surface">
-        <div className="p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <div className="mb-2 flex items-center gap-2">
-                <span className={project.status === 'completed'
-                  ? 'rounded-full bg-blue-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-300'
-                  : 'rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-400'}>
-                  {project.status}
-                </span>
-                <span className="flex items-center gap-1 text-xs text-text-light">
-                  <CalendarDays size={13} /> {dateLabel(project.target_date)}
-                </span>
-              </div>
-              <h1 className="text-xl font-bold tracking-tight text-text sm:text-2xl">{project.title}</h1>
-              <p className="mt-2 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-text-muted">
-                {project.objective || 'No project description yet.'}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-start gap-2">
-              {project.status === 'completed' ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => projectCompletionMutation.mutate(false)}
-                  loading={projectCompletionMutation.isPending}
-                >
-                  Reopen project
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  iconLeft={<CheckCircle2 size={14} />}
-                  disabled={!canCompleteWork || !canCompleteProject}
-                  loading={projectCompletionMutation.isPending}
-                  onClick={() => projectCompletionMutation.mutate(true)}
-                  title={!canCompleteProject ? 'Complete every objective first' : 'Complete project'}
-                >
-                  Complete project
-                </Button>
-              )}
-              <Button variant="secondary" size="sm" iconLeft={<Pencil size={14} />} onClick={() => setEditingProject(true)}>
-                Edit project
+      <ProjectHero
+        project={project}
+        progress={progress}
+        eyebrow={(() => {
+          const owner = teamMembers.find((member) => member.id === project.owner_id)?.display_name
+            ?? members.find((member) => member.member_id === project.owner_id)?.display_name
+            ?? 'Project owner'
+          const updated = project.updated_at
+            ? new Date(project.updated_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+            : null
+          return `${owner}${updated ? ` · Updated ${updated}` : ''}`
+        })()}
+        actions={
+          <div className="project-detail-actions flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm" iconLeft={<Pencil size={14} />} onClick={() => setEditingProject(true)}>
+              Edit
+            </Button>
+            {canManageMembers && currentMemberId && (
+              <ProjectCoverButton
+                project={project}
+                teamId={project.team_id}
+                userId={currentMemberId}
+              />
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              iconLeft={<Share2 size={14} />}
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(window.location.href)
+                  toast('Project link copied.', 'success')
+                } catch {
+                  toast('Could not copy the link.', 'error')
+                }
+              }}
+            >
+              Share
+            </Button>
+            <div className="relative">
+              <Button variant="secondary" size="sm" iconLeft={<Ellipsis size={14} />} aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)}>
+                More
               </Button>
-              <div className="rounded-xl border border-border bg-surface-alt px-4 py-3 text-right">
-                <div className="text-2xl font-bold tabular-nums text-text">{completedObjectives}/{objectives.length}</div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-text-light">objectives complete</div>
-              </div>
+              {moreOpen && (
+                <div className="absolute right-0 z-10 mt-2 min-w-44 rounded-xl border border-border bg-surface p-1 shadow-lg">
+                  {project.status === 'completed' ? (
+                    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { setMoreOpen(false); projectCompletionMutation.mutate(false) }}>Reopen project</Button>
+                  ) : (
+                    <Button variant="ghost" size="sm" className="w-full justify-start" disabled={!canCompleteWork || !canCompleteProject} onClick={() => { setMoreOpen(false); projectCompletionMutation.mutate(true) }}>Complete project</Button>
+                  )}
+                  <Button variant="ghost" size="sm" className="w-full justify-start" iconLeft={<Pencil size={14} />} onClick={() => { setMoreOpen(false); setEditingProject(true) }}>Edit details</Button>
+                </div>
+              )}
             </div>
           </div>
-          <div className="mt-5 h-2 overflow-hidden rounded-full bg-border">
-            <div className="h-full rounded-full bg-gold transition-all" style={{ width: `${progress}%` }} />
-          </div>
-        </div>
-      </section>
+        }
+      />
 
+      <div className="project-deck-tabs" role="tablist" aria-label="Project views">
+        {([['cards', 'Cards & deck'], ['visual', 'Visual'], ['stats', 'Stats']] as const).map(([id, label]) => (
+          <button key={id} type="button" role="tab" className="focus-ring" aria-selected={deckTab === id} onClick={() => setDeckTab(id)}>{label}</button>
+        ))}
+      </div>
+
+      {deckTab === 'visual' && (
+        <ProjectToolsBoard
+          key={project.id}
+          projectId={project.id}
+          canEdit={project.status !== 'archived' && (canCompleteWork || canManageMembers)}
+          objectives={objectives}
+          onDirtyChange={onToolsDirty}
+          renderTasks={objectiveId => <>
+            {tasks.filter(task => !objectiveId || task.project_objective_id === objectiveId).map(task => <ProjectTaskRow key={task.id} projectId={project.id} task={task} canCompleteWork={canCompleteWork} embedded />)}
+            {objectiveId ? <AddSubtaskForm projectId={project.id} objectiveId={objectiveId} /> : <AddWorkspaceTask projectId={project.id} />}
+          </>}
+        />
+      )}
+
+      {deckTab !== 'visual' && (
+        <ProjectExplorer
+          projectId={project.id}
+          teamId={project.team_id}
+          userId={currentMemberId}
+          summary={project.objective}
+          canEdit={project.status !== 'archived' && (canCompleteWork || canManageMembers)}
+          onEditProject={() => setEditingProject(true)}
+          objectives={objectives}
+          tasks={tasks}
+          stats={{ objectivesDone: completedObjectives, objectivesTotal: objectives.length }}
+          onDirtyChange={onToolsDirty}
+          previewSelect={import.meta.env.DEV ? new URLSearchParams(window.location.search).get('previewSelect') : null}
+          mode={deckTab === 'stats' ? 'stats' : 'cards'}
+          renderTasks={objectiveId => <>
+            {tasks.filter(task => !objectiveId || task.project_objective_id === objectiveId).map(task => <ProjectTaskRow key={task.id} projectId={project.id} task={task} canCompleteWork={canCompleteWork} embedded />)}
+            {objectiveId ? <AddSubtaskForm projectId={project.id} objectiveId={objectiveId} /> : <AddWorkspaceTask projectId={project.id} />}
+          </>}
+        />
+      )}
+
+      <details open={new URLSearchParams(window.location.search).has('task')} className="rounded-xl border border-border p-4">
+        <summary className="cursor-pointer text-section">Objectives, team &amp; progress</summary>
+        <div className="mt-4 space-y-4">
       <ProjectTeam
         projectId={project.id}
         members={members}
@@ -1010,9 +1243,9 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
                 </span>
                 <div className="min-w-0">
                   {update.task_id && (
-                    <a href={`?project=${project.id}&task=${update.task_id}`} className="text-xs font-bold text-gold hover:underline">
+                    <Link to={projectDetailPath(project.id, undefined, { task: update.task_id })} className="text-xs font-bold text-gold hover:underline">
                       {taskTitle.get(update.task_id) ?? 'Project task'}
-                    </a>
+                    </Link>
                   )}
                   <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-text">{update.note}</p>
                   <p className="mt-1.5 text-[11px] text-text-light">{timeLabel(update.created_at)}</p>
@@ -1022,162 +1255,175 @@ function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () =>
           </ol>
         )}
       </section>
+        </div>
+      </details>
     </div>
   )
 }
 
 export default function Projects() {
-  useDocumentTitle('Projects - Checkmark Workspace')
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [creating, setCreating] = useState(false)
-  const selectedId = searchParams.get('project')
-  const projectsQuery = useQuery({ queryKey: projectKeys.list(), queryFn: fetchProjects })
-  const projects = projectsQuery.data ?? []
+  const { projectId } = useParams()
+  const [searchParams] = useSearchParams()
+  const legacyPath = !projectId ? legacyProjectSearchRedirect(searchParams.toString()) : null
+  if (legacyPath) return <Navigate to={legacyPath} replace />
+  if (projectId) return <ProjectWorkspace projectId={projectId} />
+  return <ProjectsGallery />
+}
 
-  function selectProject(id: string | null) {
-    setSearchParams(id ? { project: id } : {})
+function ProjectWorkspace({ projectId }: { projectId: string }) {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const listPath = projectsListPath(searchParams)
+  const projectsQuery = useQuery({ queryKey: projectKeys.list(), queryFn: fetchProjects })
+  const title = projectsQuery.data?.find((project) => project.id === projectId)?.title
+  useDocumentTitle(title ? `${title} - Checkmark Workspace` : 'Project - Checkmark Workspace')
+
+  function goBack() {
+    if (!window.dispatchEvent(new Event('project-tools-leave', { cancelable: true }))) return
+    navigate(listPath)
   }
 
   return (
-    <div className="mx-auto max-w-[900px] animate-fade-in space-y-6">
+    <div className="project-grid-page mx-auto animate-fade-in space-y-5">
+      <nav className="project-workspace-nav" aria-label="Project">
+        <Link to={listPath} className="project-back focus-ring">
+          <ArrowLeft size={16} aria-hidden="true" />
+          All projects
+        </Link>
+        <ol className="project-breadcrumb">
+          <li><Link to={listPath} className="focus-ring">Projects</Link></li>
+          <li aria-current="page">{title ?? 'Project'}</li>
+        </ol>
+      </nav>
+      <ProjectDetail projectId={projectId} onBack={goBack} />
+    </div>
+  )
+}
+
+type ProjectViewSize = 's' | 'm' | 'l' | 'list'
+function ProjectsGallery() {
+  useDocumentTitle('Projects - Checkmark Workspace')
+  const [searchParams] = useSearchParams()
+  const [creating, setCreating] = useState(false)
+  const [filter, setFilter] = useState<ProjectListFilter>('all')
+  const previewView = import.meta.env.DEV ? searchParams.get('previewView') : null
+  const [view, setView] = useState<ProjectViewSize>(() => {
+    if (previewView === 's' || previewView === 'm' || previewView === 'l' || previewView === 'list') return previewView
+    try {
+      const stored = sessionStorage.getItem('checkmark-projects-view')
+      if (stored === 's' || stored === 'm' || stored === 'l' || stored === 'list') return stored
+    } catch { /* Browser-only preference. */ }
+    return 'l'
+  })
+  function chooseView(next: ProjectViewSize) {
+    setView(next)
+    try { sessionStorage.setItem('checkmark-projects-view', next) } catch { /* Browser-only preference. */ }
+  }
+  const formRef = useRef<HTMLDivElement>(null)
+  const projectsQuery = useQuery({ queryKey: projectKeys.list(), queryFn: fetchProjects })
+  const projects = projectsQuery.data ?? []
+  const ids = projects.map((project) => project.id)
+  const metaQuery = useQuery({
+    queryKey: projectKeys.cardMeta(ids),
+    queryFn: () => fetchProjectCardMeta(ids),
+    enabled: ids.length > 0,
+  })
+  const visible = projects.filter((project) => matchesProjectFilter(project.status, filter))
+  const activeCount = projects.filter((project) => matchesProjectFilter(project.status, 'active')).length
+  const completedCount = projects.filter((project) => project.status === 'completed').length
+  const objectiveTotal = Object.values(metaQuery.data ?? {}).reduce((sum, meta) => sum + (meta.objectiveCount ?? 0), 0)
+  const objectiveDone = Object.values(metaQuery.data ?? {}).reduce((sum, meta) => sum + (meta.completedCount ?? 0), 0)
+
+  function openCreateForm() {
+    setCreating(true)
+    window.setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
+
+  return (
+    <div className="project-grid-page animate-fade-in space-y-6">
       <PageHeader
         icon={FolderKanban}
         title="Projects"
         actions={
-          <Button iconLeft={<Plus size={16} />} onClick={() => setCreating(true)}>
+          <Button size="lg" iconLeft={<Plus size={16} />} onClick={openCreateForm}>
             New project
           </Button>
         }
       />
 
-      {creating && <CreateProjectForm onClose={() => setCreating(false)} />}
+      <div ref={formRef}>{creating && <CreateProjectForm onClose={() => setCreating(false)} />}</div>
 
-      {/* Single-column, expandable projects layout — ADHD-friendly */}
       {projectsQuery.isLoading ? (
-        <div className="space-y-3">
-          <div className="h-40 animate-pulse rounded-xl bg-surface" />
-          <div className="h-40 animate-pulse rounded-xl bg-surface" />
+        <ProjectGridSkeleton />
+      ) : projectsQuery.isError ? (
+        <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-6 text-sm text-red-300" role="alert">
+          {(projectsQuery.error as Error).message || 'Could not load projects.'}
         </div>
       ) : projects.length === 0 ? (
         <EmptyState
           icon={FolderKanban}
           title="No projects yet"
           description="Create one outcome, then add its next concrete task."
-          action={<Button size="sm" onClick={() => setCreating(true)} iconLeft={<Plus size={14} />}>Create project</Button>}
+          action={<Button size="sm" onClick={openCreateForm} iconLeft={<Plus size={14} />}>Create project</Button>}
         />
       ) : (
         <div className="space-y-4">
-          <div className="px-1">
-            <h2 className="text-sm font-bold text-text">All Projects</h2>
-            <p className="text-xs text-text-muted">
-              {projects.filter((p) => p.status !== 'completed').length} active · {projects.filter((p) => p.status === 'completed').length} completed
-            </p>
+          <div className="project-stats-strip" aria-label="Project overview stats">
+            <span className="project-stat-chip"><strong>{projects.length}</strong> projects</span>
+            <span className="project-stat-chip"><strong>{activeCount}</strong> active</span>
+            <span className="project-stat-chip"><strong>{completedCount}</strong> completed</span>
+            <span className="project-stat-chip"><strong>{objectiveDone}/{objectiveTotal}</strong> objectives</span>
           </div>
-          {projects.map((project) => (
-            <ProjectExpandableCard
-              key={project.id}
-              project={project}
-              isExpanded={selectedId === project.id}
-              onToggleExpand={() => selectProject(selectedId === project.id ? null : project.id)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/**
- * Expandable project card — shows overview, expands inline to show full detail
- * ADHD-friendly: big click target, clear visual hierarchy, no navigation
- */
-function ProjectExpandableCard({
-  project,
-  isExpanded,
-  onToggleExpand,
-}: {
-  project: Project
-  isExpanded: boolean
-  onToggleExpand: () => void
-}) {
-  const projectQuery = useQuery({
-    queryKey: projectKeys.detail(project.id),
-    queryFn: () => fetchProjectDetail(project.id),
-    enabled: isExpanded,
-  })
-  const data = projectQuery.data
-  const objectives = data?.objectives ?? []
-  const completedObjectives = objectives.filter((o) => o.is_completed).length
-  const progress = objectives.length ? Math.round((completedObjectives / objectives.length) * 100) : 0
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-border bg-surface transition-all">
-      {/* Clickable header — always visible, big target */}
-      <button
-        type="button"
-        onClick={onToggleExpand}
-        className="w-full p-4 text-left hover:bg-surface-hover focus-ring transition-colors sm:p-5"
-      >
-        <div className="flex items-start gap-4">
-          {/* Chevron */}
-          <div className="shrink-0 pt-1">
-            <ChevronDown
-              size={24}
-              className={`transition-transform text-gold ${isExpanded ? 'rotate-180' : ''}`}
-              aria-hidden="true"
-            />
-          </div>
-
-          {/* Project info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-              <h3 className="text-lg font-bold text-text">{project.title}</h3>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shrink-0 ${
-                project.status === 'completed'
-                  ? 'bg-blue-500/15 text-blue-300'
-                  : 'bg-emerald-500/15 text-emerald-400'
-              }`}>
-                {project.status}
-              </span>
+          <div className="project-grid-toolbar">
+            <div className="project-filter" role="group" aria-label="Filter projects">
+              {PROJECT_LIST_FILTERS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="focus-ring"
+                  aria-pressed={filter === item.id}
+                  onClick={() => setFilter(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
-
-            <p className="text-sm text-text-muted line-clamp-2 mb-3">
-              {project.objective || 'No description yet'}
-            </p>
-
-            {/* Quick stats */}
-            <div className="flex flex-wrap gap-4 text-sm mb-3">
-              <div>
-                <span className="font-bold text-text">{objectives.length}</span>
-                <span className="text-text-light ml-1">objectives</span>
-              </div>
-              <div>
-                <span className="font-bold text-text">{completedObjectives}</span>
-                <span className="text-text-light ml-1">complete</span>
-              </div>
-              <div className="flex items-center gap-1 text-text-light">
-                <CalendarDays size={14} />
-                {dateLabel(project.target_date)}
-              </div>
+            <div className="project-view-toggle" role="group" aria-label="Project layout">
+              {([['s', 'S'], ['m', 'M'], ['l', 'L'], ['list', 'List']] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="focus-ring"
+                  aria-pressed={view === id}
+                  aria-label={id === 'list' ? 'List view' : `${label} grid`}
+                  onClick={() => chooseView(id)}
+                >
+                  {id === 'list' ? <Rows3 size={16} /> : id === 's' ? 'S' : id === 'm' ? 'M' : <LayoutGrid size={16} />}
+                </button>
+              ))}
             </div>
-
-            {/* Progress bar */}
-            {objectives.length > 0 && (
-              <div className="h-2 w-full overflow-hidden rounded-full bg-border">
-                <div className="h-full rounded-full bg-gold transition-all" style={{ width: `${progress}%` }} />
-              </div>
-            )}
           </div>
-        </div>
-      </button>
-
-      {/* Expanded detail — shown below header when expanded */}
-      {isExpanded && (
-        <div className="border-t border-border bg-surface-alt/30">
-          {projectQuery.isLoading ? (
-            <div className="p-6 text-center text-text-light">Loading project details…</div>
+          {visible.length === 0 ? (
+            <EmptyState
+              icon={FolderKanban}
+              title={filter === 'completed' ? 'No completed projects' : 'No active projects'}
+              description="Try another filter, or start a new project."
+              action={<Button size="sm" onClick={() => setFilter('all')}>Show all projects</Button>}
+            />
           ) : (
-            <ProjectDetail projectId={project.id} onBack={() => onToggleExpand()} />
+            <div className="project-grid" data-size={view}>
+              {visible.map((project) => {
+                const meta = metaQuery.data?.[project.id]
+                const card: ProjectCardModel = {
+                  ...project,
+                  objectiveCount: meta?.objectiveCount ?? 0,
+                  completedCount: meta?.completedCount ?? 0,
+                  members: meta?.members ?? [],
+                }
+                return <ProjectCard key={project.id} project={card} href={projectDetailPath(project.id, searchParams)} layout={view === 'list' ? 'row' : 'tile'} previewHover={import.meta.env.DEV && searchParams.get('previewHover') === project.id} />
+              })}
+              <NewProjectTile onClick={openCreateForm} />
+            </div>
           )}
         </div>
       )}

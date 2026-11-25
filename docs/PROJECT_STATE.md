@@ -9,6 +9,8 @@
 
 ## Snapshot
 
+**2026-10-24 — Projects tools beta:** PR [#346](https://github.com/CheckmarkAudio/Dashboard-V3/pull/346) contains the modular workspace. Migration `20261014120000_project_toolboards.sql` is applied and recorded in production with explicit director approval. Live RLS/grant and rollback-only save/read/conflict checks passed; no test content remained. Frontend is not deployed: Vercel preview failed, and inspection currently requires renewed Vercel access (browser authenticator verification). See `docs/ux/PROJECT_SPACES_PLAN.md` for the rollout state. CODEX:
+
 | | |
 |--|--|
 | **Live URL** | https://cm-audio.vercel.app (renamed 2026-07-11 from `dashboard-v3-dusky.vercel.app`; Vercel project itself is also named `cm-audio`, matching. The old `dashboard-v3-dusky.vercel.app` domain is intentionally still attached too — no downtime during the switch. A real custom domain, e.g. `app.checkmarkaudio.com`, is the next step once the director + Gavin pick a name) |

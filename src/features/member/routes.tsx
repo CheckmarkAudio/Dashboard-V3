@@ -42,6 +42,7 @@ export const MEMBER_ROUTES: FeatureRouteDef[] = [
   { path: APP_ROUTES.member.profile,  element: <Profile /> },
   { path: APP_ROUTES.member.tasks,    element: <DailyChecklist /> },
   { path: APP_ROUTES.member.projects, element: <Projects /> },
+  { path: APP_ROUTES.member.project, element: <Projects /> },
   { path: APP_ROUTES.member.booking,  element: <Sessions /> },
   { path: APP_ROUTES.member.calendar, element: <StyledPage name="Calendar"><Calendar /></StyledPage> },
   { path: APP_ROUTES.member.content,  element: <StyledPage name="Content"><Content /></StyledPage> },

@@ -7,7 +7,20 @@ export const sampleMembers = [
   { id: 'dev-user', display_name: 'Dev Admin', email: 'preview@example.test', role: 'admin', position: 'Operations', department: 'Studio', bio: 'Production, scheduling, and team operations.', pronouns: 'they/them' },
   ...['Jamie Rivera', 'Alex Morgan', 'Riley Chen', 'Taylor Brooks'].map((display_name, index) => ({ id: `00000000-0000-4000-8000-00000000000${index+1}`, display_name, email: `member${index+1}@example.test`, role: 'member', position: ['Studio','Production','Marketing','Operations'][index], department: 'Studio', bio: null, pronouns: null })),
 ].map(member => ({...member, status:'active', avatar_url:null, banner_url:null, socials:{}, preferences:{}, created_at:stamp, managed_by:'dev-user'}))
-export const sampleProjects = ['Echoes in Gold','After Hours EP','The Long Way Home'].map((title,index) => ({ id:`sample-project-${index}`, team_id:'sample-team', owner_id:'dev-user', title, name:title, objective:['Mix & master','Finish vocal edits','Prepare final delivery'][index], status:'active', target_date:today, created_at:stamp, updated_at:stamp, completed_at:null }))
+function dayOffset(days: number) {
+  const date = new Date(now)
+  date.setDate(date.getDate() + days)
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
+}
+const projectSeed = [
+  { title:'Echoes in Gold', objective:'Mix and master the record for release, keeping the warm gold tone of the demos.', status:'active', target_date:dayOffset(14), completed_at:null },
+  { title:'After Hours EP', objective:'Finish vocal edits and lock the song sequence for the EP.', status:'active', target_date:dayOffset(7), completed_at:null },
+  { title:'The Long Way Home', objective:'Prepare final delivery and artwork for the album.', status:'active', target_date:dayOffset(21), completed_at:null },
+  { title:'Northline Sessions', objective:'Record and arrange the Northline live sessions in Studio A.', status:'active', target_date:dayOffset(30), completed_at:null },
+  { title:'Holiday Special', objective:'Deliver the holiday special mix, artwork, and rollout plan.', status:'completed', target_date:dayOffset(-12), completed_at:stamp },
+  { title:'Studio B Refresh', objective:'Plan the Studio B refresh: storage, lighting, and a clearer floor plan.', status:'paused', target_date:null, completed_at:null },
+] as const
+export const sampleProjects = projectSeed.map((project, index) => ({ id:`sample-project-${index}`, team_id:'sample-team', owner_id:'dev-user', title:project.title, name:project.title, objective:project.objective, status:project.status, target_date:project.target_date, created_at:stamp, updated_at:stamp, completed_at:project.completed_at }))
 export const sampleTasks = ['Review the latest mix','Prepare session files','Confirm the vocal session'].map((title,index) => ({ id:`sample-task-${index}`, title, description:null, category:'Production', sort_order:index, is_required:false, is_completed:false, completed_at:null, due_date:today, visible_on_overview:true, source_type:'custom', source_template_id:null, source_template_item_id:null, created_at:stamp, updated_at:stamp, scope:'member', assigned_to:'dev-user', assigned_to_name:'Dev Admin', can_complete:true, batch:null, project_id:sampleProjects[index]!.id, project_objective_id:null }))
 export const sampleSessions = ['Mix review','Vocal session','Team sync'].map((client_name,index) => ({id:`sample-session-${index}`, project_id:sampleProjects[index]!.id, client_name, session_date:today, start_time:['10:00:00','12:30:00','15:00:00'][index], end_time:['11:00:00','14:00:00','16:00:00'][index], session_type:['mixing','recording','meeting'][index], status:'confirmed', room:['Studio A','Studio B','Creative room'][index], notes:null, created_by:'dev-user', assigned_to:sampleMembers[index]!.id, google_event_id:null, google_sync_status:'synced', created_at:stamp}))
 const channels = ['Mix review','Session planning','Announcements'].map((name,index) => ({ id:`sample-channel-${index}`, name, slug:`sample-${index}`, description:'', kind:'public', pinned_at:null, created_at:stamp }))
@@ -23,4 +36,41 @@ for (const thread of sampleThreads) {
 
 Object.assign(sampleTables.media_submissions![0]!, { drive_view_url: sampleAudio, size_bytes: 16044 })
 Object.assign(sampleTables.media_submissions![2]!, { original_filename: 'AfterHours_Cover03.svg', content_type: 'image/svg+xml', drive_view_url: sampleArtwork, size_bytes: 706 })
-sampleTables.project_objectives = sampleProjects.flatMap((project,index) => ['Prepare','Review','Deliver'].map((title,step) => ({id:`${project.id}-objective-${step}`,project_id:project.id,title,sort_order:step,is_completed:step<index+1,completed_at:step<index+1?stamp:null,created_at:stamp})))
+const objectiveDone = [0, 1, 2, 1, 3, 0]
+sampleTables.project_objectives = sampleProjects.flatMap((project,index) => ['Prepare','Review','Deliver'].map((title,step) => {
+  const is_completed = step < objectiveDone[index]!
+  return {id:`${project.id}-objective-${step}`,project_id:project.id,title,sort_order:step,is_completed,completed_at:is_completed?stamp:null,created_at:stamp}
+}))
+
+function projectMember(projectId: string, member: (typeof sampleMembers)[number]) {
+  return { project_id:projectId, member_id:member.id, member:{display_name:member.display_name,avatar_url:member.avatar_url} }
+}
+sampleTables.project_members = [
+  projectMember('sample-project-0', sampleMembers[0]!), projectMember('sample-project-0', sampleMembers[1]!), projectMember('sample-project-0', sampleMembers[2]!),
+  projectMember('sample-project-1', sampleMembers[0]!), projectMember('sample-project-1', sampleMembers[3]!),
+  projectMember('sample-project-2', sampleMembers[0]!), projectMember('sample-project-2', sampleMembers[4]!), projectMember('sample-project-2', sampleMembers[1]!),
+  projectMember('sample-project-3', sampleMembers[0]!), projectMember('sample-project-3', sampleMembers[2]!), projectMember('sample-project-3', sampleMembers[3]!), projectMember('sample-project-3', sampleMembers[4]!),
+  projectMember('sample-project-4', sampleMembers[0]!), projectMember('sample-project-4', sampleMembers[1]!),
+  projectMember('sample-project-5', sampleMembers[0]!), projectMember('sample-project-5', sampleMembers[4]!),
+]
+
+// Project-tool UI fixtures only; sample edits live in memory and reset on reload.
+sampleTables.project_toolboards = [{project_id:'sample-project-0',revision:1,updated_at:stamp,content:{version:1,tools:[
+  {id:'fixture-measure',type:'measurements',title:'Measurements',wide:false,entries:[
+    {id:'fixture-closet',name:'Closet opening',width:'34',depth:'18',height:'72',unit:'in',notes:'Leave room for the door.'},
+    {id:'fixture-booth',name:'Vocal booth',width:'48',depth:'48',height:'96',unit:'in',notes:'Keep the ceiling clear of lights.'},
+  ]},
+  {id:'fixture-shopping',type:'shopping',title:'Shopping list',wide:false,items:[
+    {id:'fixture-shelf',name:'Storage shelf',done:false,measurementId:'fixture-closet'},
+    {id:'fixture-cable',name:'Gold patch cable',done:false,measurementId:null},
+    {id:'fixture-lamp',name:'Desk lamp',done:true,measurementId:null},
+  ]},
+  {id:'fixture-note',type:'note',title:'Studio ideas',wide:false,text:'Warm lighting. Clear floors. Everything has a home.'},
+  {id:'fixture-tasks',type:'tasks',title:'Next steps',wide:false,objectiveId:null},
+  {id:'fixture-sketch',type:'sketch',title:'Room sketch',wide:true,strokes:[{width:4,points:[[80,80],[920,80],[920,520],[80,520],[80,80]]},{width:2,points:[[80,200],[400,200],[400,520]]}],text:'Rough floor plan for the vocal booth and closet.'},
+]}}]
+
+sampleTables.project_inspo_images = [
+  {id:'inspo-gold',project_id:'sample-project-0',team_id:'sample-team',created_by:'dev-user',title:'Gold tone reference',public_url:'/project-art/gold-mic.svg',storage_path:'sample-team/sample-project-0/inspo/dev-user/gold-mic.svg',created_at:stamp},
+  {id:'inspo-vinyl',project_id:'sample-project-0',team_id:'sample-team',created_by:'dev-user',title:'Artwork mood',public_url:'/project-art/vinyl.svg',storage_path:'sample-team/sample-project-0/inspo/dev-user/vinyl.svg',created_at:stamp},
+]

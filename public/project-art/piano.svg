@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<!-- After BY_PAGE/team/clipart/grand-piano.png: vertical left, curved treble bout, lid stick, keys -->
+  <path d="M46 78c0-10 8-18 18-18h90c28 0 50 6 70 28 28 30 42 62 38 98-4 40-28 70-78 82H64c-10 0-18-8-18-18V78z"/>
+  <line x1="50" y1="252" x2="246" y2="252"/>
+  <line x1="54" y1="266" x2="242" y2="266"/>
+  <line x1="76" y1="248" x2="176" y2="86"/>
+  <rect x="58" y="276" width="184" height="54" rx="2"/>
+  <g stroke-width="2">
+    <line x1="73" y1="276" x2="73" y2="330"/>
+    <line x1="88" y1="276" x2="88" y2="330"/>
+    <line x1="103" y1="276" x2="103" y2="330"/>
+    <line x1="118" y1="276" x2="118" y2="330"/>
+    <line x1="133" y1="276" x2="133" y2="330"/>
+    <line x1="148" y1="276" x2="148" y2="330"/>
+    <line x1="163" y1="276" x2="163" y2="330"/>
+    <line x1="178" y1="276" x2="178" y2="330"/>
+    <line x1="193" y1="276" x2="193" y2="330"/>
+    <line x1="208" y1="276" x2="208" y2="330"/>
+    <line x1="223" y1="276" x2="223" y2="330"/>
+  </g>
+  <g fill="#fff" stroke="none">
+    <rect x="67" y="276" width="10" height="32"/>
+    <rect x="82" y="276" width="10" height="32"/>
+    <rect x="110" y="276" width="10" height="32"/>
+    <rect x="125" y="276" width="10" height="32"/>
+    <rect x="140" y="276" width="10" height="32"/>
+    <rect x="168" y="276" width="10" height="32"/>
+    <rect x="183" y="276" width="10" height="32"/>
+    <rect x="211" y="276" width="10" height="32"/>
+    <rect x="226" y="276" width="10" height="32"/>
+  </g>
+</svg>

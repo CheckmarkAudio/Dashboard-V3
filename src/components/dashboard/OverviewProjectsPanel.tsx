@@ -4,7 +4,7 @@ import { ArrowUpRight } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { fetchProjects, projectKeys } from '../../lib/queries/projects'
 import { supabase } from '../../lib/supabase'
-import { APP_ROUTES } from '../../app/routes'
+import { projectDetailPath } from '../../app/projectPaths'
 
 export function useOverviewProjects() {
   const { profile } = useAuth()
@@ -41,7 +41,7 @@ export default function OverviewProjectsPanel() {
       const objectives = (progressQuery.data ?? []).filter(item => item.project_id === project.id)
       const completed = objectives.filter(item => item.is_completed).length
       const progress = objectives.length ? Math.round(completed / objectives.length * 100) : 0
-      return <Link key={project.id} to={`${APP_ROUTES.member.projects}?project=${encodeURIComponent(project.id)}`} className="overview-project-columns px-5 py-5 hover:bg-surface-alt focus-ring">
+      return <Link key={project.id} to={projectDetailPath(project.id)} className="overview-project-columns px-5 py-5 hover:bg-surface-alt focus-ring">
         <span className="flex items-center gap-3 min-w-0">
           <span className="overview-project-monogram" aria-hidden="true">{project.title.split(/\s+/).slice(0, 2).map(word => word[0]).join('')}</span>
           <span className="min-w-0"><strong className="block truncate text-sm">{project.title}</strong><span className="block truncate mt-1 text-xs text-text-muted">{project.objective || project.status}</span></span>

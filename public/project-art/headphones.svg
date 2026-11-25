@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<!-- After MEDIA/IMAGES/BY_PAGE/team/clipart/logo-headphones.png -->
+  <path d="M56 196c0-92 52-150 94-150s94 58 94 150"/>
+  <path d="M76 196c0-76 42-128 74-128s74 52 74 128"/>
+  <rect x="28" y="178" width="70" height="108" rx="26"/>
+  <path d="M62 178v-18c0-9 7-16 16-16h10"/>
+  <rect x="202" y="178" width="70" height="108" rx="26"/>
+  <path d="M238 178v-18c0-9-7-16-16-16h-10"/>
+</svg>
