@@ -1,5 +1,6 @@
+import { loginDestination } from '../app/loginDestination'
 import { useEffect, useRef, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
@@ -196,6 +197,7 @@ export default function Login() {
   const previewBuild = deployEnv === 'preview'
   const previewHost = isVercelBranchPreview()
   const installedAppContext = isInstalledAppContext()
+  const location = useLocation()
   const previewReady =
     previewBuild &&
     Boolean(previewEmail) &&
@@ -283,7 +285,7 @@ export default function Login() {
     )
   }
 
-  if (user) return <Navigate to="/" replace />
+  if (user) return <Navigate to={loginDestination(location.state?.returnTo, installedAppContext)} replace />
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

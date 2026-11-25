@@ -84,7 +84,7 @@ export default function TroubleshootingButton() {
         onClick={() => setOpen(true)}
         title="Send feedback"
         aria-label="Send feedback"
-        className="fixed bottom-5 left-5 z-40 inline-flex items-center gap-2 px-3 py-2 rounded-full bg-surface ring-1 ring-border-light shadow-lg text-text-muted hover:text-gold hover:ring-gold/40 transition-colors focus-ring"
+        className="app-help-button fixed bottom-5 left-5 z-40 inline-flex items-center gap-2 px-3 py-2 rounded-full bg-surface ring-1 ring-border-light shadow-lg text-text-muted hover:text-gold hover:ring-gold/40 transition-colors focus-ring"
       >
         <MessageSquareText size={14} aria-hidden="true" />
         <span className="text-[12px] font-semibold">Feedback</span>

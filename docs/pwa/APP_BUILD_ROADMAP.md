@@ -14,6 +14,20 @@ Companion docs:
 - `docs/pwa/WEB_INTERFACE_POLISH_ROADMAP.md`: website clarity work inside the daily workflow phases.
 - `docs/ux/WORKER_OBVIOUSNESS_AUDIT.md`: worker-facing friction audit and validation script.
 
+## Priority 1 — director override, 2026-11-25
+
+All product effort now targets a usable task/project app for Bridget and Gavin on computer, phone, iPad and other tablets. Deliver installation, project-first launch, safe sign-in/deep links, touch navigation, reconnect behavior and real project workflows before other queued enhancements. Preserve the existing Soft Gold identity. PWA is the immediate installable release; native store packaging remains a separate delivery milestone. Nested spaces and prompt-generated starters remain tracked in the Project Spaces plan, not represented as shipped.
+
+PR #346 and the visual project/image work in #347 have merged. The toolboard migration was applied on 2026-10-24. Production deployment of current main is green as checked on 2026-11-25. Branch previews still require their configured separate test backend.
+
+### Current app release slice
+
+- Install guide in navigation, stable installed identity, Projects launch and My tasks shortcut; phone bottom navigation and safe-area spacing.
+- Preserve project deep links through sign-in. Refresh board reads on focus/reconnect, retain explicit saves and revision conflicts.
+- Phone/tablet detail sheets include Save workspace, readable fields, editable shopping/note/sketch titles, and linked measurement clearance notes. Shared modals scroll on small phones.
+- Production-only worker caches only a public reconnect page. No private offline cache, offline editing, replayed writes, or forced update reloads.
+- Verified: 66 tests, production build/release-marker checks; 320/390px phone and 820px tablet browser layouts, measurement/shopping saves, mouse drawing and task navigation. Physical iPhone/iPad install/relaunch, Apple Pencil, two-account collaboration, and store packages remain acceptance work.
+
 ## Guiding Rule
 
 Build from safety to daily usefulness to polish.
@@ -137,7 +151,7 @@ Exit criteria:
 
 ## Phase 3: Daily Workflows
 
-2026-10-14 director override: implement the reviewed modular Project tools beta now within the existing website. Database approval and deployment are pending; see `docs/ux/PROJECT_SPACES_PLAN.md`. This does not change the installed-app safety gates.
+2026-10-14 director override: implement the reviewed modular Project tools beta now within the existing website. Toolboard database applied 2026-10-24 and implementation merged; see `docs/ux/PROJECT_SPACES_PLAN.md`. This does not change the installed-app safety gates.
 
 ### Director direction — 2026-09-29
 

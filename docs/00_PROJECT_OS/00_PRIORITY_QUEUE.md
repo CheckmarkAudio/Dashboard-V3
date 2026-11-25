@@ -36,6 +36,8 @@ You can also just tell an AI coder "add this to the priority queue" and it will 
 ## Active
 
 <!-- ACTIVE:START -->
+
+- [ ] **PRIORITY 1 — Checkmark task/project app for Bridget and Gavin, ASAP.** Requested by director · Added: 2026-11-25. All new product effort goes toward installable computer/phone/iPad/tablet use, real project persistence, touch/Pencil workflows, app navigation and reliable release. Projects concepts are the active product work; other items below remain queued. Native-store packaging and remaining concepts must stay explicitly tracked until delivered.
 <!-- Add priority items below this line as `- [ ] ...`. The session-start hook reads everything between the ACTIVE markers. Keep finished items OUT of here — move them to Done. -->
 
 - [ ] Customizable per-member schedule colors — Requested by: director · Added: 2026-07-28 · ASAP: no · Notes: after locking the six team members' colors for the Team Schedule redesign (Bridget red-orange, Checkmark gold, Christian blue, Matthan gray, Richard green, Tony red — see `docs/ux/SCHEDULE_UX_REDESIGN_PLAN.md`), director wants these changeable later as a real setting in admin Settings (a color picker per member) rather than hardcoded. Log only, build alongside the Team Schedule redesign above — not urgent on its own.

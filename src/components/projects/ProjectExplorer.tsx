@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react'
+import { useFocusTrap } from '../../hooks/useFocusTrap'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ImagePlus, LayoutTemplate, ListTodo, NotebookPen, Ruler, ShoppingBag, Trash2, X } from 'lucide-react'
 import { Button, Input, Textarea } from '../ui'
@@ -97,6 +98,15 @@ export default function ProjectExplorer({
   )
   const counts = explorerStats(items, stats.objectivesDone, stats.objectivesTotal)
   const selected = items.find((item) => item.id === selectedId) ?? null
+  const panelRef = useRef<HTMLElement>(null)
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 979px)').matches)
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 979px)')
+    const update = () => setNarrow(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  useFocusTrap(panelRef, Boolean(selected && narrow && mode === 'cards'))
   const visibleSections = EXPLORER_SECTIONS.filter((entry) => (
     (section === 'all' || section === entry.id)
     && (items.some((item) => item.section === entry.id) || canEdit)
@@ -308,7 +318,7 @@ export default function ProjectExplorer({
               })}
             </div>
 
-            <aside className={`project-panel${sheet ? ' is-sheet' : ''}`} aria-label={selected ? 'Item details' : 'Your project'}>
+            <aside ref={panelRef} role={sheet && narrow ? 'dialog' : undefined} aria-modal={sheet && narrow ? true : undefined} className={`project-panel${sheet ? ' is-sheet' : ''}`} aria-label={selected ? 'Item details' : 'Your project'}>
               <div className="project-panel-head">
                 <h2>{selected ? 'Details' : 'Your project'}</h2>
                 {selected && <Button size="sm" variant="ghost" iconLeft={<X size={16} />} onClick={closePanel} aria-label="Close details">Close</Button>}
@@ -343,6 +353,11 @@ export default function ProjectExplorer({
                   })}
                 </ul>
               )}
+              {selected && canEdit && <div className="project-panel-save">
+                <span role="status">{saving ? 'Saving…' : dirty ? 'Unsaved changes' : saved ? 'Saved' : ''}</span>
+                {error && <p role="alert">{error}</p>}
+                <Button disabled={!dirty || saving} loading={saving} onClick={() => void save()}>Save workspace</Button>
+              </div>}
             </aside>
           </div>
           {sheet && <button type="button" className="project-sheet-backdrop" aria-label="Close details" onClick={closePanel} />}
@@ -448,6 +463,7 @@ function ExplorerDetail({
         <div className="project-panel-art"><Icon size={48} strokeWidth={1.5} /></div>
         <div className="project-panel-body">
           <h3>{row.name}</h3>
+          <Input label="Item" value={row.name} maxLength={160} disabled={disabled} onChange={(event) => changeTool({ ...tool, items: tool.items.map((entry) => entry.id === row.id ? { ...entry, name: event.target.value } : entry) })} />
           <label className="pt-check">
             <input type="checkbox" checked={row.done} disabled={disabled} onChange={(event) => changeTool({ ...tool, items: tool.items.map((entry) => entry.id === row.id ? { ...entry, done: event.target.checked } : entry) })} />
             <span>Mark as bought</span>
@@ -458,7 +474,7 @@ function ExplorerDetail({
               {measurements.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
             </select>
           </label>
-          {linked && <MeasurementValues entry={linked} />}
+          {linked && <div className="pt-linked-measure"><MeasurementValues entry={linked} />{linked.notes && <p>{linked.notes}</p>}</div>}
         </div>
       </>
     )
@@ -466,12 +482,11 @@ function ExplorerDetail({
   if (tool && (tool.type === 'note' || tool.type === 'sketch' || tool.type === 'tasks')) {
     return (
       <>
-        <div className="project-panel-art">
-          {tool.type === 'sketch' && tool.strokes.length ? <SketchThumb tool={tool} /> : <Icon size={48} strokeWidth={1.5} />}
-        </div>
+        {tool.type !== 'sketch' && <div className="project-panel-art"><Icon size={48} strokeWidth={1.5} /></div>}
         <div className="project-panel-body">
           <h3>{tool.title}</h3>
-          <fieldset disabled={disabled}>
+          <fieldset disabled={disabled} className="project-tool-editor">
+            <Input label="Title" value={tool.title} maxLength={160} onChange={event => changeTool({ ...tool, title: event.target.value })} />
             <ProjectToolContent tool={tool} tools={tools} change={changeTool} objectives={objectives} renderTasks={renderTasks} disabled={disabled} />
           </fieldset>
         </div>

@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { APP_ROUTES } from '../app/routes'
 import { hasCapability, isAtLeastRole, type AppCapability, type AppRole } from '../domain/permissions'
@@ -14,6 +14,7 @@ export default function ProtectedRoute({
   requiredRole?: AppRole
   requiredCapabilities?: AppCapability[]
 }) {
+  const location = useLocation()
   // Local-dev bypass only. `import.meta.env.DEV` is build-time true ONLY
   // when running `vite dev` — Vercel builds (preview AND production) get
   // `DEV=false`, so this can never bypass auth on a deployed site.
@@ -27,7 +28,7 @@ export default function ProtectedRoute({
     return <RouteSpinner />
   }
 
-  if (!user) return <Navigate to={APP_ROUTES.auth.login} replace />
+  if (!user) return <Navigate to={APP_ROUTES.auth.login} state={{ returnTo: `${location.pathname}${location.search}${location.hash}` }} replace />
 
   // 2026-05-18 (Refresh-stays-put fix) — when a capability/role check
   // is required but the profile fetch is still in flight, KEEP showing

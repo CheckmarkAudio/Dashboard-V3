@@ -11,7 +11,7 @@ export function useProjectToolBoard(projectId: string, canEdit: boolean, onDirty
   const { user } = useAuth()
   const draftKey = ['project-tools-draft', user?.id, projectId] as const
   const remembered = client.getQueryData<{ draft: ToolBoard; base: BoardRecord }>(draftKey)
-  const query = useQuery({ queryKey: projectToolKeys.board(projectId), queryFn: () => fetchProjectTools(projectId), refetchInterval: 30000 })
+  const query = useQuery({ queryKey: projectToolKeys.board(projectId), queryFn: () => fetchProjectTools(projectId), refetchInterval: 30000, refetchOnWindowFocus: true })
   const [draft, setDraft] = useState<ToolBoard | null>(remembered?.draft ?? null)
   const [base, setBase] = useState<BoardRecord | null>(remembered?.base ?? null)
   const [saving, setSaving] = useState(false)
@@ -53,6 +53,7 @@ export function useProjectToolBoard(projectId: string, canEdit: boolean, onDirty
     busy.current = true; setSaving(true); setError('')
     try {
       const record = await saveProjectTools(projectId, base.revision, draft)
+      await client.cancelQueries({ queryKey: projectToolKeys.board(projectId), exact: true })
       client.setQueryData(projectToolKeys.board(projectId), record)
       client.removeQueries({ queryKey: draftKey, exact: true })
       setDraft(null); setBase(null); setSaved(true)

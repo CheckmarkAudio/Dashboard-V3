@@ -102,7 +102,7 @@ export function Modal({
           aria-modal="true"
           aria-label={typeof title === 'string' ? title : undefined}
           className={[
-            'relative w-full bg-surface rounded-2xl border border-border shadow-2xl animate-slide-up',
+            'relative w-full max-h-[calc(100dvh-2rem)] overflow-y-auto bg-surface rounded-2xl border border-border shadow-2xl animate-slide-up',
             SIZE_CLASSES[size],
           ].join(' ')}
         >
