@@ -409,6 +409,26 @@ export default function WorkspacePanel({
   const edgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const edgeSideRef = useRef<'left' | 'right' | null>(null)
 
+  // Touch swipe — horizontal swipe navigates carousel pages. Only fires
+  // when the gesture is more horizontal than vertical so normal vertical
+  // scrolling doesn't accidentally page the carousel.
+  const swipeTouchStartX = useRef<number | null>(null)
+  const swipeTouchStartY = useRef<number | null>(null)
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    swipeTouchStartX.current = e.touches[0]?.clientX ?? null
+    swipeTouchStartY.current = e.touches[0]?.clientY ?? null
+  }, [])
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (swipeTouchStartX.current === null || swipeTouchStartY.current === null) return
+    const dx = (e.changedTouches[0]?.clientX ?? 0) - swipeTouchStartX.current
+    const dy = (e.changedTouches[0]?.clientY ?? 0) - swipeTouchStartY.current
+    swipeTouchStartX.current = null
+    swipeTouchStartY.current = null
+    if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return
+    if (dx < 0) goNext()
+    else goPrev()
+  }, [goNext, goPrev])
+
   const clearEdgeTimer = useCallback(() => {
     if (edgeTimerRef.current) {
       clearTimeout(edgeTimerRef.current)
@@ -621,10 +641,13 @@ export default function WorkspacePanel({
       >
         <div className="relative">
           {/* Carousel viewport — overflow-hidden so off-page widgets
-              are clipped; inner row translates by transform. */}
+              are clipped; inner row translates by transform.
+              Touch handlers enable left/right swipe on mobile. */}
           <div
             className="overflow-hidden"
             style={{ height: `${rowHeight}px` }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
           >
             <SortableContext items={orderedIds} strategy={horizontalListSortingStrategy}>
               <div
