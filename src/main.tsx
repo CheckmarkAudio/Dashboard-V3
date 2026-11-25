@@ -11,6 +11,7 @@ import { mark as perfMark } from './lib/perfTrace'
 import App from './App'
 import './index.css'
 import './appearance.css'
+import './components/app/AppShell.css'
 import { AppearanceProvider } from './contexts/AppearanceContext'
 
 // Earliest possible timestamp — fires before React mounts so the flush
@@ -109,3 +110,12 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+// Offline handling is isolated from auth and private data; never register in sample/dev mode.
+if (import.meta.env.PROD && import.meta.env.BASE_URL === '/' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {
+      console.warn('Offline reconnect screen unavailable. Online app use is unaffected.')
+    })
+  })
+}

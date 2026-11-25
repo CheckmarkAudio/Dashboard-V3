@@ -1,3 +1,5 @@
+import AppNavigation, { ConnectionStatus } from './app/AppNavigation'
+import InstallApp from './app/InstallApp'
 import SamplePreviewBadge from './SamplePreviewBadge'
 import AppearanceLink from './AppearanceLink'
 import { Suspense, useState, useRef, useEffect, type ComponentType } from 'react'
@@ -222,6 +224,7 @@ export default function Layout() {
             )}
           </>
         )}
+        <InstallApp />
       </nav>
     </div>
   )
@@ -412,6 +415,7 @@ export default function Layout() {
         </div>
       )}
 
+      <ConnectionStatus />
       {/* Routed pages retain their existing state, permissions, and actions. */}
       <main ref={mainRef} id="main-content" className="workspace-main flex-1 flex flex-col min-w-0" tabIndex={-1}>
         <div className="workspace-content flex-1 p-4 lg:p-7">
@@ -422,6 +426,7 @@ export default function Layout() {
           </ErrorBoundary>
         </div>
       </main>
+      <AppNavigation openMenu={() => setSidebarOpen(true)} />
       </div>
 
       <ForcePasswordChangeModal />

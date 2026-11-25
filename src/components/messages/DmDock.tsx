@@ -30,7 +30,7 @@ export default function DmDock() {
   const byId = new Map(threads.map((t) => [t.channel_id, t]))
 
   return (
-    <div className="fixed bottom-0 right-4 z-[55] flex items-end gap-3 pointer-events-none">
+    <div className="app-dm-dock fixed bottom-0 right-4 z-[55] flex items-end gap-3 pointer-events-none">
       {open.map((channelId) => (
         <DmChatWindow
           key={channelId}

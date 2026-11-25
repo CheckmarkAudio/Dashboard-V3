@@ -277,3 +277,18 @@
 .project-tile.is-add span { font-size: 13px; font-weight: 700; }
 .project-tile.is-add.is-busy { opacity: .7; pointer-events: none; }
 .project-empty-add { margin-top: 10px; }
+
+/* Keep editing and saving reachable inside the phone/tablet detail sheet. */
+.project-panel-head{position:sticky;top:0;z-index:2;background:var(--color-surface);flex-shrink:0}
+.project-panel-save{position:sticky;bottom:0;z-index:2;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:12px 14px;background:var(--color-surface);border-top:1px solid var(--color-border);margin-top:auto}
+.project-panel-save [role=status]{font-size:12px;color:var(--color-text-muted)}
+.project-panel-save [role=alert]{width:100%;font-size:13px}
+@media(max-width:979px){
+  .project-panel.is-sheet{padding-bottom:env(safe-area-inset-bottom);max-height:90dvh;overscroll-behavior:contain}
+  .project-panel.is-sheet button{min-height:44px}
+  .project-panel.is-sheet input:not([type=checkbox]),.project-panel.is-sheet select,.project-panel.is-sheet textarea{font-size:16px;min-height:44px}
+}
+
+.project-tool-editor{display:grid;gap:14px;min-width:0}
+.project-panel-body select{display:block;max-width:100%;min-height:44px;margin-top:6px;padding:8px 10px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);color:var(--color-text);font-size:16px}
+.project-panel.is-sheet .project-panel-art:has(>svg){min-height:72px;padding:12px}

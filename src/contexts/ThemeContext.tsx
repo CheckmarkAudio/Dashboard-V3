@@ -86,7 +86,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // overrides in index.css take effect. Runs on every resolve change.
   useEffect(() => {
     const preview = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('previewTheme') : null
-    document.documentElement.dataset.theme = preview === 'dark' || preview === 'light' ? preview : resolved
+    const activeTheme = preview === 'dark' || preview === 'light' ? preview : resolved
+    document.documentElement.dataset.theme = activeTheme
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', activeTheme === 'dark' ? '#211e19' : '#fcfaf5')
   }, [resolved])
 
   // Re-resolve whenever preference changes.

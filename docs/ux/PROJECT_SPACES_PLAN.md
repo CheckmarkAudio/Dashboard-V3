@@ -1,7 +1,7 @@
 # Project Spaces — design and implementation draft
 
 Date: 2026-09-29
-Status: Beta implementation in PR #346. Database migration applied and verified on 2026-10-24; frontend deployment pending. The broader nested-spaces/AI design remains a draft.
+Status: Modular tools (#346) and visual project explorer/images (#347) merged; current main production deployment verified green on 2026-11-25. Toolboard migration applied and verified on 2026-10-24. App usability is Priority 1; nested spaces and AI starters remain planned.
 Owner: Codex for architecture and data contracts. Master phase order remains in `../pwa/APP_BUILD_ROADMAP.md`.
 
 ## Product direction
@@ -159,5 +159,5 @@ Verification:
 Release gate:
 - Migration **APPLIED 2026-10-24** to linked CM-Audio Workspace (`ncljfjdcyswoeitsooty`) after the director's explicit approval. Command: `supabase db query --linked --file supabase/migrations/20261014120000_project_toolboards.sql`. History recorded with `supabase migration repair 20261014120000 --status applied --linked`. Only this migration was applied.
 - Live verification confirmed RLS, authenticated SELECT/RPC grants, anonymous denial and direct-write denial. An authenticated-owner save/read and stale-revision rejection passed inside a transaction that was rolled back; zero toolboards remained afterward. These checks do not replace browser/device verification.
-- Frontend deployment remains pending. PR #346 code checks passed, but its Vercel preview failed; the CLI login is invalid and browser access requires authenticator verification before build logs can be inspected. Resume from the deployment linked on the PR after sign-in. Then test a real project on two authorized sessions and an iPad. Roll back the frontend without dropping the new table; preserve recorded content.
-- Remaining later slices: nested room spaces/task-to-space promotion, private room images, AI starters, automatic conflict merging, and installed-device packaging. These are not claimed by this beta.
+- Frontend release: #346 and #347 merged; production main deployment verified green on 2026-11-25. Branch previews still require the separate approved test backend. Test a real project on two authorized sessions and an iPad before claiming device acceptance. Roll back the frontend without dropping tables; preserve recorded content.
+- Remaining slices: nested room spaces/task-to-space promotion, AI starters, automatic conflict merging, and physical installed-device acceptance/native-store packaging. Private image implementation arrived in #347; its live storage and device upload acceptance remain separate from toolboard verification.

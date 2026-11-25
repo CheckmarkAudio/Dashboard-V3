@@ -1049,3 +1049,15 @@ PR #346 remains draft. Code CI passed; the existing Vercel preview deployment fa
 
 Files: Project Spaces plan, Project State, checkpoint ledger. No application code changed in this checkpoint. Token note: exact token total not visible.
 Signature: CODEX:
+
+
+## 2026-11-25 - CODEX - Priority 1 app functionality
+
+Director made the task/project app for Bridget and Gavin Priority 1 across computer, phone, iPad and tablets. Recorded precedence in the queue and master app roadmap. Built on merged #346/#347 and verified current main production deployment green.
+
+Implemented: Projects-first install manifest and shortcuts, install guide, phone bottom navigation/safe areas, safe sign-in return paths, public-only reconnect worker, focus/reconnect refresh, sheet save controls, readable mobile fields/modals, shopping names and linked clearance notes, note/sketch titles, and theme-colored app chrome. No new migration or live project edits.
+
+Verification: 66 tests passed; production TypeScript/Vite build and release-marker check passed (existing bundle-size warning). Browser checks covered 320/390px phones and 820px tablet, synthetic measurement/shopping save confirmation, linked dimensions/notes, mouse drawing and Tasks navigation. Sample data resets on reload. Physical device/Pencil, two-account workflow and native-store packaging remain open. Nested spaces and prompt starters are still planned.
+
+Release: preparing codex/app-priority-one through normal PR checks; deployment status must be recorded after release. Unrelated priority queue public-site entry, CLI temp change and website handoff preserved.
+Signature: CODEX:

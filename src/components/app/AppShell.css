@@ -1,0 +1,32 @@
+.app-bottom-nav{display:none}
+.app-install-link{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;text-align:left;color:var(--color-text-muted)}
+.app-install-guide{display:grid;gap:18px;line-height:1.55}
+.app-install-guide h3{font-weight:700;margin-bottom:4px}
+.app-connection-status{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--color-surface-alt);color:var(--color-text);border-bottom:1px solid var(--color-border);font-size:14px}
+.app-connection-status svg{flex-shrink:0}
+@media(max-width:759px){
+  .app-bottom-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));flex-shrink:0;gap:4px;padding:6px max(8px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));border-top:1px solid var(--color-border);background:var(--color-surface)}
+  .app-bottom-nav a,.app-bottom-nav button{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;min-height:50px;font-size:12px;font-weight:600;color:var(--color-text-muted);border-radius:10px}
+  .app-bottom-nav [aria-current=page]{color:var(--workspace-accent);background:var(--color-surface-alt)}
+  .workspace-header{padding-top:env(safe-area-inset-top)}
+  .workspace-header-banner .workspace-toolbar{padding-top:8px;min-height:64px}
+  .workspace-header .workspace-edit-header{display:none}
+  .workspace-time-zone{display:none}
+  .workspace-toolbar .workspace-jump{min-height:44px}
+  .workspace-utilities>button,.workspace-mobile-trigger{min-width:44px;min-height:44px}
+  .workspace-main{scrollbar-gutter:auto}
+  .workspace-content{padding-bottom:90px}
+  .workspace-mobile-drawer aside{padding-top:calc(44px + env(safe-area-inset-top));padding-bottom:env(safe-area-inset-bottom);width:min(320px,90vw)}
+  .workspace-mobile-drawer aside>button{top:env(safe-area-inset-top);right:8px;min-width:44px;min-height:44px}
+  .app-help-button{bottom:calc(76px + env(safe-area-inset-bottom))}
+  .app-dm-dock{bottom:calc(68px + env(safe-area-inset-bottom))}
+}
+@media(pointer:coarse){
+  .workspace-shell :is(.project-tools,.project-deck,.project-panel) button{min-height:44px}
+  .workspace-shell :is(.project-tools,.project-deck,.project-panel) :is(input:not([type=checkbox]),textarea,select){font-size:16px;min-height:44px}
+  .workspace-shell .workspace-nav-item{min-height:48px}
+}
+@media(display-mode:standalone){
+  body,:root[data-theme=light] body{--shell-gap:0px}
+  .dashboard-shell.workspace-shell,:root[data-theme=light] .dashboard-shell.workspace-shell{border:0;border-radius:0;max-width:none}
+}
